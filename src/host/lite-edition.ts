@@ -6,6 +6,15 @@ export const LITE_SERVER_ONLY_ROUTE_GROUPS = {
     prefixes: ["/v1/admin/control", "/v1/admin/control/*"],
     reason: "admin control routes are unavailable in lite edition",
   },
+  memory_lifecycle: {
+    prefixes: [
+      "/v1/memory/archive/rehydrate",
+      "/v1/memory/archive/rehydrate/*",
+      "/v1/memory/nodes/activate",
+      "/v1/memory/nodes/activate/*",
+    ],
+    reason: "memory lifecycle routes are unavailable in lite edition",
+  },
 } as const;
 
 export function buildLiteRouteMatrix() {

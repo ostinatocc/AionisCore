@@ -36,6 +36,7 @@ Lite-local automation kernel currently supports:
 - default local identity via `LITE_LOCAL_ACTOR_ID` so replay/playbook/automation flows work without multi-tenant identity payloads
 
 Still unsupported in Lite:
+- archive rehydrate and node activation lifecycle routes
 - reviewer workflows
 - promotion/control-plane flows
 - server alerting and admin automation surfaces

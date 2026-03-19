@@ -12,7 +12,6 @@ import { registerMemoryAccessRoutes } from "../routes/memory-access.js";
 import { registerMemoryContextRuntimeRoutes } from "../routes/memory-context-runtime.js";
 import { registerMemoryFeedbackToolRoutes } from "../routes/memory-feedback-tools.js";
 import { registerHandoffRoutes } from "../routes/handoff.js";
-import { registerMemoryLifecycleRoutes } from "../routes/memory-lifecycle.js";
 import { registerMemoryRecallRoutes } from "../routes/memory-recall.js";
 import { registerMemoryReplayCoreRoutes } from "../routes/memory-replay-core.js";
 import { registerMemoryReplayGovernedRoutes } from "../routes/memory-replay-governed.js";
@@ -430,17 +429,6 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
     tenantFromBody,
     acquireInflightSlot,
     executionStateStore: getSharedExecutionStateStore(),
-  });
-
-  registerMemoryLifecycleRoutes({
-    app,
-    env,
-    store,
-    requireMemoryPrincipal,
-    withIdentityFromRequest,
-    enforceRateLimit,
-    enforceTenantQuota,
-    tenantFromBody,
   });
 
   registerMemoryAccessRoutes({

@@ -255,3 +255,12 @@ test("lite handoff routes do not keep store fallback branches", () => {
   assert.equal(hostFile.includes("registerHandoffRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into handoff routes");
   assert.match(handoffFile, /aionis-lite handoff routes only support AIONIS_EDITION=lite/);
 });
+
+test("lite host does not register broken memory lifecycle routes and exposes them as unsupported", () => {
+  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
+  const liteEditionFile = fs.readFileSync(path.join(ROOT, "src", "host", "lite-edition.ts"), "utf8");
+  assert.equal(hostFile.includes("registerMemoryLifecycleRoutes"), false, "lite host should not register PG-only memory lifecycle routes");
+  assert.match(liteEditionFile, /memory lifecycle routes are unavailable in lite edition/);
+  assert.match(liteEditionFile, /\/v1\/memory\/archive\/rehydrate/);
+  assert.match(liteEditionFile, /\/v1\/memory\/nodes\/activate/);
+});
