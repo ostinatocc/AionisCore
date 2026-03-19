@@ -1,4 +1,3 @@
-import { capabilityContract, type CapabilityId } from "../capability-contract.js";
 import type { Env } from "../config.js";
 import {
   createApiKeyPrincipalResolver,
@@ -12,20 +11,12 @@ import {
   parseAllowedSandboxCommands,
 } from "../memory/sandbox.js";
 import {
-  createPostgresRecallStoreAccess,
   type RecallStoreCapabilities,
 } from "../store/recall-access.js";
 import { createLiteRecallStore } from "../store/lite-recall-store.js";
-import { createPostgresReplayStoreAccess } from "../store/replay-access.js";
 import { createLiteReplayStore } from "../store/lite-replay-store.js";
 import { createLiteHostStore } from "../store/lite-host-store.js";
-import { createEmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import {
-  asPostgresMemoryStore,
-  createMemoryStore,
-} from "../store/memory-store.js";
-import {
-  createPostgresWriteStoreAccess,
   type WriteStoreCapabilities,
 } from "../store/write-access.js";
 import { createLiteWriteStore } from "../store/lite-write-store.js";
@@ -34,7 +25,6 @@ import { createLiteAutomationRunStore } from "../store/lite-automation-run-store
 import { createAuthResolver } from "../util/auth.js";
 import { sha256Hex } from "../util/crypto.js";
 import { EmbedQueryBatcher } from "../util/embed_query_batcher.js";
-import { HttpError } from "../util/http.js";
 import { InflightGate } from "../util/inflight_gate.js";
 import { LruTtlCache } from "../util/lru_ttl_cache.js";
 import { TokenBucketLimiter } from "../util/ratelimit.js";
@@ -116,67 +106,22 @@ function parseSandboxRemoteAllowedCidrs(raw: string): Set<string> {
   );
 }
 
-function databaseTargetHash(databaseUrl: string): string | null {
-  try {
-    const u = new URL(databaseUrl);
-    const protocol = u.protocol.toLowerCase();
-    const rawHost = u.hostname.toLowerCase();
-    const host = rawHost === "localhost" || rawHost === "127.0.0.1" || rawHost === "::1" ? "loopback" : rawHost;
-    const port = u.port || (protocol === "postgres:" || protocol === "postgresql:" ? "5432" : "");
-    const dbName = (u.pathname || "/").replace(/^\/+/, "");
-    if (!host || !port || !dbName) return null;
-    return sha256Hex(`${host}:${port}/${dbName}`);
-  } catch {
-    return null;
-  }
-}
-
 export async function createRuntimeServices(env: Env) {
-  const liteEdition = env.AIONIS_EDITION === "lite";
+  if (env.AIONIS_EDITION !== "lite") {
+    throw new Error("aionis-lite runtime services only support AIONIS_EDITION=lite");
+  }
   const sandboxRemoteAllowedHosts = parseSandboxRemoteAllowedHosts(env.SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON);
   const sandboxRemoteAllowedCidrs = parseSandboxRemoteAllowedCidrs(env.SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON);
   const sandboxAllowedCommands = parseAllowedSandboxCommands(env.SANDBOX_ALLOWED_COMMANDS_JSON);
-  const store = liteEdition
-    ? createLiteHostStore()
-    : createMemoryStore({
-        backend: env.MEMORY_STORE_BACKEND,
-        databaseUrl: env.DATABASE_URL,
-        embeddedExperimentalEnabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
-      });
-  const db = liteEdition ? createNoopDb() : asPostgresMemoryStore(store).db;
-  const embeddedRuntime =
-    !liteEdition && env.MEMORY_STORE_BACKEND === "embedded"
-      ? createEmbeddedMemoryRuntime({
-          snapshotPath: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_PATH,
-          autoPersist: env.MEMORY_STORE_EMBEDDED_AUTOSAVE,
-          snapshotMaxBytes: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES,
-          snapshotMaxBackups: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BACKUPS,
-          snapshotStrictMaxBytes: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_STRICT_MAX_BYTES,
-          snapshotCompactionEnabled: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED,
-          snapshotCompactionMaxRounds: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS,
-          recallDebugEmbeddingsEnabled: env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED,
-          recallAuditInsertEnabled: env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED,
-        })
-      : null;
-  if (embeddedRuntime) {
-    await embeddedRuntime.loadSnapshot();
-  }
-  const liteReplayStore = liteEdition
-    ? createLiteReplayStore(env.LITE_REPLAY_SQLITE_PATH)
-    : null;
+  const store = createLiteHostStore();
+  const db = createNoopDb();
+  const embeddedRuntime = null;
+  const liteReplayStore = createLiteReplayStore(env.LITE_REPLAY_SQLITE_PATH);
   const liteReplayAccess = liteReplayStore?.createReplayAccess() ?? null;
-  const liteWriteStore = liteEdition
-    ? createLiteWriteStore(env.LITE_WRITE_SQLITE_PATH)
-    : null;
-  const liteAutomationStore = liteEdition
-    ? createLiteAutomationStore(env.LITE_WRITE_SQLITE_PATH)
-    : null;
-  const liteAutomationRunStore = liteEdition
-    ? createLiteAutomationRunStore(env.LITE_WRITE_SQLITE_PATH)
-    : null;
-  const liteRecallStore = liteEdition
-    ? createLiteRecallStore(env.LITE_WRITE_SQLITE_PATH)
-    : null;
+  const liteWriteStore = createLiteWriteStore(env.LITE_WRITE_SQLITE_PATH);
+  const liteAutomationStore = createLiteAutomationStore(env.LITE_WRITE_SQLITE_PATH);
+  const liteAutomationRunStore = createLiteAutomationRunStore(env.LITE_WRITE_SQLITE_PATH);
+  const liteRecallStore = createLiteRecallStore(env.LITE_WRITE_SQLITE_PATH);
   const liteRecallAccess = liteRecallStore?.createRecallAccess() ?? null;
 
   const embedder = createEmbeddingProviderFromEnv(process.env);
@@ -219,48 +164,23 @@ export async function createRuntimeServices(env: Env) {
     jwtRequireExp: env.APP_ENV === "prod",
   });
 
-  const healthDatabaseTargetHash = liteEdition ? null : databaseTargetHash(env.DATABASE_URL);
   const recallStoreCapabilities: RecallStoreCapabilities = {
-    debug_embeddings: liteEdition || env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED,
-    audit_insert: liteEdition || env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED,
+    debug_embeddings: true,
+    audit_insert: true,
   };
   const writeStoreCapabilities: WriteStoreCapabilities = {
-    shadow_mirror_v2: liteEdition ? false : env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED,
+    shadow_mirror_v2: false,
   };
   const storeFeatureCapabilities = {
-    sessions_graph: liteEdition || env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED,
-    packs_export: liteEdition || env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED,
-    packs_import: liteEdition || env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED,
+    sessions_graph: true,
+    packs_export: true,
+    packs_import: true,
   } as const;
 
-  const recallAccessForClient = (client: any) => {
-    if (liteRecallAccess) return liteRecallAccess;
-    if (embeddedRuntime) return embeddedRuntime.createRecallAccess();
-    return createPostgresRecallStoreAccess(client, {
-      capabilities: recallStoreCapabilities,
-    });
-  };
-  const writeAccessForClient = (client: any) => {
-    if (liteWriteStore) return liteWriteStore;
-    return createPostgresWriteStoreAccess(client, {
-      capabilities: writeStoreCapabilities,
-    });
-  };
-  const replayAccessForClient = (client: any) => {
-    if (liteReplayAccess) return liteReplayAccess;
-    return createPostgresReplayStoreAccess(client);
-  };
-  const requireStoreFeatureCapability = (capability: keyof typeof storeFeatureCapabilities): void => {
-    if (storeFeatureCapabilities[capability]) return;
-    const spec = capabilityContract(capability as CapabilityId);
-    throw new HttpError(501, "backend_capability_unsupported", `backend capability unsupported: ${capability}`, {
-      capability,
-      backend: env.MEMORY_STORE_BACKEND,
-      failure_mode: spec.failure_mode,
-      degraded_mode: "feature_disabled",
-      fallback_applied: false,
-    });
-  };
+  const recallAccessForClient = (_client: any) => liteRecallAccess;
+  const writeAccessForClient = (_client: any) => liteWriteStore;
+  const replayAccessForClient = (_client: any) => liteReplayAccess;
+  const requireStoreFeatureCapability = (_capability: keyof typeof storeFeatureCapabilities): void => {};
 
   const recallLimiter = env.RATE_LIMIT_ENABLED
     ? new TokenBucketLimiter({
@@ -323,15 +243,10 @@ export async function createRuntimeServices(env: Env) {
     recall_text_embed_burst: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_BURST,
     recall_text_embed_max_wait_ms: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS,
   };
-  const resolveControlPlaneApiKeyPrincipal = liteEdition
-    ? Object.assign(async () => null, {
-        invalidate() {},
-        clear() {},
-      })
-    : createApiKeyPrincipalResolver(db, {
-        negative_ttl_ms: 10_000,
-        cache_positive: false,
-      });
+  const resolveControlPlaneApiKeyPrincipal = Object.assign(async () => null, {
+    invalidate() {},
+    clear() {},
+  });
   const tenantQuotaResolver = createTenantQuotaResolver(db, {
     cache_ttl_ms: env.CONTROL_TENANT_QUOTA_CACHE_TTL_MS,
     defaults: tenantQuotaDefaults,
@@ -388,7 +303,7 @@ export async function createRuntimeServices(env: Env) {
     embedder,
     sandboxExecutor,
     authResolver,
-    healthDatabaseTargetHash,
+    healthDatabaseTargetHash: null,
     recallStoreCapabilities,
     writeStoreCapabilities,
     storeFeatureCapabilities,

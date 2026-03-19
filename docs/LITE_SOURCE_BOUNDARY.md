@@ -6,6 +6,7 @@ Current source boundary:
 - `apps/lite/` owns the product-facing Lite wrapper.
 - `apps/lite/src/index.js` is the source-owned launcher into the Lite runtime.
 - `src/runtime-entry.ts` is the runtime truth for Lite startup.
+- `src/app/runtime-services.ts` is narrowed to Lite-owned store/runtime wiring only.
 - `packages/runtime-core/` is the shared extraction seam.
 - `src/host/http-host.ts` is Lite-only and rejects non-lite source startup.
 - `src/routes/automations.ts` is reintroduced as a Lite-local automation kernel surface.

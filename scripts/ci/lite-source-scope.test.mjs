@@ -101,3 +101,20 @@ test("lite replay repair review policy is endpoint-only", () => {
   assert.equal(policyFile.includes("tenant_default"), false, "tenant_default should be absent from lite repair review policy");
   assert.match(configFile, /is not supported in Lite \(use endpoint only\)/);
 });
+
+test("lite runtime services do not wire postgres or embedded store constructors", () => {
+  const runtimeServicesFile = fs.readFileSync(path.join(ROOT, "src", "app", "runtime-services.ts"), "utf8");
+  const forbiddenSymbols = [
+    "createPostgresRecallStoreAccess",
+    "createPostgresReplayStoreAccess",
+    "createPostgresWriteStoreAccess",
+    "createEmbeddedMemoryRuntime",
+    "createMemoryStore",
+    "asPostgresMemoryStore",
+    "databaseTargetHash",
+  ];
+  for (const symbol of forbiddenSymbols) {
+    assert.equal(runtimeServicesFile.includes(symbol), false, `${symbol} should be absent from lite runtime-services`);
+  }
+  assert.match(runtimeServicesFile, /aionis-lite runtime services only support AIONIS_EDITION=lite/);
+});
