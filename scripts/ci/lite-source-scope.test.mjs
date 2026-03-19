@@ -78,6 +78,11 @@ test("lite route registration args drop server-only plumbing", () => {
     assert.equal(hostFile.includes(symbol), false, `${symbol} should be absent from lite http-host route args`);
     assert.equal(runtimeEntry.includes(symbol), false, `${symbol} should not be passed through lite runtime-entry route wiring`);
   }
+  const sandboxBudgetFile = fs.readFileSync(path.join(ROOT, "src", "app", "sandbox-budget.ts"), "utf8");
+  for (const symbol of forbiddenSymbols.slice(2)) {
+    assert.equal(sandboxBudgetFile.includes(symbol), false, `${symbol} should be absent from lite sandbox-budget module`);
+  }
+  assert.match(sandboxBudgetFile, /enforceSandboxTenantBudget/);
 });
 
 test("lite repo keeps local automation kernel sources and removes server-only lite automation blockers", () => {
