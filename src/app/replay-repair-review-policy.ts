@@ -23,11 +23,7 @@ type ReplayRepairReviewPolicyPatch = {
   auto_promote_gate?: Partial<ReplayRepairReviewAutoPromoteGateDefaults>;
 };
 type ReplayRepairReviewPolicy = {
-  endpoint: Record<string, ReplayRepairReviewPolicyPatch>;
-  tenant_default: Record<string, ReplayRepairReviewPolicyPatch>;
-  tenant_endpoint: Record<string, Record<string, ReplayRepairReviewPolicyPatch>>;
-  tenant_scope_default: Record<string, Record<string, ReplayRepairReviewPolicyPatch>>;
-  tenant_scope_endpoint: Record<string, Record<string, Record<string, ReplayRepairReviewPolicyPatch>>>;
+  endpoint: Partial<Record<"*" | ReplayRepairReviewEndpoint, ReplayRepairReviewPolicyPatch>>;
 };
 type ReplayRepairReviewDefaultsResolution = {
   endpoint: ReplayRepairReviewEndpoint;
@@ -36,12 +32,7 @@ type ReplayRepairReviewDefaultsResolution = {
   base_source: "global_profile" | "global_env";
   base_profile: ReplayRepairReviewAutoPromoteProfile | null;
   sources_applied: Array<{
-    layer:
-      | "endpoint"
-      | "tenant_default"
-      | "tenant_endpoint"
-      | "tenant_scope_default"
-      | "tenant_scope_endpoint";
+    layer: "endpoint";
     key: string;
     patch: ReplayRepairReviewPolicyPatch;
   }>;
@@ -61,6 +52,8 @@ type ReplayRepairReviewDefaultsResolution = {
 };
 
 const REPLAY_REPAIR_REVIEW_ENDPOINT_KEY: ReplayRepairReviewEndpoint = "replay_playbook_repair_review";
+const SUPPORTED_POLICY_KEYS = new Set(["endpoint"]);
+const SUPPORTED_ENDPOINT_KEYS = new Set(["*", REPLAY_REPAIR_REVIEW_ENDPOINT_KEY]);
 
 const REPLAY_REPAIR_REVIEW_PROFILE_DEFAULTS: Record<
   Exclude<ReplayRepairReviewAutoPromoteProfile, "custom">,
@@ -152,7 +145,7 @@ function parseReplayRepairReviewPolicyPatch(raw: unknown, path: string): ReplayR
     }
     const parseNonNegativeInt = (value: unknown, key: string): number => {
       const n = Number(value);
-      if (!Number.isFinite(n) || Math.trunc(n) !== n || n < 0) {
+      if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
         throw new Error(`${path}.auto_promote_gate.${key} must be a non-negative integer`);
       }
       return n;
@@ -174,13 +167,7 @@ function parseReplayRepairReviewPolicyPatch(raw: unknown, path: string): ReplayR
 }
 
 function parseReplayRepairReviewPolicy(raw: string): ReplayRepairReviewPolicy {
-  const out: ReplayRepairReviewPolicy = {
-    endpoint: {},
-    tenant_default: {},
-    tenant_endpoint: {},
-    tenant_scope_default: {},
-    tenant_scope_endpoint: {},
-  };
+  const out: ReplayRepairReviewPolicy = { endpoint: {} };
   const trimmed = raw.trim();
   if (trimmed.length === 0 || trimmed === "{}") return out;
   let parsed: unknown;
@@ -193,109 +180,62 @@ function parseReplayRepairReviewPolicy(raw: string): ReplayRepairReviewPolicy {
     throw new Error("REPLAY_REPAIR_REVIEW_POLICY_JSON must be a JSON object");
   }
   const obj = parsed as Record<string, unknown>;
-  if (obj.endpoint !== undefined) {
-    if (!obj.endpoint || typeof obj.endpoint !== "object" || Array.isArray(obj.endpoint)) {
-      throw new Error("REPLAY_REPAIR_REVIEW_POLICY_JSON.endpoint must be an object");
-    }
-    for (const [endpointKey, patchRaw] of Object.entries(obj.endpoint as Record<string, unknown>)) {
-      const key = endpointKey.trim();
-      if (!key) continue;
-      out.endpoint[key] = parseReplayRepairReviewPolicyPatch(
-        patchRaw,
-        `REPLAY_REPAIR_REVIEW_POLICY_JSON.endpoint.${key}`,
+  for (const key of Object.keys(obj)) {
+    if (!SUPPORTED_POLICY_KEYS.has(key)) {
+      throw new Error(
+        `REPLAY_REPAIR_REVIEW_POLICY_JSON.${key} is not supported in Lite (use endpoint only)`,
       );
     }
   }
-  if (obj.tenant_default !== undefined) {
-    if (!obj.tenant_default || typeof obj.tenant_default !== "object" || Array.isArray(obj.tenant_default)) {
-      throw new Error("REPLAY_REPAIR_REVIEW_POLICY_JSON.tenant_default must be an object");
-    }
-    for (const [tenantIdRaw, patchRaw] of Object.entries(obj.tenant_default as Record<string, unknown>)) {
-      const tenantId = tenantIdRaw.trim();
-      if (!tenantId) continue;
-      out.tenant_default[tenantId] = parseReplayRepairReviewPolicyPatch(
-        patchRaw,
-        `REPLAY_REPAIR_REVIEW_POLICY_JSON.tenant_default.${tenantId}`,
+  if (obj.endpoint === undefined) return out;
+  if (!obj.endpoint || typeof obj.endpoint !== "object" || Array.isArray(obj.endpoint)) {
+    throw new Error("REPLAY_REPAIR_REVIEW_POLICY_JSON.endpoint must be an object");
+  }
+  for (const [endpointKeyRaw, patchRaw] of Object.entries(obj.endpoint as Record<string, unknown>)) {
+    const key = endpointKeyRaw.trim();
+    if (!key) continue;
+    if (!SUPPORTED_ENDPOINT_KEYS.has(key)) {
+      throw new Error(
+        `REPLAY_REPAIR_REVIEW_POLICY_JSON.endpoint.${key} is not supported in Lite (use *|${REPLAY_REPAIR_REVIEW_ENDPOINT_KEY})`,
       );
     }
+    out.endpoint[key as "*" | ReplayRepairReviewEndpoint] = parseReplayRepairReviewPolicyPatch(
+      patchRaw,
+      `REPLAY_REPAIR_REVIEW_POLICY_JSON.endpoint.${key}`,
+    );
   }
-  if (obj.tenant_endpoint !== undefined) {
-    if (!obj.tenant_endpoint || typeof obj.tenant_endpoint !== "object" || Array.isArray(obj.tenant_endpoint)) {
-      throw new Error("REPLAY_REPAIR_REVIEW_POLICY_JSON.tenant_endpoint must be an object");
-    }
-    for (const [tenantIdRaw, endpointMapRaw] of Object.entries(obj.tenant_endpoint as Record<string, unknown>)) {
-      const tenantId = tenantIdRaw.trim();
-      if (!tenantId) continue;
-      if (!endpointMapRaw || typeof endpointMapRaw !== "object" || Array.isArray(endpointMapRaw)) {
-        throw new Error(`REPLAY_REPAIR_REVIEW_POLICY_JSON.tenant_endpoint.${tenantId} must be an object`);
-      }
-      const endpointMap = endpointMapRaw as Record<string, unknown>;
-      const parsedEndpointMap: Record<string, ReplayRepairReviewPolicyPatch> = {};
-      for (const [endpointKeyRaw, patchRaw] of Object.entries(endpointMap)) {
-        const endpointKey = endpointKeyRaw.trim();
-        if (!endpointKey) continue;
-        parsedEndpointMap[endpointKey] = parseReplayRepairReviewPolicyPatch(
-          patchRaw,
-          `REPLAY_REPAIR_REVIEW_POLICY_JSON.tenant_endpoint.${tenantId}.${endpointKey}`,
-        );
-      }
-      out.tenant_endpoint[tenantId] = parsedEndpointMap;
-    }
+  return out;
+}
+
+function applyReplayRepairReviewPolicyPatch(
+  base: ReplayRepairReviewAutoPromoteDefaults,
+  patch: ReplayRepairReviewPolicyPatch | null | undefined,
+): ReplayRepairReviewAutoPromoteDefaults {
+  if (!patch) return cloneReplayRepairReviewDefaults(base);
+  let out = cloneReplayRepairReviewDefaults(base);
+  if (patch.profile && patch.profile !== "custom") {
+    out = cloneReplayRepairReviewDefaults(REPLAY_REPAIR_REVIEW_PROFILE_DEFAULTS[patch.profile]);
   }
-  if (obj.tenant_scope_default !== undefined) {
-    if (!obj.tenant_scope_default || typeof obj.tenant_scope_default !== "object" || Array.isArray(obj.tenant_scope_default)) {
-      throw new Error("REPLAY_REPAIR_REVIEW_POLICY_JSON.tenant_scope_default must be an object");
+  if (typeof patch.auto_promote_on_pass === "boolean") out.auto_promote_on_pass = patch.auto_promote_on_pass;
+  if (patch.auto_promote_target_status) out.auto_promote_target_status = patch.auto_promote_target_status;
+  if (patch.auto_promote_gate) {
+    if (typeof patch.auto_promote_gate.require_shadow_pass === "boolean") {
+      out.auto_promote_gate.require_shadow_pass = patch.auto_promote_gate.require_shadow_pass;
     }
-    for (const [tenantIdRaw, scopeMapRaw] of Object.entries(obj.tenant_scope_default as Record<string, unknown>)) {
-      const tenantId = tenantIdRaw.trim();
-      if (!tenantId) continue;
-      if (!scopeMapRaw || typeof scopeMapRaw !== "object" || Array.isArray(scopeMapRaw)) {
-        throw new Error(`REPLAY_REPAIR_REVIEW_POLICY_JSON.tenant_scope_default.${tenantId} must be an object`);
-      }
-      const scopeMap = scopeMapRaw as Record<string, unknown>;
-      const parsedScopeMap: Record<string, ReplayRepairReviewPolicyPatch> = {};
-      for (const [scopeRaw, patchRaw] of Object.entries(scopeMap)) {
-        const scope = scopeRaw.trim();
-        if (!scope) continue;
-        parsedScopeMap[scope] = parseReplayRepairReviewPolicyPatch(
-          patchRaw,
-          `REPLAY_REPAIR_REVIEW_POLICY_JSON.tenant_scope_default.${tenantId}.${scope}`,
-        );
-      }
-      out.tenant_scope_default[tenantId] = parsedScopeMap;
+    if (patch.auto_promote_gate.min_total_steps !== undefined) {
+      out.auto_promote_gate.min_total_steps = patch.auto_promote_gate.min_total_steps;
     }
-  }
-  if (obj.tenant_scope_endpoint !== undefined) {
-    if (!obj.tenant_scope_endpoint || typeof obj.tenant_scope_endpoint !== "object" || Array.isArray(obj.tenant_scope_endpoint)) {
-      throw new Error("REPLAY_REPAIR_REVIEW_POLICY_JSON.tenant_scope_endpoint must be an object");
+    if (patch.auto_promote_gate.max_failed_steps !== undefined) {
+      out.auto_promote_gate.max_failed_steps = patch.auto_promote_gate.max_failed_steps;
     }
-    for (const [tenantIdRaw, scopeMapRaw] of Object.entries(obj.tenant_scope_endpoint as Record<string, unknown>)) {
-      const tenantId = tenantIdRaw.trim();
-      if (!tenantId) continue;
-      if (!scopeMapRaw || typeof scopeMapRaw !== "object" || Array.isArray(scopeMapRaw)) {
-        throw new Error(`REPLAY_REPAIR_REVIEW_POLICY_JSON.tenant_scope_endpoint.${tenantId} must be an object`);
-      }
-      const scopeMap = scopeMapRaw as Record<string, unknown>;
-      const parsedScopeMap: Record<string, Record<string, ReplayRepairReviewPolicyPatch>> = {};
-      for (const [scopeRaw, endpointMapRaw] of Object.entries(scopeMap)) {
-        const scope = scopeRaw.trim();
-        if (!scope) continue;
-        if (!endpointMapRaw || typeof endpointMapRaw !== "object" || Array.isArray(endpointMapRaw)) {
-          throw new Error(`REPLAY_REPAIR_REVIEW_POLICY_JSON.tenant_scope_endpoint.${tenantId}.${scope} must be an object`);
-        }
-        const endpointMap = endpointMapRaw as Record<string, unknown>;
-        const parsedEndpointMap: Record<string, ReplayRepairReviewPolicyPatch> = {};
-        for (const [endpointKeyRaw, patchRaw] of Object.entries(endpointMap)) {
-          const endpointKey = endpointKeyRaw.trim();
-          if (!endpointKey) continue;
-          parsedEndpointMap[endpointKey] = parseReplayRepairReviewPolicyPatch(
-            patchRaw,
-            `REPLAY_REPAIR_REVIEW_POLICY_JSON.tenant_scope_endpoint.${tenantId}.${scope}.${endpointKey}`,
-          );
-        }
-        parsedScopeMap[scope] = parsedEndpointMap;
-      }
-      out.tenant_scope_endpoint[tenantId] = parsedScopeMap;
+    if (patch.auto_promote_gate.max_blocked_steps !== undefined) {
+      out.auto_promote_gate.max_blocked_steps = patch.auto_promote_gate.max_blocked_steps;
+    }
+    if (patch.auto_promote_gate.max_unknown_steps !== undefined) {
+      out.auto_promote_gate.max_unknown_steps = patch.auto_promote_gate.max_unknown_steps;
+    }
+    if (patch.auto_promote_gate.min_success_ratio !== undefined) {
+      out.auto_promote_gate.min_success_ratio = patch.auto_promote_gate.min_success_ratio;
     }
   }
   return out;
@@ -309,11 +249,11 @@ export function createReplayRepairReviewPolicy(args: {
   const { env, tenantFromBody, scopeFromBody } = args;
   const replayRepairReviewPolicy = parseReplayRepairReviewPolicy(env.REPLAY_REPAIR_REVIEW_POLICY_JSON);
 
-  function resolveReplayRepairReviewGlobalDefaults(): {
+  const resolveReplayRepairReviewGlobalDefaults = (): {
     defaults: ReplayRepairReviewAutoPromoteDefaults;
     source: "global_profile" | "global_env";
     profile: ReplayRepairReviewAutoPromoteProfile | null;
-  } {
+  } => {
     const profile = env.REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_PROFILE as ReplayRepairReviewAutoPromoteProfile;
     const profileDefaults = profile === "custom" ? null : REPLAY_REPAIR_REVIEW_PROFILE_DEFAULTS[profile];
     if (profileDefaults) {
@@ -339,102 +279,26 @@ export function createReplayRepairReviewPolicy(args: {
       source: "global_env",
       profile: null,
     };
-  }
+  };
 
-  function applyReplayRepairReviewPolicyPatch(
-    base: ReplayRepairReviewAutoPromoteDefaults,
-    patch: ReplayRepairReviewPolicyPatch | null | undefined,
-  ): ReplayRepairReviewAutoPromoteDefaults {
-    if (!patch) return cloneReplayRepairReviewDefaults(base);
-    let out = cloneReplayRepairReviewDefaults(base);
-    if (patch.profile && patch.profile !== "custom") {
-      out = cloneReplayRepairReviewDefaults(REPLAY_REPAIR_REVIEW_PROFILE_DEFAULTS[patch.profile]);
-    }
-    if (typeof patch.auto_promote_on_pass === "boolean") out.auto_promote_on_pass = patch.auto_promote_on_pass;
-    if (patch.auto_promote_target_status) out.auto_promote_target_status = patch.auto_promote_target_status;
-    if (patch.auto_promote_gate) {
-      if (typeof patch.auto_promote_gate.require_shadow_pass === "boolean") {
-        out.auto_promote_gate.require_shadow_pass = patch.auto_promote_gate.require_shadow_pass;
-      }
-      if (patch.auto_promote_gate.min_total_steps !== undefined) {
-        out.auto_promote_gate.min_total_steps = patch.auto_promote_gate.min_total_steps;
-      }
-      if (patch.auto_promote_gate.max_failed_steps !== undefined) {
-        out.auto_promote_gate.max_failed_steps = patch.auto_promote_gate.max_failed_steps;
-      }
-      if (patch.auto_promote_gate.max_blocked_steps !== undefined) {
-        out.auto_promote_gate.max_blocked_steps = patch.auto_promote_gate.max_blocked_steps;
-      }
-      if (patch.auto_promote_gate.max_unknown_steps !== undefined) {
-        out.auto_promote_gate.max_unknown_steps = patch.auto_promote_gate.max_unknown_steps;
-      }
-      if (patch.auto_promote_gate.min_success_ratio !== undefined) {
-        out.auto_promote_gate.min_success_ratio = patch.auto_promote_gate.min_success_ratio;
-      }
-    }
-    return out;
-  }
-
-  function resolveReplayRepairReviewDefaults(
+  const resolveReplayRepairReviewDefaults = (
     tenantIdRaw: string,
     scopeRaw: string,
     endpoint: ReplayRepairReviewEndpoint,
-  ): ReplayRepairReviewDefaultsResolution {
+  ): ReplayRepairReviewDefaultsResolution => {
     const tenantId = tenantIdRaw.trim() || env.MEMORY_TENANT_ID;
     const scope = scopeRaw.trim() || env.MEMORY_SCOPE;
     const global = resolveReplayRepairReviewGlobalDefaults();
     let out = cloneReplayRepairReviewDefaults(global.defaults);
     const sourcesApplied: ReplayRepairReviewDefaultsResolution["sources_applied"] = [];
-    const apply = (
-      layer: ReplayRepairReviewDefaultsResolution["sources_applied"][number]["layer"],
-      key: string,
-      patch: ReplayRepairReviewPolicyPatch | null | undefined,
-    ) => {
+    const apply = (key: "*" | ReplayRepairReviewEndpoint, patch: ReplayRepairReviewPolicyPatch | null | undefined) => {
       if (!patch) return;
       out = applyReplayRepairReviewPolicyPatch(out, patch);
-      sourcesApplied.push({ layer, key, patch });
+      sourcesApplied.push({ layer: "endpoint", key, patch });
     };
 
-    apply("endpoint", "*", replayRepairReviewPolicy.endpoint["*"]);
-    apply("endpoint", endpoint, replayRepairReviewPolicy.endpoint[endpoint]);
-    apply("tenant_default", "*", replayRepairReviewPolicy.tenant_default["*"]);
-    apply("tenant_default", tenantId, replayRepairReviewPolicy.tenant_default[tenantId]);
-    apply("tenant_endpoint", "*.*", replayRepairReviewPolicy.tenant_endpoint["*"]?.["*"]);
-    apply("tenant_endpoint", `*.${endpoint}`, replayRepairReviewPolicy.tenant_endpoint["*"]?.[endpoint]);
-    apply("tenant_endpoint", `${tenantId}.*`, replayRepairReviewPolicy.tenant_endpoint[tenantId]?.["*"]);
-    apply("tenant_endpoint", `${tenantId}.${endpoint}`, replayRepairReviewPolicy.tenant_endpoint[tenantId]?.[endpoint]);
-    apply("tenant_scope_default", "*.*", replayRepairReviewPolicy.tenant_scope_default["*"]?.["*"]);
-    apply("tenant_scope_default", `*.${scope}`, replayRepairReviewPolicy.tenant_scope_default["*"]?.[scope]);
-    apply("tenant_scope_default", `${tenantId}.*`, replayRepairReviewPolicy.tenant_scope_default[tenantId]?.["*"]);
-    apply("tenant_scope_default", `${tenantId}.${scope}`, replayRepairReviewPolicy.tenant_scope_default[tenantId]?.[scope]);
-    apply("tenant_scope_endpoint", "*.*.*", replayRepairReviewPolicy.tenant_scope_endpoint["*"]?.["*"]?.["*"]);
-    apply("tenant_scope_endpoint", `*.*.${endpoint}`, replayRepairReviewPolicy.tenant_scope_endpoint["*"]?.["*"]?.[endpoint]);
-    apply("tenant_scope_endpoint", `*.${scope}.*`, replayRepairReviewPolicy.tenant_scope_endpoint["*"]?.[scope]?.["*"]);
-    apply(
-      "tenant_scope_endpoint",
-      `*.${scope}.${endpoint}`,
-      replayRepairReviewPolicy.tenant_scope_endpoint["*"]?.[scope]?.[endpoint],
-    );
-    apply(
-      "tenant_scope_endpoint",
-      `${tenantId}.*.*`,
-      replayRepairReviewPolicy.tenant_scope_endpoint[tenantId]?.["*"]?.["*"],
-    );
-    apply(
-      "tenant_scope_endpoint",
-      `${tenantId}.*.${endpoint}`,
-      replayRepairReviewPolicy.tenant_scope_endpoint[tenantId]?.["*"]?.[endpoint],
-    );
-    apply(
-      "tenant_scope_endpoint",
-      `${tenantId}.${scope}.*`,
-      replayRepairReviewPolicy.tenant_scope_endpoint[tenantId]?.[scope]?.["*"],
-    );
-    apply(
-      "tenant_scope_endpoint",
-      `${tenantId}.${scope}.${endpoint}`,
-      replayRepairReviewPolicy.tenant_scope_endpoint[tenantId]?.[scope]?.[endpoint],
-    );
+    apply("*", replayRepairReviewPolicy.endpoint["*"]);
+    apply(endpoint, replayRepairReviewPolicy.endpoint[endpoint]);
 
     return {
       endpoint,
@@ -457,7 +321,7 @@ export function createReplayRepairReviewPolicy(args: {
       },
       effective: out,
     };
-  }
+  };
 
   function withReplayRepairReviewDefaults(body: unknown): {
     body: Record<string, unknown>;
@@ -470,15 +334,18 @@ export function createReplayRepairReviewPolicy(args: {
     const scope = scopeFromBody(out);
     const resolution = resolveReplayRepairReviewDefaults(tenantId, scope, REPLAY_REPAIR_REVIEW_ENDPOINT_KEY);
     const resolved = resolution.effective;
+
     resolution.request_overrides.auto_promote_on_pass = out.auto_promote_on_pass !== undefined && out.auto_promote_on_pass !== null;
     resolution.request_overrides.auto_promote_target_status =
       out.auto_promote_target_status !== undefined && out.auto_promote_target_status !== null;
+
     if (out.auto_promote_on_pass === undefined || out.auto_promote_on_pass === null) {
       out.auto_promote_on_pass = resolved.auto_promote_on_pass;
     }
     if (out.auto_promote_target_status === undefined || out.auto_promote_target_status === null) {
       out.auto_promote_target_status = resolved.auto_promote_target_status;
     }
+
     const gateRaw = out.auto_promote_gate;
     const gate: Record<string, unknown> = gateRaw && typeof gateRaw === "object" && !Array.isArray(gateRaw)
       ? { ...(gateRaw as Record<string, unknown>) }

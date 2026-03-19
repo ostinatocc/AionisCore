@@ -91,3 +91,13 @@ test("lite repo keeps local automation kernel sources and removes server-only li
   assert.equal(liteEdition.includes("automation orchestration remains server-only"), false);
   assert.match(liteEdition, /automations-lite-kernel/);
 });
+
+test("lite replay repair review policy is endpoint-only", () => {
+  const policyFile = fs.readFileSync(path.join(ROOT, "src", "app", "replay-repair-review-policy.ts"), "utf8");
+  const configFile = fs.readFileSync(path.join(ROOT, "src", "config.ts"), "utf8");
+  assert.equal(policyFile.includes("tenant_scope_endpoint"), false, "tenant_scope_endpoint should be absent from lite repair review policy");
+  assert.equal(policyFile.includes("tenant_scope_default"), false, "tenant_scope_default should be absent from lite repair review policy");
+  assert.equal(policyFile.includes("tenant_endpoint"), false, "tenant_endpoint should be absent from lite repair review policy");
+  assert.equal(policyFile.includes("tenant_default"), false, "tenant_default should be absent from lite repair review policy");
+  assert.match(configFile, /is not supported in Lite \(use endpoint only\)/);
+});

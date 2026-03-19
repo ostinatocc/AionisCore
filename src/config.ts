@@ -790,6 +790,24 @@ export function loadEnv(): Env {
     if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
       throw new Error("REPLAY_REPAIR_REVIEW_POLICY_JSON must be a JSON object");
     }
+    const asRecord = policy as Record<string, unknown>;
+    for (const key of Object.keys(asRecord)) {
+      if (key !== "endpoint") {
+        throw new Error(`REPLAY_REPAIR_REVIEW_POLICY_JSON.${key} is not supported in Lite (use endpoint only)`);
+      }
+    }
+    if (asRecord.endpoint !== undefined) {
+      if (!asRecord.endpoint || typeof asRecord.endpoint !== "object" || Array.isArray(asRecord.endpoint)) {
+        throw new Error("REPLAY_REPAIR_REVIEW_POLICY_JSON.endpoint must be an object");
+      }
+      for (const endpoint of Object.keys(asRecord.endpoint as Record<string, unknown>)) {
+        if (endpoint !== "*" && endpoint !== "replay_playbook_repair_review") {
+          throw new Error(
+            `REPLAY_REPAIR_REVIEW_POLICY_JSON.endpoint.${endpoint} is not supported in Lite (use *|replay_playbook_repair_review)`,
+          );
+        }
+      }
+    }
   }
   {
     const normalized = parseSandboxAllowedCommandsJson(parsed.data.SANDBOX_ALLOWED_COMMANDS_JSON);

@@ -9,6 +9,7 @@ Current source boundary:
 - `packages/runtime-core/` is the shared extraction seam.
 - `src/host/http-host.ts` is Lite-only and rejects non-lite source startup.
 - `src/routes/automations.ts` is reintroduced as a Lite-local automation kernel surface.
+- `src/app/replay-repair-review-policy.ts` is narrowed to global plus endpoint defaults only.
 - `src/jobs/` is reduced to kernel-linked helpers only:
   - `associative-linking-lib.ts`
   - `topicClusterLib.ts`
@@ -31,6 +32,7 @@ Still unsupported in Lite:
 - promotion/control-plane flows
 - server alerting and admin automation surfaces
 - repair approval/rejection workflows
+- tenant-scoped replay repair review policy overlays
 - compensation tooling, telemetry, and shadow review/report surfaces
 
 Still pending before Lite becomes a clean source-built repo:
