@@ -1,8 +1,4 @@
 import type { Env } from "../config.js";
-import {
-  createApiKeyPrincipalResolver,
-  createTenantQuotaResolver,
-} from "../control-plane.js";
 import { createNoopDb } from "../db.js";
 import { createEmbeddingProviderFromEnv } from "../embeddings/index.js";
 import { createEmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
@@ -22,8 +18,6 @@ import {
 import { createLiteWriteStore } from "../store/lite-write-store.js";
 import { createLiteAutomationStore } from "../store/lite-automation-store.js";
 import { createLiteAutomationRunStore } from "../store/lite-automation-run-store.js";
-import { createAuthResolver } from "../util/auth.js";
-import { sha256Hex } from "../util/crypto.js";
 import { EmbedQueryBatcher } from "../util/embed_query_batcher.js";
 import { InflightGate } from "../util/inflight_gate.js";
 import { LruTtlCache } from "../util/lru_ttl_cache.js";
@@ -156,14 +150,6 @@ export async function createRuntimeServices(env: Env) {
     recoveryPollIntervalMs: env.SANDBOX_RUN_RECOVERY_POLL_INTERVAL_MS,
     recoveryBatchSize: env.SANDBOX_RUN_RECOVERY_BATCH_SIZE,
   });
-  const authResolver = createAuthResolver({
-    mode: env.MEMORY_AUTH_MODE,
-    apiKeysJson: env.MEMORY_API_KEYS_JSON,
-    jwtHs256Secret: env.MEMORY_JWT_HS256_SECRET,
-    jwtClockSkewSec: env.MEMORY_JWT_CLOCK_SKEW_SEC,
-    jwtRequireExp: env.APP_ENV === "prod",
-  });
-
   const recallStoreCapabilities: RecallStoreCapabilities = {
     debug_embeddings: true,
     audit_insert: true,
@@ -231,26 +217,6 @@ export async function createRuntimeServices(env: Env) {
       })
     : null;
 
-  const tenantQuotaDefaults = {
-    recall_rps: env.TENANT_RECALL_RATE_LIMIT_RPS,
-    recall_burst: env.TENANT_RECALL_RATE_LIMIT_BURST,
-    write_rps: env.TENANT_WRITE_RATE_LIMIT_RPS,
-    write_burst: env.TENANT_WRITE_RATE_LIMIT_BURST,
-    write_max_wait_ms: env.TENANT_WRITE_RATE_LIMIT_MAX_WAIT_MS,
-    debug_embed_rps: env.TENANT_DEBUG_EMBED_RATE_LIMIT_RPS,
-    debug_embed_burst: env.TENANT_DEBUG_EMBED_RATE_LIMIT_BURST,
-    recall_text_embed_rps: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
-    recall_text_embed_burst: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_BURST,
-    recall_text_embed_max_wait_ms: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS,
-  };
-  const resolveControlPlaneApiKeyPrincipal = Object.assign(async () => null, {
-    invalidate() {},
-    clear() {},
-  });
-  const tenantQuotaResolver = createTenantQuotaResolver(db, {
-    cache_ttl_ms: env.CONTROL_TENANT_QUOTA_CACHE_TTL_MS,
-    defaults: tenantQuotaDefaults,
-  });
   const sandboxTenantBudgetPolicy = parseSandboxTenantBudgetPolicy(env.SANDBOX_TENANT_BUDGET_POLICY_JSON);
 
   const recallTextEmbedCache =
@@ -302,7 +268,6 @@ export async function createRuntimeServices(env: Env) {
     liteAutomationRunStore,
     embedder,
     sandboxExecutor,
-    authResolver,
     healthDatabaseTargetHash: null,
     recallStoreCapabilities,
     writeStoreCapabilities,
@@ -317,8 +282,6 @@ export async function createRuntimeServices(env: Env) {
     sandboxWriteLimiter,
     sandboxReadLimiter,
     recallTextEmbedLimiter,
-    resolveControlPlaneApiKeyPrincipal,
-    tenantQuotaResolver,
     sandboxTenantBudgetPolicy,
     recallTextEmbedCache,
     recallTextEmbedInflight,

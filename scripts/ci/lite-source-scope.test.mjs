@@ -118,3 +118,24 @@ test("lite runtime services do not wire postgres or embedded store constructors"
   }
   assert.match(runtimeServicesFile, /aionis-lite runtime services only support AIONIS_EDITION=lite/);
 });
+
+test("lite request guards do not keep full auth or tenant quota plumbing", () => {
+  const requestGuardsFile = fs.readFileSync(path.join(ROOT, "src", "app", "request-guards.ts"), "utf8");
+  const runtimeEntryFile = fs.readFileSync(path.join(ROOT, "src", "runtime-entry.ts"), "utf8");
+  const runtimeServicesFile = fs.readFileSync(path.join(ROOT, "src", "app", "runtime-services.ts"), "utf8");
+  const forbiddenSymbols = [
+    "recordControlAuditEvent",
+    "emitControlAudit",
+    "resolveControlPlaneApiKeyPrincipal",
+    "tenantQuotaResolver",
+    "authResolver",
+    "assertIdentityMatch",
+  ];
+  for (const symbol of forbiddenSymbols) {
+    assert.equal(requestGuardsFile.includes(symbol), false, `${symbol} should be absent from lite request-guards`);
+    assert.equal(runtimeEntryFile.includes(symbol), false, `${symbol} should not be passed through lite runtime-entry`);
+    assert.equal(runtimeServicesFile.includes(symbol), false, `${symbol} should be absent from lite runtime-services`);
+  }
+  assert.match(requestGuardsFile, /aionis-lite request guards only support MEMORY_AUTH_MODE=off/);
+  assert.match(requestGuardsFile, /aionis-lite request guards only support TENANT_QUOTA_ENABLED=false/);
+});

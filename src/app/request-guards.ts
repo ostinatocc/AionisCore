@@ -1,9 +1,7 @@
-import { type ApiKeyPrincipalResolver, recordControlAuditEvent } from "../control-plane.js";
-import type { Db } from "../db.js";
 import type { Env } from "../config.js";
 import type { RecallAuth } from "../memory/recall.js";
 import { requireAdminTokenHeader, secretTokensEqual } from "../util/admin_auth.js";
-import type { AuthPrincipal, AuthResolver } from "../util/auth.js";
+import type { AuthPrincipal } from "../util/auth.js";
 import { sha256Hex } from "../util/crypto.js";
 import { HttpError } from "../util/http.js";
 import { parseTrustedProxyCidrs, resolveTrustedClientIp } from "../util/ip-guard.js";
@@ -15,26 +13,6 @@ type RateLimitResult =
 
 type Limiter = {
   check: (key: string, cost?: number) => RateLimitResult;
-};
-
-type TenantQuotaLimit = {
-  rps: number;
-  burst: number;
-  max_wait_ms: number;
-};
-
-type TenantQuotaResolver = {
-  resolve: (tenantId: string) => Promise<{
-    recall: TenantQuotaLimit;
-    write: TenantQuotaLimit;
-    debug_embeddings: TenantQuotaLimit;
-    recall_text_embed: TenantQuotaLimit;
-  }>;
-  limiterFor: (
-    tenantId: string,
-    kind: "recall" | "write" | "debug_embeddings" | "recall_text_embed",
-    cfg: TenantQuotaLimit,
-  ) => Limiter;
 };
 
 export type RateLimitKind = "recall" | "debug_embeddings" | "write" | "sandbox_read" | "sandbox_write";
@@ -94,11 +72,7 @@ export type IdentityRequestKind =
 
 type CreateRequestGuardsArgs = {
   env: Env;
-  db: Db | null;
   embedder: { embed: (texts: string[]) => Promise<number[][]> } | null;
-  authResolver: AuthResolver;
-  resolveControlPlaneApiKeyPrincipal: ApiKeyPrincipalResolver;
-  tenantQuotaResolver: TenantQuotaResolver;
   recallLimiter: Limiter | null;
   debugEmbedLimiter: Limiter | null;
   writeLimiter: Limiter | null;
@@ -116,16 +90,6 @@ function isLoopbackIp(ip: string | undefined): boolean {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function assertIdentityMatch(field: string, provided: string | null, expected: string | null) {
-  if (!provided || !expected) return;
-  if (provided === expected) return;
-  throw new HttpError(403, "identity_mismatch", `${field} does not match authenticated principal`, {
-    field,
-    provided,
-    expected,
-  });
 }
 
 function isReplayReadIdentityKind(kind: IdentityRequestKind): boolean {
@@ -163,11 +127,7 @@ function isReplayWriteIdentityKind(kind: IdentityRequestKind): boolean {
 
 export function createRequestGuards({
   env,
-  db,
   embedder,
-  authResolver,
-  resolveControlPlaneApiKeyPrincipal,
-  tenantQuotaResolver,
   recallLimiter,
   debugEmbedLimiter,
   writeLimiter,
@@ -177,6 +137,16 @@ export function createRequestGuards({
   recallInflightGate,
   writeInflightGate,
 }: CreateRequestGuardsArgs) {
+  if (env.AIONIS_EDITION !== "lite") {
+    throw new Error("aionis-lite request guards only support AIONIS_EDITION=lite");
+  }
+  if (env.MEMORY_AUTH_MODE !== "off") {
+    throw new Error("aionis-lite request guards only support MEMORY_AUTH_MODE=off");
+  }
+  if (env.TENANT_QUOTA_ENABLED) {
+    throw new Error("aionis-lite request guards only support TENANT_QUOTA_ENABLED=false");
+  }
+
   const trustedProxyCidrs = parseTrustedProxyCidrs(env.TRUSTED_PROXY_CIDRS);
   const requestClientIp = (req: any): string => {
     const cached = typeof req?.aionis_client_ip === "string" ? req.aionis_client_ip : "";
@@ -191,6 +161,7 @@ export function createRequestGuards({
     (req as any).aionis_client_ip = ip;
     return ip;
   };
+
   const buildRecallAuth = (req: any, wantDebugEmbeddings: boolean): RecallAuth => {
     if (!wantDebugEmbeddings) return { allow_debug_embeddings: false };
 
@@ -270,119 +241,37 @@ export function createRequestGuards({
   };
 
   const enforceRecallTextEmbedQuota = async (req: any, reply: any, tenantId: string) => {
+    void tenantId;
     if (!embedder) return;
-    if (env.RATE_LIMIT_ENABLED && recallTextEmbedLimiter) {
-      const key = rateLimitKey(req, "recall_text_embed");
-      let waitedMs = 0;
-      let res = recallTextEmbedLimiter.check(key, 1);
-      if (!res.allowed && env.RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS > 0) {
-        waitedMs = Math.min(env.RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS, Math.max(1, res.retry_after_ms));
-        await sleep(waitedMs);
-        res = recallTextEmbedLimiter.check(key, 1);
-      }
-      if (!res.allowed) {
-        reply.header("retry-after", Math.ceil(res.retry_after_ms / 1000));
-        throw new HttpError(429, "rate_limited_recall_text_embed", "recall_text embedding quota exceeded; retry later", {
-          retry_after_ms: res.retry_after_ms,
-          waited_ms: waitedMs,
-        });
-      }
-    }
+    if (!env.RATE_LIMIT_ENABLED || !recallTextEmbedLimiter) return;
 
-    if (!env.TENANT_QUOTA_ENABLED) return;
-    const quota = await tenantQuotaResolver.resolve(tenantId);
-    const cfg = quota.recall_text_embed;
-    const limiter = tenantQuotaResolver.limiterFor(tenantId, "recall_text_embed", cfg);
-    const key = `tenant:${tenantId}:recall_text_embed`;
+    const key = rateLimitKey(req, "recall_text_embed");
     let waitedMs = 0;
-    let res = limiter.check(key, 1);
-    if (!res.allowed && cfg.max_wait_ms > 0) {
-      waitedMs = Math.min(cfg.max_wait_ms, Math.max(1, res.retry_after_ms));
+    let res = recallTextEmbedLimiter.check(key, 1);
+    if (!res.allowed && env.RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS > 0) {
+      waitedMs = Math.min(env.RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS, Math.max(1, res.retry_after_ms));
       await sleep(waitedMs);
-      res = limiter.check(key, 1);
+      res = recallTextEmbedLimiter.check(key, 1);
     }
     if (res.allowed) return;
 
     reply.header("retry-after", Math.ceil(res.retry_after_ms / 1000));
-    throw new HttpError(
-      429,
-      "tenant_rate_limited_recall_text_embed",
-      "tenant recall_text embedding quota exceeded; retry later",
-      {
-        tenant_id: tenantId,
-        retry_after_ms: res.retry_after_ms,
-        waited_ms: waitedMs,
-      },
-    );
-  };
-
-  const emitControlAudit = async (
-    req: any,
-    input: {
-      action: string;
-      resource_type: string;
-      resource_id?: string | null;
-      tenant_id?: string | null;
-      details?: Record<string, unknown>;
-    },
-  ) => {
-    try {
-      if (!db) return;
-      await recordControlAuditEvent(db, {
-        actor: "admin_token",
-        action: input.action,
-        resource_type: input.resource_type,
-        resource_id: input.resource_id ?? null,
-        tenant_id: input.tenant_id ?? null,
-        request_id: String(req?.id ?? ""),
-        details: input.details ?? {},
-      });
-    } catch (err) {
-      req.log.warn({ err, action: input.action }, "failed to record control audit event");
-    }
+    throw new HttpError(429, "rate_limited_recall_text_embed", "recall_text embedding quota exceeded; retry later", {
+      retry_after_ms: res.retry_after_ms,
+      waited_ms: waitedMs,
+    });
   };
 
   const requireAdminToken = (req: any) => {
     requireAdminTokenHeader(req?.headers ?? {}, env.ADMIN_TOKEN);
   };
 
-  const requireMemoryPrincipal = async (req: any): Promise<AuthPrincipal | null> => {
-    if (authResolver.mode === "off") return null;
-    const principal = authResolver.resolve(req?.headers ?? {});
-    if (principal) return principal;
-
-    if (authResolver.mode === "api_key" || authResolver.mode === "api_key_or_jwt") {
-      const apiKey = typeof req?.headers?.["x-api-key"] === "string" ? String(req.headers["x-api-key"]).trim() : "";
-      if (apiKey) {
-        const resolved = await resolveControlPlaneApiKeyPrincipal(apiKey);
-        if (resolved) {
-          (req as any).aionis_api_key_prefix = resolved.key_prefix;
-          return {
-            tenant_id: resolved.tenant_id,
-            agent_id: resolved.agent_id,
-            team_id: resolved.team_id,
-            role: resolved.role,
-            source: "api_key",
-          };
-        }
-      }
-    }
-
-    const hint =
-      authResolver.required_header_hint === "x-api-key"
-        ? "X-Api-Key"
-        : authResolver.required_header_hint === "authorization"
-          ? "Authorization: Bearer <jwt>"
-          : authResolver.required_header_hint === "x-api-key_or_authorization"
-            ? "X-Api-Key or Authorization: Bearer <jwt>"
-            : "authorization";
-    throw new HttpError(401, "unauthorized", `valid ${hint} is required`);
-  };
+  const requireMemoryPrincipal = async (_req: any): Promise<AuthPrincipal | null> => null;
 
   const withIdentityFromRequest = (
     req: any,
     body: unknown,
-    principal: AuthPrincipal | null,
+    _principal: AuthPrincipal | null,
     kind: IdentityRequestKind,
   ): unknown => {
     if (!body || typeof body !== "object" || Array.isArray(body)) return body;
@@ -390,12 +279,8 @@ export function createRequestGuards({
     const headerTenantRaw = req?.headers?.["x-tenant-id"];
     const headerTenant = typeof headerTenantRaw === "string" ? headerTenantRaw.trim() : "";
     const bodyTenant = typeof obj.tenant_id === "string" ? obj.tenant_id.trim() : "";
-    const explicitTenant = bodyTenant || headerTenant || null;
 
-    if (principal) {
-      assertIdentityMatch("tenant_id", explicitTenant, principal.tenant_id);
-      obj.tenant_id = principal.tenant_id;
-    } else if (!bodyTenant && headerTenant) {
+    if (!bodyTenant && headerTenant) {
       obj.tenant_id = headerTenant;
     }
     if (typeof obj.tenant_id === "string" && obj.tenant_id.trim().length > 0) {
@@ -407,66 +292,21 @@ export function createRequestGuards({
       (req as any).aionis_scope = obj.scope.trim();
     }
 
-    if (
-      principal &&
-      (
-        kind === "find"
-        || kind === "resolve"
-        || kind === "recall"
-        || kind === "recall_text"
-        || kind === "planning_context"
-        || kind === "context_assemble"
-        || isReplayReadIdentityKind(kind)
-      )
-    ) {
-      const reqAgent = typeof obj.consumer_agent_id === "string" ? obj.consumer_agent_id.trim() : null;
-      const reqTeam = typeof obj.consumer_team_id === "string" ? obj.consumer_team_id.trim() : null;
-      assertIdentityMatch("consumer_agent_id", reqAgent, principal.agent_id);
-      assertIdentityMatch("consumer_team_id", reqTeam, principal.team_id);
-      if (!reqAgent && principal.agent_id) obj.consumer_agent_id = principal.agent_id;
-      if (!reqTeam && principal.team_id) obj.consumer_team_id = principal.team_id;
-    } else if (!principal && env.AIONIS_EDITION === "lite" && isReplayReadIdentityKind(kind)) {
-      if (!obj.consumer_agent_id) obj.consumer_agent_id = env.LITE_LOCAL_ACTOR_ID;
+    if (isReplayReadIdentityKind(kind) && !obj.consumer_agent_id) {
+      obj.consumer_agent_id = env.LITE_LOCAL_ACTOR_ID;
     }
 
-    if (
-      principal &&
-      (
-        kind === "write"
-        || isReplayWriteIdentityKind(kind)
-      )
-    ) {
-      const reqProducer = typeof obj.producer_agent_id === "string" ? obj.producer_agent_id.trim() : null;
-      const reqOwnerAgent = typeof obj.owner_agent_id === "string" ? obj.owner_agent_id.trim() : null;
-      const reqOwnerTeam = typeof obj.owner_team_id === "string" ? obj.owner_team_id.trim() : null;
-      assertIdentityMatch("producer_agent_id", reqProducer, principal.agent_id);
-      assertIdentityMatch("owner_agent_id", reqOwnerAgent, principal.agent_id);
-      assertIdentityMatch("owner_team_id", reqOwnerTeam, principal.team_id);
-      if (!reqProducer && principal.agent_id) obj.producer_agent_id = principal.agent_id;
-      if (!reqOwnerAgent && !reqOwnerTeam) {
-        if (principal.agent_id) obj.owner_agent_id = principal.agent_id;
-        else if (principal.team_id) obj.owner_team_id = principal.team_id;
-      }
-    } else if (!principal && env.AIONIS_EDITION === "lite" && isReplayWriteIdentityKind(kind)) {
+    if (kind === "write" || isReplayWriteIdentityKind(kind)) {
       if (!obj.memory_lane) obj.memory_lane = "private";
       if (!obj.producer_agent_id) obj.producer_agent_id = env.LITE_LOCAL_ACTOR_ID;
       if (!obj.owner_agent_id && !obj.owner_team_id) obj.owner_agent_id = env.LITE_LOCAL_ACTOR_ID;
     }
 
-    if (
-      principal
-      && (kind === "rules_evaluate" || kind === "tools_select" || kind === "tools_feedback" || kind === "planning_context" || kind === "context_assemble")
-    ) {
+    if (kind === "rules_evaluate" || kind === "tools_select" || kind === "tools_feedback" || kind === "planning_context" || kind === "context_assemble") {
       const ctx = obj.context && typeof obj.context === "object" && !Array.isArray(obj.context) ? { ...obj.context } : {};
       const agent = ctx.agent && typeof ctx.agent === "object" && !Array.isArray(ctx.agent) ? { ...ctx.agent } : {};
-      const reqCtxAgent = typeof agent.id === "string" ? agent.id.trim() : typeof ctx.agent_id === "string" ? ctx.agent_id.trim() : null;
-      const reqCtxTeam = typeof agent.team_id === "string" ? agent.team_id.trim() : typeof ctx.team_id === "string" ? ctx.team_id.trim() : null;
-      assertIdentityMatch("context.agent.id", reqCtxAgent, principal.agent_id);
-      assertIdentityMatch("context.agent.team_id", reqCtxTeam, principal.team_id);
-      if (!agent.id && principal.agent_id) agent.id = principal.agent_id;
-      if (!agent.team_id && principal.team_id) agent.team_id = principal.team_id;
-      if (!ctx.agent_id && principal.agent_id) ctx.agent_id = principal.agent_id;
-      if (!ctx.team_id && principal.team_id) ctx.team_id = principal.team_id;
+      if (!agent.id) agent.id = env.LITE_LOCAL_ACTOR_ID;
+      if (!ctx.agent_id) ctx.agent_id = env.LITE_LOCAL_ACTOR_ID;
       if (Object.keys(agent).length > 0) ctx.agent = agent;
       obj.context = ctx;
     }
@@ -498,40 +338,13 @@ export function createRequestGuards({
     return null;
   };
 
-  const enforceTenantQuota = async (req: any, reply: any, kind: TenantQuotaKind, tenantId: string) => {
-    if (!env.TENANT_QUOTA_ENABLED) return;
-    const quota = await tenantQuotaResolver.resolve(tenantId);
-    const cfg = kind === "debug_embeddings" ? quota.debug_embeddings : kind === "write" ? quota.write : quota.recall;
-    const limiter = tenantQuotaResolver.limiterFor(tenantId, kind, cfg);
-    const key = `tenant:${tenantId}:${kind}`;
-    let waitedMs = 0;
-    let res = limiter.check(key, 1);
-    if (!res.allowed && kind === "write" && cfg.max_wait_ms > 0) {
-      waitedMs = Math.min(cfg.max_wait_ms, Math.max(1, res.retry_after_ms));
-      await sleep(waitedMs);
-      res = limiter.check(key, 1);
-    }
-    if (res.allowed) return;
-
-    reply.header("retry-after", Math.ceil(res.retry_after_ms / 1000));
-    throw new HttpError(
-      429,
-      kind === "debug_embeddings"
-        ? "tenant_rate_limited_debug_embeddings"
-        : kind === "write"
-          ? "tenant_rate_limited_write"
-          : "tenant_rate_limited_recall",
-      `tenant quota exceeded (${kind}); retry later`,
-      { tenant_id: tenantId, retry_after_ms: res.retry_after_ms, waited_ms: waitedMs },
-    );
-  };
+  const enforceTenantQuota = async (_req: any, _reply: any, _kind: TenantQuotaKind, _tenantId: string) => {};
 
   return {
     buildRecallAuth,
     acquireInflightSlot,
     enforceRateLimit,
     enforceRecallTextEmbedQuota,
-    emitControlAudit,
     requireAdminToken,
     requireMemoryPrincipal,
     withIdentityFromRequest,
