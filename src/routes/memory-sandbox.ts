@@ -9,7 +9,6 @@ import {
   getSandboxRunArtifact,
   getSandboxRunLogs,
 } from "../memory/sandbox.js";
-import type { AuthPrincipal } from "../util/auth.js";
 import { HttpError } from "../util/http.js";
 
 type StoreLike = {
@@ -42,11 +41,10 @@ type RegisterMemorySandboxRoutesArgs = {
   store: StoreLike;
   sandboxExecutor: SandboxExecutorLike;
   requireAdminToken: (req: FastifyRequest) => void;
-  requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
     req: FastifyRequest,
     body: unknown,
-    principal: AuthPrincipal | null,
+    principal: null,
     kind: MemorySandboxRequestKind,
   ) => unknown;
   enforceRateLimit: (req: FastifyRequest, reply: FastifyReply, kind: "sandbox_read" | "sandbox_write") => Promise<void>;
@@ -64,7 +62,6 @@ export function registerMemorySandboxRoutes(args: RegisterMemorySandboxRoutesArg
     store,
     sandboxExecutor,
     requireAdminToken,
-    requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,
     enforceTenantQuota,
@@ -73,6 +70,9 @@ export function registerMemorySandboxRoutes(args: RegisterMemorySandboxRoutesArg
     projectFromBody,
     enforceSandboxTenantBudget,
   } = args;
+  if (env.AIONIS_EDITION !== "lite") {
+    throw new Error("aionis-lite memory-sandbox routes only support AIONIS_EDITION=lite");
+  }
 
   const assertSandboxEnabled = (req: FastifyRequest) => {
     if (!env.SANDBOX_ENABLED) {
@@ -90,9 +90,8 @@ export function registerMemorySandboxRoutes(args: RegisterMemorySandboxRoutesArg
     rateLimitKind: SandboxRateLimitKind,
     tenantQuotaKind: SandboxTenantQuotaKind,
   ) => {
-    const principal = await requireMemoryPrincipal(req);
     assertSandboxEnabled(req);
-    const typedBody = withIdentityFromRequest(req, req.body, principal, kind);
+    const typedBody = withIdentityFromRequest(req, req.body, null, kind);
     await enforceRateLimit(req, reply, rateLimitKind);
     await enforceTenantQuota(req, reply, tenantQuotaKind, tenantFromBody(typedBody));
     return typedBody;

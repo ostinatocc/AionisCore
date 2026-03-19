@@ -588,7 +588,6 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
     store,
     sandboxExecutor,
     requireAdminToken,
-    requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,
     enforceTenantQuota,
