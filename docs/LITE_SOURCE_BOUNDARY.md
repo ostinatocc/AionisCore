@@ -1,0 +1,37 @@
+# Lite Source Boundary
+
+This repository is intentionally slimmer than the monorepo export it came from.
+
+Current source boundary:
+- `apps/lite/` owns the product-facing Lite wrapper.
+- `apps/lite/dist/index.js` is a thin launcher into the Lite source runtime.
+- `src/runtime-entry.ts` is the runtime truth for Lite startup.
+- `packages/runtime-core/` is the shared extraction seam.
+- `src/host/http-host.ts` is Lite-only and rejects non-lite source startup.
+- `src/routes/automations.ts` is reintroduced as a Lite-local automation kernel surface.
+- `src/jobs/` is reduced to kernel-linked helpers only:
+  - `associative-linking-lib.ts`
+  - `topicClusterLib.ts`
+
+Explicitly removed from this repo:
+- benchmark, perf, hosted, and backfill jobs
+- dev, eval, MCP, SDK, and bench entrypoints
+- admin/control and automation route source files
+- benchmark fixtures and job docs tied to the full/server topology
+
+Lite-local automation kernel currently supports:
+- create/get/list/validate for single-user local automation definitions
+- run/get/list/cancel/resume for local playbook-driven automation runs
+- SQLite-backed persistence in the Lite write database
+- node kinds: `playbook`, `approval`, `condition`, `artifact_gate`
+- default local identity via `LITE_LOCAL_ACTOR_ID` so replay/playbook/automation flows work without multi-tenant identity payloads
+
+Still unsupported in Lite:
+- reviewer workflows
+- promotion/control-plane flows
+- server alerting and admin automation surfaces
+- repair approval/rejection workflows
+- compensation tooling, telemetry, and shadow review/report surfaces
+
+Still pending before Lite becomes a clean source-built repo:
+- replace the remaining vendored `dist/` payloads with Lite-owned build artifacts end-to-end

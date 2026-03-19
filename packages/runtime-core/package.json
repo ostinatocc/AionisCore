@@ -1,0 +1,38 @@
+{
+  "name": "@aionis/runtime-core",
+  "version": "0.2.21",
+  "description": "Shared runtime boundary for Aionis Lite and full Aionis",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "pack:dry-run": "npm pack --dry-run --cache /tmp/aionis-npm-cache"
+  },
+  "keywords": [
+    "aionis",
+    "runtime",
+    "lite",
+    "server"
+  ],
+  "author": "Aionis Core",
+  "license": "Apache-2.0"
+}
+

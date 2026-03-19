@@ -1,0 +1,16 @@
+{
+  "manifest_version": 1,
+  "runtime_id": "aionis-lite-wrapper",
+  "display_name": "Aionis Lite Wrapper",
+  "runtime_root": "../..",
+  "dist_entry": "apps/lite/dist/index.js",
+  "start_command": {
+    "command": "bash",
+    "args": [
+      "apps/lite/scripts/start-lite-app.sh"
+    ]
+  },
+  "release": {
+    "github_repo": "Cognary/Aionis-Lite"
+  }
+}

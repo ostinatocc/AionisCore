@@ -1,0 +1,42 @@
+name: Lite Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "lite-v*"
+
+jobs:
+  lite-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build
+        run: npm run -s build
+
+      - name: Resolve version
+        id: version
+        run: echo "version=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
+
+      - name: Pack source
+        run: tar --exclude-vcs --exclude='./node_modules' --exclude='./.aionisgo' --exclude='./.tmp' --exclude='./artifacts' -czf "aionis-lite-${{ steps.version.outputs.version }}-source.tgz" .
+
+      - name: Upload source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aionis-lite-source
+          path: aionis-lite-${{ steps.version.outputs.version }}-source.tgz

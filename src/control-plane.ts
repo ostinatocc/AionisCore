@@ -1,0 +1,3876 @@
+import { randomBytes } from "node:crypto";
+import { isIP } from "node:net";
+import { posix as pathPosix } from "node:path";
+import type { Db } from "./db.js";
+import { withClient, withTx } from "./db.js";
+import { sha256Hex } from "./util/crypto.js";
+import { HttpError, badRequest } from "./util/http.js";
+import { TokenBucketLimiter } from "./util/ratelimit.js";
+
+export type ApiKeyPrincipal = {
+  tenant_id: string;
+  agent_id: string | null;
+  team_id: string | null;
+  role: string | null;
+  key_prefix: string | null;
+};
+
+export type ControlTenantInput = {
+  tenant_id: string;
+  display_name?: string | null;
+  status?: "active" | "suspended";
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlProjectInput = {
+  project_id: string;
+  tenant_id: string;
+  display_name?: string | null;
+  status?: "active" | "archived";
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlApiKeyInput = {
+  tenant_id: string;
+  project_id?: string | null;
+  label?: string | null;
+  role?: string | null;
+  agent_id?: string | null;
+  team_id?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlApiKeyRotateInput = {
+  label?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type TenantQuotaProfile = {
+  tenant_id: string;
+  recall_rps: number;
+  recall_burst: number;
+  write_rps: number;
+  write_burst: number;
+  write_max_wait_ms: number;
+  debug_embed_rps: number;
+  debug_embed_burst: number;
+  recall_text_embed_rps: number;
+  recall_text_embed_burst: number;
+  recall_text_embed_max_wait_ms: number;
+  updated_at: string;
+};
+
+type TenantQuotaDefaults = Omit<TenantQuotaProfile, "tenant_id" | "updated_at">;
+
+type QuotaKind = "recall" | "write" | "debug_embeddings" | "recall_text_embed";
+
+type QuotaLimit = {
+  rps: number;
+  burst: number;
+  max_wait_ms: number;
+};
+
+type TenantQuotaResolved = Record<QuotaKind, QuotaLimit>;
+
+export type ControlAuditEventInput = {
+  actor?: string | null;
+  action: string;
+  resource_type: string;
+  resource_id?: string | null;
+  tenant_id?: string | null;
+  request_id?: string | null;
+  details?: Record<string, unknown>;
+};
+
+export type AlertChannel = "webhook" | "slack_webhook" | "pagerduty_events";
+export type AlertRouteStatus = "active" | "disabled";
+
+export type ControlAlertRouteInput = {
+  tenant_id: string;
+  channel: AlertChannel;
+  label?: string | null;
+  events?: string[];
+  status?: AlertRouteStatus;
+  target?: string | null;
+  secret?: string | null;
+  headers?: Record<string, string>;
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlAlertDeliveryInput = {
+  route_id: string;
+  tenant_id: string;
+  event_type: string;
+  status: "sent" | "failed" | "skipped";
+  request_id?: string | null;
+  response_code?: number | null;
+  response_body?: string | null;
+  error?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlIncidentPublishJobInput = {
+  tenant_id: string;
+  run_id: string;
+  source_dir: string;
+  target: string;
+  max_attempts?: number;
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlIncidentPublishReplayInput = {
+  tenant_id?: string;
+  statuses?: Array<"failed" | "dead_letter">;
+  ids?: string[];
+  limit?: number;
+  reset_attempts?: boolean;
+  reason?: string;
+  dry_run?: boolean;
+  allow_all_tenants?: boolean;
+};
+
+export type MemoryRequestTelemetryInput = {
+  tenant_id: string;
+  scope: string;
+  endpoint: "write" | "recall" | "recall_text" | "planning_context" | "context_assemble";
+  status_code: number;
+  latency_ms: number;
+  api_key_prefix?: string | null;
+  request_id?: string | null;
+};
+
+export type ContextAssemblyLayerName = "facts" | "episodes" | "rules" | "decisions" | "tools" | "citations";
+
+export type MemoryContextAssemblyLayerTelemetryInput = {
+  layer_name: ContextAssemblyLayerName;
+  source_count: number;
+  kept_count: number;
+  dropped_count: number;
+  budget_chars: number;
+  used_chars: number;
+  max_items: number;
+};
+
+export type MemoryContextAssemblyTelemetryInput = {
+  tenant_id: string;
+  scope: string;
+  endpoint: "planning_context" | "context_assemble";
+  layered_output: boolean;
+  latency_ms: number;
+  request_id?: string | null;
+  total_budget_chars: number;
+  used_chars: number;
+  remaining_chars: number;
+  source_items: number;
+  kept_items: number;
+  dropped_items: number;
+  layers_with_content: number;
+  merge_trace_included: boolean;
+  selection_policy_name?: string | null;
+  selection_policy_source?: string | null;
+  selected_memory_layers?: string[];
+  trust_anchor_layers?: string[];
+  requested_allowed_layers?: string[];
+  layers: MemoryContextAssemblyLayerTelemetryInput[];
+};
+
+type TelemetryEndpoint = MemoryRequestTelemetryInput["endpoint"];
+
+function trimOrNull(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  return s.length > 0 ? s : null;
+}
+
+function asJson(v: unknown): Record<string, unknown> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  return v as Record<string, unknown>;
+}
+
+function asStringMap(v: unknown): Record<string, string> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    const key = trimOrNull(k);
+    const str = trimOrNull(val);
+    if (!key || !str) continue;
+    out[key] = str;
+  }
+  return out;
+}
+
+function asStringArray(v: unknown, fallback: string[] = []): string[] {
+  if (!Array.isArray(v)) return fallback;
+  const out: string[] = [];
+  for (const item of v) {
+    const s = trimOrNull(item);
+    if (!s) continue;
+    out.push(s);
+  }
+  return out.length > 0 ? out : fallback;
+}
+
+function hasControlChars(input: string): boolean {
+  return /[\u0000-\u001f\u007f]/.test(input);
+}
+
+function isPrivateOrReservedIpv4(host: string): boolean {
+  const parts = host.split(".").map((seg) => Number(seg));
+  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+  const [a, b, c] = parts;
+  if (a === 10 || a === 127 || a === 0) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a === 192 && b === 0 && c === 0) return true;
+  if (a === 192 && b === 0 && c === 2) return true;
+  if (a === 198 && (b === 18 || b === 19)) return true;
+  if (a === 198 && b === 51 && c === 100) return true;
+  if (a === 203 && b === 0 && c === 113) return true;
+  if (a >= 224) return true;
+  return false;
+}
+
+function isPrivateOrReservedIpv6(host: string): boolean {
+  const h = host.toLowerCase();
+  if (h === "::1" || h === "::") return true;
+  if (h.startsWith("fc") || h.startsWith("fd")) return true; // ULA (fc00::/7)
+  if (h.startsWith("fe8") || h.startsWith("fe9") || h.startsWith("fea") || h.startsWith("feb")) return true; // link-local (fe80::/10)
+  if (h.startsWith("ff")) return true; // multicast (ff00::/8)
+  if (h.startsWith("2001:db8")) return true; // documentation range
+  if (h.startsWith("::ffff:")) {
+    const mapped = h.slice("::ffff:".length);
+    if (isIP(mapped) === 4 && isPrivateOrReservedIpv4(mapped)) return true;
+  }
+  return false;
+}
+
+function isBlockedOutboundHostname(hostnameRaw: string): boolean {
+  const hostname = hostnameRaw.toLowerCase();
+  if (!hostname) return true;
+  // Block non-canonical numeric hostnames (e.g. 2130706433, 127.1) to avoid parser-dependent loopback resolution.
+  if (/^[0-9.]+$/.test(hostname)) return true;
+  if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || hostname.endsWith(".internal")) {
+    return true;
+  }
+  const ipType = isIP(hostname);
+  if (ipType === 4) return isPrivateOrReservedIpv4(hostname);
+  if (ipType === 6) return isPrivateOrReservedIpv6(hostname);
+  return false;
+}
+
+export function normalizeControlAlertRouteTarget(channel: AlertChannel, rawTarget: unknown): string {
+  const target = trimOrNull(rawTarget);
+  if (!target) {
+    badRequest("invalid_alert_target", "target is required");
+  }
+  if (hasControlChars(target)) {
+    badRequest("invalid_alert_target", "target contains invalid control characters");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(target);
+  } catch {
+    badRequest("invalid_alert_target", "target must be a valid absolute URL");
+  }
+  if (parsed.protocol.toLowerCase() !== "https:") {
+    badRequest("invalid_alert_target", "target protocol must be https");
+  }
+  if (!parsed.hostname) {
+    badRequest("invalid_alert_target", "target host is required");
+  }
+  if (parsed.username || parsed.password) {
+    badRequest("invalid_alert_target", "target must not include URL credentials");
+  }
+  if (isBlockedOutboundHostname(parsed.hostname)) {
+    badRequest("invalid_alert_target", "target host must be public and routable");
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (channel === "slack_webhook" && host !== "hooks.slack.com" && host !== "hooks.slack-gov.com") {
+    badRequest("invalid_alert_target", "slack_webhook target host must be hooks.slack.com or hooks.slack-gov.com");
+  }
+  if (channel === "pagerduty_events" && host !== "events.pagerduty.com" && host !== "events.eu.pagerduty.com") {
+    badRequest("invalid_alert_target", "pagerduty_events target host must be events.pagerduty.com or events.eu.pagerduty.com");
+  }
+  return parsed.toString();
+}
+
+export function normalizeControlIncidentPublishSourceDir(rawSourceDir: unknown): string {
+  const sourceDir = trimOrNull(rawSourceDir);
+  if (!sourceDir) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir is required");
+  }
+  if (hasControlChars(sourceDir)) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir contains invalid control characters");
+  }
+  if (sourceDir.includes("\\")) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir must use POSIX path separators");
+  }
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(sourceDir)) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir must be a local absolute path, not a URI");
+  }
+  if (!sourceDir.startsWith("/")) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir must be an absolute path");
+  }
+  const sourceParts = sourceDir.split("/");
+  if (sourceParts.includes(".") || sourceParts.includes("..")) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir must not contain dot segments");
+  }
+  const normalized = pathPosix.normalize(sourceDir);
+  if (!normalized.startsWith("/")) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir must be an absolute path");
+  }
+  if (normalized === "/") {
+    badRequest("invalid_incident_publish_source_dir", "source_dir must not be filesystem root");
+  }
+  return normalized.length > 1 && normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+}
+
+export function normalizeControlIncidentPublishTarget(rawTarget: unknown): string {
+  const target = trimOrNull(rawTarget);
+  if (!target) {
+    badRequest("invalid_incident_publish_target", "target is required");
+  }
+  if (hasControlChars(target)) {
+    badRequest("invalid_incident_publish_target", "target contains invalid control characters");
+  }
+  if (target.includes("\\")) {
+    badRequest("invalid_incident_publish_target", "target must not contain backslashes");
+  }
+  if (target.startsWith("/") || target.startsWith("./") || target.startsWith("../") || target.startsWith("~")) {
+    badRequest("invalid_incident_publish_target", "target must be a URI, not a local filesystem path");
+  }
+  const schemeMatch = target.match(/^([a-z][a-z0-9+.-]*):/i);
+  if (!schemeMatch) {
+    badRequest("invalid_incident_publish_target", "target must include a URI scheme");
+  }
+  const scheme = schemeMatch[1].toLowerCase();
+  const allowedSchemes = new Set(["https", "s3", "gs", "az", "abfs", "oci", "arn"]);
+  if (!allowedSchemes.has(scheme)) {
+    badRequest("invalid_incident_publish_target", `target scheme ${scheme} is not allowed`);
+  }
+  if (scheme === "arn") return target;
+
+  let parsed: URL | null = null;
+  const shouldParseAsUrl = target.includes("://") || scheme === "https";
+  if (!shouldParseAsUrl) {
+    badRequest("invalid_incident_publish_target", "target must be a valid absolute URI");
+  }
+  try {
+    parsed = new URL(target);
+  } catch {
+    badRequest("invalid_incident_publish_target", "target must be a valid absolute URI");
+  }
+  if (!parsed.hostname) {
+    badRequest("invalid_incident_publish_target", "target host/bucket is required");
+  }
+  if (parsed.username || parsed.password) {
+    badRequest("invalid_incident_publish_target", "target must not include URI credentials");
+  }
+  if (scheme === "https" && isBlockedOutboundHostname(parsed.hostname)) {
+    badRequest("invalid_incident_publish_target", "target host must be public and routable");
+  }
+  return parsed.toString();
+}
+
+function f64(v: unknown, fallback: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+function i32(v: unknown, fallback: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : fallback;
+}
+
+function round(v: number, digits = 6): number {
+  const f = 10 ** digits;
+  return Math.round(v * f) / f;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function normalizeIsoTimestamp(v: string | null): string | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isFinite(d.getTime()) ? d.toISOString() : null;
+}
+
+export async function upsertControlTenant(db: Db, input: ControlTenantInput) {
+  const tenantId = trimOrNull(input.tenant_id);
+  if (!tenantId) throw new Error("tenant_id is required");
+  const displayName = trimOrNull(input.display_name);
+  const status = input.status ?? "active";
+  const metadata = asJson(input.metadata);
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      INSERT INTO control_tenants (tenant_id, display_name, status, metadata)
+      VALUES ($1, $2, $3, $4::jsonb)
+      ON CONFLICT (tenant_id)
+      DO UPDATE SET
+        display_name = EXCLUDED.display_name,
+        status = EXCLUDED.status,
+        metadata = EXCLUDED.metadata
+      RETURNING tenant_id, display_name, status, metadata, created_at, updated_at
+      `,
+      [tenantId, displayName, status, JSON.stringify(metadata)],
+    );
+    return q.rows[0];
+  });
+}
+
+export async function listControlTenants(
+  db: Db,
+  opts: { status?: "active" | "suspended"; limit?: number; offset?: number } = {},
+) {
+  const limit = Number.isFinite(opts.limit) ? Math.max(1, Math.min(500, Math.trunc(opts.limit!))) : 100;
+  const offset = Number.isFinite(opts.offset) ? Math.max(0, Math.trunc(opts.offset!)) : 0;
+  const status = opts.status ?? null;
+  return await withClient(db, async (client) => {
+    if (status) {
+      const q = await client.query(
+        `
+        SELECT tenant_id, display_name, status, metadata, created_at, updated_at
+        FROM control_tenants
+        WHERE status = $1
+        ORDER BY tenant_id ASC
+        LIMIT $2 OFFSET $3
+        `,
+        [status, limit, offset],
+      );
+      return q.rows;
+    }
+    const q = await client.query(
+      `
+      SELECT tenant_id, display_name, status, metadata, created_at, updated_at
+      FROM control_tenants
+      ORDER BY tenant_id ASC
+      LIMIT $1 OFFSET $2
+      `,
+      [limit, offset],
+    );
+    return q.rows;
+  });
+}
+
+export async function upsertControlProject(db: Db, input: ControlProjectInput) {
+  const projectId = trimOrNull(input.project_id);
+  const tenantId = trimOrNull(input.tenant_id);
+  if (!projectId) throw new Error("project_id is required");
+  if (!tenantId) throw new Error("tenant_id is required");
+  const displayName = trimOrNull(input.display_name);
+  const status = input.status ?? "active";
+  const metadata = asJson(input.metadata);
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      INSERT INTO control_projects (project_id, tenant_id, display_name, status, metadata)
+      VALUES ($1, $2, $3, $4, $5::jsonb)
+      ON CONFLICT (project_id)
+      DO UPDATE SET
+        display_name = EXCLUDED.display_name,
+        status = EXCLUDED.status,
+        metadata = EXCLUDED.metadata
+      WHERE control_projects.tenant_id = EXCLUDED.tenant_id
+      RETURNING project_id, tenant_id, display_name, status, metadata, created_at, updated_at
+      `,
+      [projectId, tenantId, displayName, status, JSON.stringify(metadata)],
+    );
+    if (Number(q.rowCount ?? 0) > 0) return q.rows[0];
+    const existing = await client.query(
+      `
+      SELECT tenant_id
+      FROM control_projects
+      WHERE project_id = $1
+      LIMIT 1
+      `,
+      [projectId],
+    );
+    if (Number(existing.rowCount ?? 0) > 0) {
+      throw new HttpError(409, "project_tenant_mismatch", "project_id belongs to a different tenant", {
+        project_id: projectId,
+        tenant_id: tenantId,
+        project_tenant_id: String(existing.rows[0].tenant_id),
+      });
+    }
+    throw new Error(`failed to upsert control project: ${projectId}`);
+  });
+}
+
+function generateApiKey(): string {
+  const secret = randomBytes(24).toString("base64url");
+  return `ak_live_${secret}`;
+}
+
+async function assertProjectBelongsToTenant(
+  client: { query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<{ tenant_id: string }>; rowCount: number }> },
+  projectId: string | null,
+  tenantId: string,
+): Promise<void> {
+  if (!projectId) return;
+  const existing = await client.query(
+    `
+    SELECT tenant_id
+    FROM control_projects
+    WHERE project_id = $1
+    LIMIT 1
+    `,
+    [projectId],
+  );
+  if (existing.rowCount < 1) {
+    badRequest("invalid_project_id", "project_id was not found", { project_id: projectId });
+  }
+  const ownerTenantId = String(existing.rows[0].tenant_id);
+  if (ownerTenantId !== tenantId) {
+    throw new HttpError(409, "project_tenant_mismatch", "project_id belongs to a different tenant", {
+      project_id: projectId,
+      tenant_id: tenantId,
+      project_tenant_id: ownerTenantId,
+    });
+  }
+}
+
+export async function createControlApiKey(db: Db, input: ControlApiKeyInput) {
+  const tenantId = trimOrNull(input.tenant_id);
+  if (!tenantId) throw new Error("tenant_id is required");
+  const projectId = trimOrNull(input.project_id);
+  const label = trimOrNull(input.label);
+  const role = trimOrNull(input.role);
+  const agentId = trimOrNull(input.agent_id);
+  const teamId = trimOrNull(input.team_id);
+  const metadata = asJson(input.metadata);
+
+  const apiKey = generateApiKey();
+  const keyHash = sha256Hex(apiKey);
+  const keyPrefix = apiKey.slice(0, 14);
+
+  return await withClient(db, async (client) => {
+    await assertProjectBelongsToTenant(client, projectId, tenantId);
+    const q = await client.query(
+      `
+      INSERT INTO control_api_keys (tenant_id, project_id, label, role, agent_id, team_id, key_hash, key_prefix, metadata)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+      RETURNING id, tenant_id, project_id, label, role, agent_id, team_id, key_prefix, status, metadata, created_at, revoked_at
+      `,
+      [tenantId, projectId, label, role, agentId, teamId, keyHash, keyPrefix, JSON.stringify(metadata)],
+    );
+    return { ...q.rows[0], api_key: apiKey };
+  });
+}
+
+export type ApiKeyPrincipalResolver = ((rawApiKey: string) => Promise<ApiKeyPrincipal | null>) & {
+  invalidate(rawApiKey: string): void;
+  clear(): void;
+};
+
+export async function listControlApiKeys(
+  db: Db,
+  opts: {
+    tenant_id?: string;
+    project_id?: string;
+    status?: "active" | "revoked";
+    limit?: number;
+    offset?: number;
+  } = {},
+) {
+  const tenantId = trimOrNull(opts.tenant_id);
+  const projectId = trimOrNull(opts.project_id);
+  const status = opts.status ?? null;
+  const limit = Number.isFinite(opts.limit) ? Math.max(1, Math.min(500, Math.trunc(opts.limit!))) : 100;
+  const offset = Number.isFinite(opts.offset) ? Math.max(0, Math.trunc(opts.offset!)) : 0;
+
+  const where: string[] = [];
+  const args: unknown[] = [];
+  if (tenantId) {
+    args.push(tenantId);
+    where.push(`tenant_id = $${args.length}`);
+  }
+  if (projectId) {
+    args.push(projectId);
+    where.push(`project_id = $${args.length}`);
+  }
+  if (status) {
+    args.push(status);
+    where.push(`status = $${args.length}`);
+  }
+  args.push(limit);
+  args.push(offset);
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      SELECT id, tenant_id, project_id, label, role, agent_id, team_id, key_prefix, status, metadata, created_at, revoked_at
+      FROM control_api_keys
+      ${whereSql}
+      ORDER BY created_at DESC
+      LIMIT $${args.length - 1} OFFSET $${args.length}
+      `,
+      args,
+    );
+    return q.rows;
+  });
+}
+
+export async function revokeControlApiKey(db: Db, id: string) {
+  const keyId = trimOrNull(id);
+  if (!keyId) throw new Error("id is required");
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      UPDATE control_api_keys
+      SET status = 'revoked', revoked_at = now()
+      WHERE id = $1
+      RETURNING id, tenant_id, project_id, label, role, agent_id, team_id, key_prefix, status, metadata, created_at, revoked_at
+      `,
+      [keyId],
+    );
+    return q.rows[0] ?? null;
+  });
+}
+
+export async function rotateControlApiKey(db: Db, id: string, input: ControlApiKeyRotateInput = {}) {
+  const keyId = trimOrNull(id);
+  if (!keyId) throw new Error("id is required");
+  const overrideLabel = trimOrNull(input.label);
+  const overrideMetadata = asJson(input.metadata);
+  const apiKey = generateApiKey();
+  const keyHash = sha256Hex(apiKey);
+  const keyPrefix = apiKey.slice(0, 14);
+
+  return await withTx(db, async (client) => {
+    const cur = await client.query(
+      `
+      SELECT id, tenant_id, project_id, label, role, agent_id, team_id, metadata, status
+      FROM control_api_keys
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [keyId],
+    );
+    const oldRow = cur.rows[0];
+    if (!oldRow) return null;
+    if (String(oldRow.status) !== "active") return null;
+
+    const mergedMetadata = {
+      ...asJson(oldRow.metadata),
+      ...overrideMetadata,
+      rotated_from_key_id: keyId,
+      rotated_at: nowIso(),
+    };
+
+    const ins = await client.query(
+      `
+      INSERT INTO control_api_keys (
+        tenant_id, project_id, label, role, agent_id, team_id, key_hash, key_prefix, metadata
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+      RETURNING id, tenant_id, project_id, label, role, agent_id, team_id, key_prefix, status, metadata, created_at, revoked_at
+      `,
+      [
+        String(oldRow.tenant_id),
+        oldRow.project_id ?? null,
+        overrideLabel ?? trimOrNull(oldRow.label),
+        trimOrNull(oldRow.role),
+        trimOrNull(oldRow.agent_id),
+        trimOrNull(oldRow.team_id),
+        keyHash,
+        keyPrefix,
+        JSON.stringify(mergedMetadata),
+      ],
+    );
+
+    const revoked = await client.query(
+      `
+      UPDATE control_api_keys
+      SET status = 'revoked', revoked_at = now()
+      WHERE id = $1
+      RETURNING id, tenant_id, project_id, label, role, agent_id, team_id, key_prefix, status, metadata, created_at, revoked_at
+      `,
+      [keyId],
+    );
+
+    return {
+      rotated: ins.rows[0],
+      revoked: revoked.rows[0] ?? null,
+      api_key: apiKey,
+    };
+  });
+}
+
+export function createApiKeyPrincipalResolver(
+  db: Db,
+  opts?: { ttl_ms?: number; negative_ttl_ms?: number; max_entries?: number; cache_positive?: boolean },
+): ApiKeyPrincipalResolver {
+  const cachePositive = opts?.cache_positive === true;
+  const ttlMs = cachePositive ? Math.max(5_000, Math.trunc(opts?.ttl_ms ?? 60_000)) : 0;
+  const negativeTtlMs = Math.max(1_000, Math.trunc(opts?.negative_ttl_ms ?? 10_000));
+  const maxEntries = Math.max(1, Math.trunc(opts?.max_entries ?? 20_000));
+  const cache = new Map<string, { expires_at: number; principal: ApiKeyPrincipal | null }>();
+
+  const cacheGet = (hash: string, now: number): ApiKeyPrincipal | null | undefined => {
+    const hit = cache.get(hash);
+    if (!hit) return undefined;
+    if (hit.expires_at <= now) {
+      cache.delete(hash);
+      return undefined;
+    }
+    // LRU bump to keep hot keys.
+    cache.delete(hash);
+    cache.set(hash, hit);
+    return hit.principal;
+  };
+
+  const cacheSet = (hash: string, principal: ApiKeyPrincipal | null, ttlMsLocal: number, now: number): void => {
+    if (cache.has(hash)) cache.delete(hash);
+    cache.set(hash, { expires_at: now + ttlMsLocal, principal });
+    while (cache.size > maxEntries) {
+      const oldest = cache.keys().next();
+      if (oldest.done) break;
+      cache.delete(oldest.value);
+    }
+  };
+
+  const resolver = (async (rawApiKey: string): Promise<ApiKeyPrincipal | null> => {
+    const key = trimOrNull(rawApiKey);
+    if (!key) return null;
+    const hash = sha256Hex(key);
+    const now = Date.now();
+    const cached = cacheGet(hash, now);
+    if (cached !== undefined) return cached;
+
+    try {
+      const row = await withClient(db, async (client) => {
+        const q = await client.query(
+          `
+          SELECT k.tenant_id, k.agent_id, k.team_id, k.role, k.key_prefix
+          FROM control_api_keys k
+          JOIN control_tenants t ON t.tenant_id = k.tenant_id
+          WHERE k.key_hash = $1
+            AND k.status = 'active'
+            AND t.status = 'active'
+          LIMIT 1
+          `,
+          [hash],
+        );
+        return q.rows[0] ?? null;
+      });
+      const principal: ApiKeyPrincipal | null = row
+        ? {
+            tenant_id: String(row.tenant_id),
+            agent_id: trimOrNull(row.agent_id),
+            team_id: trimOrNull(row.team_id),
+            role: trimOrNull(row.role),
+            key_prefix: trimOrNull(row.key_prefix),
+          }
+        : null;
+      if (principal) {
+        if (cachePositive) cacheSet(hash, principal, ttlMs, now);
+      } else {
+        cacheSet(hash, null, negativeTtlMs, now);
+      }
+      return principal;
+    } catch (err: any) {
+      // table missing during migration rollout should not block existing env key auth.
+      if (String(err?.code ?? "") === "42P01") return null;
+      throw err;
+    }
+  }) as ApiKeyPrincipalResolver;
+
+  resolver.invalidate = (rawApiKey: string): void => {
+    const key = trimOrNull(rawApiKey);
+    if (!key) return;
+    cache.delete(sha256Hex(key));
+  };
+  resolver.clear = () => cache.clear();
+  return resolver;
+}
+
+export async function upsertTenantQuotaProfile(
+  db: Db,
+  tenantIdRaw: string,
+  values: Omit<TenantQuotaProfile, "tenant_id" | "updated_at">,
+) {
+  const tenantId = trimOrNull(tenantIdRaw);
+  if (!tenantId) throw new Error("tenant_id is required");
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      INSERT INTO control_tenant_quotas (
+        tenant_id,
+        recall_rps, recall_burst,
+        write_rps, write_burst, write_max_wait_ms,
+        debug_embed_rps, debug_embed_burst,
+        recall_text_embed_rps, recall_text_embed_burst, recall_text_embed_max_wait_ms
+      )
+      VALUES (
+        $1,
+        $2, $3,
+        $4, $5, $6,
+        $7, $8,
+        $9, $10, $11
+      )
+      ON CONFLICT (tenant_id)
+      DO UPDATE SET
+        recall_rps = EXCLUDED.recall_rps,
+        recall_burst = EXCLUDED.recall_burst,
+        write_rps = EXCLUDED.write_rps,
+        write_burst = EXCLUDED.write_burst,
+        write_max_wait_ms = EXCLUDED.write_max_wait_ms,
+        debug_embed_rps = EXCLUDED.debug_embed_rps,
+        debug_embed_burst = EXCLUDED.debug_embed_burst,
+        recall_text_embed_rps = EXCLUDED.recall_text_embed_rps,
+        recall_text_embed_burst = EXCLUDED.recall_text_embed_burst,
+        recall_text_embed_max_wait_ms = EXCLUDED.recall_text_embed_max_wait_ms
+      RETURNING *
+      `,
+      [
+        tenantId,
+        values.recall_rps,
+        values.recall_burst,
+        values.write_rps,
+        values.write_burst,
+        values.write_max_wait_ms,
+        values.debug_embed_rps,
+        values.debug_embed_burst,
+        values.recall_text_embed_rps,
+        values.recall_text_embed_burst,
+        values.recall_text_embed_max_wait_ms,
+      ],
+    );
+    return q.rows[0] as TenantQuotaProfile;
+  });
+}
+
+export async function getTenantQuotaProfile(db: Db, tenantIdRaw: string): Promise<TenantQuotaProfile | null> {
+  const tenantId = trimOrNull(tenantIdRaw);
+  if (!tenantId) return null;
+  return await withClient(db, async (client) => {
+    const q = await client.query("SELECT * FROM control_tenant_quotas WHERE tenant_id = $1 LIMIT 1", [tenantId]);
+    return (q.rows[0] as TenantQuotaProfile | undefined) ?? null;
+  });
+}
+
+export async function deleteTenantQuotaProfile(db: Db, tenantIdRaw: string): Promise<boolean> {
+  const tenantId = trimOrNull(tenantIdRaw);
+  if (!tenantId) return false;
+  return await withClient(db, async (client) => {
+    const q = await client.query("DELETE FROM control_tenant_quotas WHERE tenant_id = $1", [tenantId]);
+    return (q.rowCount ?? 0) > 0;
+  });
+}
+
+export async function recordControlAuditEvent(db: Db, input: ControlAuditEventInput): Promise<void> {
+  const action = trimOrNull(input.action);
+  const resourceType = trimOrNull(input.resource_type);
+  if (!action) throw new Error("action is required");
+  if (!resourceType) throw new Error("resource_type is required");
+  const actor = trimOrNull(input.actor) ?? "admin_token";
+  const resourceId = trimOrNull(input.resource_id);
+  const tenantId = trimOrNull(input.tenant_id);
+  const requestId = trimOrNull(input.request_id);
+  const details = asJson(input.details);
+  try {
+    await withClient(db, async (client) => {
+      await client.query(
+        `
+        INSERT INTO control_audit_events (
+          actor, action, resource_type, resource_id, tenant_id, request_id, details
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+        `,
+        [actor, action, resourceType, resourceId, tenantId, requestId, JSON.stringify(details)],
+      );
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return;
+    throw err;
+  }
+}
+
+export async function listControlAuditEvents(
+  db: Db,
+  opts: { tenant_id?: string; action?: string; limit?: number; offset?: number } = {},
+) {
+  const tenantId = trimOrNull(opts.tenant_id);
+  const action = trimOrNull(opts.action);
+  const limit = Number.isFinite(opts.limit) ? Math.max(1, Math.min(500, Math.trunc(opts.limit!))) : 100;
+  const offset = Number.isFinite(opts.offset) ? Math.max(0, Math.trunc(opts.offset!)) : 0;
+  const where: string[] = [];
+  const args: unknown[] = [];
+
+  if (tenantId) {
+    args.push(tenantId);
+    where.push(`tenant_id = $${args.length}`);
+  }
+  if (action) {
+    args.push(action);
+    where.push(`action = $${args.length}`);
+  }
+  args.push(limit);
+  args.push(offset);
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT event_id, actor, action, resource_type, resource_id, tenant_id, request_id, details, created_at
+        FROM control_audit_events
+        ${whereSql}
+        ORDER BY created_at DESC
+        LIMIT $${args.length - 1} OFFSET $${args.length}
+        `,
+        args,
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function createControlAlertRoute(db: Db, input: ControlAlertRouteInput) {
+  const tenantId = trimOrNull(input.tenant_id);
+  if (!tenantId) throw new Error("tenant_id is required");
+  const channel = trimOrNull(input.channel);
+  if (channel !== "webhook" && channel !== "slack_webhook" && channel !== "pagerduty_events") {
+    throw new Error("channel must be one of: webhook|slack_webhook|pagerduty_events");
+  }
+  const label = trimOrNull(input.label);
+  const status = input.status ?? "active";
+  const target = normalizeControlAlertRouteTarget(channel, input.target);
+  const secret = trimOrNull(input.secret);
+  const events = asStringArray(input.events, ["*"]);
+  const headers = asStringMap(input.headers);
+  const metadata = asJson(input.metadata);
+
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      INSERT INTO control_alert_routes (
+        tenant_id, channel, label, events, status, target, secret, headers, metadata
+      )
+      VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8::jsonb, $9::jsonb)
+      RETURNING id, tenant_id, channel, label, events, status, target, headers, metadata, created_at, updated_at
+      `,
+      [tenantId, channel, label, JSON.stringify(events), status, target, secret, JSON.stringify(headers), JSON.stringify(metadata)],
+    );
+    return q.rows[0];
+  });
+}
+
+export async function listControlAlertRoutes(
+  db: Db,
+  opts: {
+    tenant_id?: string;
+    channel?: AlertChannel;
+    status?: AlertRouteStatus;
+    limit?: number;
+    offset?: number;
+  } = {},
+) {
+  const tenantId = trimOrNull(opts.tenant_id);
+  const channel = trimOrNull(opts.channel);
+  const status = trimOrNull(opts.status);
+  const limit = Number.isFinite(opts.limit) ? Math.max(1, Math.min(500, Math.trunc(opts.limit!))) : 100;
+  const offset = Number.isFinite(opts.offset) ? Math.max(0, Math.trunc(opts.offset!)) : 0;
+  const where: string[] = [];
+  const args: unknown[] = [];
+  if (tenantId) {
+    args.push(tenantId);
+    where.push(`tenant_id = $${args.length}`);
+  }
+  if (channel) {
+    args.push(channel);
+    where.push(`channel = $${args.length}`);
+  }
+  if (status) {
+    args.push(status);
+    where.push(`status = $${args.length}`);
+  }
+  args.push(limit);
+  args.push(offset);
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT id, tenant_id, channel, label, events, status, target, headers, metadata, created_at, updated_at
+        FROM control_alert_routes
+        ${whereSql}
+        ORDER BY created_at DESC
+        LIMIT $${args.length - 1} OFFSET $${args.length}
+        `,
+        args,
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function getControlAlertRouteById(db: Db, idRaw: string) {
+  const id = trimOrNull(idRaw);
+  if (!id) return null;
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT id, tenant_id, channel, label, events, status, target, secret, headers, metadata, created_at, updated_at
+        FROM control_alert_routes
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [id],
+      );
+      return q.rows[0] ?? null;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return null;
+    throw err;
+  }
+}
+
+export async function updateControlAlertRouteStatus(db: Db, idRaw: string, statusRaw: AlertRouteStatus) {
+  const id = trimOrNull(idRaw);
+  if (!id) throw new Error("id is required");
+  const status = trimOrNull(statusRaw);
+  if (status !== "active" && status !== "disabled") {
+    throw new Error("status must be active|disabled");
+  }
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      UPDATE control_alert_routes
+      SET status = $2
+      WHERE id = $1
+      RETURNING id, tenant_id, channel, label, events, status, target, headers, metadata, created_at, updated_at
+      `,
+      [id, status],
+    );
+    return q.rows[0] ?? null;
+  });
+}
+
+export async function listActiveAlertRoutesForEvent(db: Db, args: { tenant_id: string; event_type: string; limit?: number }) {
+  const tenantId = trimOrNull(args.tenant_id);
+  const eventType = trimOrNull(args.event_type);
+  if (!tenantId || !eventType) return [];
+  const limit = Number.isFinite(args.limit) ? Math.max(1, Math.min(200, Math.trunc(args.limit!))) : 50;
+
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT id, tenant_id, channel, label, events, status, target, secret, headers, metadata, created_at, updated_at
+        FROM control_alert_routes
+        WHERE tenant_id = $1
+          AND status = 'active'
+          AND (events ? $2 OR events ? '*')
+        ORDER BY created_at ASC
+        LIMIT $3
+        `,
+        [tenantId, eventType, limit],
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function recordControlAlertDelivery(db: Db, input: ControlAlertDeliveryInput): Promise<void> {
+  const routeId = trimOrNull(input.route_id);
+  const tenantId = trimOrNull(input.tenant_id);
+  const eventType = trimOrNull(input.event_type);
+  const status = trimOrNull(input.status);
+  if (!routeId || !tenantId || !eventType || !status) return;
+  const requestId = trimOrNull(input.request_id);
+  const responseCode = Number.isFinite(input.response_code) ? Math.trunc(Number(input.response_code)) : null;
+  const responseBody = trimOrNull(input.response_body);
+  const error = trimOrNull(input.error);
+  const metadata = asJson(input.metadata);
+
+  try {
+    await withClient(db, async (client) => {
+      await client.query(
+        `
+        INSERT INTO control_alert_deliveries (
+          route_id, tenant_id, event_type, status, request_id, response_code, response_body, error, metadata
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+        `,
+        [routeId, tenantId, eventType, status, requestId, responseCode, responseBody, error, JSON.stringify(metadata)],
+      );
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return;
+    throw err;
+  }
+}
+
+export async function listControlAlertDeliveries(
+  db: Db,
+  opts: {
+    tenant_id?: string;
+    event_type?: string;
+    status?: "sent" | "failed" | "skipped";
+    limit?: number;
+    offset?: number;
+  } = {},
+) {
+  const tenantId = trimOrNull(opts.tenant_id);
+  const eventType = trimOrNull(opts.event_type);
+  const status = trimOrNull(opts.status);
+  const limit = Number.isFinite(opts.limit) ? Math.max(1, Math.min(500, Math.trunc(opts.limit!))) : 100;
+  const offset = Number.isFinite(opts.offset) ? Math.max(0, Math.trunc(opts.offset!)) : 0;
+  const where: string[] = [];
+  const args: unknown[] = [];
+  if (tenantId) {
+    args.push(tenantId);
+    where.push(`tenant_id = $${args.length}`);
+  }
+  if (eventType) {
+    args.push(eventType);
+    where.push(`event_type = $${args.length}`);
+  }
+  if (status) {
+    args.push(status);
+    where.push(`status = $${args.length}`);
+  }
+  args.push(limit);
+  args.push(offset);
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT id, delivery_id, route_id, tenant_id, event_type, status, request_id, response_code, response_body, error, metadata, created_at
+        FROM control_alert_deliveries
+        ${whereSql}
+        ORDER BY created_at DESC
+        LIMIT $${args.length - 1} OFFSET $${args.length}
+        `,
+        args,
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function listControlAlertDeliveriesByIds(db: Db, ids: string[]) {
+  const normalized = Array.from(
+    new Set(
+      (Array.isArray(ids) ? ids : [])
+        .map((id) => trimOrNull(id))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ).slice(0, 500);
+  if (normalized.length === 0) return [];
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT id, delivery_id, route_id, tenant_id, event_type, status, request_id, response_code, response_body, error, metadata, created_at
+        FROM control_alert_deliveries
+        WHERE delivery_id = ANY($1::uuid[])
+        ORDER BY created_at DESC
+        `,
+        [normalized],
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function updateControlAlertDeliveriesMetadata(
+  db: Db,
+  ids: string[],
+  buildNextMetadata: (row: any) => Record<string, unknown>,
+) {
+  const normalized = Array.from(
+    new Set(
+      (Array.isArray(ids) ? ids : [])
+        .map((id) => trimOrNull(id))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ).slice(0, 500);
+  if (normalized.length === 0) return [];
+  try {
+    return await withTx(db, async (client) => {
+      const existing = await client.query(
+        `
+        SELECT id, delivery_id, route_id, tenant_id, event_type, status, request_id, response_code, response_body, error, metadata, created_at
+        FROM control_alert_deliveries
+        WHERE delivery_id = ANY($1::uuid[])
+        ORDER BY created_at DESC
+        `,
+        [normalized],
+      );
+      const out = [];
+      for (const row of existing.rows) {
+        const nextMetadata = asJson(buildNextMetadata(row));
+        const updated = await client.query(
+          `
+          UPDATE control_alert_deliveries
+          SET metadata = $2::jsonb
+          WHERE delivery_id = $1::uuid
+          RETURNING id, delivery_id, route_id, tenant_id, event_type, status, request_id, response_code, response_body, error, metadata, created_at
+          `,
+          [row.delivery_id, JSON.stringify(nextMetadata)],
+        );
+        if (updated.rows[0]) out.push(updated.rows[0]);
+      }
+      return out;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function findRecentControlAlertDeliveryByDedupe(
+  db: Db,
+  args: {
+    route_id: string;
+    dedupe_key: string;
+    ttl_seconds: number;
+  },
+) {
+  const routeId = trimOrNull(args.route_id);
+  const dedupeKey = trimOrNull(args.dedupe_key);
+  if (!routeId || !dedupeKey) return null;
+  const ttlSeconds = Number.isFinite(args.ttl_seconds) ? Math.max(60, Math.min(7 * 24 * 3600, Math.trunc(args.ttl_seconds))) : 1800;
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT id, delivery_id, route_id, tenant_id, event_type, status, created_at, metadata
+        FROM control_alert_deliveries
+        WHERE route_id = $1
+          AND status = 'sent'
+          AND (metadata->>'dedupe_key') = $2
+          AND created_at >= now() - (($3::text || ' seconds')::interval)
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [routeId, dedupeKey, ttlSeconds],
+      );
+      return q.rows[0] ?? null;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return null;
+    throw err;
+  }
+}
+
+export async function countRecentControlAlertDeliveriesByRoute(
+  db: Db,
+  args: {
+    route_id: string;
+    ttl_seconds: number;
+    status?: "sent" | "failed" | "skipped";
+  },
+) {
+  const routeId = trimOrNull(args.route_id);
+  if (!routeId) return 0;
+  const ttlSeconds = Number.isFinite(args.ttl_seconds) ? Math.max(60, Math.min(7 * 24 * 3600, Math.trunc(args.ttl_seconds))) : 1800;
+  const status = trimOrNull(args.status) || "sent";
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT count(*)::int AS n
+        FROM control_alert_deliveries
+        WHERE route_id = $1
+          AND status = $2
+          AND created_at >= now() - (($3::text || ' seconds')::interval)
+        `,
+        [routeId, status, ttlSeconds],
+      );
+      return Number(q.rows[0]?.n ?? 0) || 0;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return 0;
+    throw err;
+  }
+}
+
+export async function enqueueControlIncidentPublishJob(db: Db, input: ControlIncidentPublishJobInput) {
+  const tenantId = trimOrNull(input.tenant_id);
+  const runId = trimOrNull(input.run_id);
+  const sourceDir = normalizeControlIncidentPublishSourceDir(input.source_dir);
+  const target = normalizeControlIncidentPublishTarget(input.target);
+  if (!tenantId) throw new Error("tenant_id is required");
+  if (!runId) throw new Error("run_id is required");
+  const maxAttempts = Number.isFinite(input.max_attempts) ? Math.max(1, Math.min(100, Math.trunc(input.max_attempts!))) : 5;
+  const metadata = asJson(input.metadata);
+
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      INSERT INTO control_incident_publish_jobs (
+        tenant_id, run_id, source_dir, target, max_attempts, metadata
+      )
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+      RETURNING
+        id, tenant_id, run_id, source_dir, target, status, attempts, max_attempts,
+        next_attempt_at, locked_at, locked_by, published_uri, last_error, last_response, metadata,
+        created_at, updated_at
+      `,
+      [tenantId, runId, sourceDir, target, maxAttempts, JSON.stringify(metadata)],
+    );
+    return q.rows[0];
+  });
+}
+
+export async function listControlIncidentPublishJobs(
+  db: Db,
+  opts: {
+    tenant_id?: string;
+    status?: "pending" | "processing" | "succeeded" | "failed" | "dead_letter";
+    limit?: number;
+    offset?: number;
+  } = {},
+) {
+  const tenantId = trimOrNull(opts.tenant_id);
+  const status = trimOrNull(opts.status);
+  const limit = Number.isFinite(opts.limit) ? Math.max(1, Math.min(500, Math.trunc(opts.limit!))) : 100;
+  const offset = Number.isFinite(opts.offset) ? Math.max(0, Math.trunc(opts.offset!)) : 0;
+  const where: string[] = [];
+  const args: unknown[] = [];
+  if (tenantId) {
+    args.push(tenantId);
+    where.push(`tenant_id = $${args.length}`);
+  }
+  if (status) {
+    args.push(status);
+    where.push(`status = $${args.length}`);
+  }
+  args.push(limit);
+  args.push(offset);
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT
+          id, tenant_id, run_id, source_dir, target, status, attempts, max_attempts,
+          next_attempt_at, locked_at, locked_by, published_uri, last_error, last_response, metadata,
+          created_at, updated_at
+        FROM control_incident_publish_jobs
+        ${whereSql}
+        ORDER BY created_at DESC
+        LIMIT $${args.length - 1} OFFSET $${args.length}
+        `,
+        args,
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function replayControlIncidentPublishJobs(db: Db, input: ControlIncidentPublishReplayInput = {}) {
+  const tenantId = trimOrNull(input.tenant_id);
+  const statusSet = new Set<string>();
+  for (const raw of input.statuses ?? []) {
+    const s = trimOrNull(raw);
+    if (s === "failed" || s === "dead_letter") statusSet.add(s);
+  }
+  const statuses = statusSet.size > 0 ? Array.from(statusSet) : ["dead_letter", "failed"];
+  const ids = (input.ids ?? [])
+    .map((x) => trimOrNull(x))
+    .filter((x): x is string => !!x)
+    .slice(0, 500);
+  const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(200, Math.trunc(input.limit!))) : 50;
+  const resetAttempts = input.reset_attempts ?? true;
+  const reason = trimOrNull(input.reason) ?? "manual_replay";
+  const dryRun = input.dry_run ?? false;
+  const allowAllTenants = input.allow_all_tenants ?? false;
+  if (!tenantId && ids.length === 0 && !allowAllTenants) {
+    throw new Error("tenant_id or ids is required unless allow_all_tenants=true");
+  }
+
+  try {
+    if (dryRun) {
+      return await withClient(db, async (client) => {
+        const q = await client.query(
+          `
+          SELECT
+            id, tenant_id, run_id, source_dir, target, status, attempts, max_attempts,
+            next_attempt_at, locked_at, locked_by, published_uri, last_error, last_response, metadata,
+            created_at, updated_at
+          FROM control_incident_publish_jobs
+          WHERE ($1::text IS NULL OR tenant_id = $1::text)
+            AND status = ANY($2::text[])
+            AND ($3::text[] IS NULL OR id::text = ANY($3::text[]))
+          ORDER BY created_at ASC
+          LIMIT $4
+          `,
+          [tenantId, statuses, ids.length > 0 ? ids : null, limit],
+        );
+        return q.rows;
+      });
+    }
+
+    return await withTx(db, async (client) => {
+      const q = await client.query(
+        `
+        WITH candidates AS (
+          SELECT id
+          FROM control_incident_publish_jobs
+          WHERE ($1::text IS NULL OR tenant_id = $1::text)
+            AND status = ANY($2::text[])
+            AND ($3::text[] IS NULL OR id::text = ANY($3::text[]))
+          ORDER BY created_at ASC
+          LIMIT $4
+          FOR UPDATE SKIP LOCKED
+        )
+        UPDATE control_incident_publish_jobs j
+        SET
+          status = 'pending',
+          attempts = CASE
+            WHEN $5::boolean THEN 0
+            ELSE LEAST(j.attempts, GREATEST(j.max_attempts - 1, 0))
+          END,
+          next_attempt_at = now(),
+          locked_at = NULL,
+          locked_by = NULL,
+          last_error = NULL,
+          last_response = '{}'::jsonb,
+          metadata = COALESCE(j.metadata, '{}'::jsonb) || jsonb_build_object(
+            'replayed_at', now(),
+            'replay_reason', $6::text
+          )
+        FROM candidates
+        WHERE j.id = candidates.id
+        RETURNING
+          j.id, j.tenant_id, j.run_id, j.source_dir, j.target, j.status, j.attempts, j.max_attempts,
+          j.next_attempt_at, j.locked_at, j.locked_by, j.published_uri, j.last_error, j.last_response, j.metadata,
+          j.created_at, j.updated_at
+        `,
+        [tenantId, statuses, ids.length > 0 ? ids : null, limit, resetAttempts, reason],
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function claimControlIncidentPublishJob(
+  db: Db,
+  args: {
+    worker_id: string;
+    tenant_id?: string;
+  },
+) {
+  const workerId = trimOrNull(args.worker_id);
+  const tenantId = trimOrNull(args.tenant_id);
+  if (!workerId) throw new Error("worker_id is required");
+
+  try {
+    return await withTx(db, async (client) => {
+      const q = await client.query(
+        `
+        WITH pick AS (
+          SELECT id
+          FROM control_incident_publish_jobs
+          WHERE status IN ('pending', 'failed')
+            AND next_attempt_at <= now()
+            AND attempts < max_attempts
+            AND ($1::text IS NULL OR tenant_id = $1::text)
+          ORDER BY next_attempt_at ASC, created_at ASC
+          FOR UPDATE SKIP LOCKED
+          LIMIT 1
+        )
+        UPDATE control_incident_publish_jobs j
+        SET
+          status = 'processing',
+          attempts = j.attempts + 1,
+          locked_at = now(),
+          locked_by = $2
+        FROM pick
+        WHERE j.id = pick.id
+        RETURNING
+          j.id, j.tenant_id, j.run_id, j.source_dir, j.target, j.status, j.attempts, j.max_attempts,
+          j.next_attempt_at, j.locked_at, j.locked_by, j.published_uri, j.last_error, j.last_response, j.metadata,
+          j.created_at, j.updated_at
+        `,
+        [tenantId, workerId],
+      );
+      return q.rows[0] ?? null;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return null;
+    throw err;
+  }
+}
+
+export async function markControlIncidentPublishJobSucceeded(
+  db: Db,
+  args: {
+    id: string;
+    published_uri?: string | null;
+    response?: Record<string, unknown>;
+  },
+) {
+  const id = trimOrNull(args.id);
+  if (!id) throw new Error("id is required");
+  const publishedUri = trimOrNull(args.published_uri);
+  const response = asJson(args.response);
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      UPDATE control_incident_publish_jobs
+      SET
+        status = 'succeeded',
+        locked_at = NULL,
+        locked_by = NULL,
+        next_attempt_at = now(),
+        published_uri = $2,
+        last_error = NULL,
+        last_response = $3::jsonb
+      WHERE id = $1
+      RETURNING
+        id, tenant_id, run_id, source_dir, target, status, attempts, max_attempts,
+        next_attempt_at, locked_at, locked_by, published_uri, last_error, last_response, metadata,
+        created_at, updated_at
+      `,
+      [id, publishedUri, JSON.stringify(response)],
+    );
+    return q.rows[0] ?? null;
+  });
+}
+
+export async function markControlIncidentPublishJobFailed(
+  db: Db,
+  args: {
+    id: string;
+    retry_delay_seconds?: number;
+    error?: string | null;
+    response?: Record<string, unknown>;
+  },
+) {
+  const id = trimOrNull(args.id);
+  if (!id) throw new Error("id is required");
+  const retryDelaySeconds = Number.isFinite(args.retry_delay_seconds)
+    ? Math.max(1, Math.min(7 * 24 * 3600, Math.trunc(args.retry_delay_seconds!)))
+    : 60;
+  const error = trimOrNull(args.error);
+  const response = asJson(args.response);
+
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        UPDATE control_incident_publish_jobs
+        SET
+          status = CASE WHEN attempts >= max_attempts THEN 'dead_letter' ELSE 'failed' END,
+          next_attempt_at = CASE
+            WHEN attempts >= max_attempts THEN next_attempt_at
+            ELSE now() + (($2::text || ' seconds')::interval)
+          END,
+          locked_at = NULL,
+          locked_by = NULL,
+          last_error = $3,
+          last_response = $4::jsonb
+        WHERE id = $1
+        RETURNING
+          id, tenant_id, run_id, source_dir, target, status, attempts, max_attempts,
+          next_attempt_at, locked_at, locked_by, published_uri, last_error, last_response, metadata,
+          created_at, updated_at
+        `,
+        [id, retryDelaySeconds, error, JSON.stringify(response)],
+      );
+      return q.rows[0] ?? null;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return null;
+    throw err;
+  }
+}
+
+export async function recordMemoryRequestTelemetry(db: Db, input: MemoryRequestTelemetryInput): Promise<void> {
+  const tenantId = trimOrNull(input.tenant_id);
+  const scope = trimOrNull(input.scope);
+  const endpoint = trimOrNull(input.endpoint);
+  if (!tenantId || !scope || !endpoint) return;
+  const statusCode = Number.isFinite(input.status_code) ? Math.trunc(input.status_code) : 0;
+  const latencyMs = Number.isFinite(input.latency_ms) ? Math.max(0, input.latency_ms) : 0;
+  const apiKeyPrefix = trimOrNull(input.api_key_prefix);
+  const requestId = trimOrNull(input.request_id);
+  try {
+    await withClient(db, async (client) => {
+      await client.query(
+        `
+        INSERT INTO memory_request_telemetry (
+          tenant_id, scope, endpoint, status_code, latency_ms, api_key_prefix, request_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `,
+        [tenantId, scope, endpoint, statusCode, latencyMs, apiKeyPrefix, requestId],
+      );
+    });
+  } catch (err: any) {
+    // During rollout, this table may not exist yet.
+    const code = String(err?.code ?? "");
+    if (code === "42P01") return;
+    if (code === "23514" && (endpoint === "planning_context" || endpoint === "context_assemble")) return;
+    throw err;
+  }
+}
+
+function boundedInt(input: number, max = 10_000_000): number {
+  if (!Number.isFinite(input)) return 0;
+  return Math.max(0, Math.min(max, Math.trunc(input)));
+}
+
+function boundedMs(input: number): number {
+  if (!Number.isFinite(input)) return 0;
+  return Math.max(0, input);
+}
+
+export async function recordMemoryContextAssemblyTelemetry(
+  db: Db,
+  input: MemoryContextAssemblyTelemetryInput,
+): Promise<void> {
+  const tenantId = trimOrNull(input.tenant_id);
+  const scope = trimOrNull(input.scope);
+  const endpoint = trimOrNull(input.endpoint);
+  if (!tenantId || !scope) return;
+  if (endpoint !== "planning_context" && endpoint !== "context_assemble") return;
+
+  const requestId = trimOrNull(input.request_id);
+  const layeredOutput = input.layered_output === true;
+  const totalBudgetChars = boundedInt(input.total_budget_chars);
+  const usedChars = boundedInt(input.used_chars);
+  const remainingChars = boundedInt(input.remaining_chars);
+  const sourceItems = boundedInt(input.source_items);
+  const keptItems = boundedInt(input.kept_items);
+  const droppedItems = boundedInt(input.dropped_items);
+  const layersWithContent = boundedInt(input.layers_with_content, 10_000);
+  const mergeTraceIncluded = input.merge_trace_included === true;
+  const latencyMs = boundedMs(input.latency_ms);
+  const selectionPolicyName = trimOrNull(input.selection_policy_name);
+  const selectionPolicySourceRaw = trimOrNull(input.selection_policy_source);
+  const selectionPolicySource =
+    selectionPolicySourceRaw === "endpoint_default" || selectionPolicySourceRaw === "request_override"
+      ? selectionPolicySourceRaw
+      : null;
+  const selectedMemoryLayers = asStringArray(input.selected_memory_layers, []).filter((layer) =>
+    layer === "L0" || layer === "L1" || layer === "L2" || layer === "L3" || layer === "L4" || layer === "L5",
+  );
+  const trustAnchorLayers = asStringArray(input.trust_anchor_layers, []).filter((layer) =>
+    layer === "L0" || layer === "L1" || layer === "L2" || layer === "L3" || layer === "L4" || layer === "L5",
+  );
+  const requestedAllowedLayers = asStringArray(input.requested_allowed_layers, []).filter((layer) =>
+    layer === "L0" || layer === "L1" || layer === "L2" || layer === "L3" || layer === "L4" || layer === "L5",
+  );
+  const selectedMemoryLayersJson = JSON.stringify(selectedMemoryLayers);
+  const trustAnchorLayersJson = JSON.stringify(trustAnchorLayers);
+  const requestedAllowedLayersJson = JSON.stringify(requestedAllowedLayers);
+  const headInsertSavepoint = "memory_context_assembly_head_insert_sp";
+
+  const layers = (Array.isArray(input.layers) ? input.layers : [])
+    .map((layer) => ({
+      layer_name: layer.layer_name,
+      source_count: boundedInt(layer.source_count),
+      kept_count: boundedInt(layer.kept_count),
+      dropped_count: boundedInt(layer.dropped_count),
+      budget_chars: boundedInt(layer.budget_chars),
+      used_chars: boundedInt(layer.used_chars),
+      max_items: boundedInt(layer.max_items, 10_000),
+    }))
+    .filter((layer) => {
+      return (
+        layer.layer_name === "facts" ||
+        layer.layer_name === "episodes" ||
+        layer.layer_name === "rules" ||
+        layer.layer_name === "decisions" ||
+        layer.layer_name === "tools" ||
+        layer.layer_name === "citations"
+      );
+    });
+
+  try {
+    await withTx(db, async (client) => {
+      const headInsertAttempts: Array<{ sql: string; params: unknown[] }> = [
+        {
+          sql: `
+            INSERT INTO memory_context_assembly_telemetry (
+              tenant_id,
+              scope,
+              endpoint,
+              layered_output,
+              request_id,
+              total_budget_chars,
+              used_chars,
+              remaining_chars,
+              source_items,
+              kept_items,
+              dropped_items,
+              layers_with_content,
+              merge_trace_included,
+              selection_policy_name,
+              selection_policy_source,
+              selected_memory_layers_json,
+              trust_anchor_layers_json,
+              requested_allowed_layers_json,
+              latency_ms
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+            RETURNING id
+          `,
+          params: [
+            tenantId,
+            scope,
+            endpoint,
+            layeredOutput,
+            requestId,
+            totalBudgetChars,
+            usedChars,
+            remainingChars,
+            sourceItems,
+            keptItems,
+            droppedItems,
+            layersWithContent,
+            mergeTraceIncluded,
+            selectionPolicyName,
+            selectionPolicySource,
+            selectedMemoryLayersJson,
+            trustAnchorLayersJson,
+            requestedAllowedLayersJson,
+            latencyMs,
+          ],
+        },
+        {
+          sql: `
+            INSERT INTO memory_context_assembly_telemetry (
+              tenant_id,
+              scope,
+              endpoint,
+              layered_output,
+              request_id,
+              total_budget_chars,
+              used_chars,
+              remaining_chars,
+              source_items,
+              kept_items,
+              dropped_items,
+              layers_with_content,
+              merge_trace_included,
+              latency_ms
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            RETURNING id
+          `,
+          params: [
+            tenantId,
+            scope,
+            endpoint,
+            layeredOutput,
+            requestId,
+            totalBudgetChars,
+            usedChars,
+            remainingChars,
+            sourceItems,
+            keptItems,
+            droppedItems,
+            layersWithContent,
+            mergeTraceIncluded,
+            latencyMs,
+          ],
+        },
+        {
+          sql: `
+            INSERT INTO memory_context_assembly_telemetry (
+              tenant_id,
+              scope,
+              endpoint,
+              request_id,
+              total_budget_chars,
+              used_chars,
+              remaining_chars,
+              source_items,
+              kept_items,
+              dropped_items,
+              layers_with_content,
+              merge_trace_included,
+              latency_ms
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            RETURNING id
+          `,
+          params: [
+            tenantId,
+            scope,
+            endpoint,
+            requestId,
+            totalBudgetChars,
+            usedChars,
+            remainingChars,
+            sourceItems,
+            keptItems,
+            droppedItems,
+            layersWithContent,
+            mergeTraceIncluded,
+            latencyMs,
+          ],
+        },
+      ];
+      let head: any = null;
+      let lastHeadInsertErr: unknown = null;
+      for (const attempt of headInsertAttempts) {
+        await client.query(`SAVEPOINT ${headInsertSavepoint}`);
+        try {
+          head = await client.query(attempt.sql, attempt.params);
+          await client.query(`RELEASE SAVEPOINT ${headInsertSavepoint}`);
+          lastHeadInsertErr = null;
+          break;
+        } catch (insertErr: any) {
+          await client.query(`ROLLBACK TO SAVEPOINT ${headInsertSavepoint}`);
+          await client.query(`RELEASE SAVEPOINT ${headInsertSavepoint}`);
+          if (String(insertErr?.code ?? "") !== "42703") throw insertErr;
+          lastHeadInsertErr = insertErr;
+        }
+      }
+      if (!head) throw lastHeadInsertErr ?? new Error("memory_context_assembly_telemetry insert failed");
+      const telemetryId = Number(head.rows[0]?.id ?? 0);
+      if (!Number.isFinite(telemetryId) || telemetryId <= 0) return;
+
+      for (const layer of layers) {
+        await client.query(
+          `
+          INSERT INTO memory_context_assembly_layer_telemetry (
+            telemetry_id,
+            tenant_id,
+            scope,
+            endpoint,
+            layer_name,
+            source_count,
+            kept_count,
+            dropped_count,
+            budget_chars,
+            used_chars,
+            max_items
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          `,
+          [
+            telemetryId,
+            tenantId,
+            scope,
+            endpoint,
+            layer.layer_name,
+            layer.source_count,
+            layer.kept_count,
+            layer.dropped_count,
+            layer.budget_chars,
+            layer.used_chars,
+            layer.max_items,
+          ],
+        );
+      }
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return;
+    throw err;
+  }
+}
+
+export async function listStaleControlApiKeys(
+  db: Db,
+  opts: {
+    max_age_days?: number;
+    warn_age_days?: number;
+    rotation_window_days?: number;
+    limit?: number;
+  } = {},
+) {
+  const maxAgeDays = Number.isFinite(opts.max_age_days) ? Math.max(1, Math.trunc(opts.max_age_days!)) : 30;
+  const warnAgeDays = Number.isFinite(opts.warn_age_days) ? Math.max(1, Math.trunc(opts.warn_age_days!)) : 21;
+  const rotationWindowDays = Number.isFinite(opts.rotation_window_days) ? Math.max(1, Math.trunc(opts.rotation_window_days!)) : 30;
+  const limit = Number.isFinite(opts.limit) ? Math.max(1, Math.min(1000, Math.trunc(opts.limit!))) : 200;
+
+  try {
+    return await withClient(db, async (client) => {
+      const stale = await client.query(
+        `
+        SELECT
+          id,
+          tenant_id,
+          project_id,
+          label,
+          key_prefix,
+          created_at,
+          ROUND(EXTRACT(EPOCH FROM (now() - created_at)) / 86400.0, 3) AS age_days
+        FROM control_api_keys
+        WHERE status = 'active'
+          AND created_at <= now() - (($1::text || ' days')::interval)
+        ORDER BY created_at ASC
+        LIMIT $2
+        `,
+        [maxAgeDays, limit],
+      );
+
+      const warn = await client.query(
+        `
+        SELECT
+          id,
+          tenant_id,
+          project_id,
+          label,
+          key_prefix,
+          created_at,
+          ROUND(EXTRACT(EPOCH FROM (now() - created_at)) / 86400.0, 3) AS age_days
+        FROM control_api_keys
+        WHERE status = 'active'
+          AND created_at <= now() - (($1::text || ' days')::interval)
+          AND created_at > now() - (($2::text || ' days')::interval)
+        ORDER BY created_at ASC
+        LIMIT $3
+        `,
+        [warnAgeDays, maxAgeDays, limit],
+      );
+
+      const activeStats = await client.query(
+        `
+        SELECT
+          tenant_id,
+          COUNT(*)::bigint AS active_key_count,
+          MIN(created_at) AS oldest_active_key_at,
+          MAX(created_at) AS newest_active_key_at
+        FROM control_api_keys
+        WHERE status = 'active'
+        GROUP BY tenant_id
+        ORDER BY tenant_id ASC
+        `,
+      );
+
+      const recentRotations = await client.query(
+        `
+        SELECT
+          tenant_id,
+          COUNT(*)::bigint AS recent_rotation_count
+        FROM control_audit_events
+        WHERE action = 'api_key.rotate'
+          AND created_at >= now() - (($1::text || ' days')::interval)
+          AND tenant_id IS NOT NULL
+        GROUP BY tenant_id
+        ORDER BY tenant_id ASC
+        `,
+        [rotationWindowDays],
+      );
+
+      const rotationsByTenant = new Map<string, number>();
+      for (const r of recentRotations.rows) {
+        rotationsByTenant.set(String(r.tenant_id), Number(r.recent_rotation_count ?? 0));
+      }
+
+      const tenantsWithoutRecentRotation = activeStats.rows
+        .map((r) => ({
+          tenant_id: String(r.tenant_id),
+          active_key_count: Number(r.active_key_count ?? 0),
+          oldest_active_key_at: r.oldest_active_key_at,
+          newest_active_key_at: r.newest_active_key_at,
+          recent_rotation_count: rotationsByTenant.get(String(r.tenant_id)) ?? 0,
+        }))
+        .filter((r) => r.active_key_count > 0 && r.recent_rotation_count === 0);
+
+      return {
+        ok: true,
+        checked_at: nowIso(),
+        thresholds: {
+          max_age_days: maxAgeDays,
+          warn_age_days: warnAgeDays,
+          rotation_window_days: rotationWindowDays,
+        },
+        stale: {
+          count: stale.rows.length,
+          sample: stale.rows,
+        },
+        warning_window: {
+          count: warn.rows.length,
+          sample: warn.rows,
+        },
+        active_by_tenant: activeStats.rows,
+        recent_rotations_by_tenant: recentRotations.rows,
+        tenants_without_recent_rotation: tenantsWithoutRecentRotation,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      return {
+        ok: false,
+        checked_at: nowIso(),
+        error: "control_plane_schema_missing",
+      };
+    }
+    throw err;
+  }
+}
+
+function tenantScopeCondition(args: unknown[], tenantId: string, defaultTenantId: string): { sql: string; args: unknown[] } {
+  if (tenantId === defaultTenantId) {
+    return { sql: "scope NOT LIKE 'tenant:%'", args };
+  }
+  args.push(`tenant:${tenantId}::scope:%`);
+  return { sql: `scope LIKE $${args.length}`, args };
+}
+
+function tenantScopeConditionForColumn(
+  args: unknown[],
+  tenantId: string,
+  defaultTenantId: string,
+  columnSql: string,
+): { sql: string; args: unknown[] } {
+  if (tenantId === defaultTenantId) {
+    return { sql: `${columnSql} NOT LIKE 'tenant:%'`, args };
+  }
+  args.push(`tenant:${tenantId}::scope:%`);
+  return { sql: `${columnSql} LIKE $${args.length}`, args };
+}
+
+function tenantScopeKey(scope: string, tenantId: string, defaultTenantId: string): string {
+  return tenantId === defaultTenantId ? scope : `tenant:${tenantId}::scope:${scope}`;
+}
+
+export async function getTenantOperabilityDiagnostics(
+  db: Db,
+  args: { tenant_id: string; default_tenant_id: string; scope?: string; window_minutes?: number },
+) {
+  const tenantId = trimOrNull(args.tenant_id);
+  const defaultTenantId = trimOrNull(args.default_tenant_id) ?? "default";
+  const scope = trimOrNull(args.scope);
+  const windowMinutes = Number.isFinite(args.window_minutes)
+    ? Math.max(5, Math.min(24 * 60, Math.trunc(args.window_minutes!)))
+    : 60;
+  if (!tenantId) throw new Error("tenant_id is required");
+
+  const telemetryArgs: unknown[] = [tenantId];
+  let scopeFilterTelemetry = scope
+    ? (() => {
+        telemetryArgs.push(tenantScopeKey(scope, tenantId, defaultTenantId));
+        return { sql: `t.scope = $${telemetryArgs.length}`, args: telemetryArgs };
+      })()
+    : tenantScopeConditionForColumn(telemetryArgs, tenantId, defaultTenantId, "t.scope");
+
+  const memoryArgs: unknown[] = [];
+  let scopeFilterMemory = scope
+    ? (() => {
+        memoryArgs.push(tenantScopeKey(scope, tenantId, defaultTenantId));
+        return { sql: `scope = $${memoryArgs.length}`, args: memoryArgs };
+      })()
+    : tenantScopeCondition(memoryArgs, tenantId, defaultTenantId);
+
+  const contextArgs: unknown[] = [tenantId];
+  let scopeFilterContext = scope
+    ? (() => {
+        contextArgs.push(tenantScopeKey(scope, tenantId, defaultTenantId));
+        return { sql: `c.scope = $${contextArgs.length}`, args: contextArgs };
+      })()
+    : tenantScopeConditionForColumn(contextArgs, tenantId, defaultTenantId, "c.scope");
+
+  const sandboxArgs: unknown[] = [tenantId];
+  let scopeFilterSandbox = scope
+    ? (() => {
+        sandboxArgs.push(tenantScopeKey(scope, tenantId, defaultTenantId));
+        return { sql: `s.scope = $${sandboxArgs.length}`, args: sandboxArgs };
+      })()
+    : tenantScopeConditionForColumn(sandboxArgs, tenantId, defaultTenantId, "s.scope");
+
+  const out: Record<string, unknown> = {
+    tenant_id: tenantId,
+    default_tenant_id: defaultTenantId,
+    scope: scope ?? null,
+    window_minutes: windowMinutes,
+    generated_at: nowIso(),
+  };
+
+  try {
+    await withClient(db, async (client) => {
+      const requestTelemetry = await client.query(
+        `
+        SELECT
+          t.endpoint,
+          COUNT(*)::bigint AS total,
+          COUNT(*) FILTER (WHERE t.status_code >= 400)::bigint AS errors,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY t.latency_ms) AS latency_p50_ms,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY t.latency_ms) AS latency_p95_ms,
+          percentile_cont(0.99) WITHIN GROUP (ORDER BY t.latency_ms) AS latency_p99_ms
+        FROM memory_request_telemetry t
+        WHERE t.tenant_id = $1
+          AND ${scopeFilterTelemetry.sql}
+          AND t.created_at >= now() - (($${scopeFilterTelemetry.args.length + 1}::text || ' minutes')::interval)
+        GROUP BY t.endpoint
+        ORDER BY t.endpoint ASC
+        `,
+        [...scopeFilterTelemetry.args, windowMinutes],
+      );
+
+      const recallAudit = await client.query(
+        `
+        SELECT
+          COUNT(*)::bigint AS total,
+          COUNT(*) FILTER (WHERE seed_count = 0)::bigint AS empty_seed,
+          COUNT(*) FILTER (WHERE node_count = 0)::bigint AS empty_nodes,
+          COUNT(*) FILTER (WHERE edge_count = 0)::bigint AS empty_edges,
+          AVG(seed_count)::double precision AS seed_avg,
+          AVG(node_count)::double precision AS node_avg,
+          AVG(edge_count)::double precision AS edge_avg
+        FROM memory_recall_audit
+        WHERE ${scopeFilterMemory.sql}
+          AND created_at >= now() - (($${scopeFilterMemory.args.length + 1}::text || ' minutes')::interval)
+        `,
+        [...scopeFilterMemory.args, windowMinutes],
+      );
+
+      const outboxByType = await client.query(
+        `
+        SELECT
+          event_type,
+          COUNT(*) FILTER (WHERE published_at IS NULL AND failed_at IS NULL)::bigint AS pending,
+          COUNT(*) FILTER (WHERE published_at IS NULL AND failed_at IS NULL AND attempts > 0)::bigint AS retrying,
+          COUNT(*) FILTER (WHERE failed_at IS NOT NULL)::bigint AS failed,
+          MAX(
+            CASE
+              WHEN published_at IS NULL AND failed_at IS NULL THEN EXTRACT(EPOCH FROM (now() - created_at))
+              ELSE NULL
+            END
+          )::double precision AS oldest_pending_age_sec
+        FROM memory_outbox
+        WHERE ${scopeFilterMemory.sql}
+        GROUP BY event_type
+        ORDER BY event_type ASC
+        `,
+        scopeFilterMemory.args,
+      );
+
+      let contextSummaryRow: any = null;
+      let contextEndpointRowsRaw: any[] = [];
+      let contextLayerRowsRaw: any[] = [];
+      let contextSelectionPolicyRowsRaw: any[] = [];
+      let contextSelectionPolicySourceRowsRaw: any[] = [];
+      let contextMemoryLayerRowsRaw: any[] = [];
+      let contextTrustAnchorRowsRaw: any[] = [];
+      let contextRequestedAllowedLayerRowsRaw: any[] = [];
+      let contextTelemetryWarning: string | null = null;
+      let sandboxSummaryRow: any = null;
+      let sandboxStatusRowsRaw: any[] = [];
+      let sandboxModeRowsRaw: any[] = [];
+      let sandboxTopErrorsRaw: any[] = [];
+      let sandboxTelemetryWarning: string | null = null;
+      let replayPolicySummaryRow: any = null;
+      let replayPolicyBaseRowsRaw: any[] = [];
+      let replayPolicyLayerRowsRaw: any[] = [];
+      let replayPolicyWarning: string | null = null;
+
+      try {
+        const layeredOutputColumn = await client.query(
+          `
+          SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'memory_context_assembly_telemetry'
+              AND column_name = 'layered_output'
+          ) AS has_layered_output
+          `,
+        );
+        const hasLayeredOutput = layeredOutputColumn.rows[0]?.has_layered_output === true;
+        const layeredExpr = hasLayeredOutput ? "c.layered_output" : "(c.total_budget_chars > 0)";
+        const layerPolicyColumns = await client.query(
+          `
+          SELECT
+            EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'memory_context_assembly_telemetry'
+                AND column_name = 'selection_policy_name'
+            ) AS has_selection_policy_name,
+            EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'memory_context_assembly_telemetry'
+                AND column_name = 'selected_memory_layers_json'
+            ) AS has_selected_memory_layers_json,
+            EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'memory_context_assembly_telemetry'
+                AND column_name = 'trust_anchor_layers_json'
+            ) AS has_trust_anchor_layers_json
+            ,
+            EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'memory_context_assembly_telemetry'
+                AND column_name = 'selection_policy_source'
+            ) AS has_selection_policy_source,
+            EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'memory_context_assembly_telemetry'
+                AND column_name = 'requested_allowed_layers_json'
+            ) AS has_requested_allowed_layers_json
+          `,
+        );
+        const hasSelectionPolicyName = layerPolicyColumns.rows[0]?.has_selection_policy_name === true;
+        const hasSelectedMemoryLayersJson = layerPolicyColumns.rows[0]?.has_selected_memory_layers_json === true;
+        const hasTrustAnchorLayersJson = layerPolicyColumns.rows[0]?.has_trust_anchor_layers_json === true;
+        const hasSelectionPolicySource = layerPolicyColumns.rows[0]?.has_selection_policy_source === true;
+        const hasRequestedAllowedLayersJson = layerPolicyColumns.rows[0]?.has_requested_allowed_layers_json === true;
+        if (
+          !hasLayeredOutput ||
+          !hasSelectionPolicyName ||
+          !hasSelectedMemoryLayersJson ||
+          !hasTrustAnchorLayersJson ||
+          !hasSelectionPolicySource ||
+          !hasRequestedAllowedLayersJson
+        ) {
+          contextTelemetryWarning = "context_assembly_telemetry_schema_legacy";
+        }
+
+        const contextSummary = await client.query(
+          `
+          SELECT
+            COUNT(*)::bigint AS total,
+            COUNT(*) FILTER (WHERE ${layeredExpr})::bigint AS layered_total,
+            percentile_cont(0.5) WITHIN GROUP (ORDER BY c.latency_ms) AS latency_p50_ms,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY c.latency_ms) AS latency_p95_ms,
+            percentile_cont(0.99) WITHIN GROUP (ORDER BY c.latency_ms) AS latency_p99_ms,
+            COUNT(*) FILTER (WHERE ${layeredExpr} AND c.remaining_chars = 0)::bigint AS budget_exhausted,
+            COUNT(*) FILTER (WHERE ${layeredExpr} AND c.dropped_items > 0)::bigint AS dropped_requests,
+            AVG(
+              CASE
+                WHEN ${layeredExpr} AND c.total_budget_chars > 0
+                  THEN c.used_chars::double precision / c.total_budget_chars::double precision
+                ELSE NULL
+              END
+            )::double precision AS budget_use_ratio_avg
+          FROM memory_context_assembly_telemetry c
+          WHERE c.tenant_id = $1
+            AND ${scopeFilterContext.sql}
+            AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+          `,
+          [...scopeFilterContext.args, windowMinutes],
+        );
+        contextSummaryRow = contextSummary.rows[0] ?? null;
+
+        const contextByEndpoint = await client.query(
+          `
+          SELECT
+            c.endpoint,
+            COUNT(*)::bigint AS total,
+            COUNT(*) FILTER (WHERE ${layeredExpr})::bigint AS layered_total,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY c.latency_ms) AS latency_p95_ms,
+            COUNT(*) FILTER (WHERE ${layeredExpr} AND c.remaining_chars = 0)::bigint AS budget_exhausted,
+            COUNT(*) FILTER (WHERE ${layeredExpr} AND c.dropped_items > 0)::bigint AS dropped_requests
+          FROM memory_context_assembly_telemetry c
+          WHERE c.tenant_id = $1
+            AND ${scopeFilterContext.sql}
+            AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+          GROUP BY c.endpoint
+          ORDER BY c.endpoint ASC
+          `,
+          [...scopeFilterContext.args, windowMinutes],
+        );
+        contextEndpointRowsRaw = contextByEndpoint.rows;
+
+        const layerArgs = [...scopeFilterContext.args];
+        const windowArgIndex = layerArgs.length + 1;
+        const contextByLayer = await client.query(
+          `
+          SELECT
+            l.layer_name,
+            COUNT(*)::bigint AS total,
+            SUM(l.source_count)::bigint AS source_total,
+            SUM(l.kept_count)::bigint AS kept_total,
+            SUM(l.dropped_count)::bigint AS dropped_total,
+            AVG(l.used_chars)::double precision AS used_chars_avg,
+            AVG(l.budget_chars)::double precision AS budget_chars_avg,
+            COUNT(*) FILTER (WHERE l.dropped_count > 0)::bigint AS dropped_requests,
+            COUNT(*) FILTER (WHERE l.budget_chars > 0 AND l.used_chars >= l.budget_chars)::bigint AS budget_exhausted
+          FROM memory_context_assembly_layer_telemetry l
+          WHERE l.tenant_id = $1
+            AND ${scopeFilterContext.sql.replace(/c\.scope/g, "l.scope")}
+            AND l.created_at >= now() - (($${windowArgIndex}::text || ' minutes')::interval)
+          GROUP BY l.layer_name
+          ORDER BY l.layer_name ASC
+          `,
+          [...layerArgs, windowMinutes],
+        );
+        contextLayerRowsRaw = contextByLayer.rows;
+
+        if (hasSelectionPolicyName) {
+          const contextBySelectionPolicy = await client.query(
+            `
+            SELECT
+              c.selection_policy_name,
+              COUNT(*)::bigint AS total
+            FROM memory_context_assembly_telemetry c
+            WHERE c.tenant_id = $1
+              AND ${scopeFilterContext.sql}
+              AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+              AND c.selection_policy_name IS NOT NULL
+            GROUP BY c.selection_policy_name
+            ORDER BY total DESC, c.selection_policy_name ASC
+            `,
+            [...scopeFilterContext.args, windowMinutes],
+          );
+          contextSelectionPolicyRowsRaw = contextBySelectionPolicy.rows;
+        }
+
+        if (hasSelectionPolicySource) {
+          const contextBySelectionPolicySource = await client.query(
+            `
+            SELECT
+              c.selection_policy_source,
+              COUNT(*)::bigint AS total
+            FROM memory_context_assembly_telemetry c
+            WHERE c.tenant_id = $1
+              AND ${scopeFilterContext.sql}
+              AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+              AND c.selection_policy_source IS NOT NULL
+            GROUP BY c.selection_policy_source
+            ORDER BY total DESC, c.selection_policy_source ASC
+            `,
+            [...scopeFilterContext.args, windowMinutes],
+          );
+          contextSelectionPolicySourceRowsRaw = contextBySelectionPolicySource.rows;
+        }
+
+        if (hasSelectedMemoryLayersJson) {
+          const contextByMemoryLayer = await client.query(
+            `
+            SELECT
+              layer_name,
+              COUNT(*)::bigint AS total
+            FROM (
+              SELECT jsonb_array_elements_text(c.selected_memory_layers_json) AS layer_name
+              FROM memory_context_assembly_telemetry c
+              WHERE c.tenant_id = $1
+                AND ${scopeFilterContext.sql}
+                AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+            ) expanded
+            GROUP BY layer_name
+            ORDER BY total DESC, layer_name ASC
+            `,
+            [...scopeFilterContext.args, windowMinutes],
+          );
+          contextMemoryLayerRowsRaw = contextByMemoryLayer.rows;
+        }
+
+        if (hasTrustAnchorLayersJson) {
+          const contextByTrustAnchor = await client.query(
+            `
+            SELECT
+              layer_name,
+              COUNT(*)::bigint AS total
+            FROM (
+              SELECT jsonb_array_elements_text(c.trust_anchor_layers_json) AS layer_name
+              FROM memory_context_assembly_telemetry c
+              WHERE c.tenant_id = $1
+                AND ${scopeFilterContext.sql}
+                AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+            ) expanded
+            GROUP BY layer_name
+            ORDER BY total DESC, layer_name ASC
+            `,
+            [...scopeFilterContext.args, windowMinutes],
+          );
+          contextTrustAnchorRowsRaw = contextByTrustAnchor.rows;
+        }
+
+        if (hasRequestedAllowedLayersJson) {
+          const contextByRequestedAllowedLayer = await client.query(
+            `
+            SELECT
+              layer_name,
+              COUNT(*)::bigint AS total
+            FROM (
+              SELECT jsonb_array_elements_text(c.requested_allowed_layers_json) AS layer_name
+              FROM memory_context_assembly_telemetry c
+              WHERE c.tenant_id = $1
+                AND ${scopeFilterContext.sql}
+                AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+            ) expanded
+            GROUP BY layer_name
+            ORDER BY total DESC, layer_name ASC
+            `,
+            [...scopeFilterContext.args, windowMinutes],
+          );
+          contextRequestedAllowedLayerRowsRaw = contextByRequestedAllowedLayer.rows;
+        }
+      } catch (contextErr: any) {
+        if (String(contextErr?.code ?? "") === "42P01") {
+          contextTelemetryWarning = "context_assembly_telemetry_table_missing";
+        } else {
+          throw contextErr;
+        }
+      }
+
+      try {
+        const sandboxSummary = await client.query(
+          `
+          SELECT
+            COUNT(*)::bigint AS total,
+            COUNT(*) FILTER (WHERE s.status = 'succeeded')::bigint AS succeeded,
+            COUNT(*) FILTER (WHERE s.status = 'failed')::bigint AS failed,
+            COUNT(*) FILTER (WHERE s.status = 'canceled')::bigint AS canceled,
+            COUNT(*) FILTER (WHERE s.status = 'timeout')::bigint AS timeout,
+            COUNT(*) FILTER (WHERE s.output_truncated)::bigint AS output_truncated,
+            percentile_cont(0.5) WITHIN GROUP (ORDER BY s.queue_wait_ms) AS queue_wait_p50_ms,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY s.queue_wait_ms) AS queue_wait_p95_ms,
+            percentile_cont(0.5) WITHIN GROUP (ORDER BY s.runtime_ms) AS runtime_p50_ms,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY s.runtime_ms) AS runtime_p95_ms,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY s.total_latency_ms) AS total_latency_p95_ms
+          FROM memory_sandbox_run_telemetry s
+          WHERE s.tenant_id = $1
+            AND ${scopeFilterSandbox.sql}
+            AND s.created_at >= now() - (($${scopeFilterSandbox.args.length + 1}::text || ' minutes')::interval)
+          `,
+          [...scopeFilterSandbox.args, windowMinutes],
+        );
+        sandboxSummaryRow = sandboxSummary.rows[0] ?? null;
+
+        const sandboxByStatus = await client.query(
+          `
+          SELECT
+            s.status,
+            COUNT(*)::bigint AS total
+          FROM memory_sandbox_run_telemetry s
+          WHERE s.tenant_id = $1
+            AND ${scopeFilterSandbox.sql}
+            AND s.created_at >= now() - (($${scopeFilterSandbox.args.length + 1}::text || ' minutes')::interval)
+          GROUP BY s.status
+          ORDER BY s.status ASC
+          `,
+          [...scopeFilterSandbox.args, windowMinutes],
+        );
+        sandboxStatusRowsRaw = sandboxByStatus.rows;
+
+        const sandboxByMode = await client.query(
+          `
+          SELECT
+            s.mode,
+            COUNT(*)::bigint AS total
+          FROM memory_sandbox_run_telemetry s
+          WHERE s.tenant_id = $1
+            AND ${scopeFilterSandbox.sql}
+            AND s.created_at >= now() - (($${scopeFilterSandbox.args.length + 1}::text || ' minutes')::interval)
+          GROUP BY s.mode
+          ORDER BY s.mode ASC
+          `,
+          [...scopeFilterSandbox.args, windowMinutes],
+        );
+        sandboxModeRowsRaw = sandboxByMode.rows;
+
+        const sandboxTopErrors = await client.query(
+          `
+          SELECT
+            s.error_code,
+            COUNT(*)::bigint AS total
+          FROM memory_sandbox_run_telemetry s
+          WHERE s.tenant_id = $1
+            AND ${scopeFilterSandbox.sql}
+            AND s.created_at >= now() - (($${scopeFilterSandbox.args.length + 1}::text || ' minutes')::interval)
+            AND s.error_code IS NOT NULL
+          GROUP BY s.error_code
+          ORDER BY total DESC, s.error_code ASC
+          LIMIT 10
+          `,
+          [...scopeFilterSandbox.args, windowMinutes],
+        );
+        sandboxTopErrorsRaw = sandboxTopErrors.rows;
+      } catch (sandboxErr: any) {
+        if (String(sandboxErr?.code ?? "") === "42P01") {
+          sandboxTelemetryWarning = "sandbox_telemetry_table_missing";
+        } else {
+          throw sandboxErr;
+        }
+      }
+
+      try {
+        const replaySummary = await client.query(
+          `
+          SELECT
+            COUNT(*)::bigint AS total,
+            COUNT(*) FILTER (WHERE n.slots #>> '{repair_review,state}' = 'approved')::bigint AS approved,
+            COUNT(*) FILTER (WHERE n.slots #>> '{repair_review,state}' = 'rejected')::bigint AS rejected,
+            COUNT(*) FILTER (WHERE n.slots #>> '{repair_review,state}' = 'approved_shadow_blocked')::bigint AS approved_shadow_blocked,
+            COUNT(*) FILTER (WHERE n.slots #>> '{repair_review,auto_promote_on_pass}' = 'true')::bigint AS auto_promote_requested,
+            COUNT(*) FILTER (
+              WHERE jsonb_typeof(n.slots #> '{repair_review,review_metadata,auto_promote_policy_resolution,sources_applied}') = 'array'
+                AND jsonb_array_length(n.slots #> '{repair_review,review_metadata,auto_promote_policy_resolution,sources_applied}') > 0
+            )::bigint AS policy_overrides_applied
+          FROM memory_nodes n
+          WHERE n.type = 'procedure'
+            AND n.slots->>'replay_kind' = 'playbook'
+            AND n.slots ? 'repair_review'
+            AND ${scopeFilterMemory.sql.replace(/scope/g, "n.scope")}
+            AND n.created_at >= now() - (($${scopeFilterMemory.args.length + 1}::text || ' minutes')::interval)
+          `,
+          [...scopeFilterMemory.args, windowMinutes],
+        );
+        replayPolicySummaryRow = replaySummary.rows[0] ?? null;
+
+        const replayByBase = await client.query(
+          `
+          SELECT
+            COALESCE(n.slots #>> '{repair_review,review_metadata,auto_promote_policy_resolution,base_source}', 'unknown') AS base_source,
+            COUNT(*)::bigint AS total
+          FROM memory_nodes n
+          WHERE n.type = 'procedure'
+            AND n.slots->>'replay_kind' = 'playbook'
+            AND n.slots ? 'repair_review'
+            AND ${scopeFilterMemory.sql.replace(/scope/g, "n.scope")}
+            AND n.created_at >= now() - (($${scopeFilterMemory.args.length + 1}::text || ' minutes')::interval)
+          GROUP BY base_source
+          ORDER BY total DESC, base_source ASC
+          `,
+          [...scopeFilterMemory.args, windowMinutes],
+        );
+        replayPolicyBaseRowsRaw = replayByBase.rows;
+
+        const replayByLayer = await client.query(
+          `
+          SELECT
+            COALESCE(src.item->>'layer', 'unknown') AS layer,
+            COUNT(*)::bigint AS total
+          FROM memory_nodes n
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE
+              WHEN jsonb_typeof(n.slots #> '{repair_review,review_metadata,auto_promote_policy_resolution,sources_applied}') = 'array'
+                THEN n.slots #> '{repair_review,review_metadata,auto_promote_policy_resolution,sources_applied}'
+              ELSE '[]'::jsonb
+            END
+          ) AS src(item)
+          WHERE n.type = 'procedure'
+            AND n.slots->>'replay_kind' = 'playbook'
+            AND n.slots ? 'repair_review'
+            AND ${scopeFilterMemory.sql.replace(/scope/g, "n.scope")}
+            AND n.created_at >= now() - (($${scopeFilterMemory.args.length + 1}::text || ' minutes')::interval)
+          GROUP BY layer
+          ORDER BY total DESC, layer ASC
+          LIMIT 10
+          `,
+          [...scopeFilterMemory.args, windowMinutes],
+        );
+        replayPolicyLayerRowsRaw = replayByLayer.rows;
+      } catch (replayErr: any) {
+        if (String(replayErr?.code ?? "") === "42P01") {
+          replayPolicyWarning = "replay_policy_diagnostics_table_missing";
+        } else {
+          throw replayErr;
+        }
+      }
+
+      const endpointRows = requestTelemetry.rows.map((r: any) => {
+        const total = Number(r.total ?? 0);
+        const errors = Number(r.errors ?? 0);
+        return {
+          endpoint: String(r.endpoint ?? "unknown"),
+          total,
+          errors,
+          error_rate: total > 0 ? round(errors / total) : 0,
+          latency_p50_ms: round(Number(r.latency_p50_ms ?? 0)),
+          latency_p95_ms: round(Number(r.latency_p95_ms ?? 0)),
+          latency_p99_ms: round(Number(r.latency_p99_ms ?? 0)),
+        };
+      });
+
+      const recallRow = recallAudit.rows[0] ?? {};
+      const recallTotal = Number(recallRow.total ?? 0);
+      const emptySeed = Number(recallRow.empty_seed ?? 0);
+      const emptyNodes = Number(recallRow.empty_nodes ?? 0);
+      const emptyEdges = Number(recallRow.empty_edges ?? 0);
+
+      const outboxRows = outboxByType.rows.map((r: any) => ({
+        event_type: String(r.event_type ?? "unknown"),
+        pending: Number(r.pending ?? 0),
+        retrying: Number(r.retrying ?? 0),
+        failed: Number(r.failed ?? 0),
+        oldest_pending_age_sec: round(Number(r.oldest_pending_age_sec ?? 0)),
+      }));
+      const outboxTotals = outboxRows.reduce(
+        (acc, r) => {
+          acc.pending += r.pending;
+          acc.retrying += r.retrying;
+          acc.failed += r.failed;
+          acc.oldest_pending_age_sec = Math.max(acc.oldest_pending_age_sec, r.oldest_pending_age_sec);
+          return acc;
+        },
+        { pending: 0, retrying: 0, failed: 0, oldest_pending_age_sec: 0 },
+      );
+
+      const contextTotal = Number(contextSummaryRow?.total ?? 0);
+      const contextLayeredTotal = Number(contextSummaryRow?.layered_total ?? 0);
+      const contextBudgetExhausted = Number(contextSummaryRow?.budget_exhausted ?? 0);
+      const contextDroppedRequests = Number(contextSummaryRow?.dropped_requests ?? 0);
+      const contextEndpointRows = contextEndpointRowsRaw.map((r: any) => {
+        const total = Number(r.total ?? 0);
+        const layeredTotal = Number(r.layered_total ?? 0);
+        const budgetExhausted = Number(r.budget_exhausted ?? 0);
+        const droppedRequests = Number(r.dropped_requests ?? 0);
+        return {
+          endpoint: String(r.endpoint ?? "unknown"),
+          total,
+          layered_total: layeredTotal,
+          layered_adoption_rate: total > 0 ? round(layeredTotal / total) : 0,
+          latency_p95_ms: round(Number(r.latency_p95_ms ?? 0)),
+          budget_exhausted: budgetExhausted,
+          budget_exhausted_rate: layeredTotal > 0 ? round(budgetExhausted / layeredTotal) : 0,
+          dropped_requests: droppedRequests,
+          dropped_request_rate: layeredTotal > 0 ? round(droppedRequests / layeredTotal) : 0,
+        };
+      });
+      const contextLayerRows = contextLayerRowsRaw.map((r: any) => {
+        const total = Number(r.total ?? 0);
+        const sourceTotal = Number(r.source_total ?? 0);
+        const keptTotal = Number(r.kept_total ?? 0);
+        const droppedTotal = Number(r.dropped_total ?? 0);
+        const droppedRequests = Number(r.dropped_requests ?? 0);
+        const budgetExhausted = Number(r.budget_exhausted ?? 0);
+        return {
+          layer_name: String(r.layer_name ?? "unknown"),
+          total,
+          source_total: sourceTotal,
+          kept_total: keptTotal,
+          dropped_total: droppedTotal,
+          kept_ratio: sourceTotal > 0 ? round(keptTotal / sourceTotal) : 0,
+          drop_ratio: sourceTotal > 0 ? round(droppedTotal / sourceTotal) : 0,
+          used_chars_avg: round(Number(r.used_chars_avg ?? 0)),
+          budget_chars_avg: round(Number(r.budget_chars_avg ?? 0)),
+          dropped_requests: droppedRequests,
+          dropped_request_rate: total > 0 ? round(droppedRequests / total) : 0,
+          budget_exhausted: budgetExhausted,
+          budget_exhausted_rate: total > 0 ? round(budgetExhausted / total) : 0,
+        };
+      });
+      const contextSelectionPolicyRows = contextSelectionPolicyRowsRaw.map((r: any) => ({
+        selection_policy_name: String(r.selection_policy_name ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const contextSelectionPolicySourceRows = contextSelectionPolicySourceRowsRaw.map((r: any) => ({
+        selection_policy_source: String(r.selection_policy_source ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const contextMemoryLayerRows = contextMemoryLayerRowsRaw.map((r: any) => ({
+        layer_name: String(r.layer_name ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const contextTrustAnchorRows = contextTrustAnchorRowsRaw.map((r: any) => ({
+        layer_name: String(r.layer_name ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const contextRequestedAllowedLayerRows = contextRequestedAllowedLayerRowsRaw.map((r: any) => ({
+        layer_name: String(r.layer_name ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const criticalLayerAlerts = contextLayerRows
+        .filter((row) => row.layer_name === "rules" || row.layer_name === "decisions")
+        .map((row) => ({
+          layer_name: row.layer_name,
+          sample_count: row.total,
+          drop_ratio: row.drop_ratio,
+          severity: row.total >= 20 && row.drop_ratio >= 0.2 ? "warning" : "ok",
+        }));
+      const sandboxTotal = Number(sandboxSummaryRow?.total ?? 0);
+      const sandboxSucceeded = Number(sandboxSummaryRow?.succeeded ?? 0);
+      const sandboxFailed = Number(sandboxSummaryRow?.failed ?? 0);
+      const sandboxCanceled = Number(sandboxSummaryRow?.canceled ?? 0);
+      const sandboxTimeout = Number(sandboxSummaryRow?.timeout ?? 0);
+      const sandboxOutputTruncated = Number(sandboxSummaryRow?.output_truncated ?? 0);
+      const sandboxStatusRows = sandboxStatusRowsRaw.map((r: any) => ({
+        status: String(r.status ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const sandboxModeRows = sandboxModeRowsRaw.map((r: any) => ({
+        mode: String(r.mode ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const sandboxTopErrors = sandboxTopErrorsRaw.map((r: any) => ({
+        error_code: String(r.error_code ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const replayPolicyTotal = Number(replayPolicySummaryRow?.total ?? 0);
+      const replayPolicyApproved = Number(replayPolicySummaryRow?.approved ?? 0);
+      const replayPolicyRejected = Number(replayPolicySummaryRow?.rejected ?? 0);
+      const replayPolicyShadowBlocked = Number(replayPolicySummaryRow?.approved_shadow_blocked ?? 0);
+      const replayPolicyAutoPromoteRequested = Number(replayPolicySummaryRow?.auto_promote_requested ?? 0);
+      const replayPolicyOverridesApplied = Number(replayPolicySummaryRow?.policy_overrides_applied ?? 0);
+      const replayPolicyByBase = replayPolicyBaseRowsRaw.map((r: any) => ({
+        base_source: String(r.base_source ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const replayPolicyByLayer = replayPolicyLayerRowsRaw.map((r: any) => ({
+        layer: String(r.layer ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+
+      out.request_telemetry = {
+        endpoints: endpointRows,
+      };
+      out.recall_pipeline = {
+        total: recallTotal,
+        empty_seed: emptySeed,
+        empty_nodes: emptyNodes,
+        empty_edges: emptyEdges,
+        empty_seed_rate: recallTotal > 0 ? round(emptySeed / recallTotal) : 0,
+        empty_node_rate: recallTotal > 0 ? round(emptyNodes / recallTotal) : 0,
+        empty_edge_rate: recallTotal > 0 ? round(emptyEdges / recallTotal) : 0,
+        seed_avg: round(Number(recallRow.seed_avg ?? 0)),
+        node_avg: round(Number(recallRow.node_avg ?? 0)),
+        edge_avg: round(Number(recallRow.edge_avg ?? 0)),
+      };
+      out.outbox = {
+        totals: outboxTotals,
+        by_event_type: outboxRows,
+      };
+      out.context_assembly = {
+        total: contextTotal,
+        layered_total: contextLayeredTotal,
+        layered_adoption_rate: contextTotal > 0 ? round(contextLayeredTotal / contextTotal) : 0,
+        latency_p50_ms: round(Number(contextSummaryRow?.latency_p50_ms ?? 0)),
+        latency_p95_ms: round(Number(contextSummaryRow?.latency_p95_ms ?? 0)),
+        latency_p99_ms: round(Number(contextSummaryRow?.latency_p99_ms ?? 0)),
+        budget_exhausted: contextBudgetExhausted,
+        budget_exhausted_rate: contextLayeredTotal > 0 ? round(contextBudgetExhausted / contextLayeredTotal) : 0,
+        dropped_requests: contextDroppedRequests,
+        dropped_request_rate: contextLayeredTotal > 0 ? round(contextDroppedRequests / contextLayeredTotal) : 0,
+        budget_use_ratio_avg: round(Number(contextSummaryRow?.budget_use_ratio_avg ?? 0)),
+        endpoints: contextEndpointRows,
+        layers: contextLayerRows,
+        selection_policies: contextSelectionPolicyRows,
+        selection_policy_sources: contextSelectionPolicySourceRows,
+        selected_memory_layers: contextMemoryLayerRows,
+        trust_anchor_layers: contextTrustAnchorRows,
+        requested_allowed_layers: contextRequestedAllowedLayerRows,
+        alerts: {
+          critical_layers: criticalLayerAlerts,
+        },
+        warning: contextTelemetryWarning ?? undefined,
+      };
+      out.sandbox = {
+        total: sandboxTotal,
+        succeeded: sandboxSucceeded,
+        failed: sandboxFailed,
+        canceled: sandboxCanceled,
+        timeout: sandboxTimeout,
+        timeout_rate: sandboxTotal > 0 ? round(sandboxTimeout / sandboxTotal) : 0,
+        cancel_rate: sandboxTotal > 0 ? round(sandboxCanceled / sandboxTotal) : 0,
+        output_truncated: sandboxOutputTruncated,
+        output_truncated_rate: sandboxTotal > 0 ? round(sandboxOutputTruncated / sandboxTotal) : 0,
+        queue_wait_p50_ms: round(Number(sandboxSummaryRow?.queue_wait_p50_ms ?? 0)),
+        queue_wait_p95_ms: round(Number(sandboxSummaryRow?.queue_wait_p95_ms ?? 0)),
+        runtime_p50_ms: round(Number(sandboxSummaryRow?.runtime_p50_ms ?? 0)),
+        runtime_p95_ms: round(Number(sandboxSummaryRow?.runtime_p95_ms ?? 0)),
+        total_latency_p95_ms: round(Number(sandboxSummaryRow?.total_latency_p95_ms ?? 0)),
+        by_status: sandboxStatusRows,
+        by_mode: sandboxModeRows,
+        top_errors: sandboxTopErrors,
+        warning: sandboxTelemetryWarning ?? undefined,
+      };
+      out.replay_policy = {
+        total_reviews: replayPolicyTotal,
+        states: {
+          approved: replayPolicyApproved,
+          rejected: replayPolicyRejected,
+          approved_shadow_blocked: replayPolicyShadowBlocked,
+        },
+        auto_promote_requested: replayPolicyAutoPromoteRequested,
+        auto_promote_requested_rate: replayPolicyTotal > 0 ? round(replayPolicyAutoPromoteRequested / replayPolicyTotal) : 0,
+        policy_overrides_applied: replayPolicyOverridesApplied,
+        policy_overrides_applied_rate: replayPolicyTotal > 0 ? round(replayPolicyOverridesApplied / replayPolicyTotal) : 0,
+        by_base_source: replayPolicyByBase,
+        top_policy_layers: replayPolicyByLayer,
+        warning: replayPolicyWarning ?? undefined,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      out.warning = "schema_not_ready_for_operability_diagnostics";
+      return out;
+    }
+    throw err;
+  }
+
+  return out;
+}
+
+export async function getTenantDashboardSummary(db: Db, args: { tenant_id: string; default_tenant_id: string }) {
+  const tenantId = trimOrNull(args.tenant_id);
+  const defaultTenantId = trimOrNull(args.default_tenant_id) ?? "default";
+  if (!tenantId) throw new Error("tenant_id is required");
+
+  const scopeArgs: unknown[] = [];
+  const scopeFilter = tenantScopeCondition(scopeArgs, tenantId, defaultTenantId);
+
+  const out: Record<string, unknown> = {
+    tenant_id: tenantId,
+    generated_at: nowIso(),
+    default_tenant_id: defaultTenantId,
+  };
+
+  try {
+    await withClient(db, async (client) => {
+      const activeKeys = await client.query(
+        `
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'active')::bigint AS active,
+          COUNT(*) FILTER (WHERE status = 'revoked')::bigint AS revoked
+        FROM control_api_keys
+        WHERE tenant_id = $1
+        `,
+        [tenantId],
+      );
+      const tenantState = await client.query(
+        `
+        SELECT status, created_at, updated_at
+        FROM control_tenants
+        WHERE tenant_id = $1
+        LIMIT 1
+        `,
+        [tenantId],
+      );
+      const quota = await client.query(
+        `
+        SELECT *
+        FROM control_tenant_quotas
+        WHERE tenant_id = $1
+        LIMIT 1
+        `,
+        [tenantId],
+      );
+      const nodes = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM memory_nodes
+        WHERE ${scopeFilter.sql}
+        `,
+        scopeFilter.args,
+      );
+      const edges = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM memory_edges
+        WHERE ${scopeFilter.sql}
+        `,
+        scopeFilter.args,
+      );
+      const outbox = await client.query(
+        `
+        SELECT
+          COUNT(*) FILTER (WHERE published_at IS NULL)::bigint AS pending,
+          COUNT(*) FILTER (WHERE published_at IS NULL AND attempts > 0)::bigint AS retrying,
+          COUNT(*) FILTER (WHERE failed_at IS NOT NULL)::bigint AS failed
+        FROM memory_outbox
+        WHERE ${scopeFilter.sql}
+        `,
+        scopeFilter.args,
+      );
+      const recall24h = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM memory_recall_audit
+        WHERE ${scopeFilter.sql}
+          AND created_at >= now() - interval '24 hours'
+        `,
+        scopeFilter.args,
+      );
+      const commits24h = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM memory_commits
+        WHERE ${scopeFilter.sql}
+          AND created_at >= now() - interval '24 hours'
+        `,
+        scopeFilter.args,
+      );
+      const activeRules = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM memory_rule_defs
+        WHERE ${scopeFilter.sql}
+          AND state = 'active'
+        `,
+        scopeFilter.args,
+      );
+
+      out.tenant = tenantState.rows[0] ?? null;
+      out.api_keys = {
+        active: Number(activeKeys.rows[0]?.active ?? 0),
+        revoked: Number(activeKeys.rows[0]?.revoked ?? 0),
+      };
+      out.quota_profile = quota.rows[0] ?? null;
+      out.data_plane = {
+        nodes: Number(nodes.rows[0]?.count ?? 0),
+        edges: Number(edges.rows[0]?.count ?? 0),
+        active_rules: Number(activeRules.rows[0]?.count ?? 0),
+        recalls_24h: Number(recall24h.rows[0]?.count ?? 0),
+        commits_24h: Number(commits24h.rows[0]?.count ?? 0),
+      };
+      out.outbox = {
+        pending: Number(outbox.rows[0]?.pending ?? 0),
+        retrying: Number(outbox.rows[0]?.retrying ?? 0),
+        failed: Number(outbox.rows[0]?.failed ?? 0),
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      out.warning = "schema_not_ready_for_dashboard";
+      return out;
+    }
+    throw err;
+  }
+
+  return out;
+}
+
+export async function getTenantIncidentPublishRollup(
+  db: Db,
+  args: {
+    tenant_id: string;
+    window_hours?: number;
+    sample_limit?: number;
+  },
+) {
+  const tenantId = trimOrNull(args.tenant_id);
+  if (!tenantId) throw new Error("tenant_id is required");
+  const windowHours = Number.isFinite(args.window_hours)
+    ? Math.max(1, Math.min(24 * 365, Math.trunc(args.window_hours!)))
+    : 24 * 7;
+  const sampleLimit = Number.isFinite(args.sample_limit) ? Math.max(1, Math.min(100, Math.trunc(args.sample_limit!))) : 20;
+
+  try {
+    return await withClient(db, async (client) => {
+      const statusRows = await client.query(
+        `
+        SELECT status, COUNT(*)::bigint AS count
+        FROM control_incident_publish_jobs
+        WHERE tenant_id = $1
+          AND created_at >= now() - (($2::text || ' hours')::interval)
+        GROUP BY status
+        ORDER BY status ASC
+        `,
+        [tenantId, windowHours],
+      );
+
+      const replayRows = await client.query(
+        `
+        SELECT
+          action,
+          COUNT(*)::bigint AS events,
+          SUM(
+            CASE
+              WHEN (details->>'replayed_count') ~ '^[0-9]+$' THEN (details->>'replayed_count')::bigint
+              ELSE 0
+            END
+          )::bigint AS replayed_count,
+          SUM(
+            CASE
+              WHEN (details->>'candidate_count') ~ '^[0-9]+$' THEN (details->>'candidate_count')::bigint
+              ELSE 0
+            END
+          )::bigint AS candidate_count
+        FROM control_audit_events
+        WHERE tenant_id = $1
+          AND action IN ('incident_publish.replay', 'incident_publish.replay.preview')
+          AND created_at >= now() - (($2::text || ' hours')::interval)
+        GROUP BY action
+        ORDER BY action ASC
+        `,
+        [tenantId, windowHours],
+      );
+
+      const sampleRows = await client.query(
+        `
+        SELECT
+          id,
+          run_id,
+          status,
+          attempts,
+          max_attempts,
+          target,
+          last_error,
+          updated_at
+        FROM control_incident_publish_jobs
+        WHERE tenant_id = $1
+          AND status IN ('failed', 'dead_letter')
+        ORDER BY updated_at DESC
+        LIMIT $2
+        `,
+        [tenantId, sampleLimit],
+      );
+
+      const statusCounts: Record<string, number> = {};
+      let total = 0;
+      for (const r of statusRows.rows) {
+        const status = String(r.status);
+        const count = Number(r.count ?? 0);
+        statusCounts[status] = count;
+        total += count;
+      }
+
+      const replayAgg = {
+        replay_events: 0,
+        preview_events: 0,
+        replayed_count: 0,
+        candidate_count: 0,
+      };
+      for (const r of replayRows.rows) {
+        const action = String(r.action);
+        const events = Number(r.events ?? 0);
+        const replayedCount = Number(r.replayed_count ?? 0);
+        const candidateCount = Number(r.candidate_count ?? 0);
+        if (action === "incident_publish.replay") replayAgg.replay_events += events;
+        if (action === "incident_publish.replay.preview") replayAgg.preview_events += events;
+        replayAgg.replayed_count += replayedCount;
+        replayAgg.candidate_count += candidateCount;
+      }
+
+      const failedSample = sampleRows.rows.map((r) => ({
+        id: String(r.id),
+        run_id: r.run_id == null ? null : String(r.run_id),
+        status: r.status == null ? null : String(r.status),
+        attempts: Number(r.attempts ?? 0),
+        max_attempts: Number(r.max_attempts ?? 0),
+        target: r.target == null ? null : String(r.target),
+        last_error: r.last_error == null ? null : String(r.last_error),
+        updated_at: r.updated_at,
+      }));
+
+      return {
+        ok: true,
+        tenant_id: tenantId,
+        window_hours: windowHours,
+        generated_at: nowIso(),
+        jobs: {
+          total,
+          status_counts: statusCounts,
+          failed_or_dead_letter: (statusCounts.failed ?? 0) + (statusCounts.dead_letter ?? 0),
+        },
+        replay: replayAgg,
+        failed_sample: failedSample,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      return {
+        ok: false,
+        tenant_id: tenantId,
+        window_hours: windowHours,
+        generated_at: nowIso(),
+        warning: "incident_publish_schema_missing",
+        jobs: {
+          total: 0,
+          status_counts: {},
+          failed_or_dead_letter: 0,
+        },
+        replay: {
+          replay_events: 0,
+          preview_events: 0,
+          replayed_count: 0,
+          candidate_count: 0,
+        },
+        failed_sample: [],
+      };
+    }
+    throw err;
+  }
+}
+
+export async function getTenantIncidentPublishSloReport(
+  db: Db,
+  args: {
+    tenant_id: string;
+    window_hours?: number;
+    baseline_hours?: number;
+    anchor_utc?: string;
+    min_jobs?: number;
+    adaptive_multiplier?: number;
+    failure_rate_floor?: number;
+    dead_letter_rate_floor?: number;
+    backlog_warning_abs?: number;
+    dead_letter_backlog_warning_abs?: number;
+    dead_letter_backlog_critical_abs?: number;
+  },
+) {
+  const tenantId = trimOrNull(args.tenant_id);
+  if (!tenantId) throw new Error("tenant_id is required");
+  const windowHours = Number.isFinite(args.window_hours) ? Math.max(1, Math.min(24 * 365, Math.trunc(args.window_hours!))) : 24;
+  const baselineHours = Number.isFinite(args.baseline_hours)
+    ? Math.max(windowHours + 1, Math.min(24 * 365, Math.trunc(args.baseline_hours!)))
+    : Math.max(windowHours + 1, 24 * 7);
+  const minJobs = Number.isFinite(args.min_jobs) ? Math.max(1, Math.min(1_000_000, Math.trunc(args.min_jobs!))) : 20;
+  const adaptiveMultiplier = Number.isFinite(args.adaptive_multiplier)
+    ? Math.max(1, Math.min(20, Number(args.adaptive_multiplier)))
+    : 2;
+  const failureRateFloor = Number.isFinite(args.failure_rate_floor) ? Math.max(0, Math.min(1, Number(args.failure_rate_floor))) : 0.05;
+  const deadLetterRateFloor = Number.isFinite(args.dead_letter_rate_floor)
+    ? Math.max(0, Math.min(1, Number(args.dead_letter_rate_floor)))
+    : 0.02;
+  const backlogWarningAbs = Number.isFinite(args.backlog_warning_abs)
+    ? Math.max(1, Math.min(1_000_000, Math.trunc(args.backlog_warning_abs!)))
+    : 200;
+  const deadLetterBacklogWarningAbs = Number.isFinite(args.dead_letter_backlog_warning_abs)
+    ? Math.max(1, Math.min(1_000_000, Math.trunc(args.dead_letter_backlog_warning_abs!)))
+    : 20;
+  const deadLetterBacklogCriticalAbs = Number.isFinite(args.dead_letter_backlog_critical_abs)
+    ? Math.max(deadLetterBacklogWarningAbs, Math.min(1_000_000, Math.trunc(args.dead_letter_backlog_critical_abs!)))
+    : Math.max(deadLetterBacklogWarningAbs, 50);
+  const anchor = normalizeIsoTimestamp(trimOrNull(args.anchor_utc)) ?? nowIso();
+
+  function countByStatus(rows: Array<{ status: string; count: string | number }>) {
+    const out: Record<string, number> = {};
+    for (const r of rows) {
+      const status = String(r.status);
+      out[status] = Number(r.count ?? 0);
+    }
+    return out;
+  }
+
+  function buildMetrics(statusCounts: Record<string, number>) {
+    const succeeded = Number(statusCounts.succeeded ?? 0);
+    const failed = Number(statusCounts.failed ?? 0);
+    const deadLetter = Number(statusCounts.dead_letter ?? 0);
+    const total = succeeded + failed + deadLetter;
+    const failureRate = total > 0 ? (failed + deadLetter) / total : 0;
+    const deadLetterRate = total > 0 ? deadLetter / total : 0;
+    return {
+      succeeded,
+      failed,
+      dead_letter: deadLetter,
+      total_processed: total,
+      failure_rate: round(failureRate),
+      dead_letter_rate: round(deadLetterRate),
+    };
+  }
+
+  try {
+    return await withClient(db, async (client) => {
+      const curRows = await client.query(
+        `
+        SELECT status, COUNT(*)::bigint AS count
+        FROM control_incident_publish_jobs
+        WHERE tenant_id = $1
+          AND updated_at > ($2::timestamptz - (($3::text || ' hours')::interval))
+          AND updated_at <= $2::timestamptz
+        GROUP BY status
+        `,
+        [tenantId, anchor, windowHours],
+      );
+      const baseRows = await client.query(
+        `
+        SELECT status, COUNT(*)::bigint AS count
+        FROM control_incident_publish_jobs
+        WHERE tenant_id = $1
+          AND updated_at > ($2::timestamptz - (($4::text || ' hours')::interval))
+          AND updated_at <= ($2::timestamptz - (($3::text || ' hours')::interval))
+        GROUP BY status
+        `,
+        [tenantId, anchor, windowHours, baselineHours],
+      );
+      const backlogRow = await client.query(
+        `
+        SELECT
+          COUNT(*) FILTER (WHERE status IN ('pending', 'processing', 'failed'))::bigint AS open_backlog,
+          COUNT(*) FILTER (WHERE status = 'dead_letter')::bigint AS dead_letter_backlog
+        FROM control_incident_publish_jobs
+        WHERE tenant_id = $1
+        `,
+        [tenantId],
+      );
+
+      const currentCounts = countByStatus(curRows.rows as any[]);
+      const baselineCounts = countByStatus(baseRows.rows as any[]);
+      const current = buildMetrics(currentCounts);
+      const baseline = buildMetrics(baselineCounts);
+      const openBacklog = Number(backlogRow.rows[0]?.open_backlog ?? 0);
+      const deadLetterBacklog = Number(backlogRow.rows[0]?.dead_letter_backlog ?? 0);
+
+      const failureRateThreshold = Math.max(
+        failureRateFloor,
+        baseline.total_processed >= minJobs ? baseline.failure_rate * adaptiveMultiplier : failureRateFloor,
+      );
+      const deadLetterRateThreshold = Math.max(
+        deadLetterRateFloor,
+        baseline.total_processed >= minJobs ? baseline.dead_letter_rate * adaptiveMultiplier : deadLetterRateFloor,
+      );
+
+      const warningSignals: string[] = [];
+      const criticalSignals: string[] = [];
+
+      if (current.total_processed >= minJobs && current.failure_rate > failureRateThreshold) {
+        warningSignals.push("failure_rate_above_threshold");
+      }
+      if (current.total_processed >= minJobs && current.dead_letter_rate > deadLetterRateThreshold) {
+        warningSignals.push("dead_letter_rate_above_threshold");
+      }
+      if (openBacklog > backlogWarningAbs) {
+        warningSignals.push("open_backlog_above_threshold");
+      }
+      if (deadLetterBacklog > deadLetterBacklogWarningAbs) {
+        warningSignals.push("dead_letter_backlog_above_threshold");
+      }
+
+      if (current.total_processed >= minJobs && current.failure_rate > failureRateThreshold * 1.5) {
+        criticalSignals.push("failure_rate_far_above_threshold");
+      }
+      if (current.total_processed >= minJobs && current.dead_letter_rate > deadLetterRateThreshold * 1.5) {
+        criticalSignals.push("dead_letter_rate_far_above_threshold");
+      }
+      if (deadLetterBacklog > deadLetterBacklogCriticalAbs) {
+        criticalSignals.push("dead_letter_backlog_critical");
+      }
+
+      const degraded = warningSignals.length > 0 || criticalSignals.length > 0;
+      const severity = criticalSignals.length > 0 ? "critical" : warningSignals.length > 0 ? "warning" : null;
+
+      return {
+        ok: true,
+        tenant_id: tenantId,
+        generated_at: nowIso(),
+        snapshot: {
+          anchor_utc: anchor,
+          window_hours: windowHours,
+          baseline_hours: baselineHours,
+        },
+        thresholds: {
+          min_jobs: minJobs,
+          adaptive_multiplier: round(adaptiveMultiplier),
+          failure_rate_floor: round(failureRateFloor),
+          dead_letter_rate_floor: round(deadLetterRateFloor),
+          failure_rate_threshold: round(failureRateThreshold),
+          dead_letter_rate_threshold: round(deadLetterRateThreshold),
+          backlog_warning_abs: backlogWarningAbs,
+          dead_letter_backlog_warning_abs: deadLetterBacklogWarningAbs,
+          dead_letter_backlog_critical_abs: deadLetterBacklogCriticalAbs,
+        },
+        metrics: {
+          current,
+          baseline,
+          backlog: {
+            open_backlog: openBacklog,
+            dead_letter_backlog: deadLetterBacklog,
+          },
+        },
+        degraded,
+        severity,
+        warning_signals: warningSignals,
+        critical_signals: criticalSignals,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      return {
+        ok: false,
+        tenant_id: tenantId,
+        generated_at: nowIso(),
+        warning: "incident_publish_schema_missing",
+        degraded: false,
+        severity: null,
+        warning_signals: [],
+        critical_signals: [],
+      };
+    }
+    throw err;
+  }
+}
+
+export async function getTenantRequestTimeseries(
+  db: Db,
+  args: {
+    tenant_id: string;
+    window_hours?: number;
+    bucket?: "hour";
+    endpoint?: TelemetryEndpoint;
+    limit?: number;
+    offset?: number;
+    retention_hours?: number;
+    anchor_utc?: string;
+  },
+) {
+  const tenantId = trimOrNull(args.tenant_id);
+  if (!tenantId) throw new Error("tenant_id is required");
+  const retentionHours = Number.isFinite(args.retention_hours)
+    ? Math.max(1, Math.min(24 * 365, Math.trunc(args.retention_hours!)))
+    : 24 * 30;
+  const requestedWindowHours = Number.isFinite(args.window_hours) ? Math.max(1, Math.min(24 * 365, Math.trunc(args.window_hours!))) : 24 * 7;
+  const windowHours = Math.min(requestedWindowHours, retentionHours);
+  const endpoint = args.endpoint ?? null;
+  const limit = Number.isFinite(args.limit) ? Math.max(1, Math.min(20_000, Math.trunc(args.limit!))) : 5000;
+  const offset = Number.isFinite(args.offset) ? Math.max(0, Math.trunc(args.offset!)) : 0;
+  const anchorRaw = trimOrNull(args.anchor_utc);
+  const anchorUtc = normalizeIsoTimestamp(anchorRaw);
+  const bucket = args.bucket ?? "hour";
+  try {
+    return await withClient(db, async (client) => {
+      const totalRows = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM (
+          SELECT date_trunc('hour', created_at) AS bucket_utc, endpoint
+          FROM memory_request_telemetry
+          WHERE tenant_id = $1
+            AND created_at >= now() - (($2::text || ' hours')::interval)
+            AND ($3::text IS NULL OR endpoint = $3::text)
+            AND ($4::timestamptz IS NULL OR created_at <= $4::timestamptz)
+          GROUP BY bucket_utc, endpoint
+        ) t
+        `,
+        [tenantId, windowHours, endpoint, anchorUtc],
+      );
+      const total = Number(totalRows.rows[0]?.count ?? 0);
+
+      const rows = await client.query(
+        `
+        SELECT
+          date_trunc('hour', created_at) AS bucket_utc,
+          endpoint,
+          COUNT(*)::bigint AS total,
+          COUNT(*) FILTER (WHERE status_code >= 500)::bigint AS server_errors,
+          COUNT(*) FILTER (WHERE status_code = 429)::bigint AS throttled,
+          COUNT(*) FILTER (WHERE status_code >= 400 AND status_code < 500 AND status_code <> 429)::bigint AS client_errors,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS latency_p50_ms,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS latency_p95_ms,
+          percentile_cont(0.99) WITHIN GROUP (ORDER BY latency_ms) AS latency_p99_ms
+        FROM memory_request_telemetry
+        WHERE tenant_id = $1
+          AND created_at >= now() - (($2::text || ' hours')::interval)
+          AND ($3::text IS NULL OR endpoint = $3::text)
+          AND ($6::timestamptz IS NULL OR created_at <= $6::timestamptz)
+        GROUP BY bucket_utc, endpoint
+        ORDER BY bucket_utc DESC, endpoint ASC
+        OFFSET $4
+        LIMIT $5
+        `,
+        [tenantId, windowHours, endpoint, offset, limit, anchorUtc],
+      );
+
+      const series = rows.rows.map((r) => {
+        const total = Number(r.total ?? 0);
+        const serverErrors = Number(r.server_errors ?? 0);
+        const throttled = Number(r.throttled ?? 0);
+        const budgetErrors = serverErrors + throttled;
+        const errorRate = total > 0 ? budgetErrors / total : 0;
+        return {
+          bucket_utc: r.bucket_utc,
+          endpoint: r.endpoint,
+          total,
+          server_errors: serverErrors,
+          throttled,
+          client_errors: Number(r.client_errors ?? 0),
+          error_budget_consumed: budgetErrors,
+          error_rate: round(errorRate),
+          latency_p50_ms: Number(r.latency_p50_ms ?? 0),
+          latency_p95_ms: Number(r.latency_p95_ms ?? 0),
+          latency_p99_ms: Number(r.latency_p99_ms ?? 0),
+        };
+      });
+
+      const endpointBudgetRows = await client.query(
+        `
+        SELECT
+          endpoint,
+          COUNT(*)::bigint AS total,
+          COUNT(*) FILTER (WHERE status_code >= 500)::bigint AS server_errors,
+          COUNT(*) FILTER (WHERE status_code = 429)::bigint AS throttled
+        FROM memory_request_telemetry
+        WHERE tenant_id = $1
+          AND created_at >= now() - (($2::text || ' hours')::interval)
+          AND ($3::text IS NULL OR endpoint = $3::text)
+          AND ($4::timestamptz IS NULL OR created_at <= $4::timestamptz)
+        GROUP BY endpoint
+        ORDER BY endpoint ASC
+        `,
+        [tenantId, windowHours, endpoint, anchorUtc],
+      );
+
+      const budget = endpointBudgetRows.rows.map((r) => {
+        const total = Number(r.total ?? 0);
+        const serverErrors = Number(r.server_errors ?? 0);
+        const throttled = Number(r.throttled ?? 0);
+        const consumed = serverErrors + throttled;
+        return {
+          endpoint: r.endpoint,
+          total,
+          server_errors: serverErrors,
+          throttled,
+          error_budget_consumed: consumed,
+          error_rate: round(total > 0 ? consumed / total : 0),
+        };
+      });
+
+      return {
+        ok: true,
+        tenant_id: tenantId,
+        bucket,
+        window_hours: windowHours,
+        retention: {
+          retention_hours: retentionHours,
+          requested_window_hours: requestedWindowHours,
+          applied_window_hours: windowHours,
+          truncated: requestedWindowHours > windowHours,
+        },
+        filters: {
+          endpoint,
+        },
+        page: {
+          limit,
+          offset,
+          total,
+          has_more: offset + series.length < total,
+        },
+        snapshot: {
+          anchor_utc: anchorUtc ?? nowIso(),
+        },
+        generated_at: nowIso(),
+        series,
+        budget,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      return {
+        ok: false,
+        tenant_id: tenantId,
+        bucket,
+        window_hours: windowHours,
+        retention: {
+          retention_hours: retentionHours,
+          requested_window_hours: requestedWindowHours,
+          applied_window_hours: windowHours,
+          truncated: requestedWindowHours > windowHours,
+        },
+        filters: {
+          endpoint,
+        },
+        page: {
+          limit,
+          offset,
+          total: 0,
+          has_more: false,
+        },
+        snapshot: {
+          anchor_utc: anchorUtc ?? nowIso(),
+        },
+        generated_at: nowIso(),
+        warning: "request_telemetry_table_missing",
+        series: [],
+        budget: [],
+      };
+    }
+    throw err;
+  }
+}
+
+export async function getTenantApiKeyUsageReport(
+  db: Db,
+  args: {
+    tenant_id: string;
+    window_hours?: number;
+    baseline_hours?: number;
+    min_requests?: number;
+    zscore_threshold?: number;
+    endpoint?: TelemetryEndpoint;
+    limit?: number;
+    offset?: number;
+    retention_hours?: number;
+    anchor_utc?: string;
+  },
+) {
+  const tenantId = trimOrNull(args.tenant_id);
+  if (!tenantId) throw new Error("tenant_id is required");
+  const retentionHours = Number.isFinite(args.retention_hours)
+    ? Math.max(1, Math.min(24 * 365, Math.trunc(args.retention_hours!)))
+    : 24 * 30;
+  const requestedWindowHours = Number.isFinite(args.window_hours) ? Math.max(1, Math.min(24 * 365, Math.trunc(args.window_hours!))) : 24;
+  const windowHours = Math.min(requestedWindowHours, retentionHours);
+  const requestedBaselineHours = Number.isFinite(args.baseline_hours)
+    ? Math.max(windowHours + 1, Math.min(24 * 365, Math.trunc(args.baseline_hours!)))
+    : 24 * 7;
+  const baselineHours = Math.max(windowHours + 1, Math.min(requestedBaselineHours, retentionHours * 3));
+  const baselineSliceHours = Math.max(1, baselineHours - windowHours);
+  const minRequests = Number.isFinite(args.min_requests) ? Math.max(1, Math.min(1_000_000, Math.trunc(args.min_requests!))) : 30;
+  const zscoreThreshold = Number.isFinite(args.zscore_threshold)
+    ? Math.max(0.5, Math.min(100, Number(args.zscore_threshold)))
+    : 3;
+  const endpoint = args.endpoint ?? null;
+  const limit = Number.isFinite(args.limit) ? Math.max(1, Math.min(1000, Math.trunc(args.limit!))) : 200;
+  const offset = Number.isFinite(args.offset) ? Math.max(0, Math.trunc(args.offset!)) : 0;
+  const anchorRaw = trimOrNull(args.anchor_utc);
+  const anchorUtc = normalizeIsoTimestamp(anchorRaw);
+
+  try {
+    return await withClient(db, async (client) => {
+      const totalRows = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM (
+          SELECT api_key_prefix, endpoint
+          FROM memory_request_telemetry
+          WHERE tenant_id = $1
+            AND created_at >= now() - (($2::text || ' hours')::interval)
+            AND api_key_prefix IS NOT NULL
+            AND ($3::text IS NULL OR endpoint = $3::text)
+            AND ($4::timestamptz IS NULL OR created_at <= $4::timestamptz)
+          GROUP BY api_key_prefix, endpoint
+        ) t
+        `,
+        [tenantId, windowHours, endpoint, anchorUtc],
+      );
+      const total = Number(totalRows.rows[0]?.count ?? 0);
+
+      const q = await client.query(
+        `
+        WITH recent AS (
+          SELECT
+            api_key_prefix,
+            endpoint,
+            COUNT(*)::bigint AS recent_total,
+            COUNT(*) FILTER (WHERE status_code >= 500)::bigint AS recent_server_errors,
+            COUNT(*) FILTER (WHERE status_code = 429)::bigint AS recent_throttled,
+            AVG(latency_ms) AS recent_latency_avg_ms,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS recent_latency_p95_ms
+          FROM memory_request_telemetry
+          WHERE tenant_id = $1
+            AND created_at >= now() - (($2::text || ' hours')::interval)
+            AND api_key_prefix IS NOT NULL
+            AND ($3::text IS NULL OR endpoint = $3::text)
+            AND ($7::timestamptz IS NULL OR created_at <= $7::timestamptz)
+          GROUP BY api_key_prefix, endpoint
+        ),
+        baseline AS (
+          SELECT
+            api_key_prefix,
+            endpoint,
+            COUNT(*)::bigint AS baseline_total,
+            COUNT(*) FILTER (WHERE status_code >= 500)::bigint AS baseline_server_errors,
+            COUNT(*) FILTER (WHERE status_code = 429)::bigint AS baseline_throttled,
+            AVG(latency_ms) AS baseline_latency_avg_ms,
+            stddev_pop(latency_ms) AS baseline_latency_stddev_ms
+          FROM memory_request_telemetry
+          WHERE tenant_id = $1
+            AND created_at < now() - (($2::text || ' hours')::interval)
+            AND created_at >= now() - (($4::text || ' hours')::interval)
+            AND api_key_prefix IS NOT NULL
+            AND ($3::text IS NULL OR endpoint = $3::text)
+            AND ($7::timestamptz IS NULL OR created_at <= $7::timestamptz)
+          GROUP BY api_key_prefix, endpoint
+        )
+        SELECT
+          r.api_key_prefix,
+          r.endpoint,
+          r.recent_total,
+          r.recent_server_errors,
+          r.recent_throttled,
+          r.recent_latency_avg_ms,
+          r.recent_latency_p95_ms,
+          COALESCE(b.baseline_total, 0)::bigint AS baseline_total,
+          COALESCE(b.baseline_server_errors, 0)::bigint AS baseline_server_errors,
+          COALESCE(b.baseline_throttled, 0)::bigint AS baseline_throttled,
+          b.baseline_latency_avg_ms,
+          b.baseline_latency_stddev_ms
+        FROM recent r
+        LEFT JOIN baseline b
+          ON b.api_key_prefix = r.api_key_prefix
+         AND b.endpoint = r.endpoint
+        ORDER BY r.recent_total DESC, r.api_key_prefix ASC, r.endpoint ASC
+        OFFSET $5
+        LIMIT $6
+        `,
+        [tenantId, windowHours, endpoint, baselineHours, offset, limit, anchorUtc],
+      );
+
+      const items = q.rows.map((r) => {
+        const recentTotal = Number(r.recent_total ?? 0);
+        const recentServerErrors = Number(r.recent_server_errors ?? 0);
+        const recentThrottled = Number(r.recent_throttled ?? 0);
+        const recentBudgetErrors = recentServerErrors + recentThrottled;
+        const recentErrorRate = recentTotal > 0 ? recentBudgetErrors / recentTotal : 0;
+        const recentLatencyAvgMs = Number(r.recent_latency_avg_ms ?? 0);
+        const recentLatencyP95Ms = Number(r.recent_latency_p95_ms ?? 0);
+
+        const baselineTotal = Number(r.baseline_total ?? 0);
+        const baselineServerErrors = Number(r.baseline_server_errors ?? 0);
+        const baselineThrottled = Number(r.baseline_throttled ?? 0);
+        const baselineBudgetErrors = baselineServerErrors + baselineThrottled;
+        const baselineErrorRate = baselineTotal > 0 ? baselineBudgetErrors / baselineTotal : 0;
+        const baselineLatencyAvgMs = Number(r.baseline_latency_avg_ms ?? 0);
+        const baselineLatencyStddevMs = Number(r.baseline_latency_stddev_ms ?? 0);
+
+        const expectedRecent = baselineTotal > 0 ? (baselineTotal * windowHours) / baselineSliceHours : 0;
+        const trafficRatio = expectedRecent > 0 ? recentTotal / expectedRecent : recentTotal > 0 ? Number.POSITIVE_INFINITY : 1;
+        const latencyZscore =
+          baselineLatencyStddevMs > 0 ? (recentLatencyAvgMs - baselineLatencyAvgMs) / baselineLatencyStddevMs : 0;
+
+        const anomalyReasons: string[] = [];
+        if (recentTotal >= minRequests && Number.isFinite(trafficRatio) && trafficRatio >= 2) {
+          anomalyReasons.push("request_spike");
+        }
+        if (recentTotal >= minRequests && latencyZscore >= zscoreThreshold) {
+          anomalyReasons.push("latency_regression");
+        }
+        if (recentTotal >= minRequests && recentErrorRate >= 0.05 && recentErrorRate >= baselineErrorRate * 2) {
+          anomalyReasons.push("error_budget_regression");
+        }
+
+        return {
+          api_key_prefix: r.api_key_prefix,
+          endpoint: r.endpoint,
+          recent: {
+            total: recentTotal,
+            server_errors: recentServerErrors,
+            throttled: recentThrottled,
+            error_rate: round(recentErrorRate),
+            latency_avg_ms: round(recentLatencyAvgMs),
+            latency_p95_ms: round(recentLatencyP95Ms),
+          },
+          baseline: {
+            total: baselineTotal,
+            server_errors: baselineServerErrors,
+            throttled: baselineThrottled,
+            error_rate: round(baselineErrorRate),
+            latency_avg_ms: round(baselineLatencyAvgMs),
+            latency_stddev_ms: round(baselineLatencyStddevMs),
+            slice_hours: baselineSliceHours,
+          },
+          anomaly: {
+            is_anomaly: anomalyReasons.length > 0,
+            reasons: anomalyReasons,
+            traffic_ratio: Number.isFinite(trafficRatio) ? round(trafficRatio) : null,
+            latency_zscore: round(latencyZscore),
+          },
+        };
+      });
+
+      return {
+        ok: true,
+        tenant_id: tenantId,
+        generated_at: nowIso(),
+        retention: {
+          retention_hours: retentionHours,
+          requested_window_hours: requestedWindowHours,
+          applied_window_hours: windowHours,
+          requested_baseline_hours: requestedBaselineHours,
+          applied_baseline_hours: baselineHours,
+          truncated: requestedWindowHours > windowHours || requestedBaselineHours > baselineHours,
+        },
+        filters: {
+          endpoint,
+          min_requests: minRequests,
+          zscore_threshold: zscoreThreshold,
+        },
+        page: {
+          limit,
+          offset,
+          total,
+          has_more: offset + items.length < total,
+        },
+        snapshot: {
+          anchor_utc: anchorUtc ?? nowIso(),
+        },
+        anomalies: {
+          count_in_page: items.filter((item) => item.anomaly.is_anomaly).length,
+        },
+        items,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      return {
+        ok: false,
+        tenant_id: tenantId,
+        generated_at: nowIso(),
+        warning: "request_telemetry_table_missing",
+        filters: {
+          endpoint,
+          min_requests: minRequests,
+          zscore_threshold: zscoreThreshold,
+        },
+        page: {
+          limit,
+          offset,
+          total: 0,
+          has_more: false,
+        },
+        snapshot: {
+          anchor_utc: anchorUtc ?? nowIso(),
+        },
+        items: [],
+      };
+    }
+    throw err;
+  }
+}
+
+export async function purgeMemoryRequestTelemetry(
+  db: Db,
+  args: {
+    older_than_hours: number;
+    tenant_id?: string | null;
+    batch_limit?: number;
+  },
+) {
+  const olderThanHours = Number.isFinite(args.older_than_hours)
+    ? Math.max(1, Math.min(24 * 3650, Math.trunc(args.older_than_hours)))
+    : 24 * 30;
+  const tenantId = trimOrNull(args.tenant_id ?? null);
+  const batchLimit = Number.isFinite(args.batch_limit) ? Math.max(1, Math.min(200_000, Math.trunc(args.batch_limit!))) : 20_000;
+
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        WITH victims AS (
+          SELECT id
+          FROM memory_request_telemetry
+          WHERE created_at < now() - (($1::text || ' hours')::interval)
+            AND ($2::text IS NULL OR tenant_id = $2::text)
+          ORDER BY id ASC
+          LIMIT $3
+        )
+        DELETE FROM memory_request_telemetry t
+        USING victims v
+        WHERE t.id = v.id
+        RETURNING t.id
+        `,
+        [olderThanHours, tenantId, batchLimit],
+      );
+      return {
+        ok: true,
+        tenant_id: tenantId,
+        older_than_hours: olderThanHours,
+        batch_limit: batchLimit,
+        deleted: q.rowCount ?? 0,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      return {
+        ok: false,
+        tenant_id: tenantId,
+        older_than_hours: olderThanHours,
+        batch_limit: batchLimit,
+        warning: "request_telemetry_table_missing",
+        deleted: 0,
+      };
+    }
+    throw err;
+  }
+}
+
+export function createTenantQuotaResolver(db: Db, args: { defaults: TenantQuotaDefaults; cache_ttl_ms?: number }) {
+  const defaults = args.defaults;
+  const cacheTtlMs = Math.max(1_000, Math.trunc(args.cache_ttl_ms ?? 30_000));
+  const cache = new Map<string, { expires_at: number; profile: TenantQuotaProfile | null }>();
+  const limiterByConfig = new Map<string, TokenBucketLimiter>();
+
+  const toResolved = (profile: TenantQuotaProfile | null): TenantQuotaResolved => {
+    if (!profile) {
+      return {
+        recall: { rps: defaults.recall_rps, burst: defaults.recall_burst, max_wait_ms: 0 },
+        write: { rps: defaults.write_rps, burst: defaults.write_burst, max_wait_ms: defaults.write_max_wait_ms },
+        debug_embeddings: { rps: defaults.debug_embed_rps, burst: defaults.debug_embed_burst, max_wait_ms: 0 },
+        recall_text_embed: {
+          rps: defaults.recall_text_embed_rps,
+          burst: defaults.recall_text_embed_burst,
+          max_wait_ms: defaults.recall_text_embed_max_wait_ms,
+        },
+      };
+    }
+    return {
+      recall: { rps: f64(profile.recall_rps, defaults.recall_rps), burst: i32(profile.recall_burst, defaults.recall_burst), max_wait_ms: 0 },
+      write: {
+        rps: f64(profile.write_rps, defaults.write_rps),
+        burst: i32(profile.write_burst, defaults.write_burst),
+        max_wait_ms: i32(profile.write_max_wait_ms, defaults.write_max_wait_ms),
+      },
+      debug_embeddings: {
+        rps: f64(profile.debug_embed_rps, defaults.debug_embed_rps),
+        burst: i32(profile.debug_embed_burst, defaults.debug_embed_burst),
+        max_wait_ms: 0,
+      },
+      recall_text_embed: {
+        rps: f64(profile.recall_text_embed_rps, defaults.recall_text_embed_rps),
+        burst: i32(profile.recall_text_embed_burst, defaults.recall_text_embed_burst),
+        max_wait_ms: i32(profile.recall_text_embed_max_wait_ms, defaults.recall_text_embed_max_wait_ms),
+      },
+    };
+  };
+
+  const fetchProfile = async (tenantId: string): Promise<TenantQuotaProfile | null> => {
+    const now = Date.now();
+    const cached = cache.get(tenantId);
+    if (cached && cached.expires_at > now) return cached.profile;
+    try {
+      const profile = await getTenantQuotaProfile(db, tenantId);
+      cache.set(tenantId, { expires_at: now + cacheTtlMs, profile });
+      return profile;
+    } catch (err: any) {
+      if (String(err?.code ?? "") === "42P01") {
+        cache.set(tenantId, { expires_at: now + cacheTtlMs, profile: null });
+        return null;
+      }
+      throw err;
+    }
+  };
+
+  const getLimiter = (tenantId: string, kind: QuotaKind, cfg: QuotaLimit) => {
+    const key = `${tenantId}:${kind}:${cfg.rps}:${cfg.burst}`;
+    let lim = limiterByConfig.get(key);
+    if (!lim) {
+      lim = new TokenBucketLimiter({
+        rate_per_sec: cfg.rps,
+        burst: cfg.burst,
+        ttl_ms: 10 * 60 * 1000,
+        sweep_every_n: 300,
+      });
+      limiterByConfig.set(key, lim);
+      if (limiterByConfig.size > 10_000) limiterByConfig.clear();
+    }
+    return lim;
+  };
+
+  const invalidate = (tenantId?: string) => {
+    if (tenantId) cache.delete(tenantId);
+    else cache.clear();
+  };
+
+  return {
+    async resolve(tenantIdRaw: string): Promise<TenantQuotaResolved> {
+      const tenantId = trimOrNull(tenantIdRaw) ?? "default";
+      return toResolved(await fetchProfile(tenantId));
+    },
+    limiterFor(tenantIdRaw: string, kind: QuotaKind, cfg: QuotaLimit) {
+      const tenantId = trimOrNull(tenantIdRaw) ?? "default";
+      return getLimiter(tenantId, kind, cfg);
+    },
+    invalidate,
+    defaults,
+    nowIso,
+  };
+}

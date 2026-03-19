@@ -1,0 +1,15 @@
+{
+  "name": "aionis-lite",
+  "private": true,
+  "version": "0.2.21",
+  "type": "module",
+  "description": "Lite app launcher for the standalone Aionis Lite repository",
+  "scripts": {
+    "build": "mkdir -p dist && cp src/index.js dist/index.js",
+    "start": "bash ./scripts/start-lite-app.sh",
+    "start:print-env": "bash ./scripts/start-lite-app.sh --print-env"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
