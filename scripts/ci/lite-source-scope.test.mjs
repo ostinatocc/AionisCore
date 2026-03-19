@@ -156,3 +156,9 @@ test("lite health surface avoids backend implementation detail fields", () => {
   }
   assert.match(hostFile, /local_actor_id: env\.LITE_LOCAL_ACTOR_ID/);
 });
+
+test("lite pack routes do not keep admin-token-only gating", () => {
+  const memoryAccessFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-access.ts"), "utf8");
+  assert.equal(memoryAccessFile.includes("requireAdmin: true"), false, "pack routes should not require admin token in lite");
+  assert.equal(memoryAccessFile.includes("requireAdminToken"), false, "memory-access should not depend on admin token helper in lite");
+});

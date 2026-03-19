@@ -125,21 +125,7 @@ Lite 支持 `/v1/memory/write`，但最小请求形状和 Server 一样，不是
 
 这不是 Lite 特有故障，也不表示 SQLite 写路径坏了，而是请求本身不满足 write contract。
 
-## Pack 路由和 Admin Token
-
-Lite 默认本地认证很宽松，但 `packs` 路由仍然要求 admin token。
-
-启动时设置：
-
-```bash
-ADMIN_TOKEN=dogfood-admin npm run start:lite
-```
-
-调用 pack 路由时带上：
-
-```bash
--H 'X-Admin-Token: dogfood-admin'
-```
+## Pack 路由
 
 你需要记住：
 
@@ -242,9 +228,8 @@ npm run -s lite:dogfood
 
 先检查：
 
-1. 启动前是否设置了 `ADMIN_TOKEN`
-2. 请求里是否带了 `X-Admin-Token`
-3. import 时传的是不是嵌套 `pack`，而不是整个 export envelope
+1. import 时传的是不是嵌套 `pack`，而不是整个 export envelope
+2. `/health` 返回里是否仍然显示 `runtime.edition = "lite"`
 
 ## 推荐的运维顺序
 

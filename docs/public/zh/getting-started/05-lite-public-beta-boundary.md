@@ -166,7 +166,7 @@ npm run -s lite:dogfood
 1. Lite 依赖 Node `22+`，因为用到了 `node:sqlite`
 2. `memory_lane = "private"` 不该被理解成“所有 surface 一律不可见”
 3. 在当前 Lite beta 里，`find` 对 private lane 更严格，而 `recall_text` / context 路径可能仍然返回 private 内容
-4. pack 路由仍然需要 `ADMIN_TOKEN` 和 `X-Admin-Token`
+4. pack 路由现在属于本地 Lite 路由，不再要求 admin token
 5. 成功写入后可能返回 `lite_embedding_backfill_completed_inline`
 
 详细说明见：

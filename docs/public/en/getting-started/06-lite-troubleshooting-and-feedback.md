@@ -13,7 +13,7 @@ Check these in order:
 1. startup environment
 2. `/health`
 3. `memory_lane`
-4. admin token requirements for pack routes
+4. pack payload shape and runtime identity
 5. `npm run -s lite:dogfood`
 
 That order removes the most common false leads first.
@@ -95,9 +95,8 @@ If dogfood is green but your local flow is not, the issue is more likely request
 
 Check:
 
-1. `ADMIN_TOKEN` was set before startup
-2. requests include `X-Admin-Token`
-3. `packs/import` receives the nested `pack` payload, not the whole export envelope
+1. `packs/import` receives the nested `pack` payload, not the whole export envelope
+2. `/health` still reports `runtime.edition = "lite"`
 
 Current beta expectation:
 

@@ -43,7 +43,6 @@ type RegisterMemoryAccessRoutesArgs = {
   embeddedRuntime: EmbeddedMemoryRuntime | null;
   liteWriteStore?: MemoryAccessLiteStoreLike | null;
   writeAccessShadowMirrorV2: boolean;
-  requireAdminToken: (req: FastifyRequest) => void;
   requireStoreFeatureCapability: (capability: "sessions_graph" | "packs_export" | "packs_import") => void;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
@@ -72,7 +71,6 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     embeddedRuntime,
     liteWriteStore,
     writeAccessShadowMirrorV2,
-    requireAdminToken,
     requireStoreFeatureCapability,
     requireMemoryPrincipal,
     withIdentityFromRequest,
@@ -105,13 +103,11 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     requestKind: MemoryAccessRequestKind;
     inflightKind: MemoryAccessInflightKind;
     requiredCapability?: "sessions_graph" | "packs_export" | "packs_import";
-    requireAdmin?: boolean;
     bodyFactory?: (req: MemoryAccessRequest) => unknown;
     execute: (body: unknown) => Promise<TResult>;
   }): Promise<TResult> => {
-    const { req, reply, requestKind, inflightKind, requiredCapability, requireAdmin, bodyFactory, execute } = args;
+    const { req, reply, requestKind, inflightKind, requiredCapability, bodyFactory, execute } = args;
     if (requiredCapability) requireStoreFeatureCapability(requiredCapability);
-    if (requireAdmin) requireAdminToken(req);
     const principal = await requireMemoryPrincipal(req);
     const rawBody = bodyFactory ? bodyFactory(req) : req.body;
     const body = withIdentityFromRequest(req, rawBody, principal, requestKind);
@@ -138,7 +134,6 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     requestKind: MemoryAccessRequestKind;
     inflightKind: MemoryAccessInflightKind;
     requiredCapability?: "sessions_graph" | "packs_export" | "packs_import";
-    requireAdmin?: boolean;
     bodyFactory?: (req: MemoryAccessRequest) => unknown;
     execute: (body: unknown) => Promise<TResult>;
   }) => {
@@ -149,7 +144,6 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
         requestKind: args.requestKind,
         inflightKind: args.inflightKind,
         requiredCapability: args.requiredCapability,
-        requireAdmin: args.requireAdmin,
         bodyFactory: args.bodyFactory,
         execute: args.execute,
       });
@@ -256,7 +250,6 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     requestKind: "find",
     inflightKind: "recall",
     requiredCapability: "packs_export",
-    requireAdmin: true,
     bodyFactory: (request) => request.body ?? {},
     execute: (body) =>
       executeMemoryAccessStoreOperation({
@@ -272,7 +265,6 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     requestKind: "write",
     inflightKind: "write",
     requiredCapability: "packs_import",
-    requireAdmin: true,
     bodyFactory: (request) => request.body ?? {},
     execute: (body) =>
       executeMemoryAccessStoreOperation({

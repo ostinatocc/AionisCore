@@ -166,7 +166,7 @@ These are known Lite beta operator edges, not release blockers:
 1. Lite requires Node `22+` because of `node:sqlite`
 2. `memory_lane = "private"` should not be read as “hidden everywhere”
 3. in the current Lite beta, `find` is stricter for private lane visibility while `recall_text` / context paths may still surface private content
-4. pack routes still require `ADMIN_TOKEN` and `X-Admin-Token`
+4. pack routes are local Lite routes and no longer require an admin token
 5. successful writes may return `lite_embedding_backfill_completed_inline`
 
 For details, see:

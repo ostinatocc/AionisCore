@@ -125,21 +125,7 @@ If you send only `nodes`, the current response is:
 
 That is not a Lite-specific failure and does not mean the SQLite write path is broken. It means the request does not satisfy the write contract.
 
-## Pack Routes and Admin Token
-
-Lite runs with local auth defaults, but pack routes still require an admin token.
-
-Set it at startup:
-
-```bash
-ADMIN_TOKEN=dogfood-admin npm run start:lite
-```
-
-Then call pack routes with:
-
-```bash
--H 'X-Admin-Token: dogfood-admin'
-```
+## Pack Routes
 
 Operator expectations:
 
@@ -242,9 +228,8 @@ Check:
 
 Check:
 
-1. `ADMIN_TOKEN` was set before startup
-2. requests include `X-Admin-Token`
-3. you are importing the nested `pack`, not the whole export envelope
+1. you are importing the nested `pack`, not the whole export envelope
+2. `/health` still reports `runtime.edition = "lite"`
 
 ## Recommended Operator Flow
 

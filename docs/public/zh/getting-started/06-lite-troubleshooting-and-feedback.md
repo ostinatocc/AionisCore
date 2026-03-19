@@ -13,7 +13,7 @@ title: "Lite 排障与反馈"
 1. 启动环境
 2. `/health`
 3. `memory_lane`
-4. pack 路由的 admin token
+4. pack payload 形状和运行时身份
 5. `npm run -s lite:dogfood`
 
 这个顺序能先排掉最常见的误判。
@@ -95,9 +95,8 @@ curl -fsS http://localhost:3001/health | jq '{ok,runtime,storage,lite}'
 
 先检查：
 
-1. 启动前是否设置了 `ADMIN_TOKEN`
-2. 请求里是否带了 `X-Admin-Token`
-3. `packs/import` 收到的是嵌套 `pack`，而不是整个 export envelope
+1. `packs/import` 收到的是嵌套 `pack`，而不是整个 export envelope
+2. `/health` 返回里是否仍然显示 `runtime.edition = "lite"`
 
 当前 beta 预期是：
 
