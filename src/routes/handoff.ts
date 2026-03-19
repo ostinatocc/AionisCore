@@ -15,11 +15,6 @@ import type { WriteStoreAccess } from "../store/write-access.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
 
-type StoreLike = {
-  withTx: <T>(fn: (client: pg.PoolClient) => Promise<T>) => Promise<T>;
-  withClient: <T>(fn: (client: pg.PoolClient) => Promise<T>) => Promise<T>;
-};
-
 type LiteWriteStoreLike = NonNullable<NonNullable<Parameters<typeof recoverHandoff>[0]>["liteWriteStore"]> & WriteStoreAccess & {
   withTx: <T>(fn: () => Promise<T>) => Promise<T>;
 };
@@ -46,12 +41,10 @@ type HandoffWriteResult = Awaited<ReturnType<typeof applyMemoryWrite>>;
 type RegisterHandoffRoutesArgs = {
   app: FastifyInstance;
   env: Env;
-  store: StoreLike;
   embedder: EmbeddingProvider | null;
   embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
   embeddedRuntime: EmbeddedMemoryRuntime | null;
-  liteWriteStore?: LiteWriteStoreLike | null;
-  writeAccessForClient: (client: pg.PoolClient) => WriteStoreAccess;
+  liteWriteStore: LiteWriteStoreLike;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
     req: FastifyRequest,
@@ -82,12 +75,10 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
   const {
     app,
     env,
-    store,
     embedder,
     embeddingSurfacePolicy: embeddingSurfacePolicyArg,
     embeddedRuntime,
     liteWriteStore,
-    writeAccessForClient,
     requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,
@@ -96,6 +87,9 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
     acquireInflightSlot,
     executionStateStore,
   } = args;
+  if (env.AIONIS_EDITION !== "lite") {
+    throw new Error("aionis-lite handoff routes only support AIONIS_EDITION=lite");
+  }
   const embeddingSurfacePolicy =
     embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
   const writeEmbedder = embeddingSurfacePolicy.providerFor("write_auto_embed", embedder);
@@ -107,29 +101,17 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
       ...(!principal?.agent_id && principal?.team_id ? { owner_team_id: principal.team_id } : {}),
     });
   const runCommittedHandoffWrite = async (prepared: PreparedHandoffWrite): Promise<HandoffWriteResult> =>
-    liteWriteStore
-      ? liteWriteStore.withTx(() =>
-          applyMemoryWrite({} as pg.PoolClient, prepared, {
-            maxTextLen: env.MAX_TEXT_LEN,
-            piiRedaction: env.PII_REDACTION,
-            allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
-            shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
-            shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
-            write_access: liteWriteStore,
-            associativeLinkOrigin: "handoff_store",
-          }),
-        )
-      : store.withTx((client) =>
-          applyMemoryWrite(client, prepared, {
-            maxTextLen: env.MAX_TEXT_LEN,
-            piiRedaction: env.PII_REDACTION,
-            allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
-            shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
-            shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
-            write_access: writeAccessForClient(client),
-            associativeLinkOrigin: "handoff_store",
-          }),
-        );
+    liteWriteStore.withTx(() =>
+      applyMemoryWrite({} as pg.PoolClient, prepared, {
+        maxTextLen: env.MAX_TEXT_LEN,
+        piiRedaction: env.PII_REDACTION,
+        allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+        shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+        shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+        write_access: liteWriteStore,
+        associativeLinkOrigin: "handoff_store",
+      }),
+    );
   const applyHandoffExecutionTransitions = (args: {
     writeSlots: Record<string, unknown> | null;
   }) => {
@@ -203,27 +185,15 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
     };
   };
   const runHandoffRecoverForPrincipal = (body: HandoffRecoverInput, principal: AuthPrincipal | null) =>
-    liteWriteStore
-      ? recoverHandoff({
-          liteWriteStore,
-          executionStateStore,
-          input: body,
-          defaultScope: env.MEMORY_SCOPE,
-          defaultTenantId: env.MEMORY_TENANT_ID,
-          consumerAgentId: principal?.agent_id ?? null,
-          consumerTeamId: principal?.team_id ?? null,
-        })
-      : store.withClient((client) =>
-          recoverHandoff({
-            client,
-            executionStateStore,
-            input: body,
-            defaultScope: env.MEMORY_SCOPE,
-            defaultTenantId: env.MEMORY_TENANT_ID,
-            consumerAgentId: principal?.agent_id ?? null,
-            consumerTeamId: principal?.team_id ?? null,
-          }),
-        );
+    recoverHandoff({
+      liteWriteStore,
+      executionStateStore,
+      input: body,
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+      consumerAgentId: principal?.agent_id ?? null,
+      consumerTeamId: principal?.team_id ?? null,
+    });
 
   const runHandoffRoute = async <TBody, TResult>(args: {
     req: HandoffRequest;

@@ -239,3 +239,19 @@ test("lite memory-context-runtime routes do not keep store-client recall plumbin
   assert.equal(hostFile.includes("registerMemoryContextRuntimeRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into memory-context-runtime routes");
   assert.match(memoryContextRuntimeFile, /aionis-lite memory-context-runtime routes only support AIONIS_EDITION=lite/);
 });
+
+test("lite handoff routes do not keep store fallback branches", () => {
+  const handoffFile = fs.readFileSync(path.join(ROOT, "src", "routes", "handoff.ts"), "utf8");
+  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
+  const forbiddenSymbols = [
+    "type StoreLike",
+    "store.withTx",
+    "store.withClient",
+    "writeAccessForClient",
+  ];
+  for (const symbol of forbiddenSymbols) {
+    assert.equal(handoffFile.includes(symbol), false, `${symbol} should be absent from lite handoff routes`);
+  }
+  assert.equal(hostFile.includes("registerHandoffRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into handoff routes");
+  assert.match(handoffFile, /aionis-lite handoff routes only support AIONIS_EDITION=lite/);
+});

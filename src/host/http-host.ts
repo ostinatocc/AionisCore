@@ -419,12 +419,10 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
   registerHandoffRoutes({
     app,
     env,
-    store,
     embedder,
     embeddingSurfacePolicy,
     embeddedRuntime,
     liteWriteStore,
-    writeAccessForClient,
     requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,
