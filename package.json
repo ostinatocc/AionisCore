@@ -7,11 +7,11 @@
   "description": "Single-user local Aionis runtime with SQLite-backed memory, replay, and playbook-driven automation.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Cognary/Aionis-Lite.git"
+    "url": "https://github.com/Cognary/Aionis.git"
   },
-  "homepage": "https://github.com/Cognary/Aionis-Lite",
+  "homepage": "https://github.com/Cognary/Aionis",
   "bugs": {
-    "url": "https://github.com/Cognary/Aionis-Lite/issues"
+    "url": "https://github.com/Cognary/Aionis/issues"
   },
   "engines": {
     "node": ">=22.0.0"

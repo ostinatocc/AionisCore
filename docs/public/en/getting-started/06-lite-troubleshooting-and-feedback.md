@@ -151,7 +151,7 @@ Use the GitHub `Lite Beta Feedback` issue template and include:
 
 Open the template directly:
 
-[github.com/Cognary/Aionis-Lite/issues/new?template=lite-beta-feedback.yml](https://github.com/Cognary/Aionis-Lite/issues/new?template=lite-beta-feedback.yml)
+[github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml](https://github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml)
 
 If you are unsure whether the behavior is expected, report it anyway. Public beta is for hardening operator UX, not only for catching crashes.
 

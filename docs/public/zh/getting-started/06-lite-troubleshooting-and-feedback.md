@@ -151,7 +151,7 @@ npm run -s lite:dogfood
 
 模板直达：
 
-[github.com/Cognary/Aionis-Lite/issues/new?template=lite-beta-feedback.yml](https://github.com/Cognary/Aionis-Lite/issues/new?template=lite-beta-feedback.yml)
+[github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml](https://github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml)
 
 如果你不确定这是不是预期行为，也照样提。public beta 的目标就是把 operator UX 打磨到不靠猜。
 
