@@ -32,7 +32,7 @@ body:
       description: List the exact commands or API calls used.
       placeholder: |
         1. npm install
-        2. npm run build
+        2. npm run start:lite
         3. npm run smoke:lite
     validations:
       required: true

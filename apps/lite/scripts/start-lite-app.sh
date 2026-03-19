@@ -52,13 +52,5 @@ PY
   exit 0
 fi
 
-if [[ ! -f "${APP_DIR}/dist/index.js" ]]; then
-  cat >&2 <<EOF
-Lite app wrapper is not built yet.
-Run: (cd "${ROOT_DIR}" && npm run build)
-EOF
-  exit 1
-fi
-
 cd "${APP_DIR}"
-exec node dist/index.js "$@"
+exec node src/index.js "$@"

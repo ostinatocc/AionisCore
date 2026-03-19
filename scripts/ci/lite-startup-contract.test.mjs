@@ -31,12 +31,14 @@ test("runtime manifest points at the Lite app startup command", () => {
   const manifest = readJson(path.join(ROOT, "runtime-manifest.json"));
   assert.equal(manifest.start_command.command, "bash");
   assert.deepEqual(manifest.start_command.args, ["apps/lite/scripts/start-lite-app.sh"]);
-  assert.equal(manifest.dist_entry, "apps/lite/dist/index.js");
+  assert.equal(manifest.dist_entry, "apps/lite/src/index.js");
 });
 
 test("apps/lite wrapper launches the source runtime through tsx", () => {
   const entry = fs.readFileSync(path.join(ROOT, "apps", "lite", "src", "index.js"), "utf8");
+  const startScript = fs.readFileSync(path.join(ROOT, "apps", "lite", "scripts", "start-lite-app.sh"), "utf8");
   assert.match(entry, /tsx/);
   assert.match(entry, /src\/index\.ts/);
   assert.equal(entry.includes("../../../dist/runtime-entry.js"), false);
+  assert.equal(startScript.includes("dist/index.js"), false);
 });

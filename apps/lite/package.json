@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Lite app launcher for the standalone Aionis Lite repository",
   "scripts": {
-    "build": "mkdir -p dist && cp src/index.js dist/index.js",
+    "build": "node --check src/index.js",
     "start": "bash ./scripts/start-lite-app.sh",
     "start:print-env": "bash ./scripts/start-lite-app.sh --print-env"
   },

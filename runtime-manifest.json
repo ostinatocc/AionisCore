@@ -3,7 +3,7 @@
   "runtime_id": "aionis-lite-monorepo-root",
   "display_name": "Aionis Lite",
   "runtime_root": ".",
-  "dist_entry": "apps/lite/dist/index.js",
+  "dist_entry": "apps/lite/src/index.js",
   "start_command": {
     "command": "bash",
     "args": [

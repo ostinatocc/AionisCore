@@ -4,7 +4,7 @@ This repository is intentionally slimmer than the monorepo export it came from.
 
 Current source boundary:
 - `apps/lite/` owns the product-facing Lite wrapper.
-- `apps/lite/dist/index.js` is a thin launcher into the Lite source runtime.
+- `apps/lite/src/index.js` is the source-owned launcher into the Lite runtime.
 - `src/runtime-entry.ts` is the runtime truth for Lite startup.
 - `packages/runtime-core/` is the shared extraction seam.
 - `src/host/http-host.ts` is Lite-only and rejects non-lite source startup.
@@ -34,4 +34,5 @@ Still unsupported in Lite:
 - compensation tooling, telemetry, and shadow review/report surfaces
 
 Still pending before Lite becomes a clean source-built repo:
-- replace the remaining vendored `dist/` payloads with Lite-owned build artifacts end-to-end
+- shrink the copied `src/` tree further so only the Lite/shared-core minimum remains
+- keep tightening shared-boundary metadata so local automation kernel and server orchestration are described separately

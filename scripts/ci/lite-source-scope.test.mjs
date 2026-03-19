@@ -39,6 +39,10 @@ test("lite repo keeps only kernel-linked job helpers", () => {
   assert.equal(fs.existsSync(path.join(jobsDir, "fixtures")), false, "src/jobs/fixtures should be absent in lite repo");
 });
 
+test("lite repo does not keep a copied apps/lite dist launcher", () => {
+  assert.equal(fs.existsSync(path.join(ROOT, "apps", "lite", "dist")), false, "apps/lite/dist should be absent");
+});
+
 test("lite host does not statically import server-only routes", () => {
   const hostFile = fs.readFileSync(path.join(ROOT, "src/host/http-host.ts"), "utf8");
   const forbiddenImports = [

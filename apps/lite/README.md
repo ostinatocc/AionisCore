@@ -7,6 +7,7 @@ Current state:
 1. It owns the Lite app wrapper entrypoint and startup script.
 2. It launches the root Lite source runtime through `tsx`.
 3. It keeps Lite startup behavior isolated from the shared runtime tree.
+4. It no longer depends on a copied `dist/index.js` launcher artifact.
 
 Current commands:
 
@@ -22,6 +23,7 @@ Current runtime model:
 2. `apps/lite/src/index.js` is the Lite app launcher
 3. `apps/lite/scripts/start-lite-app.sh` owns Lite startup behavior
 4. root `scripts/start-lite.sh` remains a compatibility shim
+5. startup runs directly from source and does not require a prebuilt wrapper artifact
 
 Default local identity:
 

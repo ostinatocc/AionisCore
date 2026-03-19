@@ -45,9 +45,10 @@ Lite error responses now follow one stable envelope:
 ```bash
 nvm use
 npm install
-npm run build
 npm run start:lite
 ```
+
+`npm run build` is still available as a packaging/contract check, but Lite startup no longer depends on a prebuilt wrapper artifact.
 
 ## Local Identity
 

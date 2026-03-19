@@ -18,6 +18,11 @@ export const RUNTIME_CORE_BOUNDARY: readonly RuntimeCoreBoundaryEntry[] = [
     rationale: "Environment loading and runtime bootstrap should converge behind one reusable entry contract.",
   },
   {
+    id: "automation-kernel-local",
+    kind: "shared_core",
+    rationale: "The local playbook-driven automation kernel should stay aligned across Lite and full runtime semantics.",
+  },
+  {
     id: "lite-wrapper",
     kind: "lite_product",
     rationale: "Lite-specific startup, docs, and release packaging should live with the standalone Lite product.",
@@ -28,9 +33,9 @@ export const RUNTIME_CORE_BOUNDARY: readonly RuntimeCoreBoundaryEntry[] = [
     rationale: "Governance-heavy admin/control routes stay with the full repository.",
   },
   {
-    id: "automations",
+    id: "automation-orchestration",
     kind: "server_only",
-    rationale: "Automation orchestration remains outside the standalone Lite baseline.",
+    rationale: "Reviewer workflows, shadow validation, telemetry, and compensation orchestration stay outside the standalone Lite baseline.",
   },
 ] as const;
 
@@ -53,4 +58,3 @@ export function runtimeCoreBoundarySummary() {
     server_only: [...RUNTIME_CORE_SERVER_ONLY_SURFACES],
   };
 }
-

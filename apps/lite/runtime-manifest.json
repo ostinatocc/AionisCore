@@ -3,7 +3,7 @@
   "runtime_id": "aionis-lite-wrapper",
   "display_name": "Aionis Lite Wrapper",
   "runtime_root": "../..",
-  "dist_entry": "apps/lite/dist/index.js",
+  "dist_entry": "apps/lite/src/index.js",
   "start_command": {
     "command": "bash",
     "args": [
