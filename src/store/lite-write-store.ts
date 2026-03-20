@@ -604,6 +604,59 @@ function decodeSessionListRow(row: LiteSessionListDbRow): LiteSessionListView {
   };
 }
 
+type LitePackSnapshotNodeDbRow = {
+  id: string;
+  client_id: string | null;
+  type: string;
+  tier: string;
+  memory_lane: "private" | "shared";
+  producer_agent_id: string | null;
+  owner_agent_id: string | null;
+  owner_team_id: string | null;
+  title: string | null;
+  text_summary: string | null;
+  slots_json: string;
+  raw_ref: string | null;
+  evidence_ref: string | null;
+  salience: number;
+  importance: number;
+  confidence: number;
+  created_at: string;
+  commit_id: string | null;
+};
+
+function decodePackSnapshotNodeRow(row: LitePackSnapshotNodeDbRow): LitePackSnapshotNodeView {
+  return {
+    id: row.id,
+    client_id: row.client_id,
+    type: row.type,
+    tier: row.tier,
+    memory_lane: row.memory_lane,
+    producer_agent_id: row.producer_agent_id,
+    owner_agent_id: row.owner_agent_id,
+    owner_team_id: row.owner_team_id,
+    title: row.title,
+    text_summary: row.text_summary,
+    slots: parseJsonObject(row.slots_json),
+    raw_ref: row.raw_ref,
+    evidence_ref: row.evidence_ref,
+    salience: row.salience,
+    importance: row.importance,
+    confidence: row.confidence,
+    created_at: row.created_at,
+    updated_at: row.created_at,
+    commit_id: row.commit_id,
+  };
+}
+
+function takeWithHasMore<T>(rows: T[], maxRows: number): { rows: T[]; hasMore: boolean } {
+  const hasMore = rows.length > maxRows;
+  return {
+    rows: hasMore ? rows.slice(0, maxRows) : rows,
+    hasMore,
+  };
+}
+
 function nodeVisible(
   row: { memory_lane: "private" | "shared"; owner_agent_id: string | null; owner_team_id: string | null },
   consumerAgentId: string | null,
@@ -1704,48 +1757,10 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
            WHERE scope = ?
            ORDER BY created_at ASC, id ASC
            LIMIT ?`,
-        ).all(args.scope, args.maxRows + 1) as Array<{
-          id: string;
-          client_id: string | null;
-          type: string;
-          tier: string;
-          memory_lane: "private" | "shared";
-          producer_agent_id: string | null;
-          owner_agent_id: string | null;
-          owner_team_id: string | null;
-          title: string | null;
-          text_summary: string | null;
-          slots_json: string;
-          raw_ref: string | null;
-          evidence_ref: string | null;
-          salience: number;
-          importance: number;
-          confidence: number;
-          created_at: string;
-          commit_id: string | null;
-        }>;
-        nodesHasMore = rows.length > args.maxRows;
-        nodes = (nodesHasMore ? rows.slice(0, args.maxRows) : rows).map((row) => ({
-          id: row.id,
-          client_id: row.client_id,
-          type: row.type,
-          tier: row.tier,
-          memory_lane: row.memory_lane,
-          producer_agent_id: row.producer_agent_id,
-          owner_agent_id: row.owner_agent_id,
-          owner_team_id: row.owner_team_id,
-          title: row.title,
-          text_summary: row.text_summary,
-          slots: parseJsonObject(row.slots_json),
-          raw_ref: row.raw_ref,
-          evidence_ref: row.evidence_ref,
-          salience: row.salience,
-          importance: row.importance,
-          confidence: row.confidence,
-          created_at: row.created_at,
-          updated_at: row.created_at,
-          commit_id: row.commit_id,
-        }));
+        ).all(args.scope, args.maxRows + 1) as LitePackSnapshotNodeDbRow[];
+        const limited = takeWithHasMore(rows, args.maxRows);
+        nodesHasMore = limited.hasMore;
+        nodes = limited.rows.map(decodePackSnapshotNodeRow);
       }
 
       if (args.includeEdges) {
@@ -1760,8 +1775,9 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
            ORDER BY e.created_at ASC, e.id ASC
            LIMIT ?`,
         ).all(args.scope, args.maxRows + 1) as LitePackSnapshotEdgeView[];
-        edgesHasMore = rows.length > args.maxRows;
-        edges = edgesHasMore ? rows.slice(0, args.maxRows) : rows;
+        const limited = takeWithHasMore(rows, args.maxRows);
+        edgesHasMore = limited.hasMore;
+        edges = limited.rows;
       }
 
       if (args.includeCommits) {
@@ -1773,8 +1789,9 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
            ORDER BY created_at ASC, id ASC
            LIMIT ?`,
         ).all(args.scope, args.maxRows + 1) as LitePackSnapshotCommitView[];
-        commitsHasMore = rows.length > args.maxRows;
-        commits = commitsHasMore ? rows.slice(0, args.maxRows) : rows;
+        const limited = takeWithHasMore(rows, args.maxRows);
+        commitsHasMore = limited.hasMore;
+        commits = limited.rows;
       }
 
       return {
