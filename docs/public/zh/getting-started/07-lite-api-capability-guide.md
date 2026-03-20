@@ -1,0 +1,176 @@
+---
+title: "Lite API 能力指南"
+---
+
+# Lite API 能力指南
+
+这页是面向 operator 的简版能力说明，用来快速回答：
+
+1. Lite 现在能用什么
+2. 哪些只支持 Lite 子集
+3. 哪些仍然属于 `AionisPro`
+
+如果你要看内部精确矩阵，直接看 [Lite API Capability Matrix](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md)。
+
+## 核心运行时
+
+支持：
+
+1. `npm run start:lite`
+2. `npm run start:lite:local-process`
+3. `GET /health`
+
+期望的健康面信号：
+
+1. `runtime.edition = "lite"`
+2. `storage.backend = "lite_sqlite"`
+
+## 支持的 Memory 能力面
+
+Lite 现在支持这些本地 memory 核心路由：
+
+1. `POST /v1/memory/write`
+2. `POST /v1/memory/recall`
+3. `POST /v1/memory/recall_text`
+4. `POST /v1/memory/planning/context`
+5. `POST /v1/memory/context/assemble`
+6. `POST /v1/memory/find`
+7. `POST /v1/memory/resolve`
+
+Lite 也支持本地 sessions 和 packs：
+
+1. `POST /v1/memory/sessions`
+2. `GET /v1/memory/sessions`
+3. `POST /v1/memory/events`
+4. `GET /v1/memory/sessions/:session_id/events`
+5. `POST /v1/memory/packs/export`
+6. `POST /v1/memory/packs/import`
+
+## 支持的 Replay 和 Playbook 能力面
+
+Lite 包含真实可用的 replay/playbook kernel。
+
+支持：
+
+1. `POST /v1/memory/replay/run/start`
+2. `POST /v1/memory/replay/step/before`
+3. `POST /v1/memory/replay/step/after`
+4. `POST /v1/memory/replay/run/end`
+5. `POST /v1/memory/replay/runs/get`
+6. `POST /v1/memory/replay/playbooks/compile_from_run`
+7. `POST /v1/memory/replay/playbooks/get`
+8. `POST /v1/memory/replay/playbooks/candidate`
+9. `POST /v1/memory/replay/playbooks/promote`
+10. `POST /v1/memory/replay/playbooks/repair`
+
+Lite 还保留了一组缩减后的 governed replay 子集：
+
+1. `POST /v1/memory/replay/playbooks/repair/review`
+2. `POST /v1/memory/replay/playbooks/run`
+3. `POST /v1/memory/replay/playbooks/dispatch`
+
+这不代表 Server 那套完整治理面也在 Lite 里，只代表 Lite 保留了本地执行路径。
+
+## 支持的 Handoff、Rules、Tools 能力面
+
+支持：
+
+1. `POST /v1/handoff/store`
+2. `POST /v1/handoff/recover`
+3. `POST /v1/memory/feedback`
+4. `POST /v1/memory/rules/state`
+5. `POST /v1/memory/rules/evaluate`
+6. `POST /v1/memory/tools/select`
+7. `POST /v1/memory/tools/decision`
+8. `POST /v1/memory/tools/run`
+9. `POST /v1/memory/tools/runs/list`
+10. `POST /v1/memory/tools/feedback`
+
+## 支持的 Lite Automation Kernel
+
+Lite 现在包含一套本地、playbook-driven 的 automation kernel。
+
+支持：
+
+1. `POST /v1/automations/create`
+2. `POST /v1/automations/get`
+3. `POST /v1/automations/list`
+4. `POST /v1/automations/validate`
+5. `POST /v1/automations/graph/validate`
+6. `POST /v1/automations/run`
+7. `POST /v1/automations/runs/get`
+8. `POST /v1/automations/runs/list`
+9. `POST /v1/automations/runs/cancel`
+10. `POST /v1/automations/runs/resume`
+
+Lite 当前支持的 node kind：
+
+1. `playbook`
+2. `approval`
+3. `condition`
+4. `artifact_gate`
+
+不包含：
+
+1. reviewer assignment
+2. promotion workflow
+3. shadow governance
+4. compensation governance
+5. telemetry orchestration
+
+不支持的 automation 治理面会返回：
+
+1. `501 automation_feature_not_supported_in_lite`
+
+## 支持的 Sandbox 能力面
+
+Sandbox 在 Lite 里可用。
+
+当 `SANDBOX_ENABLED=true` 时支持：
+
+1. `POST /v1/memory/sandbox/sessions`
+2. `POST /v1/memory/sandbox/execute`
+3. `POST /v1/memory/sandbox/runs/get`
+4. `POST /v1/memory/sandbox/runs/logs`
+5. `POST /v1/memory/sandbox/runs/artifact`
+6. `POST /v1/memory/sandbox/runs/cancel`
+
+当前实用模式：
+
+1. 默认 `mock`
+2. `npm run start:lite:local-process` 可启用窄白名单的本地进程 preset
+
+如果设置 `SANDBOX_ADMIN_ONLY=true`，sandbox 仍可用，但会重新要求本地 admin token。
+
+## 明确不属于 Lite 的能力
+
+这些能力面就是故意不属于 Lite：
+
+1. `/v1/admin/control/*`
+2. `/v1/memory/archive/rehydrate*`
+3. `/v1/memory/nodes/activate*`
+4. 多用户治理
+5. 完整 control-plane automation
+6. Server HA / 生产部署拓扑
+
+这些 route group 会返回：
+
+1. `501 server_only_in_lite`
+
+## 推荐验证方式
+
+最小验证链：
+
+```bash
+npm install
+npm run build
+npm run smoke:lite
+```
+
+如果你还想验证更实用的本地进程 sandbox preset：
+
+```bash
+npm run smoke:lite:local-process
+```
+
+如果你要看精确到 route 级别的完整矩阵，直接看 [Lite API Capability Matrix](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md)。

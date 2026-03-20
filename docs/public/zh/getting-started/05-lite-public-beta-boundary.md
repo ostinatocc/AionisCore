@@ -8,6 +8,8 @@ title: "Lite Public Beta 边界"
 
 如果你准备把 Lite 当成默认部署形态，先看这页。
 
+如果你想先看一版更短的 operator 视角能力总结，直接看 [Lite API 能力指南](/public/zh/getting-started/07-lite-api-capability-guide)。
+
 ## 定位
 
 Aionis Lite public beta 是：
@@ -103,7 +105,7 @@ Lite beta 目前承诺的是：
 
 1. 真实可用的本地启动路径
 2. 本地 SQLite-backed kernel path
-3. 可重复执行的 `npm run -s lite:dogfood` 验证
+3. 可重复执行的 `npm run smoke:lite` 验证
 4. alpha / beta-candidate 的仓库级 gate
 
 Lite beta 当前不承诺：
@@ -151,13 +153,20 @@ curl -fsS http://localhost:3001/health | jq '{ok,runtime,storage,lite}'
 标准验证：
 
 ```bash
-npm run -s lite:dogfood
+npm run smoke:lite
+```
+
+可选的实用 sandbox 验证：
+
+```bash
+npm run smoke:lite:local-process
 ```
 
 预期健康面：
 
 1. `runtime.edition = "lite"`
 2. `storage.backend = "lite_sqlite"`
+3. 默认启动路径下 `sandbox.mode = "mock"`
 
 ## 当前已知的运维边缘点
 

@@ -8,6 +8,8 @@ This page defines what Aionis Lite public beta is, what it supports, and what it
 
 Read this before treating Lite as your default deployment profile.
 
+For a shorter operator-facing capability summary, see [Lite API Capability Guide](/public/en/getting-started/07-lite-api-capability-guide).
+
 ## Positioning
 
 Aionis Lite public beta is:
@@ -103,7 +105,7 @@ Lite beta currently promises:
 
 1. a real local startup path
 2. a local SQLite-backed kernel path
-3. repeatable dogfood validation through `npm run -s lite:dogfood`
+3. repeatable validation through `npm run smoke:lite`
 4. repository gates for alpha and beta-candidate posture
 
 Lite beta does not currently promise:
@@ -151,13 +153,20 @@ curl -fsS http://localhost:3001/health | jq '{ok,runtime,storage,lite}'
 Canonical validation:
 
 ```bash
-npm run -s lite:dogfood
+npm run smoke:lite
+```
+
+Optional practical sandbox validation:
+
+```bash
+npm run smoke:lite:local-process
 ```
 
 Expected health:
 
 1. `runtime.edition = "lite"`
 2. `storage.backend = "lite_sqlite"`
+3. `sandbox.mode = "mock"` for the default startup path
 
 ## Known Operator Edges
 
