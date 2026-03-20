@@ -4,8 +4,8 @@ Last reviewed: 2026-03-20
 
 This document compares the current `Aionis Lite` implementation against:
 
-1. [docs/LITE_MEMORY_GOVERNANCE_MODEL.md](/Volumes/ziel/Aionisgo/docs/LITE_MEMORY_GOVERNANCE_MODEL.md)
-2. [docs/LITE_EXECUTION_MEMORY_STRATEGY.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_STRATEGY.md)
+1. [LITE_MEMORY_GOVERNANCE_MODEL.md](./LITE_MEMORY_GOVERNANCE_MODEL.md)
+2. [LITE_EXECUTION_MEMORY_STRATEGY.md](./LITE_EXECUTION_MEMORY_STRATEGY.md)
 
 The goal is not to restate either source document.
 The goal is to record:
@@ -360,7 +360,7 @@ If someone asks whether the current Lite runtime already matches those documents
 
 These are the next steps that most directly close the remaining gap between the source documents and the current Lite runtime.
 
-### Priority 1: Finish The Slim Default Planner/Context Contract
+### Priority 1: Preserve The Slim Default Planner/Context Contract
 
 Why:
 
