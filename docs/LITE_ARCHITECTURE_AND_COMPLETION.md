@@ -1,8 +1,10 @@
 # Aionis Lite Architecture And Completion
 
-Last reviewed: 2026-03-19
+Last reviewed: 2026-03-20
 
 This document describes the current architecture of the standalone `Aionis Lite` repository and records the present completion level of each major capability area.
+
+For the endpoint-level public surface, see [docs/LITE_API_CAPABILITY_MATRIX.md](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md).
 
 ## Executive Summary
 

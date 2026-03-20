@@ -12,6 +12,9 @@ This repository carries the Lite runtime, SQLite-backed stores, Lite operator do
 Architecture and completion reference:
 
 1. [docs/LITE_ARCHITECTURE_AND_COMPLETION.md](/Volumes/ziel/Aionisgo/docs/LITE_ARCHITECTURE_AND_COMPLETION.md)
+2. [docs/LITE_API_CAPABILITY_MATRIX.md](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md)
+3. [docs/LITE_EXECUTION_MEMORY_STRATEGY.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_STRATEGY.md)
+4. [docs/adr/ADR-0001-lite-execution-memory-kernel.md](/Volumes/ziel/Aionisgo/docs/adr/ADR-0001-lite-execution-memory-kernel.md)
 
 Current scope:
 
