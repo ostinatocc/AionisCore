@@ -88,17 +88,17 @@ Interpretation:
 The current contract is:
 
 1. `planner_packet` is the primary structured planner surface
-2. the same packet sections are also exposed as top-level arrays for convenience
-3. `pattern_signals` and `workflow_signals` are also exposed as top-level arrays so planner/runtime consumers do not have to reach through `layered_context`
-4. `layered_context` remains available, but it is no longer the only planner-facing interpretation layer
-5. if `action_recall_packet` is present, the planner packet is derived from it first
-6. if only `runtime_tool_hints` are present, the planner packet may be derived from those hints so planner-facing output does not silently collapse
+2. `pattern_signals` and `workflow_signals` remain top-level canonical signal surfaces so planner/runtime consumers do not have to reach through `layered_context`
+3. `layered_context` remains available, but it is no longer the planner-facing ownership layer
+4. `action_recall_packet` remains the substrate that feeds planner packet assembly, but it is no longer part of the default planner/context response surface
+5. if only `runtime_tool_hints` are present, the planner packet may be derived from those hints so planner-facing output does not silently collapse
 
-Current mirror status:
+Default route response rule:
 
-1. `recommended_workflows`, `candidate_workflows`, `candidate_patterns`, `trusted_patterns`, `contested_patterns`, and `rehydration_candidates` are transitional compatibility mirrors
-2. `supporting_knowledge` is a retained compatibility mirror
-3. `workflow_signals` and `pattern_signals` are canonical route-level signal surfaces, not packet mirrors
+1. `planner_packet.sections.*` is the only default full collection surface
+2. `workflow_signals` and `pattern_signals` are canonical route-level signal surfaces, not packet mirrors
+3. `execution_kernel` is the compact aligned runtime surface
+4. heavy inspection belongs on `POST /v1/memory/execution/introspect`
 
 ## Planner Summary Contract
 
@@ -208,10 +208,10 @@ Interpretation:
 3. `execution_kernel` should expose the same compact packet summary, not a separate interpretation model
 4. `execution_kernel.pattern_signal_summary` should agree with the same top-level `pattern_signals` surface
 5. `execution_kernel.workflow_signal_summary` should agree with the same top-level `workflow_signals` surface
-6. `execution_kernel.workflow_lifecycle_summary` should agree with the same top-level workflow packet sections
-7. `execution_kernel.workflow_maintenance_summary` should agree with the same top-level workflow packet sections
-8. `execution_kernel.pattern_lifecycle_summary` should agree with the same top-level packet sections
-9. `execution_kernel.pattern_maintenance_summary` should agree with the same top-level packet sections
+6. `execution_kernel.workflow_lifecycle_summary` should agree with the same planner packet workflow sections
+7. `execution_kernel.workflow_maintenance_summary` should agree with the same planner packet workflow sections
+8. `execution_kernel.pattern_lifecycle_summary` should agree with the same planner packet pattern sections
+9. `execution_kernel.pattern_maintenance_summary` should agree with the same planner packet pattern sections
 10. the current contract retains the whole `execution_kernel` summary family as a stable compact surface rather than narrowing it during cleanup
 
 ## Execution-Native Packet Semantics

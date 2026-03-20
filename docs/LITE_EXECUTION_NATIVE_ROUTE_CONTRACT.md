@@ -55,7 +55,7 @@ That means:
 
 1. planner/context routes do not expose only a generic layered context
 2. they expose a stable planner packet and aligned summaries
-3. execution-memory sections are promoted to first-class top-level fields
+3. execution-memory sections are owned by `planner_packet.sections.*` plus canonical signal surfaces
 4. the same packet state is visible through structured packet, summary, and kernel surfaces
 
 ## Route Families
@@ -95,37 +95,28 @@ Additional required field:
 Both routes now expose these stable top-level fields:
 
 1. `planner_packet`
-2. `action_recall_packet`
-3. `recommended_workflows`
-4. `candidate_workflows`
-5. `candidate_patterns`
-6. `trusted_patterns`
-7. `contested_patterns`
-8. `rehydration_candidates`
-9. `supporting_knowledge`
-10. `pattern_signals`
-11. `workflow_signals`
-12. `execution_kernel`
+2. `pattern_signals`
+3. `workflow_signals`
+4. `execution_kernel`
 
 Interpretation:
 
 1. these fields are part of the stable planner/context route contract
-2. they do not all have the same contract status
+2. `planner_packet` is the only default full collection owner
 3. route consumers should prefer them over re-deriving packet state from `layered_context`
 
 Current field status:
 
-1. `planner_packet`, `action_recall_packet`, and `execution_kernel` are canonical structured route surfaces
-2. `workflow_signals` and `pattern_signals` are canonical route-level signal surfaces
-3. `supporting_knowledge` is a retained compatibility mirror of `planner_packet.sections.supporting_knowledge`
-4. `recommended_workflows`, `candidate_workflows`, `candidate_patterns`, `trusted_patterns`, `contested_patterns`, and `rehydration_candidates` are transitional compatibility mirrors of `planner_packet.sections.*`
+1. `planner_packet` is the canonical structured route surface for full workflow/pattern/rehydration collections
+2. `execution_kernel` is the canonical compact route surface
+3. `workflow_signals` and `pattern_signals` are canonical route-level signal surfaces
+4. `action_recall_packet` remains a canonical internal/introspection substrate, but it is no longer part of the default planner/context route surface
 
 Versioning rule:
 
-1. `v1` keeps all of these top-level route fields
-2. `supporting_knowledge` is not a `v2` reduction candidate under the current contract
-3. the transitional packet-array mirrors are the only current candidates for any future route-shape narrowing
-4. the current replacement map for any future narrowing is documented in [docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
+1. the current default planner/context routes are already narrowed to the canonical product surface
+2. heavy recall substrate and demo-facing aggregates should use `POST /v1/memory/execution/introspect`
+3. route consumers should treat `planner_packet.sections.*` as the only default collection owner
 
 ## Planner Packet Contract
 
@@ -150,9 +141,8 @@ Current required fields:
 Interpretation:
 
 1. `planner_packet` is the canonical textual packet surface
-2. the top-level arrays are structured mirrors of the same packet state
+2. packet sections are the only default collection surface on planner/context routes
 3. packet sections should remain aligned with the summary and kernel surfaces
-4. among those mirrors, only `supporting_knowledge` is currently retained long term; the other packet-array mirrors remain transitional
 
 ## Summary Contract
 
@@ -230,15 +220,15 @@ Required fields:
 
 Interpretation:
 
-1. `execution_kernel.action_packet_summary` must align with the same top-level packet state
-2. `execution_kernel.pattern_signal_summary` must align with the same top-level `pattern_signals`
-3. `execution_kernel.workflow_signal_summary` must align with the same top-level `workflow_signals`
-4. `execution_kernel.workflow_lifecycle_summary` must align with the same top-level workflow packet sections, including `candidate_workflows`
+1. `execution_kernel.action_packet_summary` must align with `planner_packet.sections.*`
+2. `execution_kernel.pattern_signal_summary` must align with top-level `pattern_signals`
+3. `execution_kernel.workflow_signal_summary` must align with top-level `workflow_signals`
+4. `execution_kernel.workflow_lifecycle_summary` must align with workflow packet sections, including `candidate_workflows`
 5. the full kernel summary family is currently retained as the compact kernel contract, not treated as temporary convenience duplication
-5. `execution_kernel.workflow_maintenance_summary` must align with the same top-level workflow packet sections, including `candidate_workflows`
-6. `execution_kernel.pattern_lifecycle_summary` must align with the same top-level packet sections
-7. `execution_kernel.pattern_maintenance_summary` must align with the same top-level packet sections
-8. kernel summary is therefore a compact contract view, not a parallel planner model
+6. `execution_kernel.workflow_maintenance_summary` must align with workflow packet sections, including `candidate_workflows`
+7. `execution_kernel.pattern_lifecycle_summary` must align with planner packet pattern sections
+8. `execution_kernel.pattern_maintenance_summary` must align with planner packet pattern sections
+9. kernel summary is therefore a compact contract view, not a parallel planner model
 
 ## Pattern Signal Contract
 
@@ -336,14 +326,13 @@ to:
 
 The runtime must preserve these rules:
 
-1. `planner_packet.sections.*` counts must align with the corresponding top-level arrays
-2. `action_packet_summary` must describe the same packet state
-3. `execution_kernel.action_packet_summary` must describe the same packet state
-4. `execution_kernel.pattern_signal_summary` must describe the same pattern-signal state
-5. `pattern_lifecycle_summary` must describe the same packet lifecycle state
-6. `pattern_maintenance_summary` must describe the same packet maintenance state
-7. `planner_explanation` must not contradict packet state
-8. selector-side provenance must continue using the same candidate/trusted/contested language family
+1. `planner_packet.sections.*` counts must align with `action_packet_summary`
+2. `execution_kernel.action_packet_summary` must describe the same packet state
+3. `execution_kernel.pattern_signal_summary` must describe the same pattern-signal state
+4. `pattern_lifecycle_summary` must describe the same packet lifecycle state
+5. `pattern_maintenance_summary` must describe the same packet maintenance state
+6. `planner_explanation` must not contradict packet state
+7. selector-side provenance must continue using the same candidate/trusted/contested language family
 
 ## Verification
 

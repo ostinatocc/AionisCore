@@ -68,7 +68,7 @@ Good line:
 Show:
 
 1. a recalled workflow anchor
-2. `rehydration_candidates`
+2. `planner_packet.sections.rehydration_candidates`
 3. the runtime hint that deeper payload can be opened only if needed
 
 Explain:
@@ -86,7 +86,7 @@ Good line:
 Show:
 
 1. a tool feedback path
-2. `trusted_patterns`, `candidate_patterns`, or `contested_patterns`
+2. `planner_packet.sections.trusted_patterns`, `planner_packet.sections.candidate_patterns`, or `planner_packet.sections.contested_patterns`
 3. `pattern_signals`
 4. `selection_summary.provenance_explanation`
 
@@ -147,7 +147,7 @@ Avoid centering the story on:
 
 1. `layered_context` as the main reading surface
 2. raw node dumps
-3. top-level packet-array mirrors as if they were the long-term ownership layer
+3. legacy packet mirrors or layered-context internals as if they were the long-term ownership layer
 
 Reason:
 

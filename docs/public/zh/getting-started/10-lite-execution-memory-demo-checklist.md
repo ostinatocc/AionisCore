@@ -60,7 +60,7 @@ title: "Lite Execution-Memory Demo Checklist"
 
 展示：
 
-1. `rehydration_candidates`
+1. `planner_packet.sections.rehydration_candidates`
 2. 如有需要，再演示 `rehydrate_payload`
 
 可以直接说：
@@ -71,8 +71,8 @@ title: "Lite Execution-Memory Demo Checklist"
 
 展示：
 
-1. `trusted_patterns`
-2. `candidate_patterns` 或 `contested_patterns`
+1. `planner_packet.sections.trusted_patterns`
+2. `planner_packet.sections.candidate_patterns` 或 `planner_packet.sections.contested_patterns`
 3. `selection_summary.provenance_explanation`
 
 可以直接说：
@@ -97,7 +97,7 @@ title: "Lite Execution-Memory Demo Checklist"
 
 1. `layered_context`
 2. raw node dump
-3. 把 top-level packet-array mirrors 当成长期 ownership layer 来讲
+3. 把遗留 packet mirrors 或 layered-context 内部结构当成长期 ownership layer 来讲
 
 ## 收尾一句话
 

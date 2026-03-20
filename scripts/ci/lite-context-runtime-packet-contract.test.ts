@@ -21,67 +21,32 @@ import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
 import { createLiteWriteStore } from "../../src/store/lite-write-store.ts";
 import { InflightGate } from "../../src/util/inflight_gate.ts";
 
-function packetEntryIdentity(entry: any): string | null {
-  if (typeof entry?.anchor_id === "string" && entry.anchor_id.trim().length > 0) return entry.anchor_id;
-  if (typeof entry?.id === "string" && entry.id.trim().length > 0) return entry.id;
-  if (typeof entry?.node_id === "string" && entry.node_id.trim().length > 0) return entry.node_id;
-  return null;
+function parseSectionAnchorIds(lines: string[]): string[] {
+  return lines
+    .map((line) => {
+      const match = /(?:anchor|id)=([^;,\s]+)/.exec(line);
+      return match?.[1] ?? null;
+    })
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
 }
 
-function packetEntryLabels(entry: any): string[] {
-  const labels = [
-    typeof entry?.title === "string" ? entry.title.trim() : "",
-    typeof entry?.summary === "string" ? entry.summary.trim() : "",
-  ].filter((value) => value.length > 0);
-  return [...new Set(labels)];
-}
-
-function assertPacketSectionMirrors(body: {
-  planner_packet: {
-    sections: Record<string, string[]>;
-  };
-  recommended_workflows: any[];
-  candidate_workflows: any[];
-  candidate_patterns: any[];
-  trusted_patterns: any[];
-  contested_patterns: any[];
-  rehydration_candidates: any[];
-  supporting_knowledge: any[];
-}) {
-  const sectionChecks: Array<{ section: string; entries: any[] }> = [
-    { section: "recommended_workflows", entries: body.recommended_workflows },
-    { section: "candidate_workflows", entries: body.candidate_workflows },
-    { section: "candidate_patterns", entries: body.candidate_patterns },
-    { section: "trusted_patterns", entries: body.trusted_patterns },
-    { section: "contested_patterns", entries: body.contested_patterns },
-    { section: "rehydration_candidates", entries: body.rehydration_candidates },
-    { section: "supporting_knowledge", entries: body.supporting_knowledge },
+function assertNoLegacyPlannerMirrors(body: Record<string, unknown>) {
+  const removedFields = [
+    "action_recall_packet",
+    "recommended_workflows",
+    "candidate_workflows",
+    "candidate_patterns",
+    "trusted_patterns",
+    "contested_patterns",
+    "rehydration_candidates",
+    "supporting_knowledge",
   ];
-  for (const check of sectionChecks) {
-    const sectionLines = body.planner_packet.sections[check.section] ?? [];
-    assert.equal(sectionLines.length, check.entries.length, `${check.section} mirror length mismatch`);
-    check.entries.forEach((entry, index) => {
-      const line = sectionLines[index] ?? "";
-      const id = packetEntryIdentity(entry);
-      const labels = packetEntryLabels(entry);
-      if (id && check.section !== "supporting_knowledge") {
-        assert.match(
-          line,
-          new RegExp(`(?:anchor|id)=${id.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}`),
-          `${check.section}[${index}] missing canonical identity`,
-        );
-      }
-      if (labels.length > 0) {
-        assert.ok(
-          labels.some((label) => new RegExp(label.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")).test(line)),
-          `${check.section}[${index}] missing canonical label`,
-        );
-      }
-    });
+  for (const field of removedFields) {
+    assert.ok(!(field in body), `${field} should not be present on the slim default route surface`);
   }
 }
 
-function assertActionPacketSummaryMirrors(summary: {
+function assertActionPacketSummaryMatchesPacket(summary: {
   recommended_workflow_count: number;
   candidate_workflow_count: number;
   candidate_pattern_count: number;
@@ -96,39 +61,28 @@ function assertActionPacketSummaryMirrors(summary: {
   contested_pattern_anchor_ids: string[];
   rehydration_anchor_ids: string[];
 }, body: {
-  recommended_workflows: any[];
-  candidate_workflows: any[];
-  candidate_patterns: any[];
-  trusted_patterns: any[];
-  contested_patterns: any[];
-  rehydration_candidates: any[];
-  supporting_knowledge: any[];
+  planner_packet: {
+    sections: Record<string, string[]>;
+  };
 }) {
-  assert.equal(summary.recommended_workflow_count, body.recommended_workflows.length);
-  assert.equal(summary.candidate_workflow_count, body.candidate_workflows.length);
-  assert.equal(summary.candidate_pattern_count, body.candidate_patterns.length);
-  assert.equal(summary.trusted_pattern_count, body.trusted_patterns.length);
-  assert.equal(summary.contested_pattern_count, body.contested_patterns.length);
-  assert.equal(summary.rehydration_candidate_count, body.rehydration_candidates.length);
-  assert.equal(summary.supporting_knowledge_count, body.supporting_knowledge.length);
-  assert.deepEqual(summary.workflow_anchor_ids, body.recommended_workflows.map((entry) => packetEntryIdentity(entry)).filter(Boolean));
-  assert.deepEqual(summary.candidate_workflow_anchor_ids, body.candidate_workflows.map((entry) => packetEntryIdentity(entry)).filter(Boolean));
-  assert.deepEqual(summary.candidate_pattern_anchor_ids, body.candidate_patterns.map((entry) => packetEntryIdentity(entry)).filter(Boolean));
-  assert.deepEqual(summary.trusted_pattern_anchor_ids, body.trusted_patterns.map((entry) => packetEntryIdentity(entry)).filter(Boolean));
-  assert.deepEqual(summary.contested_pattern_anchor_ids, body.contested_patterns.map((entry) => packetEntryIdentity(entry)).filter(Boolean));
-  assert.deepEqual(summary.rehydration_anchor_ids, body.rehydration_candidates.map((entry) => packetEntryIdentity(entry)).filter(Boolean));
+  const sections = body.planner_packet.sections;
+  assert.equal(summary.recommended_workflow_count, (sections.recommended_workflows ?? []).length);
+  assert.equal(summary.candidate_workflow_count, (sections.candidate_workflows ?? []).length);
+  assert.equal(summary.candidate_pattern_count, (sections.candidate_patterns ?? []).length);
+  assert.equal(summary.trusted_pattern_count, (sections.trusted_patterns ?? []).length);
+  assert.equal(summary.contested_pattern_count, (sections.contested_patterns ?? []).length);
+  assert.equal(summary.rehydration_candidate_count, (sections.rehydration_candidates ?? []).length);
+  assert.equal(summary.supporting_knowledge_count, (sections.supporting_knowledge ?? []).length);
+  assert.deepEqual(summary.workflow_anchor_ids, parseSectionAnchorIds(sections.recommended_workflows ?? []));
+  assert.deepEqual(summary.candidate_workflow_anchor_ids, parseSectionAnchorIds(sections.candidate_workflows ?? []));
+  assert.deepEqual(summary.candidate_pattern_anchor_ids, parseSectionAnchorIds(sections.candidate_patterns ?? []));
+  assert.deepEqual(summary.trusted_pattern_anchor_ids, parseSectionAnchorIds(sections.trusted_patterns ?? []));
+  assert.deepEqual(summary.contested_pattern_anchor_ids, parseSectionAnchorIds(sections.contested_patterns ?? []));
+  assert.deepEqual(summary.rehydration_anchor_ids, parseSectionAnchorIds(sections.rehydration_candidates ?? []));
 }
 
 function assertExecutionKernelBundle(body: {
-  recommended_workflows: any[];
-  candidate_workflows: any[];
-  candidate_patterns: any[];
-  trusted_patterns: any[];
-  contested_patterns: any[];
-  rehydration_candidates: any[];
-  supporting_knowledge: any[];
-  pattern_signals: any[];
-  workflow_signals: any[];
+  layered_context: Record<string, unknown>;
   execution_kernel: {
     action_packet_summary: unknown;
     pattern_signal_summary: unknown;
@@ -139,16 +93,18 @@ function assertExecutionKernelBundle(body: {
     pattern_maintenance_summary: unknown;
   };
 }) {
+  const layered = body.layered_context;
   const expected = buildExecutionMemorySummaryBundle({
-    recommended_workflows: body.recommended_workflows,
-    candidate_workflows: body.candidate_workflows,
-    candidate_patterns: body.candidate_patterns,
-    trusted_patterns: body.trusted_patterns,
-    contested_patterns: body.contested_patterns,
-    rehydration_candidates: body.rehydration_candidates,
-    supporting_knowledge: body.supporting_knowledge,
-    pattern_signals: body.pattern_signals,
-    workflow_signals: body.workflow_signals,
+    action_recall_packet: layered.action_recall_packet,
+    recommended_workflows: layered.recommended_workflows,
+    candidate_workflows: layered.candidate_workflows,
+    candidate_patterns: layered.candidate_patterns,
+    trusted_patterns: layered.trusted_patterns,
+    contested_patterns: layered.contested_patterns,
+    rehydration_candidates: layered.rehydration_candidates,
+    supporting_knowledge: layered.supporting_knowledge,
+    pattern_signals: layered.pattern_signals,
+    workflow_signals: layered.workflow_signals,
   });
   assert.deepEqual(body.execution_kernel.action_packet_summary, expected.action_packet_summary);
   assert.deepEqual(body.execution_kernel.pattern_signal_summary, expected.pattern_signal_summary);
@@ -568,33 +524,32 @@ test("planning_context returns aligned planner packet, action packet summary, an
     });
     assert.equal(response.statusCode, 200);
     const body = PlanningContextRouteContractSchema.parse(response.json());
-    assertPacketSectionMirrors(body);
-    assertActionPacketSummaryMirrors(body.planning_summary.action_packet_summary, body);
-    assertActionPacketSummaryMirrors(body.execution_kernel.action_packet_summary, body);
+    assertNoLegacyPlannerMirrors(body as Record<string, unknown>);
+    assertActionPacketSummaryMatchesPacket(body.planning_summary.action_packet_summary, body);
+    assertActionPacketSummaryMatchesPacket(body.execution_kernel.action_packet_summary, body);
     assertExecutionKernelBundle(body);
     assert.equal(body.planner_packet.packet_version, "planner_packet_v1");
-    assert.equal(body.recommended_workflows.length, 1);
-    assert.equal(body.candidate_workflows.length, 1);
+    assert.equal(body.planner_packet.sections.recommended_workflows.length, 1);
+    assert.equal(body.planner_packet.sections.candidate_workflows.length, 1);
     assert.equal(body.workflow_signals.length, 2);
     assert.equal(body.workflow_signals.length, body.layered_context.workflow_signals.length);
     assert.equal(body.planner_packet.sections.candidate_workflows.length, 1);
     assert.equal(body.planning_summary.action_packet_summary.candidate_workflow_count, 1);
     assert.equal(body.execution_kernel.action_packet_summary.candidate_workflow_count, 1);
-    assert.equal(body.candidate_patterns.length, body.planning_summary.action_packet_summary.candidate_pattern_count);
-    assert.equal(body.trusted_patterns.length, 1);
-    assert.equal(body.contested_patterns.length, body.planning_summary.action_packet_summary.contested_pattern_count);
+    assert.equal(body.planner_packet.sections.candidate_patterns.length, body.planning_summary.action_packet_summary.candidate_pattern_count);
+    assert.equal(body.planner_packet.sections.trusted_patterns.length, 1);
+    assert.equal(body.planner_packet.sections.contested_patterns.length, body.planning_summary.action_packet_summary.contested_pattern_count);
     assert.equal(body.pattern_signals.length, body.layered_context.pattern_signals.length);
-    assert.ok(body.rehydration_candidates.length >= 1);
-    assert.equal(body.planner_packet.sections.rehydration_candidates.length, body.rehydration_candidates.length);
-    assert.ok(body.supporting_knowledge.length >= 1);
+    assert.ok(body.planner_packet.sections.rehydration_candidates.length >= 1);
+    assert.ok(body.planner_packet.sections.supporting_knowledge.length >= 1);
     assert.equal(body.planning_summary.action_packet_summary.recommended_workflow_count, 1);
-    assert.equal(body.planning_summary.workflow_lifecycle_summary.stable_count, body.recommended_workflows.length);
-    assert.equal(body.planning_summary.workflow_lifecycle_summary.candidate_count, body.candidate_workflows.length);
+    assert.equal(body.planning_summary.workflow_lifecycle_summary.stable_count, body.planner_packet.sections.recommended_workflows.length);
+    assert.equal(body.planning_summary.workflow_lifecycle_summary.candidate_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.planning_summary.workflow_lifecycle_summary.replay_source_count, 2);
     assert.equal(body.planning_summary.workflow_lifecycle_summary.rehydration_ready_count, 1);
     assert.equal(body.planning_summary.workflow_lifecycle_summary.promotion_ready_count, 0);
-    assert.equal(body.planning_summary.workflow_signal_summary.stable_workflow_count, body.recommended_workflows.length);
-    assert.equal(body.planning_summary.workflow_signal_summary.observing_workflow_count, body.candidate_workflows.length);
+    assert.equal(body.planning_summary.workflow_signal_summary.stable_workflow_count, body.planner_packet.sections.recommended_workflows.length);
+    assert.equal(body.planning_summary.workflow_signal_summary.observing_workflow_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.planning_summary.workflow_signal_summary.promotion_ready_workflow_count, 0);
     assert.equal(body.planning_summary.workflow_lifecycle_summary.transition_counts.candidate_observed, 1);
     assert.equal(body.planning_summary.workflow_lifecycle_summary.transition_counts.promoted_to_stable, 1);
@@ -602,16 +557,16 @@ test("planning_context returns aligned planner packet, action packet summary, an
     assert.equal(body.planning_summary.workflow_maintenance_summary.retain_count, 1);
     assert.equal(body.planning_summary.workflow_maintenance_summary.promote_candidate_count, 1);
     assert.equal(body.planning_summary.workflow_maintenance_summary.retain_workflow_count, 1);
-    assert.equal(body.planning_summary.action_packet_summary.candidate_pattern_count, body.candidate_patterns.length);
+    assert.equal(body.planning_summary.action_packet_summary.candidate_pattern_count, body.planner_packet.sections.candidate_patterns.length);
     assert.equal(body.planning_summary.action_packet_summary.trusted_pattern_count, 1);
-    assert.equal(body.planning_summary.action_packet_summary.rehydration_candidate_count, body.rehydration_candidates.length);
-    assert.equal(body.planning_summary.action_packet_summary.supporting_knowledge_count, body.supporting_knowledge.length);
+    assert.equal(body.planning_summary.action_packet_summary.rehydration_candidate_count, body.planner_packet.sections.rehydration_candidates.length);
+    assert.equal(body.planning_summary.action_packet_summary.supporting_knowledge_count, body.planner_packet.sections.supporting_knowledge.length);
     assert.equal(body.execution_kernel.action_packet_summary.recommended_workflow_count, 1);
-    assert.equal(body.execution_kernel.workflow_lifecycle_summary.stable_count, body.recommended_workflows.length);
-    assert.equal(body.execution_kernel.workflow_lifecycle_summary.candidate_count, body.candidate_workflows.length);
+    assert.equal(body.execution_kernel.workflow_lifecycle_summary.stable_count, body.planner_packet.sections.recommended_workflows.length);
+    assert.equal(body.execution_kernel.workflow_lifecycle_summary.candidate_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.execution_kernel.workflow_lifecycle_summary.promotion_ready_count, 0);
-    assert.equal(body.execution_kernel.workflow_signal_summary.stable_workflow_count, body.recommended_workflows.length);
-    assert.equal(body.execution_kernel.workflow_signal_summary.observing_workflow_count, body.candidate_workflows.length);
+    assert.equal(body.execution_kernel.workflow_signal_summary.stable_workflow_count, body.planner_packet.sections.recommended_workflows.length);
+    assert.equal(body.execution_kernel.workflow_signal_summary.observing_workflow_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.execution_kernel.workflow_signal_summary.promotion_ready_workflow_count, 0);
     assert.equal(body.execution_kernel.workflow_lifecycle_summary.transition_counts.candidate_observed, 1);
     assert.equal(body.execution_kernel.workflow_lifecycle_summary.transition_counts.promoted_to_stable, 1);
@@ -619,31 +574,31 @@ test("planning_context returns aligned planner packet, action packet summary, an
     assert.equal(body.execution_kernel.workflow_maintenance_summary.retain_count, 1);
     assert.equal(body.execution_kernel.workflow_maintenance_summary.promote_candidate_count, 1);
     assert.equal(body.execution_kernel.workflow_maintenance_summary.retain_workflow_count, 1);
-    assert.equal(body.execution_kernel.action_packet_summary.candidate_pattern_count, body.candidate_patterns.length);
+    assert.equal(body.execution_kernel.action_packet_summary.candidate_pattern_count, body.planner_packet.sections.candidate_patterns.length);
     assert.equal(body.execution_kernel.action_packet_summary.trusted_pattern_count, 1);
-    assert.equal(body.execution_kernel.action_packet_summary.rehydration_candidate_count, body.rehydration_candidates.length);
-    assert.equal(body.execution_kernel.action_packet_summary.supporting_knowledge_count, body.supporting_knowledge.length);
+    assert.equal(body.execution_kernel.action_packet_summary.rehydration_candidate_count, body.planner_packet.sections.rehydration_candidates.length);
+    assert.equal(body.execution_kernel.action_packet_summary.supporting_knowledge_count, body.planner_packet.sections.supporting_knowledge.length);
     assert.equal(body.execution_kernel.pattern_signal_summary.trusted_pattern_count, 1);
-    assert.equal(body.execution_kernel.pattern_signal_summary.candidate_pattern_count, body.candidate_patterns.length);
-    assert.equal(body.execution_kernel.pattern_signal_summary.contested_pattern_count, body.contested_patterns.length);
-    assert.equal(body.planning_summary.pattern_lifecycle_summary.trusted_count, body.trusted_patterns.length);
-    assert.equal(body.planning_summary.pattern_lifecycle_summary.candidate_count, body.candidate_patterns.length);
-    assert.equal(body.planning_summary.pattern_lifecycle_summary.contested_count, body.contested_patterns.length);
-    assert.equal(body.planning_summary.pattern_maintenance_summary.retain_count, body.trusted_patterns.length);
-    assert.equal(body.planning_summary.pattern_maintenance_summary.observe_count, body.candidate_patterns.length);
-    assert.equal(body.planning_summary.pattern_maintenance_summary.review_count, body.contested_patterns.length);
-    assert.equal(body.execution_kernel.pattern_lifecycle_summary.trusted_count, body.trusted_patterns.length);
-    assert.equal(body.execution_kernel.pattern_lifecycle_summary.candidate_count, body.candidate_patterns.length);
-    assert.equal(body.execution_kernel.pattern_lifecycle_summary.contested_count, body.contested_patterns.length);
-    assert.equal(body.execution_kernel.pattern_maintenance_summary.retain_count, body.trusted_patterns.length);
-    assert.equal(body.execution_kernel.pattern_maintenance_summary.observe_count, body.candidate_patterns.length);
-    assert.equal(body.execution_kernel.pattern_maintenance_summary.review_count, body.contested_patterns.length);
+    assert.equal(body.execution_kernel.pattern_signal_summary.candidate_pattern_count, body.planner_packet.sections.candidate_patterns.length);
+    assert.equal(body.execution_kernel.pattern_signal_summary.contested_pattern_count, body.planner_packet.sections.contested_patterns.length);
+    assert.equal(body.planning_summary.pattern_lifecycle_summary.trusted_count, body.planner_packet.sections.trusted_patterns.length);
+    assert.equal(body.planning_summary.pattern_lifecycle_summary.candidate_count, body.planner_packet.sections.candidate_patterns.length);
+    assert.equal(body.planning_summary.pattern_lifecycle_summary.contested_count, body.planner_packet.sections.contested_patterns.length);
+    assert.equal(body.planning_summary.pattern_maintenance_summary.retain_count, body.planner_packet.sections.trusted_patterns.length);
+    assert.equal(body.planning_summary.pattern_maintenance_summary.observe_count, body.planner_packet.sections.candidate_patterns.length);
+    assert.equal(body.planning_summary.pattern_maintenance_summary.review_count, body.planner_packet.sections.contested_patterns.length);
+    assert.equal(body.execution_kernel.pattern_lifecycle_summary.trusted_count, body.planner_packet.sections.trusted_patterns.length);
+    assert.equal(body.execution_kernel.pattern_lifecycle_summary.candidate_count, body.planner_packet.sections.candidate_patterns.length);
+    assert.equal(body.execution_kernel.pattern_lifecycle_summary.contested_count, body.planner_packet.sections.contested_patterns.length);
+    assert.equal(body.execution_kernel.pattern_maintenance_summary.retain_count, body.planner_packet.sections.trusted_patterns.length);
+    assert.equal(body.execution_kernel.pattern_maintenance_summary.observe_count, body.planner_packet.sections.candidate_patterns.length);
+    assert.equal(body.execution_kernel.pattern_maintenance_summary.review_count, body.planner_packet.sections.contested_patterns.length);
     assert.match(body.planning_summary.planner_explanation, /workflow guidance: Fix export failure/);
     assert.match(body.planning_summary.planner_explanation, /candidate workflows visible but not yet promoted: Replay Episode: Fix export failure/);
     assert.match(body.planning_summary.planner_explanation, /selected tool: edit/);
     assert.match(body.planning_summary.planner_explanation, /trusted patterns available but not used: edit/);
     assert.match(body.planning_summary.planner_explanation, /rehydration available: Fix export failure/);
-    assert.match(body.planning_summary.planner_explanation, new RegExp(`supporting knowledge appended: ${body.supporting_knowledge.length}`));
+    assert.match(body.planning_summary.planner_explanation, new RegExp(`supporting knowledge appended: ${body.planner_packet.sections.supporting_knowledge.length}`));
     assert.equal(body.tools.selection_summary.provenance_explanation, "selected tool: edit; candidate patterns visible but not yet trusted: edit");
   } finally {
     await app.close();
@@ -680,30 +635,27 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     });
     assert.equal(response.statusCode, 200);
     const body = ContextAssembleRouteContractSchema.parse(response.json());
-    assertPacketSectionMirrors(body);
-    assertActionPacketSummaryMirrors(body.assembly_summary.action_packet_summary, body);
-    assertActionPacketSummaryMirrors(body.execution_kernel.action_packet_summary, body);
+    assertNoLegacyPlannerMirrors(body as Record<string, unknown>);
+    assertActionPacketSummaryMatchesPacket(body.assembly_summary.action_packet_summary, body);
+    assertActionPacketSummaryMatchesPacket(body.execution_kernel.action_packet_summary, body);
     assertExecutionKernelBundle(body);
     assert.equal(body.planner_packet.packet_version, "planner_packet_v1");
     assert.deepEqual(body.planner_packet.sections.recommended_workflows.length, 1);
     assert.deepEqual(body.planner_packet.sections.candidate_workflows.length, 1);
-    assert.equal(body.candidate_workflows.length, 1);
     assert.equal(body.workflow_signals.length, 2);
     assert.equal(body.workflow_signals.length, body.layered_context.workflow_signals.length);
-    assert.equal(body.planner_packet.sections.candidate_patterns.length, body.candidate_patterns.length);
+    assert.equal(body.planner_packet.sections.candidate_patterns.length, body.assembly_summary.action_packet_summary.candidate_pattern_count);
     assert.deepEqual(body.planner_packet.sections.trusted_patterns.length, 1);
     assert.equal(body.pattern_signals.length, body.layered_context.pattern_signals.length);
-    assert.equal(body.planner_packet.sections.rehydration_candidates.length, body.rehydration_candidates.length);
-    assert.equal(body.planner_packet.sections.supporting_knowledge.length, body.supporting_knowledge.length);
     assert.equal(body.assembly_summary.action_packet_summary.recommended_workflow_count, 1);
     assert.equal(body.assembly_summary.action_packet_summary.candidate_workflow_count, 1);
-    assert.equal(body.assembly_summary.workflow_lifecycle_summary.stable_count, body.recommended_workflows.length);
-    assert.equal(body.assembly_summary.workflow_lifecycle_summary.candidate_count, body.candidate_workflows.length);
+    assert.equal(body.assembly_summary.workflow_lifecycle_summary.stable_count, body.planner_packet.sections.recommended_workflows.length);
+    assert.equal(body.assembly_summary.workflow_lifecycle_summary.candidate_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.assembly_summary.workflow_lifecycle_summary.replay_source_count, 2);
     assert.equal(body.assembly_summary.workflow_lifecycle_summary.rehydration_ready_count, 1);
     assert.equal(body.assembly_summary.workflow_lifecycle_summary.promotion_ready_count, 0);
-    assert.equal(body.assembly_summary.workflow_signal_summary.stable_workflow_count, body.recommended_workflows.length);
-    assert.equal(body.assembly_summary.workflow_signal_summary.observing_workflow_count, body.candidate_workflows.length);
+    assert.equal(body.assembly_summary.workflow_signal_summary.stable_workflow_count, body.planner_packet.sections.recommended_workflows.length);
+    assert.equal(body.assembly_summary.workflow_signal_summary.observing_workflow_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.assembly_summary.workflow_signal_summary.promotion_ready_workflow_count, 0);
     assert.equal(body.assembly_summary.workflow_lifecycle_summary.transition_counts.candidate_observed, 1);
     assert.equal(body.assembly_summary.workflow_lifecycle_summary.transition_counts.promoted_to_stable, 1);
@@ -711,41 +663,41 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     assert.equal(body.assembly_summary.workflow_maintenance_summary.retain_count, 1);
     assert.equal(body.assembly_summary.workflow_maintenance_summary.promote_candidate_count, 1);
     assert.equal(body.assembly_summary.workflow_maintenance_summary.retain_workflow_count, 1);
-    assert.equal(body.assembly_summary.action_packet_summary.candidate_pattern_count, body.candidate_patterns.length);
+    assert.equal(body.assembly_summary.action_packet_summary.candidate_pattern_count, body.planner_packet.sections.candidate_patterns.length);
     assert.equal(body.assembly_summary.action_packet_summary.trusted_pattern_count, 1);
-    assert.equal(body.assembly_summary.action_packet_summary.rehydration_candidate_count, body.rehydration_candidates.length);
-    assert.equal(body.assembly_summary.action_packet_summary.supporting_knowledge_count, body.supporting_knowledge.length);
-    assert.equal(body.execution_kernel.action_packet_summary.candidate_pattern_count, body.candidate_patterns.length);
-    assert.equal(body.execution_kernel.workflow_lifecycle_summary.stable_count, body.recommended_workflows.length);
-    assert.equal(body.execution_kernel.workflow_lifecycle_summary.candidate_count, body.candidate_workflows.length);
+    assert.equal(body.assembly_summary.action_packet_summary.rehydration_candidate_count, body.planner_packet.sections.rehydration_candidates.length);
+    assert.equal(body.assembly_summary.action_packet_summary.supporting_knowledge_count, body.planner_packet.sections.supporting_knowledge.length);
+    assert.equal(body.execution_kernel.action_packet_summary.candidate_pattern_count, body.planner_packet.sections.candidate_patterns.length);
+    assert.equal(body.execution_kernel.workflow_lifecycle_summary.stable_count, body.planner_packet.sections.recommended_workflows.length);
+    assert.equal(body.execution_kernel.workflow_lifecycle_summary.candidate_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.execution_kernel.workflow_lifecycle_summary.promotion_ready_count, 0);
-    assert.equal(body.execution_kernel.workflow_signal_summary.stable_workflow_count, body.recommended_workflows.length);
-    assert.equal(body.execution_kernel.workflow_signal_summary.observing_workflow_count, body.candidate_workflows.length);
+    assert.equal(body.execution_kernel.workflow_signal_summary.stable_workflow_count, body.planner_packet.sections.recommended_workflows.length);
+    assert.equal(body.execution_kernel.workflow_signal_summary.observing_workflow_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.execution_kernel.workflow_signal_summary.promotion_ready_workflow_count, 0);
     assert.equal(body.execution_kernel.workflow_lifecycle_summary.transition_counts.candidate_observed, 1);
     assert.equal(body.execution_kernel.workflow_maintenance_summary.observe_count, 1);
     assert.equal(body.execution_kernel.workflow_maintenance_summary.retain_count, 1);
     assert.equal(body.execution_kernel.workflow_maintenance_summary.promote_candidate_count, 1);
-    assert.equal(body.execution_kernel.action_packet_summary.rehydration_candidate_count, body.rehydration_candidates.length);
-    assert.equal(body.execution_kernel.pattern_signal_summary.trusted_pattern_count, body.trusted_patterns.length);
-    assert.equal(body.execution_kernel.pattern_signal_summary.candidate_pattern_count, body.candidate_patterns.length);
-    assert.equal(body.execution_kernel.pattern_signal_summary.contested_pattern_count, body.contested_patterns.length);
-    assert.equal(body.assembly_summary.pattern_lifecycle_summary.trusted_count, body.trusted_patterns.length);
-    assert.equal(body.assembly_summary.pattern_lifecycle_summary.candidate_count, body.candidate_patterns.length);
-    assert.equal(body.assembly_summary.pattern_lifecycle_summary.contested_count, body.contested_patterns.length);
-    assert.equal(body.assembly_summary.pattern_maintenance_summary.retain_count, body.trusted_patterns.length);
-    assert.equal(body.assembly_summary.pattern_maintenance_summary.observe_count, body.candidate_patterns.length);
-    assert.equal(body.assembly_summary.pattern_maintenance_summary.review_count, body.contested_patterns.length);
-    assert.equal(body.execution_kernel.pattern_lifecycle_summary.trusted_count, body.trusted_patterns.length);
-    assert.equal(body.execution_kernel.pattern_lifecycle_summary.candidate_count, body.candidate_patterns.length);
-    assert.equal(body.execution_kernel.pattern_lifecycle_summary.contested_count, body.contested_patterns.length);
-    assert.equal(body.execution_kernel.pattern_maintenance_summary.retain_count, body.trusted_patterns.length);
-    assert.equal(body.execution_kernel.pattern_maintenance_summary.observe_count, body.candidate_patterns.length);
-    assert.equal(body.execution_kernel.pattern_maintenance_summary.review_count, body.contested_patterns.length);
+    assert.equal(body.execution_kernel.action_packet_summary.rehydration_candidate_count, body.planner_packet.sections.rehydration_candidates.length);
+    assert.equal(body.execution_kernel.pattern_signal_summary.trusted_pattern_count, body.planner_packet.sections.trusted_patterns.length);
+    assert.equal(body.execution_kernel.pattern_signal_summary.candidate_pattern_count, body.planner_packet.sections.candidate_patterns.length);
+    assert.equal(body.execution_kernel.pattern_signal_summary.contested_pattern_count, body.planner_packet.sections.contested_patterns.length);
+    assert.equal(body.assembly_summary.pattern_lifecycle_summary.trusted_count, body.planner_packet.sections.trusted_patterns.length);
+    assert.equal(body.assembly_summary.pattern_lifecycle_summary.candidate_count, body.planner_packet.sections.candidate_patterns.length);
+    assert.equal(body.assembly_summary.pattern_lifecycle_summary.contested_count, body.planner_packet.sections.contested_patterns.length);
+    assert.equal(body.assembly_summary.pattern_maintenance_summary.retain_count, body.planner_packet.sections.trusted_patterns.length);
+    assert.equal(body.assembly_summary.pattern_maintenance_summary.observe_count, body.planner_packet.sections.candidate_patterns.length);
+    assert.equal(body.assembly_summary.pattern_maintenance_summary.review_count, body.planner_packet.sections.contested_patterns.length);
+    assert.equal(body.execution_kernel.pattern_lifecycle_summary.trusted_count, body.planner_packet.sections.trusted_patterns.length);
+    assert.equal(body.execution_kernel.pattern_lifecycle_summary.candidate_count, body.planner_packet.sections.candidate_patterns.length);
+    assert.equal(body.execution_kernel.pattern_lifecycle_summary.contested_count, body.planner_packet.sections.contested_patterns.length);
+    assert.equal(body.execution_kernel.pattern_maintenance_summary.retain_count, body.planner_packet.sections.trusted_patterns.length);
+    assert.equal(body.execution_kernel.pattern_maintenance_summary.observe_count, body.planner_packet.sections.candidate_patterns.length);
+    assert.equal(body.execution_kernel.pattern_maintenance_summary.review_count, body.planner_packet.sections.contested_patterns.length);
     assert.match(body.assembly_summary.planner_explanation, /workflow guidance: Fix export failure/);
     assert.match(body.assembly_summary.planner_explanation, /candidate workflows visible but not yet promoted: Replay Episode: Fix export failure/);
     assert.match(body.assembly_summary.planner_explanation, /trusted patterns available but not used: edit/);
-    assert.match(body.assembly_summary.planner_explanation, new RegExp(`supporting knowledge appended: ${body.supporting_knowledge.length}`));
+    assert.match(body.assembly_summary.planner_explanation, new RegExp(`supporting knowledge appended: ${body.planner_packet.sections.supporting_knowledge.length}`));
     assert.equal(body.tools.selection_summary.provenance_explanation, "selected tool: edit; candidate patterns visible but not yet trusted: edit");
   } finally {
     await app.close();

@@ -66,7 +66,7 @@ For new integrations:
 3. read compact explanations from `planning_summary` or `assembly_summary`
 4. read compact runtime state from `execution_kernel.*_summary`
 
-The top-level packet arrays still exist in `v1`, but they are convenience mirrors rather than the future-proof ownership layer.
+`planner_packet.sections.*` is now the default full collection surface, while introspection carries the heavier inspection-oriented view.
 
 ## What Lite Public Beta Is Good For
 

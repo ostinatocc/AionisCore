@@ -161,11 +161,11 @@ Make Lite planning and runtime assembly default to action-oriented memory retrie
 
 Planner-facing context should stabilize around these sections:
 
-1. `recommended_workflows`
-2. `trusted_patterns`
-3. `contested_patterns`
-4. `rehydration_candidates`
-5. `supporting_knowledge`
+1. `planner_packet.sections.recommended_workflows`
+2. `planner_packet.sections.trusted_patterns`
+3. `planner_packet.sections.contested_patterns`
+4. `planner_packet.sections.rehydration_candidates`
+5. `planner_packet.sections.supporting_knowledge`
 
 ### Key code areas
 

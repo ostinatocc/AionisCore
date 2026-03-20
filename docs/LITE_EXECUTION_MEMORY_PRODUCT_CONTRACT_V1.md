@@ -93,26 +93,20 @@ Routes:
 Canonical structured objects:
 
 1. `planner_packet`
-2. `action_recall_packet`
-3. `execution_kernel`
+2. `execution_kernel`
 
-Stable route-level arrays:
+Canonical route-level signals:
 
-1. `recommended_workflows`
-2. `candidate_workflows`
-3. `candidate_patterns`
-4. `trusted_patterns`
-5. `contested_patterns`
-6. `rehydration_candidates`
-7. `supporting_knowledge`
-8. `workflow_signals`
-9. `pattern_signals`
+1. `workflow_signals`
+2. `pattern_signals`
 
 Current field status:
 
-1. `workflow_signals` and `pattern_signals` are canonical route-level signal surfaces
-2. `supporting_knowledge` is a retained compatibility mirror
-3. `recommended_workflows`, `candidate_workflows`, `candidate_patterns`, `trusted_patterns`, `contested_patterns`, and `rehydration_candidates` remain transitional compatibility mirrors
+1. `planner_packet` is the only default full collection owner on planner/context routes
+2. `execution_kernel` is the compact aligned runtime owner
+3. `workflow_signals` and `pattern_signals` are canonical route-level signal surfaces
+4. `action_recall_packet` is still the canonical structured recall substrate, but it is no longer part of the default planner/context response surface
+5. `recommended_workflows`, `candidate_workflows`, `candidate_patterns`, `trusted_patterns`, `contested_patterns`, `rehydration_candidates`, and `supporting_knowledge` are no longer returned as default top-level planner/context fields
 
 Canonical summary objects:
 
@@ -185,114 +179,36 @@ Canonical output:
 
 ## Canonical vs Transitional Fields
 
-The product contract now distinguishes canonical surfaces from transitional convenience mirrors.
+The product contract now distinguishes default route surfaces from internal or introspection-only surfaces.
 
 ### Canonical Long-Term Fields
 
 These should be treated as the long-term stable execution-memory contract:
 
 1. `planner_packet`
-2. `action_recall_packet`
-3. `planning_summary`
-4. `assembly_summary`
-5. `execution_kernel`
-6. `workflow_signals`
-7. `pattern_signals`
-8. `selection_summary.provenance_explanation`
-9. `selection_summary.pattern_lifecycle_summary`
-10. `selection_summary.pattern_maintenance_summary`
-11. `learning_projection_result`
+2. `planning_summary`
+3. `assembly_summary`
+4. `execution_kernel`
+5. `workflow_signals`
+6. `pattern_signals`
+7. `selection_summary.provenance_explanation`
+8. `selection_summary.pattern_lifecycle_summary`
+9. `selection_summary.pattern_maintenance_summary`
+10. `learning_projection_result`
 
-### Transitional Compatibility Mirrors
+### Internal Or Introspection-Only Surfaces
 
-These remain intentionally duplicated for ease of adoption, but should be treated as compatibility mirrors of the canonical packet state:
+These remain part of the execution-memory contract family, but they are not part of the default planner/context response surface:
 
-1. top-level `recommended_workflows`
-2. top-level `candidate_workflows`
-3. top-level `candidate_patterns`
-4. top-level `trusted_patterns`
-5. top-level `contested_patterns`
-6. top-level `rehydration_candidates`
+1. `action_recall_packet`
+2. introspection route full collections and demo text
+3. layered context internals used for assembly and verification
 
 Current rule:
 
-1. they stay aligned with `planner_packet`
-2. they are not allowed to drift semantically
-3. any future removal requires an explicit deprecation decision and route-level coverage first
-
-### Retained Compatibility Mirror
-
-Current retained mirror decision:
-
-1. top-level `supporting_knowledge` is retained as a compatibility mirror
-
-Reason:
-
-1. it is the most common non-action packet data that integrators still want directly
-2. it keeps secondary knowledge consumption cheap for UIs and operator views
-3. it is already clearly subordinate to workflow, pattern, and rehydration guidance in the planner explanation order
-
-Contract rule:
-
-1. `supporting_knowledge` remains a mirror of `planner_packet.sections.supporting_knowledge`
-2. it is not promoted to canonical ownership
-3. it should remain available unless a future versioned contract explicitly removes or replaces it
-
-### Current Mirror Classification
-
-The current planner/context mirror decisions are now explicit:
-
-1. `recommended_workflows` = transitional compatibility mirror
-2. `candidate_workflows` = transitional compatibility mirror
-3. `candidate_patterns` = transitional compatibility mirror
-4. `trusted_patterns` = transitional compatibility mirror
-5. `contested_patterns` = transitional compatibility mirror
-6. `rehydration_candidates` = transitional compatibility mirror
-7. `supporting_knowledge` = retained compatibility mirror
-
-Current rule:
-
-1. no additional top-level packet array is currently retained besides `supporting_knowledge`
-2. the remaining packet-array mirrors stay transitional until a future versioned contract explicitly retains or removes them
-
-### Versioning Strategy
-
-`Execution-Memory Product Contract v1` now carries an explicit mirror versioning rule:
-
-1. `v1` keeps all current top-level packet-array mirrors in place
-2. `v1` does not deprecate any planner/context top-level packet-array mirror
-3. `v2` is the earliest contract version that may narrow the transitional mirror set
-
-Current `v2` candidate mirror-reduction set:
-
-1. `recommended_workflows`
-2. `candidate_workflows`
-3. `candidate_patterns`
-4. `trusted_patterns`
-5. `contested_patterns`
-6. `rehydration_candidates`
-
-Current non-candidates:
-
-1. `supporting_knowledge`
-   Reason:
-   it remains a retained compatibility mirror
-2. `workflow_signals`
-   Reason:
-   it is already a canonical route-level signal surface
-3. `pattern_signals`
-   Reason:
-   it is already a canonical route-level signal surface
-4. `execution_kernel.*_summary`
-   Reason:
-   it is retained as the compact aligned kernel contract
-
-Current rule:
-
-1. no packet-array mirror is removed in `v1`
-2. no packet-array mirror is deprecated in `v1` without explicit route-contract documentation
-3. any future `v2` narrowing must preserve `planner_packet` as the canonical replacement surface
-4. the current migration sketch for any such narrowing lives in [docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
+1. default planner/context routes stay slim
+2. heavy recall substrate and inspection output move to `POST /v1/memory/execution/introspect`
+3. no default top-level packet-array mirrors are retained on planner/context routes
 
 ## Product Contract Rules
 
@@ -303,6 +219,8 @@ Current rule:
 ### Rule 2
 
 `action_recall_packet` is the canonical structured recall substrate that feeds the planner packet.
+
+It remains part of the internal/runtime and introspection contract family, but it is no longer part of the default planner/context route surface.
 
 ### Rule 3
 
@@ -367,6 +285,7 @@ The highest-value next step is not adding more execution-memory concepts.
 
 It is tightening product stability around the current ones:
 
-1. decide which top-level packet mirrors remain long-term
-2. keep `planner_packet`, `action_recall_packet`, and `execution_kernel` aligned as one schema family
-3. continue strengthening end-to-end contract coverage for planner, selector, and replay-review surfaces
+1. keep `planner_packet` as the only default full collection owner
+2. keep `execution_kernel` as the compact aligned runtime owner
+3. keep `action_recall_packet` aligned as an internal/introspection substrate rather than re-expanding the default route surface
+4. continue strengthening end-to-end contract coverage for planner, selector, and replay-review surfaces

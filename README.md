@@ -51,10 +51,10 @@ Current recommended integration model:
 
 Current contract note:
 
-1. top-level packet arrays still exist in `v1`
-2. `supporting_knowledge` is a retained compatibility mirror
-3. the other packet-array mirrors remain transitional convenience mirrors
-4. the canonical product and route contracts live in the linked docs below
+1. default planner/context routes now return `planner_packet` as the only full collection owner
+2. `execution_kernel` remains the compact aligned runtime owner
+3. `workflow_signals` and `pattern_signals` remain canonical route-level signal surfaces
+4. heavier inspection output lives on `POST /v1/memory/execution/introspect`
 
 Documentation map:
 

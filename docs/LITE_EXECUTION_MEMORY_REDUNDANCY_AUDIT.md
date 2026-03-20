@@ -29,6 +29,8 @@ Current implementation note:
 2. this removes one clear source of accidental response-shape drift between the two route handlers
 3. execution-memory summary families are now also produced through one shared bundle:
    [buildExecutionMemorySummaryBundle()](/Volumes/ziel/Aionisgo/src/app/planning-summary.ts)
+4. the default planner/context routes no longer emit top-level full collection mirrors or `action_recall_packet`
+5. heavy collection inspection now belongs on introspection or internal surfaces instead of the default planner/context response
 
 ## Surface Map
 
@@ -37,38 +39,23 @@ Current implementation note:
 Canonical owner:
 
 1. `planner_packet`
-2. `action_recall_packet`
-3. `planning_summary`
-4. `assembly_summary`
-5. `execution_kernel`
-6. `workflow_signals`
-7. `pattern_signals`
+2. `planning_summary`
+3. `assembly_summary`
+4. `execution_kernel`
+5. `workflow_signals`
+6. `pattern_signals`
 
-Intentional mirrors:
+Default route overlap:
 
-1. top-level `recommended_workflows`
-2. top-level `candidate_workflows`
-3. top-level `candidate_patterns`
-4. top-level `trusted_patterns`
-5. top-level `contested_patterns`
-6. top-level `rehydration_candidates`
-7. top-level `supporting_knowledge`
+1. packet sections plus `action_packet_summary`
+2. packet sections plus workflow/pattern signal summaries
+3. packet sections plus compact lifecycle and maintenance summaries
 
-Current mirror classification:
+Interpretation:
 
-1. `recommended_workflows` = transitional compatibility mirror
-2. `candidate_workflows` = transitional compatibility mirror
-3. `candidate_patterns` = transitional compatibility mirror
-4. `trusted_patterns` = transitional compatibility mirror
-5. `contested_patterns` = transitional compatibility mirror
-6. `rehydration_candidates` = transitional compatibility mirror
-7. `supporting_knowledge` = retained compatibility mirror
-
-Reason they still exist:
-
-1. they reduce integrator work for common route consumers
-2. they support direct UI and operator views without packet re-walking
-3. they are already covered as mirrors of canonical packet state
+1. this overlap is intentional compacting, not duplicated full collections
+2. the default planner/context response no longer carries parallel full collection owners
+3. any heavier collection surface belongs on introspection or internal assembly output
 
 Derived summaries:
 
@@ -159,6 +146,7 @@ This audit already removed one implementation-level duplicate:
 4. both now consume the same summary bundle logic in [src/app/planning-summary.ts](/Volumes/ziel/Aionisgo/src/app/planning-summary.ts)
 5. `execution_introspection` no longer hand-assembles a separate signal/lifecycle summary family
 6. it now reuses the same summary bundle logic in [src/app/planning-summary.ts](/Volumes/ziel/Aionisgo/src/app/planning-summary.ts)
+7. the default planner/context routes no longer re-expose packet sections as top-level full collection fields
 
 This is an implementation cleanup, not a public contract change.
 
@@ -166,41 +154,24 @@ This is an implementation cleanup, not a public contract change.
 
 At this stage:
 
-1. no public top-level mirror is being removed
+1. the default planner/context response is now slim by design
 2. no canonical field is being renamed
-3. the main phase-2 rule is to remove only accidental implementation duplication first
-4. `supporting_knowledge` is now treated as a retained compatibility mirror, not a pending packet-only candidate
-5. the full `execution_kernel.*_summary` family is currently retained as a compact aligned kernel contract
-6. the remaining top-level packet arrays stay transitional rather than retained
+3. the main phase-2 rule is to avoid reintroducing duplicated full collections on the default route
+4. the full `execution_kernel.*_summary` family is currently retained as a compact aligned kernel contract
+5. heavy inspection remains valid, but it belongs on introspection rather than planner/context defaults
 
 ## Next Decision Points
 
 The next useful audit steps are:
 
 1. decide whether any signal summaries should become packet-only in a future contract version
-2. decide whether any future version should narrow the transitional packet-array mirror set
+2. decide whether any future introspection surface should split demo-facing and operator-facing output
 3. decide whether any future kernel contract should split operator-facing and runtime-facing summaries
 
 ## Current Versioning Position
 
 The current audit position is now:
 
-1. `Execution-Memory Product Contract v1` keeps the full current planner/context packet-array mirror set
-2. the only retained mirror within that set is `supporting_knowledge`
-3. the remaining packet-array mirrors are transitional and may only be narrowed in a future versioned contract
-
-Current `v2` narrowing candidates:
-
-1. `recommended_workflows`
-2. `candidate_workflows`
-3. `candidate_patterns`
-4. `trusted_patterns`
-5. `contested_patterns`
-6. `rehydration_candidates`
-
-Current non-candidates:
-
-1. `supporting_knowledge`
-2. `workflow_signals`
-3. `pattern_signals`
-4. `execution_kernel.*_summary`
+1. `Execution-Memory Product Contract v1` now treats the slim planner/context route as the baseline
+2. `workflow_signals`, `pattern_signals`, and `execution_kernel.*_summary` remain retained compact/canonical route surfaces
+3. `action_recall_packet` and raw collection-heavy inspection remain valid, but outside the default planner/context route

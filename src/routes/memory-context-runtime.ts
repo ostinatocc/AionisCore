@@ -384,14 +384,6 @@ function buildExecutionKernelResponse(
 function buildPlannerPacketResponseSurface(plannerSurface: ReturnType<typeof extractPlannerPacketSurface>) {
   return {
     planner_packet: plannerSurface.planner_packet,
-    action_recall_packet: plannerSurface.action_recall_packet,
-    recommended_workflows: plannerSurface.recommended_workflows,
-    candidate_workflows: plannerSurface.candidate_workflows,
-    candidate_patterns: plannerSurface.candidate_patterns,
-    trusted_patterns: plannerSurface.trusted_patterns,
-    contested_patterns: plannerSurface.contested_patterns,
-    rehydration_candidates: plannerSurface.rehydration_candidates,
-    supporting_knowledge: plannerSurface.supporting_knowledge,
     pattern_signals: plannerSurface.pattern_signals,
     workflow_signals: plannerSurface.workflow_signals,
   };

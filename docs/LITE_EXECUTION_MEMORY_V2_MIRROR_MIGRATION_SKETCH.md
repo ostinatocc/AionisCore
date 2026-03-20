@@ -2,6 +2,16 @@
 
 Last reviewed: 2026-03-20
 
+Status:
+
+`historical migration reference`
+
+Note:
+
+1. the default planner/context routes are already slim in the current runtime
+2. this document is retained only as a historical replacement map for older mirror-based consumers
+3. new integrations should use `planner_packet.sections.*` directly rather than planning for top-level packet-array mirrors
+
 This document is a migration sketch for any future `Execution-Memory Product Contract v2` narrowing of planner/context packet-array mirrors.
 
 It is not a deprecation notice.
@@ -25,7 +35,7 @@ Status:
 
 Current rule:
 
-1. `v1` keeps the full current planner/context top-level shape
+1. earlier `v1` route shapes exposed a larger top-level planner/context payload
 2. no field in this document is deprecated today
 3. this sketch only defines the canonical read path if a later contract version narrows transitional mirrors
 

@@ -20,7 +20,7 @@ The goal is not to redesign the execution-memory surface.
 The goal is to make the current surface easier to keep stable by answering three practical questions:
 
 1. which fields are the canonical long-term product contract
-2. which fields are temporary convenience mirrors
+2. which heavy surfaces belong outside the default planner/context response
 3. what testing and sequencing must happen before any response-shape cleanup
 
 ## Current Problem
@@ -39,17 +39,17 @@ This plan exists to prevent that drift.
 
 Move from:
 
-`canonical packet + transitional mirrors with implicit status`
+`canonical packet + mixed default/debug/operator output`
 
 to:
 
-`canonical packet + explicitly-governed compatibility mirrors`
+`slim default product surface + explicit heavy inspection surface`
 
 That means:
 
 1. the canonical product surfaces stay stable
-2. compatibility mirrors remain allowed for now
-3. no mirror is removed until schema, tests, and docs all agree on the canonical replacement
+2. the default planner/context routes stay slim
+3. heavy recall substrate and debug/demo output move to introspection or internal surfaces
 
 ## Canonical Contract Surface
 
@@ -58,12 +58,11 @@ These fields are the long-term execution-memory contract and should be treated a
 ### Planner/Context
 
 1. `planner_packet`
-2. `action_recall_packet`
-3. `planning_summary`
-4. `assembly_summary`
-5. `execution_kernel`
-6. `workflow_signals`
-7. `pattern_signals`
+2. `planning_summary`
+3. `assembly_summary`
+4. `execution_kernel`
+5. `workflow_signals`
+6. `pattern_signals`
 
 ### Selector
 
@@ -86,33 +85,19 @@ These fields are the long-term execution-memory contract and should be treated a
 6. `pattern_lifecycle_summary`
 7. `pattern_maintenance_summary`
 
-## Transitional Compatibility Surface
+## Internal Or Heavy Surfaces
 
-These fields remain intentionally duplicated for current ergonomics, but should be treated as mirrors rather than primary contract owners:
+These remain part of the execution-memory contract family, but no longer belong in the default planner/context response:
 
-1. top-level `recommended_workflows`
-2. top-level `candidate_workflows`
-3. top-level `candidate_patterns`
-4. top-level `trusted_patterns`
-5. top-level `contested_patterns`
-6. top-level `rehydration_candidates`
-7. top-level `supporting_knowledge`
-
-Current classification:
-
-1. `recommended_workflows` = transitional compatibility mirror
-2. `candidate_workflows` = transitional compatibility mirror
-3. `candidate_patterns` = transitional compatibility mirror
-4. `trusted_patterns` = transitional compatibility mirror
-5. `contested_patterns` = transitional compatibility mirror
-6. `rehydration_candidates` = transitional compatibility mirror
-7. `supporting_knowledge` = retained compatibility mirror
+1. `action_recall_packet`
+2. introspection raw workflow/pattern collections
+3. layered-context internal collections used for assembly and verification
 
 Current rule:
 
-1. they must remain byte-for-byte or semantically aligned with `planner_packet.sections.*`
-2. they cannot gain unique semantics that do not also exist in the canonical packet
-3. new execution-memory meaning should be added to canonical packet or summary surfaces first
+1. default planner/context routes should not re-expose these shapes
+2. they can remain available through internal assembly and introspection surfaces
+3. new execution-memory meaning should still land on canonical packet, signal, or summary surfaces first
 
 ## Cleanup Phases
 
@@ -124,9 +109,9 @@ Make the canonical execution-memory surface explicit and stable.
 
 Required changes:
 
-1. keep `planner_packet`, `action_recall_packet`, and `execution_kernel` aligned as one schema family
-2. explicitly mark top-level packet arrays as compatibility mirrors in docs
-3. ensure `planning_context` and `context_assemble` route tests assert canonical-first alignment
+1. keep `planner_packet` and `execution_kernel` aligned as the default route schema family
+2. keep `action_recall_packet` aligned as an internal/introspection substrate
+3. ensure `planning_context` and `context_assemble` route tests assert canonical-first alignment without default mirrors
 
 Primary files:
 
@@ -138,8 +123,8 @@ Primary files:
 Exit criteria:
 
 1. every canonical field is represented in route schema
-2. canonical packet alignment is validated before mirror assertions
-3. docs call out mirrors as transitional rather than primary
+2. canonical packet alignment is validated without top-level collection mirrors
+3. docs call out introspection as the heavy surface rather than implying a fat default route
 
 ### Phase 2: Contract Redundancy Audit
 
@@ -197,20 +182,17 @@ Exit criteria:
 3. selector contract is validated as a product surface, not just an implementation detail
 4. `tools_select` and `replay review` route responses are schema-validated, not just field-asserted
 
-### Phase 4: Compatibility Mirror Decision
+### Phase 4: Response-Surface Boundary Decision
 
 Goal:
 
-Decide which top-level mirrors remain part of the public Lite product shape long term.
+Decide which fields stay on the default planner/context response versus introspection or internal surfaces.
 
 Required changes:
 
-1. evaluate actual consumer value of each top-level mirror
-2. keep mirrors that materially reduce integrator complexity
-3. mark any removal candidate as:
-   - deprecated in docs
-   - still tested during overlap period
-   - removable only after a versioned contract change decision
+1. keep the default planner/context response centered on `planner_packet`, signals, summaries, and `execution_kernel`
+2. keep heavy inspection and debug output on introspection or internal surfaces
+3. avoid reintroducing duplicated full collections onto the default route
 
 Primary files:
 
@@ -221,41 +203,32 @@ Primary files:
 
 Exit criteria:
 
-1. each mirror is either retained, deprecated, or explicitly promoted to canonical
-2. no mirror removal happens without contract documentation first
-3. release narrative can describe the stable surface in one pass without caveats
+1. the default planner/context response can be described in one pass without caveats
+2. heavy inspection has a clear route home
+3. release narrative no longer depends on mirror caveats
 
 Current decision already made:
 
-1. top-level `supporting_knowledge` is retained as a compatibility mirror
+1. the default planner/context routes are already narrowed
 2. the full `execution_kernel.*_summary` family is retained as the compact aligned kernel contract
-3. the remaining top-level packet arrays remain transitional compatibility mirrors
-4. future open decisions are centered on any packet-only simplification or narrower operator-specific surfaces
+3. `action_recall_packet` remains internal/introspection-facing rather than default route-facing
+4. future open decisions are centered on narrower operator-specific surfaces, not on restoring default route mirrors
 
 Current versioning rule:
 
-1. `Phase 4` does not remove any mirror in `Execution-Memory Product Contract v1`
-2. `Phase 4` now treats `v2` as the first possible contract version for narrowing the transitional packet-array mirrors
-3. `Phase 4` does not reopen the status of `supporting_knowledge`, `workflow_signals`, `pattern_signals`, or `execution_kernel.*_summary`
-
-Current `v2` review set:
-
-1. `recommended_workflows`
-2. `candidate_workflows`
-3. `candidate_patterns`
-4. `trusted_patterns`
-5. `contested_patterns`
-6. `rehydration_candidates`
+1. `Execution-Memory Product Contract v1` now treats the slim default planner/context response as the baseline
+2. heavy inspection output should use introspection rather than route-shape regrowth
+3. `Phase 4` does not reopen the status of `workflow_signals`, `pattern_signals`, or `execution_kernel.*_summary`
 
 Current explicit non-goals:
 
-1. no `v1` packet-array mirror removal
-2. no `v1` deprecation banner for retained fields
-3. no packet-only rewrite during implementation cleanup
+1. no reintroduction of top-level full collection mirrors onto the default planner/context response
+2. no packet-only rewrite of introspection
+3. no debug/operator payload mixed back into the default product surface
 
 Current migration note:
 
-1. any future `v2` narrowing should follow the replacement map in [docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
+1. any consumer that still expects a fat planner/context route should migrate to `planner_packet.sections.*` or `POST /v1/memory/execution/introspect`, depending on whether it needs product or inspection semantics
 
 ## Recommended Delivery Order
 

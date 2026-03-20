@@ -50,8 +50,8 @@ Read:
 Why:
 
 1. this is the canonical collection surface
-2. it already works in `v1`
-3. it is the future-proof path if any top-level mirrors are narrowed later
+2. it is the active default route shape now
+3. it is the future-proof ownership layer
 
 ### 2. Compact Planner Explanation
 
@@ -85,14 +85,12 @@ Preferred source:
 
 Read:
 
-1. top-level `supporting_knowledge`
-or
-2. `planner_packet.sections.supporting_knowledge`
+1. `planner_packet.sections.supporting_knowledge`
 
 Recommended default:
 
-1. prefer `planner_packet.sections.supporting_knowledge` if you are already reading packet sections
-2. use top-level `supporting_knowledge` only when the compatibility mirror is materially simpler
+1. read supporting knowledge from packet sections like the rest of the planner collections
+2. use `POST /v1/memory/execution/introspect` when you want a heavier inspection-oriented surface
 
 ### 5. Selector Provenance
 
@@ -147,19 +145,6 @@ Treat these as canonical now:
 8. `selection_summary.pattern_lifecycle_summary`
 9. `selection_summary.pattern_maintenance_summary`
 10. `learning_projection_result`
-
-Treat these as `v1` convenience mirrors:
-
-1. top-level `recommended_workflows`
-2. top-level `candidate_workflows`
-3. top-level `candidate_patterns`
-4. top-level `trusted_patterns`
-5. top-level `contested_patterns`
-6. top-level `rehydration_candidates`
-
-Treat this as a retained compatibility mirror:
-
-1. top-level `supporting_knowledge`
 
 ## Minimal Integration Recipe
 

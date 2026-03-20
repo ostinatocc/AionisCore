@@ -69,9 +69,11 @@ For new Lite integrations, the recommended read path is:
 
 Recommended interpretation:
 
-1. top-level `recommended_workflows`, `candidate_workflows`, `candidate_patterns`, `trusted_patterns`, `contested_patterns`, and `rehydration_candidates` are still present in `v1`, but should be treated as convenience mirrors
-2. top-level `supporting_knowledge` remains available as a retained compatibility mirror
-3. `layered_context` should not be the primary execution-memory read path for a new integration
+1. `planner_packet.sections.*` is now the only default full collection surface on planner/context routes
+2. `workflow_signals` and `pattern_signals` remain canonical signal surfaces
+3. `execution_kernel.*_summary` is the compact runtime surface
+4. `layered_context` should not be the primary execution-memory read path for a new integration
+5. use `POST /v1/memory/execution/introspect` when you want a heavier demo or inspection surface
 
 If you need the more detailed integrator-oriented guide, see [Execution-Memory Integrator Guide](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md).
 

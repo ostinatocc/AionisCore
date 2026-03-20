@@ -882,14 +882,6 @@ export type AssemblySummaryContract = z.infer<typeof AssemblySummaryContractSche
 
 const PlannerPacketRouteContractBaseSchema = z.object({
   planner_packet: PlannerPacketTextSurfaceSchema,
-  action_recall_packet: z.object({}).passthrough().optional(),
-  recommended_workflows: z.array(PlannerPacketEntrySchema),
-  candidate_workflows: z.array(PlannerPacketEntrySchema),
-  candidate_patterns: z.array(PlannerPacketEntrySchema),
-  trusted_patterns: z.array(PlannerPacketEntrySchema),
-  contested_patterns: z.array(PlannerPacketEntrySchema),
-  rehydration_candidates: z.array(PlannerPacketEntrySchema),
-  supporting_knowledge: z.array(PlannerPacketEntrySchema),
   pattern_signals: z.array(PlannerPacketEntrySchema),
   workflow_signals: z.array(PlannerPacketEntrySchema),
   execution_kernel: ExecutionKernelPacketSummarySchema,

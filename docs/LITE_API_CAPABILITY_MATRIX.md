@@ -92,21 +92,22 @@ Planner-packet contract:
 2. the packet sections are:
    1. `recommended_workflows`
    2. `candidate_workflows`
-   2. `trusted_patterns`
-   3. `contested_patterns`
-   4. `rehydration_candidates`
-   5. `supporting_knowledge`
-3. both routes also expose the same sections as top-level response arrays
-4. both routes also expose top-level `pattern_signals` and `workflow_signals`
-5. `planning_summary` and `execution_kernel` expose `action_packet_summary`, and `execution_kernel` also exposes `pattern_signal_summary` and `workflow_signal_summary`
-6. `planner_explanation` now follows packet order and explains workflow guidance, pattern trust, rehydration availability, and supporting knowledge append behavior
-7. lower-level `context.items` and `citations` may now expose `summary_kind`, `execution_kind`, `anchor_kind`, and `compression_layer` so planner-facing consumers can distinguish action memory from supporting knowledge without re-parsing raw slots
+   3. `candidate_patterns`
+   4. `trusted_patterns`
+   5. `contested_patterns`
+   6. `rehydration_candidates`
+   7. `supporting_knowledge`
+3. both routes also expose canonical `pattern_signals` and `workflow_signals`
+4. `planning_summary` and `execution_kernel` expose `action_packet_summary`, and `execution_kernel` also exposes `pattern_signal_summary` and `workflow_signal_summary`
+5. `planner_explanation` now follows packet order and explains workflow guidance, pattern trust, rehydration availability, and supporting knowledge append behavior
+6. lower-level `context.items` and `citations` may now expose `summary_kind`, `execution_kind`, `anchor_kind`, and `compression_layer` so planner-facing consumers can distinguish action memory from supporting knowledge without re-parsing raw slots
+7. heavy recall substrate and demo-facing aggregation have moved to `POST /v1/memory/execution/introspect`
 
 Recommended integrator read path:
 
 1. prefer `planner_packet.sections.*` for full workflow/pattern/rehydration collections
 2. read `workflow_signals` and `pattern_signals` directly as canonical signal surfaces
-3. treat the top-level packet arrays as `v1` convenience mirrors
+3. read `planning_summary` / `assembly_summary` and `execution_kernel` for compact aligned state
 
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |

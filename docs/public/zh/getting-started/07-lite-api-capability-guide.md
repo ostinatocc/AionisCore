@@ -67,9 +67,11 @@ Lite 也支持本地 sessions 和 packs：
 
 推荐理解方式：
 
-1. top-level `recommended_workflows`、`candidate_workflows`、`candidate_patterns`、`trusted_patterns`、`contested_patterns`、`rehydration_candidates` 在 `v1` 里仍然保留，但更适合作为 convenience mirrors 看待
-2. top-level `supporting_knowledge` 仍然保留，作为 retained compatibility mirror
-3. 对新集成来说，不建议把 `layered_context` 当成 execution-memory 的主读取入口
+1. `planner_packet.sections.*` 现在是 planner/context 默认响应里唯一的完整 collections surface
+2. `workflow_signals` 和 `pattern_signals` 仍然是 canonical signal surface
+3. `execution_kernel.*_summary` 是紧凑的 runtime state surface
+4. 对新集成来说，不建议把 `layered_context` 当成 execution-memory 的主读取入口
+5. 如果需要更重的演示或检查输出，使用 `POST /v1/memory/execution/introspect`
 
 如果你需要更详细的集成指引，可以直接看 [Execution-Memory Integrator Guide](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)。
 

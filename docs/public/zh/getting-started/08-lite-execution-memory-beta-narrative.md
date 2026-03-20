@@ -66,7 +66,7 @@ Lite 现在已经按 execution-memory-first 的方式组织读取面：
 3. 紧凑 explanation 从 `planning_summary` 或 `assembly_summary` 读取
 4. 紧凑 runtime state 从 `execution_kernel.*_summary` 读取
 
-当前 `v1` 里 top-level packet arrays 仍然存在，但它们更适合作为 convenience mirrors 看待，而不是长期 ownership layer。
+现在默认的完整 collections surface 是 `planner_packet.sections.*`，更重的 inspection 视图则放到 introspection 路由里。
 
 ## Lite Public Beta 最适合什么
 

@@ -230,7 +230,7 @@ Make execution-native substrate semantics more visible at route level and reduce
 1. review whether route-level responses should expose more direct execution-native contract fields
 2. reduce repeated helper logic where route assembly re-derives semantics already available in execution-native form
 3. preserve existing public route compatibility while making execution-native fields easier to consume
-4. unify `planner_packet`, top-level planner arrays, `pattern_signals`, and `execution_kernel` summaries around a single extracted planner surface
+4. unify `planner_packet`, canonical signal surfaces, and `execution_kernel` summaries around a single extracted planner surface
 
 ### Primary files
 
@@ -240,9 +240,15 @@ Make execution-native substrate semantics more visible at route level and reduce
 ### Output expectations
 
 1. route-level planner/context responses stop re-deriving packet sections independently
-2. `planner_packet`, top-level `recommended_workflows/trusted_patterns/contested_patterns/rehydration_candidates/supporting_knowledge`, and top-level `pattern_signals` come from one extracted surface
+2. `planner_packet`, canonical signal surfaces, and compact kernel summaries come from one extracted surface
 3. `execution_kernel.action_packet_summary` and `execution_kernel.pattern_signal_summary` stay aligned with the same extracted planner surface
 4. stable route-response schemas exist for `planning_context` and `context_assemble`, so packet/kernel/summary contract checks do not rely only on ad hoc test assertions
+
+Current status note:
+
+1. this work is now reflected in the slim default planner/context response
+2. default route consumers read `planner_packet`, signals, summaries, and `execution_kernel`
+3. heavier recall substrate and collection-rich inspection output are intentionally separated onto introspection or internal surfaces
 
 ## Work Package 6: Test Coverage
 

@@ -68,7 +68,7 @@ title: "Lite Execution-Memory Demo Walkthrough"
 展示：
 
 1. 一个被召回的 workflow anchor
-2. `rehydration_candidates`
+2. `planner_packet.sections.rehydration_candidates`
 3. runtime hint 说明需要时才打开更深的 payload
 
 解释：
@@ -86,7 +86,7 @@ title: "Lite Execution-Memory Demo Walkthrough"
 展示：
 
 1. 一条 tool feedback 路径
-2. `trusted_patterns`、`candidate_patterns` 或 `contested_patterns`
+2. `planner_packet.sections.trusted_patterns`、`planner_packet.sections.candidate_patterns` 或 `planner_packet.sections.contested_patterns`
 3. `pattern_signals`
 4. `selection_summary.provenance_explanation`
 
@@ -147,7 +147,7 @@ title: "Lite Execution-Memory Demo Walkthrough"
 
 1. `layered_context`
 2. raw node dump
-3. 把 top-level packet arrays 当成长期 ownership layer 来讲
+3. 把遗留 packet mirrors 或 layered-context 内部结构当成长期 ownership layer 来讲
 
 原因：
 

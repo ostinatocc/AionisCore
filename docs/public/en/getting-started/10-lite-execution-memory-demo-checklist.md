@@ -60,7 +60,7 @@ Say:
 
 Show:
 
-1. `rehydration_candidates`
+1. `planner_packet.sections.rehydration_candidates`
 2. optional `rehydrate_payload`
 
 Say:
@@ -71,8 +71,8 @@ Say:
 
 Show:
 
-1. `trusted_patterns`
-2. `candidate_patterns` or `contested_patterns`
+1. `planner_packet.sections.trusted_patterns`
+2. `planner_packet.sections.candidate_patterns` or `planner_packet.sections.contested_patterns`
 3. `selection_summary.provenance_explanation`
 
 Say:
@@ -97,7 +97,7 @@ Avoid centering the demo on:
 
 1. `layered_context`
 2. raw node dumps
-3. top-level packet-array mirrors as if they were the long-term ownership layer
+3. legacy packet mirrors or layered-context internals as if they were the long-term ownership layer
 
 ## One-Line Close
 

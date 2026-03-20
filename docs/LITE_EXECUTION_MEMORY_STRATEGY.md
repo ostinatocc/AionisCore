@@ -217,7 +217,7 @@ Current fit:
 Interpretation:
 
 Lite no longer treats action-oriented recall as an add-on.
-The current V1/V2/V3 runtime exposes a stable `planner_packet` on `planning_context` and `context_assemble`, with explicit `recommended_workflows`, `candidate_workflows`, `candidate_patterns`, `trusted_patterns`, `contested_patterns`, `rehydration_candidates`, and `supporting_knowledge`.
+The current V1/V2/V3 runtime exposes a stable `planner_packet` on `planning_context` and `context_assemble` as the default full collection owner, alongside canonical `workflow_signals`, `pattern_signals`, compact `planning_summary`, and aligned `execution_kernel`.
 Planner-facing consumers no longer need to infer execution-memory priority from mixed context layers alone.
 
 ### 4. Decide

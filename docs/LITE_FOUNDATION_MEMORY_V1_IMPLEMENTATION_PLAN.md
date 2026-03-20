@@ -76,15 +76,21 @@ V1 does not cover:
 
 At the end of V1, a planner-facing Lite request should naturally produce:
 
-1. `recommended_workflows`
-2. `trusted_patterns`
-3. `contested_patterns`
-4. `rehydration_candidates`
-5. `supporting_knowledge`
+1. `planner_packet.sections.recommended_workflows`
+2. `planner_packet.sections.trusted_patterns`
+3. `planner_packet.sections.contested_patterns`
+4. `planner_packet.sections.rehydration_candidates`
+5. `planner_packet.sections.supporting_knowledge`
 
 The first four should be execution-memory-first sections.
 
 `supporting_knowledge` should still exist, but it should stop dominating the packet.
+
+Current status note:
+
+1. the runtime has already gone one step further and slimmed the default planner/context route surface
+2. `planner_packet` is now the only default full collection owner
+3. heavy inspection output has moved to introspection rather than staying on the default planner/context response
 
 ## Work Package 1: Recall Split
 
@@ -146,12 +152,13 @@ Turn context assembly into a stable planner packet instead of a mixed bag of use
 
 ### Required changes
 
-1. add or stabilize these top-level planner packet sections:
+1. add or stabilize these planner packet sections:
    1. `recommended_workflows`
-   2. `trusted_patterns`
-   3. `contested_patterns`
-   4. `rehydration_candidates`
-   5. `supporting_knowledge`
+   2. `candidate_workflows`
+   3. `trusted_patterns`
+   4. `contested_patterns`
+   5. `rehydration_candidates`
+   6. `supporting_knowledge`
 2. map current layered context into these packet sections
 3. keep existing layered structures where needed, but make the planner packet the intended primary surface
 
@@ -165,7 +172,7 @@ Turn context assembly into a stable planner packet instead of a mixed bag of use
 
 1. planner-facing consumers no longer need to infer packet structure from mixed context layers
 2. rehydration candidates are clearly distinct from workflow guidance and pattern guidance
-3. `planning_context` and `context_assemble` return the packet sections as first-class top-level fields, not only as layered-context internals
+3. `planning_context` and `context_assemble` return a stable `planner_packet` as the first-class collection surface, not only layered-context internals
 4. a stable `planner_packet` object is available for planner-facing natural-language and structured consumers
 
 ## Work Package 4: Summary And Explanation Surface
@@ -205,10 +212,10 @@ Lock the new runtime behavior down as contract, not aspiration.
 
 1. add planner-packet tests for:
    1. action recall preferred over supporting knowledge
-   2. workflow anchors visible in `recommended_workflows`
-   3. stable patterns visible in `trusted_patterns`
-   4. contested patterns visible in `contested_patterns`
-   5. rehydration hints visible in `rehydration_candidates`
+   2. workflow anchors visible in `planner_packet.sections.recommended_workflows`
+   3. stable patterns visible in `planner_packet.sections.trusted_patterns`
+   4. contested patterns visible in `planner_packet.sections.contested_patterns`
+   5. rehydration hints visible in `planner_packet.sections.rehydration_candidates`
 2. add summary tests for planner explanations and packet consistency
 
 ### Primary files
