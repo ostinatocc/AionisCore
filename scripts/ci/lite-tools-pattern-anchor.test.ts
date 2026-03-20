@@ -322,6 +322,14 @@ test("positive tools feedback writes a provisional recallable pattern anchor", a
     assert.equal(anchorNode.embedding_status, "ready");
     assert.equal(anchorNode.slots.summary_kind, "pattern_anchor");
     assert.equal(anchorNode.slots.compression_layer, "L3");
+    assert.equal(anchorNode.slots.execution_native_v1.execution_kind, "pattern_anchor");
+    assert.equal(anchorNode.slots.execution_native_v1.summary_kind, "pattern_anchor");
+    assert.equal(anchorNode.slots.execution_native_v1.compression_layer, "L3");
+    assert.equal(anchorNode.slots.execution_native_v1.anchor_kind, "pattern");
+    assert.equal(anchorNode.slots.execution_native_v1.anchor_level, "L3");
+    assert.equal(anchorNode.slots.execution_native_v1.pattern_state, "provisional");
+    assert.equal(anchorNode.slots.execution_native_v1.credibility_state, "candidate");
+    assert.equal(anchorNode.slots.execution_native_v1.selected_tool, "edit");
     assert.equal(anchorNode.slots.anchor_v1.anchor_kind, "pattern");
     assert.equal(anchorNode.slots.anchor_v1.anchor_level, "L3");
     assert.equal(anchorNode.slots.anchor_v1.pattern_state, "provisional");
@@ -338,6 +346,9 @@ test("positive tools feedback writes a provisional recallable pattern anchor", a
     assert.equal(anchorNode.slots.anchor_v1.promotion.credibility_state, "candidate");
     assert.equal(anchorNode.slots.anchor_v1.promotion.last_transition, "candidate_observed");
     assert.deepEqual(anchorNode.slots.anchor_v1.promotion.observed_run_ids, [runId]);
+    assert.equal(anchorNode.slots.execution_native_v1.promotion.credibility_state, "candidate");
+    assert.equal(anchorNode.slots.execution_native_v1.promotion.last_transition, "candidate_observed");
+    assert.equal(anchorNode.slots.execution_native_v1.maintenance.maintenance_state, "observe");
 
     const queryEmbedding = (await FakeEmbeddingProvider.embed([anchorNode.title ?? ""]))[0];
     const recall = await memoryRecallParsed(
@@ -636,6 +647,21 @@ test("selectTools reuses stable pattern anchors after distinct successful runs",
       recalled.selection_summary.provenance_explanation,
       "selected tool: edit; trusted pattern support: edit",
     );
+    const stableNodeLookup = await liteWriteStore.findNodes({
+      scope: "default",
+      id: stableAnchorId,
+      consumerAgentId: null,
+      consumerTeamId: null,
+      limit: 1,
+      offset: 0,
+    });
+    const stableAnchorNode = stableNodeLookup.rows[0];
+    assert.ok(stableAnchorNode);
+    assert.equal(stableAnchorNode.slots.execution_native_v1.execution_kind, "pattern_anchor");
+    assert.equal(stableAnchorNode.slots.execution_native_v1.pattern_state, "stable");
+    assert.equal(stableAnchorNode.slots.execution_native_v1.credibility_state, "trusted");
+    assert.equal(stableAnchorNode.slots.execution_native_v1.promotion.last_transition, "promoted_to_trusted");
+    assert.equal(stableAnchorNode.slots.execution_native_v1.maintenance.maintenance_state, "retain");
   } finally {
     await liteRecallStore.close();
     await liteWriteStore.close();

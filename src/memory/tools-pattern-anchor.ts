@@ -5,7 +5,7 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import type { LiteFindNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
 import { createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
 import { sha256Hex } from "../util/crypto.js";
-import { MemoryAnchorV1Schema, type MemoryAnchorV1 } from "./schemas.js";
+import { ExecutionNativeV1Schema, MemoryAnchorV1Schema, type MemoryAnchorV1 } from "./schemas.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 
 const STABLE_PATTERN_MIN_DISTINCT_RUNS = 2;
@@ -471,10 +471,27 @@ function buildPatternAnchorSlots(args: {
   sourceRuleIds: string[];
   feedbackOutcome: "positive" | "negative";
 }): Record<string, unknown> {
+  const executionNative = ExecutionNativeV1Schema.parse({
+    schema_version: "execution_native_v1",
+    execution_kind: "pattern_anchor",
+    summary_kind: "pattern_anchor",
+    compression_layer: "L3",
+    task_signature: args.anchor.task_signature,
+    ...(args.anchor.error_signature ? { error_signature: args.anchor.error_signature } : {}),
+    ...(args.anchor.workflow_signature ? { workflow_signature: args.anchor.workflow_signature } : {}),
+    anchor_kind: args.anchor.anchor_kind,
+    anchor_level: args.anchor.anchor_level,
+    ...(args.anchor.pattern_state ? { pattern_state: args.anchor.pattern_state } : {}),
+    ...(args.anchor.credibility_state ? { credibility_state: args.anchor.credibility_state } : {}),
+    ...(args.anchor.selected_tool !== undefined ? { selected_tool: args.anchor.selected_tool } : {}),
+    ...(args.anchor.promotion ? { promotion: args.anchor.promotion } : {}),
+    ...(args.anchor.maintenance ? { maintenance: args.anchor.maintenance } : {}),
+  });
   return {
     summary_kind: "pattern_anchor",
     compression_layer: "L3",
     anchor_v1: args.anchor,
+    execution_native_v1: executionNative,
     decision_pattern_signature: args.patternSignature,
     pattern_state: args.anchor.pattern_state ?? "provisional",
     credibility_state: args.anchor.credibility_state ?? "candidate",
