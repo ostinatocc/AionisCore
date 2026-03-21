@@ -34,6 +34,8 @@ Fast entry points:
    [docs/AIONIS_EXECUTION_ADAPTER_SPEC.md](docs/AIONIS_EXECUTION_ADAPTER_SPEC.md)
 9. execution adapter guide:
    [docs/AIONIS_EXECUTION_ADAPTER_GUIDE.md](docs/AIONIS_EXECUTION_ADAPTER_GUIDE.md)
+10. adapter sidecar guide:
+   [docs/AIONIS_ADAPTER_SIDECAR_GUIDE.md](docs/AIONIS_ADAPTER_SIDECAR_GUIDE.md)
 
 Repository split:
 
@@ -93,6 +95,7 @@ Integrator docs:
 13. [docs/AIONIS_EXECUTION_ADAPTER_SPEC.md](docs/AIONIS_EXECUTION_ADAPTER_SPEC.md)
 14. [docs/plans/2026-03-21-aionis-execution-adapter.md](docs/plans/2026-03-21-aionis-execution-adapter.md)
 15. [docs/AIONIS_EXECUTION_ADAPTER_GUIDE.md](docs/AIONIS_EXECUTION_ADAPTER_GUIDE.md)
+16. [docs/AIONIS_ADAPTER_SIDECAR_GUIDE.md](docs/AIONIS_ADAPTER_SIDECAR_GUIDE.md)
 
 Internal design docs:
 

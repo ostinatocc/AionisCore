@@ -132,7 +132,22 @@ If you are integrating Aionis today, the recommended order is:
 
 1. use the adapter path if your client can observe execution hooks
 2. keep thin MCP available for inspection and fallback compatibility
-3. use the local harness and adapter tests as the first integration reference
+3. use the local harness and sidecar tests as the first integration reference
+
+## Sidecar Path
+
+The next practical wiring layer is the local adapter sidecar.
+
+Use it when:
+
+1. the client can emit lifecycle events
+2. you want a real local process boundary
+3. you want to reduce dependence on prompt choreography before a deeper native integration exists
+
+See:
+
+1. [AIONIS_ADAPTER_SIDECAR_SPEC.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_SIDECAR_SPEC.md)
+2. [AIONIS_ADAPTER_SIDECAR_GUIDE.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_SIDECAR_GUIDE.md)
 
 ## Related Documents
 
@@ -140,3 +155,5 @@ If you are integrating Aionis today, the recommended order is:
 2. [AIONIS_EXECUTION_ADAPTER_SPEC.md](/Volumes/ziel/Aionisgo/docs/AIONIS_EXECUTION_ADAPTER_SPEC.md)
 3. [2026-03-21-aionis-execution-adapter.md](/Volumes/ziel/Aionisgo/docs/plans/2026-03-21-aionis-execution-adapter.md)
 4. [AIONIS_THIN_MCP_GUIDE.md](/Volumes/ziel/Aionisgo/docs/AIONIS_THIN_MCP_GUIDE.md)
+5. [AIONIS_ADAPTER_SIDECAR_SPEC.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_SIDECAR_SPEC.md)
+6. [AIONIS_ADAPTER_SIDECAR_GUIDE.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_SIDECAR_GUIDE.md)
