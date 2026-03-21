@@ -77,6 +77,44 @@ npx tsc --noEmit
 npm run -s test:lite
 ```
 
+### Task 4: Add a local wrapper entrypoint
+
+**Files:**
+- Create: `src/adapter/wrapper-contracts.ts`
+- Create: `src/adapter/aionis-adapter-wrapper.ts`
+- Test: `scripts/ci/aionis-adapter-wrapper-entry.test.ts`
+- Modify: `package.json`
+
+**Step 1: Write the failing entry test**
+
+Assert that the wrapper entrypoint can:
+
+1. accept one JSON request over stdin
+2. run one command-backed task loop
+3. return normalized planning, selection, execution, feedback, finalization, and introspection results
+
+**Step 2: Run test to verify it fails**
+
+```bash
+npx tsx --test scripts/ci/aionis-adapter-wrapper-entry.test.ts
+```
+
+**Step 3: Implement the local wrapper entrypoint**
+
+Add:
+
+1. wrapper request contracts
+2. a stdin JSON entrypoint
+3. an npm script for local execution
+
+**Step 4: Run verification**
+
+```bash
+npx tsx --test scripts/ci/aionis-adapter-wrapper-entry.test.ts
+npx tsc --noEmit
+npm run -s test:lite
+```
+
 ### Notes
 
 The wrapper should stay narrow:
