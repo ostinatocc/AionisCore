@@ -33,8 +33,11 @@ export type ToolsSelectionSummary = {
   contested_pattern_count: number;
   suppressed_pattern_count: number;
   used_trusted_pattern_tools: string[];
+  used_trusted_pattern_affinity_levels: string[];
   skipped_contested_pattern_tools: string[];
+  skipped_contested_pattern_affinity_levels: string[];
   skipped_suppressed_pattern_tools: string[];
+  skipped_suppressed_pattern_affinity_levels: string[];
   fallback_applied: boolean;
   fallback_reason: string | null;
   provenance_explanation: string | null;
@@ -118,9 +121,44 @@ function uniqueStrings(values: Array<string | null | undefined>, limit = 16): st
   return out;
 }
 
+function formatAffinityLabel(affinityLevel: string | null | undefined): string | null {
+  const value = typeof affinityLevel === "string" ? affinityLevel.trim() : "";
+  return value ? `[${value}]` : null;
+}
+
+function formatToolWithAffinity(args: { tool: string; affinityLevel?: string | null }): string {
+  const affinityLabel = formatAffinityLabel(args.affinityLevel);
+  return affinityLabel ? `${args.tool} ${affinityLabel}` : args.tool;
+}
+
+function summarizeToolAffinities(
+  anchors: Array<{
+    selected_tool?: string | null;
+    affinity_level?: string | null;
+  }>,
+  limit = 16,
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const anchor of anchors) {
+    const tool = typeof anchor?.selected_tool === "string" ? anchor.selected_tool.trim() : "";
+    if (!tool) continue;
+    const label = formatToolWithAffinity({
+      tool,
+      affinityLevel: typeof anchor?.affinity_level === "string" ? anchor.affinity_level : null,
+    });
+    if (seen.has(label)) continue;
+    seen.add(label);
+    out.push(label);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 function buildSelectionProvenanceExplanation(args: {
   selectedTool: string | null;
-  trustedPatternTools: string[];
+  trustedPatternLabels: string[];
+  usedTrustedPatternLabels: string[];
   candidatePatternTools: string[];
   contestedPatternTools: string[];
   suppressedPatternTools: string[];
@@ -131,10 +169,10 @@ function buildSelectionProvenanceExplanation(args: {
   if (args.selectedTool) {
     parts.push(`selected tool: ${args.selectedTool}`);
   }
-  if (args.selectedTool && args.trustedPatternTools.includes(args.selectedTool)) {
-    parts.push(`trusted pattern support: ${args.selectedTool}`);
-  } else if (args.trustedPatternTools.length > 0) {
-    parts.push(`trusted patterns available but not used: ${args.trustedPatternTools.join(", ")}`);
+  if (args.usedTrustedPatternLabels.length > 0) {
+    parts.push(`trusted pattern support: ${args.usedTrustedPatternLabels.join(", ")}`);
+  } else if (args.trustedPatternLabels.length > 0) {
+    parts.push(`trusted patterns available but not used: ${args.trustedPatternLabels.join(", ")}`);
   }
   if (args.candidatePatternTools.length > 0) {
     parts.push(`candidate patterns visible but not yet trusted: ${args.candidatePatternTools.join(", ")}`);
@@ -227,6 +265,7 @@ export function buildToolsSelectionSummary(args: {
       trusted?: boolean;
       suppressed?: boolean;
       credibility_state?: "candidate" | "trusted" | "contested" | null;
+      affinity_level?: string | null;
     }>;
   } | null;
   source_rule_ids?: unknown;
@@ -235,10 +274,19 @@ export function buildToolsSelectionSummary(args: {
   const rules = args.rules ?? {};
   const selectedTool = typeof selection.selected === "string" ? selection.selected : null;
   const patternAnchors = Array.isArray(args.pattern_matches?.anchors) ? args.pattern_matches?.anchors : [];
+  const trustedPatternAnchors = patternAnchors.filter((anchor) => anchor?.trusted === true);
   const trustedPatternTools = safeStringArray(
-    patternAnchors
-      .filter((anchor) => anchor?.trusted === true)
+    trustedPatternAnchors
       .map((anchor) => anchor?.selected_tool ?? null),
+  );
+  const trustedPatternLabels = summarizeToolAffinities(trustedPatternAnchors);
+  const usedTrustedPatternAnchors = selectedTool
+    ? trustedPatternAnchors.filter((anchor) => anchor?.selected_tool === selectedTool)
+    : [];
+  const usedTrustedPatternLabels = summarizeToolAffinities(usedTrustedPatternAnchors, 8);
+  const usedTrustedPatternAffinityLevels = uniqueStrings(
+    usedTrustedPatternAnchors.map((anchor) => typeof anchor?.affinity_level === "string" ? anchor.affinity_level : null),
+    8,
   );
   const candidatePatternTools = uniqueStrings(
     patternAnchors
@@ -253,6 +301,12 @@ export function buildToolsSelectionSummary(args: {
       .filter((anchor) => anchor?.trusted !== true && anchor?.suppressed !== true && anchor?.credibility_state === "contested")
       .map((anchor) => anchor?.selected_tool ?? null),
   );
+  const contestedPatternAffinityLevels = uniqueStrings(
+    patternAnchors
+      .filter((anchor) => anchor?.trusted !== true && anchor?.suppressed !== true && anchor?.credibility_state === "contested")
+      .map((anchor) => typeof anchor?.affinity_level === "string" ? anchor.affinity_level : null),
+    8,
+  );
   const contestedPatternCount = patternAnchors
     .filter((anchor) => anchor?.trusted !== true && anchor?.suppressed !== true && anchor?.credibility_state === "contested")
     .length;
@@ -260,6 +314,12 @@ export function buildToolsSelectionSummary(args: {
     patternAnchors
       .filter((anchor) => anchor?.suppressed === true)
       .map((anchor) => anchor?.selected_tool ?? null),
+  );
+  const suppressedPatternAffinityLevels = uniqueStrings(
+    patternAnchors
+      .filter((anchor) => anchor?.suppressed === true)
+      .map((anchor) => typeof anchor?.affinity_level === "string" ? anchor.affinity_level : null),
+    8,
   );
   const suppressedPatternCount = patternAnchors
     .filter((anchor) => anchor?.suppressed === true)
@@ -338,13 +398,17 @@ export function buildToolsSelectionSummary(args: {
     contested_pattern_count: contestedPatternTools.length,
     suppressed_pattern_count: suppressedPatternCount,
     used_trusted_pattern_tools: selectedTool && trustedPatternTools.includes(selectedTool) ? [selectedTool] : [],
+    used_trusted_pattern_affinity_levels: usedTrustedPatternAffinityLevels,
     skipped_contested_pattern_tools: contestedPatternTools,
+    skipped_contested_pattern_affinity_levels: contestedPatternAffinityLevels,
     skipped_suppressed_pattern_tools: suppressedPatternTools,
+    skipped_suppressed_pattern_affinity_levels: suppressedPatternAffinityLevels,
     fallback_applied: fallbackApplied,
     fallback_reason: fallbackReason,
     provenance_explanation: buildSelectionProvenanceExplanation({
       selectedTool,
-      trustedPatternTools,
+      trustedPatternLabels,
+      usedTrustedPatternLabels,
       candidatePatternTools,
       contestedPatternTools,
       suppressedPatternTools,

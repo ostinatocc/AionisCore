@@ -29,6 +29,7 @@ import {
   mapCandidatesToFamilies,
 } from "./tool-registry.js";
 import type { RecallStoreAccess, RecallNodeRow } from "../store/recall-access.js";
+import { resolvePatternTaskAffinity, type PatternAffinityLevel } from "./pattern-trust-shaping.js";
 
 function inferBroadToolKind(name: string): "scan" | "test" | null {
   const lowered = name.toLowerCase();
@@ -168,6 +169,9 @@ type RecalledToolPattern = {
   title: string | null;
   summary: string | null;
   selected_tool: string;
+  task_signature: string | null;
+  task_family: string | null;
+  error_family: string | null;
   tool_set: string[];
   pattern_state: "provisional" | "stable";
   credibility_state: "candidate" | "trusted" | "contested";
@@ -184,6 +188,8 @@ type RecalledToolPattern = {
   required_distinct_runs: number;
   confidence: number;
   similarity: number;
+  affinity_level: PatternAffinityLevel;
+  affinity_score: number;
 };
 
 async function recallToolSelectionPatterns(args: {
@@ -235,6 +241,9 @@ async function recallToolSelectionPatterns(args: {
     const anchorKind = firstString([executionNative?.anchor_kind, anchor.anchor_kind]);
     const anchorLevel = firstString([executionNative?.anchor_level, anchor.anchor_level]);
     const selectedTool = firstString([executionNative?.selected_tool, anchor.selected_tool]);
+    const taskSignature = firstString([executionNative?.task_signature, anchor.task_signature]);
+    const taskFamily = firstString([executionNative?.task_family, anchor.task_family]);
+    const errorFamily = firstString([executionNative?.error_family, anchor.error_family]);
     const patternState = firstString([executionNative?.pattern_state, anchor.pattern_state]) === "stable" ? "stable" : "provisional";
     const toolSet = uniqueStrings(Array.isArray(anchor.tool_set) ? (anchor.tool_set as Array<string | null | undefined>) : []);
     const promotion = asRecord(executionNative?.promotion) ?? asRecord(anchor.promotion);
@@ -255,12 +264,22 @@ async function recallToolSelectionPatterns(args: {
             ? "trusted"
             : "candidate";
     if (anchorKind !== "pattern" || anchorLevel !== "L3" || !selectedTool || !candidateSet.has(selectedTool)) continue;
+    const affinity = resolvePatternTaskAffinity({
+      context: args.context,
+      selectedTool,
+      storedTaskSignature: taskSignature,
+      storedTaskFamily: taskFamily,
+      storedErrorFamily: errorFamily,
+    });
     const seed = candidateMap.get(row.id);
     out.push({
       node_id: row.id,
       title: row.title,
       summary: row.text_summary,
       selected_tool: selectedTool,
+      task_signature: taskSignature,
+      task_family: taskFamily,
+      error_family: errorFamily,
       tool_set: toolSet,
       pattern_state: patternState,
       credibility_state: credibilityState,
@@ -277,10 +296,13 @@ async function recallToolSelectionPatterns(args: {
       required_distinct_runs: requiredDistinctRuns,
       confidence: Number(row.confidence ?? 0),
       similarity: Number(seed?.similarity ?? 0),
+      affinity_level: affinity.level,
+      affinity_score: affinity.score,
     });
   }
   return out.sort((a, b) =>
     Number(b.trusted) - Number(a.trusted)
+    || b.affinity_score - a.affinity_score
     || b.similarity - a.similarity
     || b.confidence - a.confidence
     || a.node_id.localeCompare(b.node_id));
@@ -424,7 +446,11 @@ export async function selectTools(
   const trustedPatterns = recalledPatterns.filter((pattern) => pattern.trusted);
   const suppressedPatterns = recalledPatterns.filter((pattern) => pattern.suppressed);
   const contestedPatterns = recalledPatterns.filter((pattern) => !pattern.trusted && !pattern.suppressed);
-  const patternPreferred = uniqueStrings(trustedPatterns.map((pattern) => pattern.selected_tool), filteredCandidates.length);
+  const affinityReusableTrustedPatterns = trustedPatterns.filter((pattern) => pattern.affinity_score > 0);
+  const patternPreferred = uniqueStrings(
+    affinityReusableTrustedPatterns.map((pattern) => pattern.selected_tool),
+    filteredCandidates.length,
+  );
 
   const explicitPreferred = Array.isArray((rules.applied as any)?.policy?.tool?.prefer)
     ? ((rules.applied as any).policy.tool.prefer as string[])
@@ -479,10 +505,13 @@ export async function selectTools(
     matched_stable_pattern_anchor_ids: trustedPatterns.map((pattern) => pattern.node_id),
     used_trusted_pattern_anchor_ids: usedTrustedPatterns.map((pattern) => pattern.node_id),
     used_trusted_pattern_tools: uniqueSelectedTools(usedTrustedPatterns),
+    used_trusted_pattern_affinity_levels: uniqueStrings(usedTrustedPatterns.map((pattern) => pattern.affinity_level), 8),
     skipped_contested_pattern_anchor_ids: contestedPatterns.map((pattern) => pattern.node_id),
     skipped_contested_pattern_tools: uniqueSelectedTools(contestedPatterns),
+    skipped_contested_pattern_affinity_levels: uniqueStrings(contestedPatterns.map((pattern) => pattern.affinity_level), 8),
     skipped_suppressed_pattern_anchor_ids: suppressedPatterns.map((pattern) => pattern.node_id),
     skipped_suppressed_pattern_tools: uniqueSelectedTools(suppressedPatterns),
+    skipped_suppressed_pattern_affinity_levels: uniqueStrings(suppressedPatterns.map((pattern) => pattern.affinity_level), 8),
     ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
   };
   const decisionRes: { id: string; created_at: string } = opts.liteWriteStore
@@ -545,10 +574,13 @@ export async function selectTools(
           matched_stable_pattern_anchor_ids: trustedPatterns.map((pattern) => pattern.node_id),
           used_trusted_pattern_anchor_ids: usedTrustedPatterns.map((pattern) => pattern.node_id),
           used_trusted_pattern_tools: uniqueSelectedTools(usedTrustedPatterns),
+          used_trusted_pattern_affinity_levels: uniqueStrings(usedTrustedPatterns.map((pattern) => pattern.affinity_level), 8),
           skipped_contested_pattern_anchor_ids: contestedPatterns.map((pattern) => pattern.node_id),
           skipped_contested_pattern_tools: uniqueSelectedTools(contestedPatterns),
+          skipped_contested_pattern_affinity_levels: uniqueStrings(contestedPatterns.map((pattern) => pattern.affinity_level), 8),
           skipped_suppressed_pattern_anchor_ids: suppressedPatterns.map((pattern) => pattern.node_id),
           skipped_suppressed_pattern_tools: uniqueSelectedTools(suppressedPatterns),
+          skipped_suppressed_pattern_affinity_levels: uniqueStrings(suppressedPatterns.map((pattern) => pattern.affinity_level), 8),
           ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
         },
         created_at: decision_created_at,
@@ -593,6 +625,9 @@ export async function selectTools(
         anchors: recalledPatterns.map((pattern) => ({
         node_id: pattern.node_id,
         selected_tool: pattern.selected_tool,
+        task_signature: pattern.task_signature,
+        task_family: pattern.task_family,
+        error_family: pattern.error_family,
         pattern_state: pattern.pattern_state,
           credibility_state: pattern.credibility_state,
           trusted: pattern.trusted,
@@ -608,6 +643,8 @@ export async function selectTools(
         required_distinct_runs: pattern.required_distinct_runs,
         similarity: pattern.similarity,
         confidence: pattern.confidence,
+        affinity_level: pattern.affinity_level,
+        affinity_score: pattern.affinity_score,
         title: pattern.title,
         summary: pattern.summary,
       })),
@@ -628,10 +665,13 @@ export async function selectTools(
       pattern_summary: {
         used_trusted_pattern_anchor_ids: usedTrustedPatterns.map((pattern) => pattern.node_id),
         used_trusted_pattern_tools: uniqueSelectedTools(usedTrustedPatterns),
+        used_trusted_pattern_affinity_levels: uniqueStrings(usedTrustedPatterns.map((pattern) => pattern.affinity_level), 8),
         skipped_contested_pattern_anchor_ids: contestedPatterns.map((pattern) => pattern.node_id),
         skipped_contested_pattern_tools: uniqueSelectedTools(contestedPatterns),
+        skipped_contested_pattern_affinity_levels: uniqueStrings(contestedPatterns.map((pattern) => pattern.affinity_level), 8),
         skipped_suppressed_pattern_anchor_ids: suppressedPatterns.map((pattern) => pattern.node_id),
         skipped_suppressed_pattern_tools: uniqueSelectedTools(suppressedPatterns),
+        skipped_suppressed_pattern_affinity_levels: uniqueStrings(suppressedPatterns.map((pattern) => pattern.affinity_level), 8),
       },
     },
   };

@@ -32,6 +32,29 @@ Current confidence by area:
 4. governance model as a complete product surface: medium
 5. tier lifecycle and maintenance platform: medium-low
 6. real route-level validation of the main product loops: medium-high
+7. repeatable product-value benchmark coverage: medium-high
+8. pattern trust hardening as a production-grade model: low-medium
+
+## 1.0 Readiness Judgment
+
+Current release-readiness judgment:
+
+1. the execution-memory mainline is now stable enough to describe as product behavior rather than an active research thesis
+2. the most important product loops are no longer the largest 1.0 risk
+3. the remaining 1.0 risk is concentrated in governance breadth, shared-core alignment, and production posture rather than in workflow/pattern mainline correctness
+
+More precise interpretation:
+
+1. execution-memory, workflow progression, pattern trust hardening, and the slim planner/context surface are now relatively stable
+2. operator governance is no longer absent, but it is still only a `suppress-first` slice rather than a complete human-governed policy-control product surface
+3. the standalone Aionis runtime and the broader platform stack are still not fully settled on a shared-core source-of-truth boundary, which matters more if the external story is a unified execution-memory platform rather than a standalone local runtime
+4. Aionis deployment and safety defaults are still strongest for single-user local and advanced-user workflows, not for broad hosted or multi-tenant production defaults
+
+What this means in practice:
+
+1. if Aionis is positioned as a local, single-user, execution-memory-first runtime, it is close to a credible `1.0` baseline
+2. if Aionis is positioned as a fully governed, shared-core-aligned, broadly production-default platform, it still has real gaps
+3. those gaps are now more about operator productization, shared-core governance, and deployment posture than about planner/context or workflow/pattern correctness
 
 ## What Is Already Implemented
 
@@ -141,6 +164,11 @@ Current runtime reality:
 13. `execution/introspect` now exposes continuity-producer provenance and compact inventory counts for projected workflow memory, so operator/debug workflows can see which workflow rows were produced by generic execution-write projection without widening the default planner surface
 14. Lite now has a first `suppress-first` operator intervention slice for learned pattern reuse, with dedicated `patterns/suppress` and `patterns/unsuppress` routes that preserve learned credibility while blocking trusted selector reuse
 15. selector and introspection surfaces now expose suppression as operator overlay state, so a historically trusted pattern can remain learned-trusted while still being operator-blocked in live selection
+16. Lite now has a repeatable `benchmark:lite:real` command that exercises policy learning, cross-task isolation, nearby-task generalization, contested revalidation cost, wrong-turn recovery, workflow progression, multi-step repair continuity, and the slim planner/context boundary on fresh SQLite-backed route fixtures instead of relying only on one-off validation notes
+17. Lite now has a dedicated pattern-trust robustness spec and a follow-on hardening plan, because benchmark evidence was able to expose the original cross-task bleed and cheap contested recovery baseline before the current hardening slices tightened both behaviors
+18. pattern anchors now persist explicit trust-hardening metadata such as `task_family`, `error_family`, distinct family counts, and current gate metadata, so the next trust-hardening slice no longer depends on implicit branch logic alone
+19. Lite now requires `3` distinct positive runs before a pattern becomes `trusted`, and contested recovery now requires `2` fresh post-contest runs before revalidation
+20. selector reuse now applies deterministic task-affinity weighting, so nearby cross-task recall can remain visible without inheriting flat trusted reuse
 
 Primary code:
 
@@ -156,6 +184,9 @@ Primary code:
 10. `scripts/ci/lite-session-event-workflow-projection-route.test.ts`
 11. `src/memory/pattern-operator-override.ts`
 12. `scripts/ci/lite-pattern-suppress-route.test.ts`
+13. `scripts/lite-real-task-benchmark.ts`
+14. `docs/plans/2026-03-21-lite-pattern-trust-robustness-spec.md`
+15. `docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md`
 
 ### 6. Runtime-Governed Adjudication Contract
 
@@ -411,19 +442,34 @@ Concrete next step:
 3. or mark them explicitly internal for now and stop implying near-term public availability
 4. treat the new `suppress-first` slice as the only current runtime-real operator intervention baseline
 
-### Priority 3: Define The Lite Position On Tier Lifecycle
+### Priority 3: Harden Pattern Trust Before Treating Current Thresholds As Production-Grade
 
 Why:
 
-1. Lite clearly has tier-aware memory
-2. Lite clearly does not yet have the full lifecycle platform
+1. the benchmark suite now directly shows `cross_task_bleed_observed = false`
+2. the benchmark suite now directly shows `contested_revalidation_fresh_runs_needed = 2`
+3. current promotion now requires `3` distinct runs, and selector reuse is already affinity-weighted
 
 Concrete next step:
 
-1. decide whether Lite should gain a narrow local-only lifecycle surface
-2. or keep lifecycle orchestration entirely in Pro and strengthen the current partial-local rehydration story instead
+1. execute the hardening work packages in [docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md](/Volumes/ziel/Aionisgo/docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md)
+2. raise the promotion gate
+3. add a stronger post-contest revalidation floor
+4. keep widening benchmark coverage before expanding selector authority further
 
-### Priority 4: Productize Maintenance Rather Than Just Summaries
+### Priority 4: Define The Lite Position On Tier Lifecycle
+
+Why:
+
+1. Aionis clearly has tier-aware memory
+2. Aionis clearly does not yet have the full lifecycle platform
+
+Concrete next step:
+
+1. decide whether Aionis should gain a narrow local-only lifecycle surface
+2. or keep lifecycle orchestration entirely outside the standalone local runtime and strengthen the current partial-local rehydration story instead
+
+### Priority 5: Productize Maintenance Rather Than Just Summaries
 
 Why:
 
@@ -437,7 +483,7 @@ Concrete next step:
 3. specify what runs offline
 4. specify what is operator-visible and what is internal only
 
-### Priority 5: Preserve The Slim Default Planner/Context Contract
+### Priority 6: Preserve The Slim Default Planner/Context Contract
 
 Why:
 

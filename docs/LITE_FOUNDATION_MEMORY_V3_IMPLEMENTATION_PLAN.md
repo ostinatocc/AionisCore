@@ -57,10 +57,17 @@ Already-present V3 precursor behavior:
 20. `memory/events` session-event writes now also benefit from the generic workflow producer when callers include explicit execution continuity
 21. the current continuity-backed producer family now shares one Lite projected-write commit pipeline across `memory/write`, `handoff/store`, and `memory/events`, reducing route-level drift in workflow projection and inline-embedding behavior
 22. Lite now has a first `suppress-first` operator overlay slice for learned pattern reuse, preserving learned credibility while blocking trusted selector reuse and exposing suppression state through selector and introspection surfaces
+23. pattern anchors now persist explicit trust-hardening metadata such as `task_family`, `error_family`, distinct family counts, post-contest fresh-run counts, and current gate markers, so threshold hardening no longer depends on implicit branch logic alone
+24. the live pattern promotion gate is now conservatively raised to `3` distinct positive runs, and contested recovery now requires `2` fresh post-contest runs before revalidation back to `trusted`
 
 What is still missing is no longer basic credibility visibility, compact maintenance surfacing, or replay-origin workflow governance.
 
 What is still missing is the broader automatic workflow-production path beyond existing replay-centered and structured execution-continuity producer entrypoints, even though generic writes now carry governed observation strength and conservative stable auto-promotion.
+
+What is now also clearly missing is the rest of a production-hardened pattern trust model. The current benchmark suite proves the trust loop is real, and promotion, contested recovery, and task-affinity-weighted selector reuse are now all live. The next hardening slice is to widen benchmark coverage and finish contract locking around the hardened model, tracked in:
+
+1. [docs/plans/2026-03-21-lite-pattern-trust-robustness-spec.md](/Volumes/ziel/Aionisgo/docs/plans/2026-03-21-lite-pattern-trust-robustness-spec.md)
+2. [docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md](/Volumes/ziel/Aionisgo/docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md)
 
 Current implementation references:
 

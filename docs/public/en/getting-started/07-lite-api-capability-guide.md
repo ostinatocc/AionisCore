@@ -1,20 +1,20 @@
 ---
-title: "Lite API Capability Guide"
+title: "Aionis API Capability Guide"
 ---
 
-# Lite API Capability Guide
+# Aionis API Capability Guide
 
-This page is the operator-facing summary of what `Aionis Lite` can do today.
+This page is the operator-facing summary of what `Aionis` can do today.
 
 Use it when you need the short answer to:
 
-1. what works in Lite
-2. what only works as a Lite subset
-3. what still belongs to `AionisPro`
+1. what works in Aionis
+2. what only works as an Aionis subset
+3. what still belongs to the broader server/control-plane surface
 
-For the internal source-of-truth matrix, see [Lite API Capability Matrix](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md).
+For the internal source-of-truth matrix, see [Aionis API Capability Matrix](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md).
 
-If you need the short public-facing product narrative instead of the route summary, see [Lite Execution-Memory Beta Narrative](/public/en/getting-started/08-lite-execution-memory-beta-narrative).
+If you need the short public-facing product narrative instead of the route summary, see [Aionis Execution-Memory Narrative](/public/en/getting-started/08-lite-execution-memory-beta-narrative).
 
 Named execution-memory loop:
 
@@ -39,7 +39,7 @@ Expected health signals:
 
 ## Supported Memory Surface
 
-Lite supports these primary local memory routes:
+Aionis supports these primary local memory routes:
 
 1. `POST /v1/memory/write`
 2. `POST /v1/memory/recall`
@@ -49,7 +49,7 @@ Lite supports these primary local memory routes:
 6. `POST /v1/memory/find`
 7. `POST /v1/memory/resolve`
 
-Lite also supports local sessions and packs:
+Aionis also supports local sessions and packs:
 
 1. `POST /v1/memory/sessions`
 2. `GET /v1/memory/sessions`
@@ -60,7 +60,7 @@ Lite also supports local sessions and packs:
 
 ## Recommended Integration Pattern
 
-For new Lite integrations, the recommended read path is:
+For new Aionis integrations, the recommended read path is:
 
 1. read full workflow, pattern, and rehydration collections from `planner_packet.sections.*`
 2. read `workflow_signals` and `pattern_signals` directly as canonical signal surfaces
@@ -80,7 +80,7 @@ If you need the more detailed integrator-oriented guide, see [Execution-Memory I
 
 ## Supported Replay And Playbook Surface
 
-Lite includes a real replay/playbook kernel.
+Aionis includes a real replay/playbook kernel.
 This is the producer side of the `Anchor-Guided Rehydration Loop`.
 
 Supported:
@@ -96,13 +96,13 @@ Supported:
 9. `POST /v1/memory/replay/playbooks/promote`
 10. `POST /v1/memory/replay/playbooks/repair`
 
-Lite also keeps a reduced governed replay subset:
+Aionis also keeps a reduced governed replay subset:
 
 1. `POST /v1/memory/replay/playbooks/repair/review`
 2. `POST /v1/memory/replay/playbooks/run`
 3. `POST /v1/memory/replay/playbooks/dispatch`
 
-That does not mean full server governance is present. It means Lite keeps the local execution path.
+That does not mean full server governance is present. It means Aionis keeps the local execution path.
 
 ## Supported Handoff, Rules, And Tooling Surface
 
@@ -127,11 +127,11 @@ In practical terms:
 1. replay produces stable execution artifacts
 2. recall surfaces anchor hits
 3. runtime tools expose optional payload expansion
-4. this is the current Lite realization of the `Anchor-Guided Rehydration Loop`
+4. this is the current Aionis realization of the `Anchor-Guided Rehydration Loop`
 
-## Supported Lite Automation Kernel
+## Supported Aionis Automation Kernel
 
-Lite includes a local playbook-driven automation kernel.
+Aionis includes a local playbook-driven automation kernel.
 
 Supported:
 
@@ -146,7 +146,7 @@ Supported:
 9. `POST /v1/automations/runs/cancel`
 10. `POST /v1/automations/runs/resume`
 
-Supported Lite node kinds:
+Supported Aionis node kinds:
 
 1. `playbook`
 2. `approval`
@@ -167,7 +167,7 @@ Unsupported automation governance routes return:
 
 ## Supported Sandbox Surface
 
-Sandbox is available in Lite.
+Sandbox is available in Aionis.
 
 Supported when `SANDBOX_ENABLED=true`:
 
@@ -185,9 +185,9 @@ Practical runtime modes:
 
 If you set `SANDBOX_ADMIN_ONLY=true`, sandbox remains available but requires the local admin token.
 
-## Explicitly Not Part Of Lite
+## Explicitly Not Part Of Aionis
 
-These surfaces are intentionally outside the Lite product boundary:
+These surfaces are intentionally outside the Aionis product boundary:
 
 1. `/v1/admin/control/*`
 2. `/v1/memory/archive/rehydrate*`
@@ -216,4 +216,4 @@ If you also want to validate the practical local-process sandbox preset:
 npm run smoke:lite:local-process
 ```
 
-If you need the exact internal route-level matrix, use [Lite API Capability Matrix](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md).
+If you need the exact internal route-level matrix, use [Aionis API Capability Matrix](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md).

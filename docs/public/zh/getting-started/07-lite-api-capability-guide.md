@@ -1,18 +1,18 @@
 ---
-title: "Lite API 能力指南"
+title: "Aionis API 能力指南"
 ---
 
-# Lite API 能力指南
+# Aionis API 能力指南
 
 这页是面向 operator 的简版能力说明，用来快速回答：
 
-1. Lite 现在能用什么
-2. 哪些只支持 Lite 子集
-3. 哪些仍然属于 `AionisPro`
+1. Aionis 现在能用什么
+2. 哪些只支持 Aionis 子集
+3. 哪些仍然属于更广的 server/control-plane 能力面
 
-如果你要看内部精确矩阵，直接看 [Lite API Capability Matrix](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md)。
+如果你要看内部精确矩阵，直接看 [Aionis API Capability Matrix](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md)。
 
-如果你需要一版更偏产品叙事、适合发布说明或 demo 开场的短文案，直接看 [Lite Execution-Memory Beta Narrative](/public/zh/getting-started/08-lite-execution-memory-beta-narrative)。
+如果你需要一版更偏产品叙事、适合发布说明或 demo 开场的短文案，直接看 [Aionis Execution-Memory Narrative](/public/zh/getting-started/08-lite-execution-memory-beta-narrative)。
 
 命名后的执行记忆主链：
 

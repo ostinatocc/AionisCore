@@ -1,6 +1,6 @@
 # Lite Testing Strategy
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-03-21
 
 This document defines how `Aionis Lite` should be tested in its current product shape.
 
@@ -20,13 +20,14 @@ The highest-risk regressions are:
 
 ## Test Stack
 
-Lite testing should be treated as a five-layer stack:
+Lite testing should be treated as a five-layer stack plus one repeatable benchmark command:
 
 1. `baseline`
 2. `contract`
 3. `mainline behavior`
 4. `surface-boundary`
 5. `smoke`
+6. `real-task benchmark`
 
 These layers serve different purposes and should not be collapsed into one mental bucket.
 
@@ -172,6 +173,54 @@ What smoke should cover:
 Smoke should stay small and real.
 It should not become a duplicate of the full contract suite.
 
+## 6. Real-Task Benchmark
+
+Purpose:
+
+1. prove current Lite product value with repeatable scenario runs
+2. keep one command that demonstrates workflow learning, multi-step repair continuity, policy learning, and slim planner surfaces together
+3. provide comparable benchmark output without bloating default CI
+
+Current command:
+
+```bash
+npm run benchmark:lite:real
+```
+
+Artifact mode:
+
+```bash
+npx tsx scripts/lite-real-task-benchmark.ts --out-json tmp/lite-benchmark.json --out-md tmp/lite-benchmark.md
+```
+
+Primary script:
+
+1. [scripts/lite-real-task-benchmark.ts](../scripts/lite-real-task-benchmark.ts)
+
+Current benchmark scenarios:
+
+1. `policy_learning_loop`
+2. `cross_task_isolation`
+3. `nearby_task_generalization`
+4. `contested_revalidation_cost`
+5. `wrong_turn_recovery`
+6. `workflow_progression_loop`
+7. `multi_step_repair_loop`
+8. `slim_surface_boundary`
+
+What this layer should catch:
+
+1. route behavior that still passes narrow tests but no longer demonstrates product value
+2. cross-task pattern-isolation regressions where nearby-task recall stops carrying affinity labels or accidentally reintroduces flat trusted reuse
+3. nearby-task generalization regressions where same-family reuse stops working
+4. contested-pattern recovery regressions, including duplicate-run versus fresh-run revalidation behavior
+5. wrong-turn recovery regressions where selector continues to trust a contested path
+6. workflow progression regressions across repeated execution continuity writes
+7. workflow carry-forward regressions across longer inspect/patch/validate repair sequences
+8. selector/pattern regressions across candidate, trusted, contested, and revalidated states
+9. accidental reintroduction of heavy planner/context payload into default product surfaces
+10. benchmark score drift across the fixed scenario set
+
 ## Current Command Model
 
 Today the repository exposes:
@@ -179,6 +228,7 @@ Today the repository exposes:
 1. `npm run test:lite`
 2. `npm run smoke:lite`
 3. `npm run smoke:lite:local-process`
+4. `npm run benchmark:lite:real`
 
 This is acceptable for now, but conceptually `test:lite` already contains multiple layers at once.
 
@@ -188,6 +238,7 @@ Future cleanup should consider splitting it into:
 2. `test:lite:contract`
 3. `test:lite:mainlines`
 4. `test:lite:smoke`
+5. `benchmark:lite:real`
 
 This is an execution convenience improvement, not a correctness requirement.
 
@@ -212,6 +263,7 @@ For changes that affect runtime, routes, or contracts:
 1. run `npx tsc --noEmit`
 2. run `npm run test:lite`
 3. run `npm run smoke:lite` for startup/runtime-affecting changes
+4. run `npm run benchmark:lite:real` for changes that affect workflow learning, tool-pattern learning, or planner/context slimness
 
 For changes that specifically affect slim/default versus debug/operator boundaries:
 

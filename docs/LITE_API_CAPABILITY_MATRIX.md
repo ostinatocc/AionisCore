@@ -1,8 +1,8 @@
-# Aionis Lite API Capability Matrix
+# Aionis API Capability Matrix
 
 Last reviewed: 2026-03-20
 
-This document records the current public API surface of the standalone `Aionis Lite` repository.
+This document records the current public API surface of the standalone `Aionis` repository.
 
 Named execution-memory mainline:
 
@@ -20,7 +20,7 @@ Definition:
 
 `feedback -> pattern -> recall -> selector reuse`
 
-It is intentionally stricter than the full runtime. When a surface is not part of Lite, the host should either:
+It is intentionally stricter than the full runtime. When a surface is not part of Aionis, the host should either:
 
 1. not register it at all, or
 2. return a structured `501`
@@ -245,15 +245,15 @@ These route groups are intentionally owned by the full/server runtime and return
 
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |
-| `ALL` | `/v1/admin/control/*` | Unsupported (501) | Admin/control-plane surface stays in `AionisPro`. |
+| `ALL` | `/v1/admin/control/*` | Unsupported (501) | Admin/control-plane surface stays outside the standalone Aionis repository. |
 | `ALL` | `/v1/memory/archive/rehydrate*` | Unsupported (501) | Archive lifecycle restore is not implemented in Lite. |
 | `ALL` | `/v1/memory/nodes/activate*` | Unsupported (501) | Node lifecycle activation is not implemented in Lite. |
 
 ## Practical Product Boundary
 
-The current Lite API shape means:
+The current Aionis API shape means:
 
-1. Lite is fully usable for local memory, replay, playbook, automation, sandbox, handoff, and pack flows.
-2. Lite is intentionally not a control-plane product.
-3. Lite automation is intentionally a local execution kernel, not a multi-tenant orchestration platform.
+1. Aionis is fully usable for local memory, replay, playbook, automation, sandbox, handoff, and pack flows.
+2. Aionis is intentionally not a control-plane product.
+3. Aionis automation is intentionally a local execution kernel, not a multi-tenant orchestration platform.
 4. If a route is missing from this document, it should be treated as non-contractual until explicitly added.

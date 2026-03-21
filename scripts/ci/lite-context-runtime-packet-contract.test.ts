@@ -263,6 +263,8 @@ async function seedContextRuntimeFixture(dbPath: string) {
     pattern_state: "stable",
     task_signature: "tools_select:repair-export:edit",
     task_class: "tools_select_pattern",
+    task_family: "task:repair_export",
+    error_family: "error:node-export-mismatch",
     workflow_signature: "stable-edit-pattern",
     summary: "Stable pattern: prefer edit for export repair after repeated successful runs.",
     tool_set: ["bash", "edit", "test"],

@@ -209,6 +209,8 @@ export const MemoryPatternTransitionKind = z.enum([
   "counter_evidence_opened",
   "revalidated_to_trusted",
 ]);
+export const MemoryPatternPromotionGateKind = z.enum(["current_distinct_runs_v1"]);
+export const MemoryPatternRevalidationFloorKind = z.enum(["post_contest_two_fresh_runs_v1"]);
 export const MemoryAnchorSourceKind = z.enum([
   "replay_step",
   "playbook",
@@ -327,6 +329,22 @@ export const MemoryPatternPromotionSchema = z.object({
   last_counter_evidence_at: z.string().min(1).nullable().default(null),
 });
 
+export const MemoryPatternTrustHardeningSchema = z.object({
+  task_family: z.string().min(1).max(128).nullable().default(null),
+  error_family: z.string().min(1).max(128).nullable().default(null),
+  observed_task_families: MemoryAnchorStringList.default([]),
+  observed_error_families: MemoryAnchorStringList.default([]),
+  distinct_task_family_count: z.number().int().min(0).default(0),
+  distinct_error_family_count: z.number().int().min(0).default(0),
+  post_contest_observed_run_ids: z.array(z.string().min(1).max(256)).max(16).default([]),
+  post_contest_distinct_run_count: z.number().int().min(0).default(0),
+  promotion_gate_kind: MemoryPatternPromotionGateKind.default("current_distinct_runs_v1"),
+  promotion_gate_satisfied: z.boolean().default(false),
+  revalidation_floor_kind: MemoryPatternRevalidationFloorKind.default("post_contest_two_fresh_runs_v1"),
+  revalidation_floor_satisfied: z.boolean().default(true),
+  task_affinity_weighting_enabled: z.boolean().default(false),
+});
+
 export const MemoryAnchorV1Schema = z.object({
   anchor_kind: MemoryAnchorKind,
   anchor_level: MemoryAnchorLevel,
@@ -334,7 +352,9 @@ export const MemoryAnchorV1Schema = z.object({
   credibility_state: MemoryPatternCredibilityState.optional(),
   task_signature: z.string().min(1).max(256),
   task_class: z.string().min(1).max(128).optional(),
+  task_family: z.string().min(1).max(128).optional(),
   error_signature: z.string().min(1).max(256).optional(),
+  error_family: z.string().min(1).max(128).optional(),
   workflow_signature: z.string().min(1).max(256).optional(),
   summary: z.string().min(1).max(400),
   tool_set: z.array(z.string().min(1).max(128)).max(64),
@@ -349,6 +369,7 @@ export const MemoryAnchorV1Schema = z.object({
   maintenance: MemoryAnchorMaintenanceSchema.optional(),
   workflow_promotion: MemoryWorkflowPromotionSchema.optional(),
   promotion: MemoryPatternPromotionSchema.optional(),
+  trust_hardening: MemoryPatternTrustHardeningSchema.optional(),
   schema_version: z.literal("anchor_v1"),
 });
 
@@ -369,7 +390,9 @@ export const ExecutionNativeV1Schema = z.object({
   summary_kind: z.string().min(1).max(128).nullable().optional(),
   compression_layer: MemoryLayerId.optional(),
   task_signature: z.string().min(1).max(256).optional(),
+  task_family: z.string().min(1).max(128).optional(),
   error_signature: z.string().min(1).max(256).optional(),
+  error_family: z.string().min(1).max(128).optional(),
   workflow_signature: z.string().min(1).max(256).optional(),
   anchor_kind: MemoryAnchorKind.optional(),
   anchor_level: MemoryAnchorLevel.optional(),
@@ -379,6 +402,7 @@ export const ExecutionNativeV1Schema = z.object({
   selected_tool: z.string().min(1).max(128).nullable().optional(),
   workflow_promotion: MemoryWorkflowPromotionSchema.optional(),
   promotion: MemoryPatternPromotionSchema.optional(),
+  trust_hardening: MemoryPatternTrustHardeningSchema.optional(),
   maintenance: MemoryAnchorMaintenanceSchema.optional(),
   rehydration: MemoryAnchorRehydrationHintSchema.optional(),
 });
@@ -934,10 +958,13 @@ export type ContextAssembleRouteContract = z.infer<typeof ContextAssembleRouteCo
 export const DecisionPatternSummaryContractSchema = z.object({
   used_trusted_pattern_anchor_ids: z.array(z.string()),
   used_trusted_pattern_tools: z.array(z.string()),
+  used_trusted_pattern_affinity_levels: z.array(z.string()).optional(),
   skipped_contested_pattern_anchor_ids: z.array(z.string()),
   skipped_contested_pattern_tools: z.array(z.string()),
+  skipped_contested_pattern_affinity_levels: z.array(z.string()).optional(),
   skipped_suppressed_pattern_anchor_ids: z.array(z.string()),
   skipped_suppressed_pattern_tools: z.array(z.string()),
+  skipped_suppressed_pattern_affinity_levels: z.array(z.string()).optional(),
 });
 
 export type DecisionPatternSummaryContract = z.infer<typeof DecisionPatternSummaryContractSchema>;
@@ -960,6 +987,11 @@ export const PatternMatchAnchorContractSchema = z.object({
   required_distinct_runs: z.number().nullable().optional(),
   similarity: z.number().nullable().optional(),
   confidence: z.number().nullable().optional(),
+  task_signature: z.string().nullable().optional(),
+  task_family: z.string().nullable().optional(),
+  error_family: z.string().nullable().optional(),
+  affinity_level: z.string().nullable().optional(),
+  affinity_score: z.number().nullable().optional(),
   title: z.string().nullable().optional(),
   summary: z.string().nullable().optional(),
 }).passthrough();
@@ -973,8 +1005,11 @@ export const ToolsSelectionSummaryContractSchema = z.object({
   contested_pattern_count: z.number().int().min(0),
   suppressed_pattern_count: z.number().int().min(0),
   used_trusted_pattern_tools: z.array(z.string()),
+  used_trusted_pattern_affinity_levels: z.array(z.string()).optional(),
   skipped_contested_pattern_tools: z.array(z.string()),
+  skipped_contested_pattern_affinity_levels: z.array(z.string()).optional(),
   skipped_suppressed_pattern_tools: z.array(z.string()),
+  skipped_suppressed_pattern_affinity_levels: z.array(z.string()).optional(),
   provenance_explanation: z.string().nullable(),
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,

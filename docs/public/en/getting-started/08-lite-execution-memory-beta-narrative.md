@@ -1,20 +1,20 @@
 ---
-title: "Lite Execution-Memory Beta Narrative"
+title: "Aionis Execution-Memory Narrative"
 ---
 
-# Lite Execution-Memory Beta Narrative
+# Aionis Execution-Memory Narrative
 
-Use this page when you need a short public-facing explanation of what `Aionis Lite` is today.
+Use this page when you need a short public-facing explanation of what `Aionis` is today.
 
 This is not the full contract or capability matrix.
 
 It is the concise release/demo narrative.
 
-If you need the step-by-step demo script, see [Lite Execution-Memory Demo Walkthrough](/public/en/getting-started/09-lite-execution-memory-demo-walkthrough).
+If you need the step-by-step demo script, see [Aionis Execution-Memory Demo Walkthrough](/public/en/getting-started/09-lite-execution-memory-demo-walkthrough).
 
 ## Short Positioning
 
-Aionis Lite is a single-user local runtime for execution memory.
+Aionis is a single-user local runtime for execution memory.
 
 It is not just a generic memory API.
 
@@ -47,9 +47,9 @@ What this means in practice:
 2. trusted patterns can influence future selection
 3. explicit operator or rule preference still stays ahead of recalled pattern preference
 
-## What Makes Lite Different
+## What Makes Aionis Different
 
-Lite is now designed around an execution-memory-first reading model:
+Aionis is now designed around an execution-memory-first reading model:
 
 1. `planner_packet.sections.*` is the canonical collection surface
 2. `workflow_signals` and `pattern_signals` expose compact maturity and trust state
@@ -68,9 +68,9 @@ For new integrations:
 
 `planner_packet.sections.*` is now the default full collection surface, while introspection carries the heavier inspection-oriented view.
 
-## What Lite Public Beta Is Good For
+## What Aionis 0.1.0 Is Good For
 
-Lite beta is strongest for:
+Aionis `0.1.0` is strongest for:
 
 1. single-developer workflows
 2. local agent runtime experiments
@@ -78,9 +78,9 @@ Lite beta is strongest for:
 4. replay/playbook and execution-memory prototyping
 5. evaluating Aionis without starting from Docker plus Postgres
 
-## What Lite Public Beta Is Not
+## What Aionis 0.1.0 Is Not
 
-Lite public beta is not:
+Aionis `0.1.0` is not:
 
 1. a Server replacement
 2. a multi-user governance plane
@@ -89,4 +89,4 @@ Lite public beta is not:
 
 ## Practical One-Sentence Summary
 
-Aionis Lite is a local execution-memory runtime that can remember stable workflows, reuse trusted tool patterns, and rehydrate historical detail only when the runtime actually needs it.
+Aionis is a local execution-memory runtime that can remember stable workflows, reuse trusted tool patterns, and rehydrate historical detail only when the runtime actually needs it.

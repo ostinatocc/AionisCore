@@ -1,10 +1,10 @@
 ---
-title: "Lite Execution-Memory Beta Narrative"
+title: "Aionis Execution-Memory Narrative"
 ---
 
-# Lite Execution-Memory Beta Narrative
+# Aionis Execution-Memory Narrative
 
-这页用于对外、简洁地解释 `Aionis Lite` 现在到底是什么。
+这页用于对外、简洁地解释 `Aionis` 现在到底是什么。
 
 它不是完整 contract，也不是完整 capability matrix。
 
@@ -14,7 +14,7 @@ title: "Lite Execution-Memory Beta Narrative"
 
 ## 一句话定位
 
-Aionis Lite 是一个面向 execution memory 的单用户本地运行时。
+Aionis 是一个面向 execution memory 的单用户本地运行时。
 
 它已经不只是一个通用 memory API。
 
@@ -47,7 +47,7 @@ Aionis Lite 是一个面向 execution memory 的单用户本地运行时。
 2. trusted pattern 可以影响未来选择
 3. 显式 operator/rule preference 仍然高于历史 pattern preference
 
-## Lite 现在真正不同的地方
+## Aionis 现在真正不同的地方
 
 Lite 现在已经按 execution-memory-first 的方式组织读取面：
 
@@ -68,9 +68,9 @@ Lite 现在已经按 execution-memory-first 的方式组织读取面：
 
 现在默认的完整 collections surface 是 `planner_packet.sections.*`，更重的 inspection 视图则放到 introspection 路由里。
 
-## Lite Public Beta 最适合什么
+## Aionis 0.1.0 最适合什么
 
-Lite beta 目前最适合：
+Aionis `0.1.0` 目前最适合：
 
 1. 单个开发者
 2. 本地 agent runtime 实验
@@ -78,7 +78,7 @@ Lite beta 目前最适合：
 4. replay/playbook 与 execution-memory 原型验证
 5. 不想从 Docker + Postgres 起步的 Aionis 评估
 
-## Lite Public Beta 不是什么
+## Aionis 0.1.0 不是什么
 
 Lite public beta 不是：
 
@@ -89,4 +89,4 @@ Lite public beta 不是：
 
 ## 最后一行总结
 
-Aionis Lite 是一个本地 execution-memory runtime：它能记住稳定 workflow、复用可信 tool pattern，并且只在真正需要时再展开历史细节。
+Aionis 是一个本地 execution-memory runtime：它能记住稳定 workflow、复用可信 tool pattern，并且只在真正需要时再展开历史细节。

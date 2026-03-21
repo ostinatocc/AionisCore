@@ -166,6 +166,8 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
     summary: firstString(row.text_summary, anchor.summary),
     anchor_level: firstString(execution.anchor_level, anchor.anchor_level),
     selected_tool: firstString(execution.selected_tool, anchor.selected_tool),
+    task_family: firstString(execution.task_family, anchor.task_family),
+    error_family: firstString(execution.error_family, anchor.error_family),
     pattern_state: firstString(execution.pattern_state, anchor.pattern_state) ?? "provisional",
     credibility_state: credibilityState,
     trusted: credibilityState === "trusted",
@@ -193,6 +195,8 @@ function toPatternSignal(entry: ReturnType<typeof toPatternEntry>) {
     anchor_id: entry.anchor_id,
     anchor_level: entry.anchor_level,
     selected_tool: entry.selected_tool,
+    task_family: entry.task_family,
+    error_family: entry.error_family,
     pattern_state: entry.pattern_state,
     credibility_state: entry.credibility_state,
     trusted: entry.trusted,
@@ -265,9 +269,9 @@ function buildDemoSurface(args: {
     }),
   ];
   const patternLines = [
-    ...args.trustedPatterns.slice(0, 6).map((entry) => `trusted pattern: prefer ${entry.selected_tool ?? "unknown"}; summary=${entry.summary ?? entry.anchor_id}; maintenance=${entry.maintenance_state ?? "unknown"}${entry.suppressed ? `; suppressed=${entry.suppression_mode ?? "shadow_learn"}` : ""}`),
-    ...args.candidatePatterns.slice(0, 6).map((entry) => `candidate pattern: prefer ${entry.selected_tool ?? "unknown"}; summary=${entry.summary ?? entry.anchor_id}; maintenance=${entry.maintenance_state ?? "unknown"}${entry.suppressed ? `; suppressed=${entry.suppression_mode ?? "shadow_learn"}` : ""}`),
-    ...args.contestedPatterns.slice(0, 6).map((entry) => `contested pattern: prefer ${entry.selected_tool ?? "unknown"}; summary=${entry.summary ?? entry.anchor_id}; maintenance=${entry.maintenance_state ?? "unknown"}${entry.suppressed ? `; suppressed=${entry.suppression_mode ?? "shadow_learn"}` : ""}`),
+    ...args.trustedPatterns.slice(0, 6).map((entry) => `trusted pattern: prefer ${entry.selected_tool ?? "unknown"}; task_family=${entry.task_family ?? "unknown"}; summary=${entry.summary ?? entry.anchor_id}; maintenance=${entry.maintenance_state ?? "unknown"}${entry.suppressed ? `; suppressed=${entry.suppression_mode ?? "shadow_learn"}` : ""}`),
+    ...args.candidatePatterns.slice(0, 6).map((entry) => `candidate pattern: prefer ${entry.selected_tool ?? "unknown"}; task_family=${entry.task_family ?? "unknown"}; summary=${entry.summary ?? entry.anchor_id}; maintenance=${entry.maintenance_state ?? "unknown"}${entry.suppressed ? `; suppressed=${entry.suppression_mode ?? "shadow_learn"}` : ""}`),
+    ...args.contestedPatterns.slice(0, 6).map((entry) => `contested pattern: prefer ${entry.selected_tool ?? "unknown"}; task_family=${entry.task_family ?? "unknown"}; summary=${entry.summary ?? entry.anchor_id}; maintenance=${entry.maintenance_state ?? "unknown"}${entry.suppressed ? `; suppressed=${entry.suppression_mode ?? "shadow_learn"}` : ""}`),
   ];
   const maintenanceLines = [
     `workflow maintenance: retain=${args.workflowMaintenanceSummary.retain_count}; observe=${args.workflowMaintenanceSummary.observe_count}; promote_candidate=${args.workflowMaintenanceSummary.promote_candidate_count}`,

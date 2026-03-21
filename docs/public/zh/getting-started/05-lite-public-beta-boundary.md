@@ -1,29 +1,29 @@
 ---
-title: "Lite Public Beta 边界"
+title: "Aionis 0.1.0 边界"
 ---
 
-# Lite Public Beta 边界
+# Aionis 0.1.0 边界
 
-这页用来明确 Aionis Lite public beta 是什么、支持什么、不承诺什么。
+这页用来明确 Aionis `0.1.0` 是什么、支持什么、不承诺什么。
 
-如果你准备把 Lite 当成默认部署形态，先看这页。
+如果你准备把 Aionis 当成默认部署形态，先看这页。
 
-如果你想先看一版更短的 operator 视角能力总结，直接看 [Lite API 能力指南](/public/zh/getting-started/07-lite-api-capability-guide)。
+如果你想先看一版更短的 operator 视角能力总结，直接看 [Aionis API 能力指南](/public/zh/getting-started/07-lite-api-capability-guide)。
 
-如果你想先看一版更适合发布说明或 demo 开场的对外短叙事，直接看 [Lite Execution-Memory Beta Narrative](/public/zh/getting-started/08-lite-execution-memory-beta-narrative)。
+如果你想先看一版更适合发布说明或 demo 开场的对外短叙事，直接看 [Aionis Execution-Memory Narrative](/public/zh/getting-started/08-lite-execution-memory-beta-narrative)。
 
-如果你需要一步一步照着讲的 demo 脚本，直接看 [Lite Execution-Memory Demo Walkthrough](/public/zh/getting-started/09-lite-execution-memory-demo-walkthrough)。
+如果你需要一步一步照着讲的 demo 脚本，直接看 [Aionis Execution-Memory Demo Walkthrough](/public/zh/getting-started/09-lite-execution-memory-demo-walkthrough)。
 
 ## 定位
 
-Aionis Lite public beta 是：
+Aionis `0.1.0` 是：
 
 1. 单用户、本地运行时
 2. SQLite-backed 的 Aionis kernel edition
 3. 本地体验 memory、replay、context 工作流的最快路径
-4. 第一条已经明确暴露 `Anchor-Guided Rehydration Loop` 的 Lite 发布线
+4. 第一条已经明确暴露 `Anchor-Guided Rehydration Loop` 的 Aionis 发布线
 
-Aionis Lite public beta 不是：
+Aionis `0.1.0` 不是：
 
 1. Server 的生产替代品
 2. 多用户团队 control plane
@@ -37,9 +37,9 @@ Aionis Lite public beta 不是：
 
 `stable execution -> workflow anchor -> recall -> runtime hint -> optional rehydration`
 
-## Lite Public Beta 当前支持
+## Aionis 0.1.0 当前支持
 
-当前 Lite beta 支持的能力面：
+当前 Aionis `0.1.0` 支持的能力面：
 
 1. `npm run start:lite`
 2. `/health`
@@ -76,30 +76,30 @@ Aionis Lite public beta 不是：
    - `tools/rehydrate_payload`
    - `tools/feedback`
 
-这意味着 Lite 已经暴露出 `Anchor-Guided Rehydration Loop` 的主链路由面。
+这意味着 Aionis 已经暴露出 `Anchor-Guided Rehydration Loop` 的主链路由面。
 replay / playbook promotion 对应稳定执行产物一侧。
 recall 与 `rehydrate_payload` 对应后续的 recall、runtime hint 与按需展开一侧。
 
 补充约束：
 
 1. `/v1/memory/write` 仍然要求最小请求里带 `input_text` 或 `input_sha256`
-2. Lite 支持这些 route，不代表所有 lane 和 inspection surface 的可见性完全一致
+2. Aionis 支持这些 route，不代表所有 lane 和 inspection surface 的可见性完全一致
 
 ## 明确保留为 Server-Only 的能力
 
-这个外层能力在 Lite 里仍然故意不可用：
+这个外层能力在 Aionis 里仍然故意不可用：
 
 1. `/v1/admin/control/*`
 
-在 Lite 中，这组路由预期返回：
+在 Aionis 中，这组路由预期返回：
 
 1. `501 server_only_in_lite`
 
 这属于 edition 语义，不是运行时故障。
 
-## Lite 本地 Automation 子集
+## Aionis 本地 Automation 子集
 
-Lite 现在已经包含一组本地 automation 子集，而不是把整个 automation 命名空间都视为不可用。
+Aionis 现在已经包含一组本地 automation 子集，而不是把整个 automation 命名空间都视为不可用。
 
 当前支持：
 
@@ -118,25 +118,25 @@ Lite 现在已经包含一组本地 automation 子集，而不是把整个 autom
 
 1. `501 automation_feature_not_supported_in_lite`
 
-## Lite Beta 当前承诺什么
+## Aionis 0.1.0 当前承诺什么
 
-Lite beta 目前承诺的是：
+Aionis `0.1.0` 目前承诺的是：
 
 1. 真实可用的本地启动路径
 2. 本地 SQLite-backed kernel path
 3. 可重复执行的 `npm run smoke:lite` 验证
 4. alpha / beta-candidate 的仓库级 gate
 
-Lite beta 当前不承诺：
+Aionis `0.1.0` 当前不承诺：
 
 1. 多用户协作
 2. hosted governance workflow
 3. 生产 HA 拓扑
 4. Server 级别的扩展性和运行保证
 
-## 谁适合用 Lite Beta
+## 谁适合用 Aionis 0.1.0
 
-Lite beta 最适合：
+Aionis `0.1.0` 最适合：
 
 1. 单个开发者
 2. 本地 agent runtime 实验
@@ -152,7 +152,7 @@ Lite beta 最适合：
 4. 生产流量
 5. 多人共同运维
 
-## 推荐的 Lite Beta 验证路径
+## 推荐的 Aionis 0.1.0 验证路径
 
 最小路径：
 
@@ -189,21 +189,21 @@ npm run smoke:lite:local-process
 
 ## 当前已知的运维边缘点
 
-这些是 Lite beta 当前已知的 operator edge，不属于 release blocker：
+这些是 Aionis `0.1.0` 当前已知的 operator edge，不属于 release blocker：
 
-1. Lite 依赖 Node `22+`，因为用到了 `node:sqlite`
+1. Aionis 依赖 Node `22+`，因为用到了 `node:sqlite`
 2. `memory_lane = "private"` 不该被理解成“所有 surface 一律不可见”
-3. 在当前 Lite beta 里，`find` 对 private lane 更严格，而 `recall_text` / context 路径可能仍然返回 private 内容
-4. pack 路由现在属于本地 Lite 路由，不再要求 admin token
+3. 在当前 Aionis `0.1.0` 里，`find` 对 private lane 更严格，而 `recall_text` / context 路径可能仍然返回 private 内容
+4. pack 路由现在属于本地 Aionis 路由，不再要求 admin token
 5. 成功写入后可能返回 `lite_embedding_backfill_completed_inline`
 
 详细说明见：
 
-1. [Lite 运维说明](/public/zh/getting-started/04-lite-operator-notes)
+1. [Aionis 运维说明](/public/zh/getting-started/04-lite-operator-notes)
 
 ## 升级到 Server 的判断规则
 
-如果你的需求出现下面任一项，就应该转到 Server，而不是继续把 Lite 拉长：
+如果你的需求出现下面任一项，就应该转到更广的 server/control-plane 部署形态，而不是继续把 Aionis 拉长：
 
 1. 共享 tenant 治理
 2. automation orchestration

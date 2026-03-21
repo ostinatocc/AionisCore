@@ -1,8 +1,8 @@
-# Aionis Lite Execution-Memory Integrator Guide
+# Aionis Execution-Memory Integrator Guide
 
 Last reviewed: 2026-03-20
 
-This guide is for consumers integrating against the Lite execution-memory routes.
+This guide is for consumers integrating against the Aionis execution-memory routes.
 
 It does not explain the full cleanup plan or contract history.
 

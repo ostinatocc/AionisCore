@@ -7,8 +7,16 @@ import { createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/
 import { sha256Hex } from "../util/crypto.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema, type MemoryAnchorV1 } from "./schemas.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
+import {
+  buildTaskSignature,
+  extractErrorFamily,
+  extractErrorSignature,
+  extractTaskCue,
+  extractTaskFamily,
+} from "./pattern-trust-shaping.js";
 
-const STABLE_PATTERN_MIN_DISTINCT_RUNS = 2;
+const STABLE_PATTERN_MIN_DISTINCT_RUNS = 3;
+const CONTESTED_REVALIDATION_MIN_FRESH_RUNS = 2;
 const MAX_OBSERVED_RUN_IDS = 16;
 
 type DecisionAnchorSource = {
@@ -144,41 +152,6 @@ function words(value: string, limit = 6): string[] {
     .slice(0, limit);
 }
 
-function extractTaskCue(context: unknown, inputText: string | null | undefined, note: string | null | undefined): string | null {
-  const ctx = asRecord(context);
-  const task = asRecord(ctx?.task);
-  const issue = asRecord(ctx?.issue);
-  const error = asRecord(ctx?.error);
-  return firstNonEmptyString([
-    ctx?.task_signature,
-    task?.signature,
-    ctx?.goal,
-    task?.goal,
-    ctx?.objective,
-    task?.objective,
-    ctx?.query,
-    task?.query,
-    ctx?.task_kind,
-    issue?.kind,
-    error?.signature,
-    error?.code,
-    note,
-    inputText,
-  ]);
-}
-
-function extractErrorSignature(context: unknown): string | null {
-  const ctx = asRecord(context);
-  const error = asRecord(ctx?.error);
-  return firstNonEmptyString([
-    error?.signature,
-    error?.code,
-    ctx?.error_signature,
-    ctx?.error_code,
-    ctx?.failure_signature,
-  ]);
-}
-
 function buildPatternSignature(args: {
   selected_tool: string;
   candidates: string[];
@@ -196,17 +169,6 @@ function buildPatternSignature(args: {
       source_rule_ids: args.source_rule_ids,
     }),
   );
-}
-
-function buildTaskSignature(args: {
-  taskCue: string | null;
-  selectedTool: string;
-  patternSignature: string;
-}): string {
-  if (!args.taskCue) return `tools_select:${args.selectedTool}:${args.patternSignature.slice(0, 20)}`;
-  const tokens = words(args.taskCue.toLowerCase(), 6).join("-");
-  if (!tokens) return `tools_select:${args.selectedTool}:${args.patternSignature.slice(0, 20)}`;
-  return truncate(`tools_select:${tokens}:${args.selectedTool}`, 256);
 }
 
 function buildPatternSummary(args: {
@@ -276,9 +238,29 @@ function observedRunIdsFromAnchor(anchor: MemoryAnchorV1): string[] {
   return uniqueStrings(observed, MAX_OBSERVED_RUN_IDS);
 }
 
+function trustHardeningRecord(anchor: MemoryAnchorV1 | null | undefined): Record<string, unknown> | null {
+  return asRecord(anchor?.trust_hardening);
+}
+
+function observedFamiliesFromHardening(record: Record<string, unknown> | null, key: "observed_task_families" | "observed_error_families"): string[] {
+  const value = record?.[key];
+  return Array.isArray(value)
+    ? uniqueStrings((value as Array<string | null | undefined>).filter((entry): entry is string => typeof entry === "string"), 16)
+    : [];
+}
+
+function observedPostContestRunIds(record: Record<string, unknown> | null): string[] {
+  const value = record?.post_contest_observed_run_ids;
+  return Array.isArray(value)
+    ? uniqueStrings((value as Array<string | null | undefined>).filter((entry): entry is string => typeof entry === "string"), MAX_OBSERVED_RUN_IDS)
+    : [];
+}
+
 function buildPatternAnchor(args: {
   taskCue: string | null;
+  taskFamily: string | null;
   errorSignature: string | null;
+  errorFamily: string | null;
   patternSignature: string;
   selectedTool: string;
   candidates: string[];
@@ -289,6 +271,7 @@ function buildPatternAnchor(args: {
   existing?: MemoryAnchorV1 | null;
 }): MemoryAnchorV1 {
   const existing = args.existing ?? null;
+  const existingHardening = trustHardeningRecord(existing);
   const existingCredibilityState = (existing?.credibility_state ?? existing?.promotion?.credibility_state ?? "candidate") as PatternCredibilityState;
   const existingObservedRunIds = existing ? observedRunIdsFromAnchor(existing) : [];
   const nextObservedRunIds = args.feedbackOutcome === "positive"
@@ -310,9 +293,23 @@ function buildPatternAnchor(args: {
   ) + (hasNewDistinctRun ? 1 : 0);
   const existingCounterEvidenceCount = Math.max(Number(existing?.promotion?.counter_evidence_count ?? 0), 0);
   const nextCounterEvidenceCount = existingCounterEvidenceCount + (args.feedbackOutcome === "negative" ? 1 : 0);
+  const existingObservedTaskFamilies = observedFamiliesFromHardening(existingHardening, "observed_task_families");
+  const existingObservedErrorFamilies = observedFamiliesFromHardening(existingHardening, "observed_error_families");
+  const observedTaskFamilies = uniqueStrings([...existingObservedTaskFamilies, args.taskFamily], 16);
+  const observedErrorFamilies = uniqueStrings([...existingObservedErrorFamilies, args.errorFamily], 16);
+  const existingPostContestObservedRunIds = observedPostContestRunIds(existingHardening);
+  const postContestObservedRunIds = args.feedbackOutcome === "negative"
+    ? []
+    : existingCounterEvidenceCount > 0
+      ? hasNewDistinctRun
+        ? uniqueStrings([...existingPostContestObservedRunIds, args.decision.run_id], MAX_OBSERVED_RUN_IDS)
+        : existingPostContestObservedRunIds
+      : existingPostContestObservedRunIds;
+  const revalidationFloorSatisfied =
+    nextCounterEvidenceCount === 0 || postContestObservedRunIds.length >= CONTESTED_REVALIDATION_MIN_FRESH_RUNS;
   const counterEvidenceOpen = args.feedbackOutcome === "negative"
     ? true
-    : distinctRunCount >= (requiredDistinctRuns + nextCounterEvidenceCount)
+    : distinctRunCount >= (requiredDistinctRuns + nextCounterEvidenceCount) && revalidationFloorSatisfied
       ? false
       : Boolean(existing?.promotion?.counter_evidence_open ?? false);
   const reuseFailureCount = Math.max(existing?.metrics?.reuse_failure_count ?? 0, 0) + (args.feedbackOutcome === "negative" ? 1 : 0);
@@ -362,6 +359,7 @@ function buildPatternAnchor(args: {
     counterEvidenceOpen,
     timestamp: args.decision.created_at,
   });
+  const promotionGateSatisfied = distinctRunCount >= requiredDistinctRuns;
   return MemoryAnchorV1Schema.parse({
     anchor_kind: "pattern",
     anchor_level: "L3",
@@ -369,7 +367,9 @@ function buildPatternAnchor(args: {
     credibility_state: credibilityState,
     task_signature: taskSignature,
     task_class: "tools_select_pattern",
+    task_family: args.taskFamily ?? undefined,
     error_signature: args.errorSignature ?? undefined,
+    error_family: args.errorFamily ?? undefined,
     workflow_signature: args.patternSignature,
     summary,
     tool_set: args.candidates,
@@ -459,6 +459,21 @@ function buildPatternAnchor(args: {
         ? args.decision.created_at
         : existing?.promotion?.last_counter_evidence_at ?? null,
     },
+    trust_hardening: {
+      task_family: args.taskFamily,
+      error_family: args.errorFamily,
+      observed_task_families: observedTaskFamilies,
+      observed_error_families: observedErrorFamilies,
+      distinct_task_family_count: observedTaskFamilies.length,
+      distinct_error_family_count: observedErrorFamilies.length,
+      post_contest_observed_run_ids: postContestObservedRunIds,
+      post_contest_distinct_run_count: postContestObservedRunIds.length,
+      promotion_gate_kind: "current_distinct_runs_v1",
+      promotion_gate_satisfied: promotionGateSatisfied,
+      revalidation_floor_kind: "post_contest_two_fresh_runs_v1",
+      revalidation_floor_satisfied: revalidationFloorSatisfied,
+      task_affinity_weighting_enabled: false,
+    },
     schema_version: "anchor_v1",
   });
 }
@@ -477,7 +492,9 @@ function buildPatternAnchorSlots(args: {
     summary_kind: "pattern_anchor",
     compression_layer: "L3",
     task_signature: args.anchor.task_signature,
+    ...(args.anchor.task_family ? { task_family: args.anchor.task_family } : {}),
     ...(args.anchor.error_signature ? { error_signature: args.anchor.error_signature } : {}),
+    ...(args.anchor.error_family ? { error_family: args.anchor.error_family } : {}),
     ...(args.anchor.workflow_signature ? { workflow_signature: args.anchor.workflow_signature } : {}),
     anchor_kind: args.anchor.anchor_kind,
     anchor_level: args.anchor.anchor_level,
@@ -485,6 +502,7 @@ function buildPatternAnchorSlots(args: {
     ...(args.anchor.credibility_state ? { credibility_state: args.anchor.credibility_state } : {}),
     ...(args.anchor.selected_tool !== undefined ? { selected_tool: args.anchor.selected_tool } : {}),
     ...(args.anchor.promotion ? { promotion: args.anchor.promotion } : {}),
+    ...(args.anchor.trust_hardening ? { trust_hardening: args.anchor.trust_hardening } : {}),
     ...(args.anchor.maintenance ? { maintenance: args.anchor.maintenance } : {}),
   });
   return {
@@ -638,7 +656,9 @@ export async function writeToolsDecisionPatternAnchor(
   }
 
   const taskCue = extractTaskCue(args.context, args.input_text ?? null, args.note ?? null);
+  const taskFamily = extractTaskFamily(args.context, taskCue);
   const errorSignature = extractErrorSignature(args.context);
+  const errorFamily = extractErrorFamily(args.context, errorSignature);
   const patternSignature = buildPatternSignature({
     selected_tool: args.selected_tool,
     candidates: args.candidates,
@@ -664,7 +684,9 @@ export async function writeToolsDecisionPatternAnchor(
   const existingAnchor = existingNode ? parseExistingAnchor(existingNode) : null;
   const anchor = buildPatternAnchor({
     taskCue,
+    taskFamily,
     errorSignature,
+    errorFamily,
     patternSignature,
     selectedTool: args.selected_tool,
     candidates: args.candidates,

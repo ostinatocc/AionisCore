@@ -65,6 +65,8 @@ async function seedToolsSelectFixture(dbPath: string) {
     credibility_state: "trusted",
     task_signature: "tools_select:repair-export:edit",
     task_class: "tools_select_pattern",
+    task_family: "task:repair_export",
+    error_family: "error:node-export-mismatch",
     workflow_signature: "stable-edit-pattern",
     summary: "Stable pattern: prefer edit for repair_export after repeated successful runs.",
     tool_set: ["bash", "edit", "test"],
@@ -263,17 +265,20 @@ test("tools_select route returns the stable execution-memory contract surface", 
     assert.deepEqual(body.pattern_matches.preferred_tools, ["edit"]);
     assert.equal(body.pattern_matches.anchors[0]?.selected_tool, "edit");
     assert.equal(body.pattern_matches.anchors[0]?.credibility_state, "trusted");
+    assert.equal(body.pattern_matches.anchors[0]?.affinity_level, "same_task_family");
     assert.deepEqual(body.decision.pattern_summary.used_trusted_pattern_tools, []);
     assert.deepEqual(body.decision.pattern_summary.used_trusted_pattern_anchor_ids, []);
+    assert.deepEqual(body.decision.pattern_summary.used_trusted_pattern_affinity_levels ?? [], []);
     assert.deepEqual(body.decision.pattern_summary.skipped_contested_pattern_tools, []);
     assert.equal(body.selection_summary.trusted_pattern_count, 1);
     assert.equal(body.selection_summary.contested_pattern_count, 0);
     assert.equal(body.selection_summary.pattern_lifecycle_summary.trusted_count, 1);
     assert.equal(body.selection_summary.pattern_lifecycle_summary.candidate_count, 0);
     assert.equal(body.selection_summary.pattern_maintenance_summary.retain_count, 1);
+    assert.deepEqual(body.selection_summary.used_trusted_pattern_affinity_levels ?? [], []);
     assert.equal(
       body.selection_summary.provenance_explanation,
-      "selected tool: bash; trusted patterns available but not used: edit",
+      "selected tool: bash; trusted patterns available but not used: edit [same_task_family]",
     );
   } finally {
     await app.close();
@@ -363,11 +368,15 @@ test("tools_select keeps suppressed trusted patterns visible but excludes them f
     assert.equal(body.pattern_matches.trusted, 0);
     assert.equal(body.pattern_matches.anchors[0]?.credibility_state, "trusted");
     assert.equal(body.pattern_matches.anchors[0]?.suppressed, true);
+    assert.equal(body.pattern_matches.anchors[0]?.affinity_level, "same_task_family");
     assert.equal(body.selection_summary.trusted_pattern_count, 0);
     assert.equal(body.selection_summary.suppressed_pattern_count, 1);
     assert.deepEqual(body.selection_summary.used_trusted_pattern_tools, []);
+    assert.deepEqual(body.selection_summary.used_trusted_pattern_affinity_levels ?? [], []);
     assert.deepEqual(body.selection_summary.skipped_suppressed_pattern_tools, ["edit"]);
+    assert.deepEqual(body.selection_summary.skipped_suppressed_pattern_affinity_levels ?? [], ["same_task_family"]);
     assert.deepEqual(body.decision.pattern_summary.skipped_suppressed_pattern_tools, ["edit"]);
+    assert.deepEqual(body.decision.pattern_summary.skipped_suppressed_pattern_affinity_levels ?? [], ["same_task_family"]);
     assert.equal(
       body.selection_summary.provenance_explanation,
       "selected tool: bash; suppressed patterns visible but operator-blocked: edit",

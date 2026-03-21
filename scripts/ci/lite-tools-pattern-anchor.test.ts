@@ -110,6 +110,8 @@ test("recall ranking prefers stable pattern anchors over counter-evidence-open c
     credibility_state: "trusted",
     task_signature: "tools_select:repair-export:edit",
     task_class: "tools_select_pattern",
+    task_family: "task:repair_export",
+    error_family: "error:node-export-mismatch",
     workflow_signature: "stable-edit-pattern",
     summary: "Stable pattern: prefer edit for export repair after repeated successful rule-backed tool selections.",
     tool_set: ["bash", "edit", "test"],
@@ -307,7 +309,7 @@ test("positive tools feedback writes a provisional recallable pattern anchor", a
     assert.equal(feedback.pattern_anchor?.pattern_state, "provisional");
     assert.equal(feedback.pattern_anchor?.credibility_state, "candidate");
     assert.equal(feedback.pattern_anchor?.maintenance?.maintenance_state, "observe");
-    assert.equal(feedback.pattern_anchor?.maintenance?.offline_priority, "promote_candidate");
+    assert.equal(feedback.pattern_anchor?.maintenance?.offline_priority, "none");
 
     const { rows } = await liteWriteStore.findNodes({
       scope: "default",
@@ -328,6 +330,8 @@ test("positive tools feedback writes a provisional recallable pattern anchor", a
     assert.equal(anchorNode.slots.execution_native_v1.compression_layer, "L3");
     assert.equal(anchorNode.slots.execution_native_v1.anchor_kind, "pattern");
     assert.equal(anchorNode.slots.execution_native_v1.anchor_level, "L3");
+    assert.equal(anchorNode.slots.execution_native_v1.task_family, "task:repair_export");
+    assert.equal(anchorNode.slots.execution_native_v1.error_family, "error:node-export-mismatch");
     assert.equal(anchorNode.slots.execution_native_v1.pattern_state, "provisional");
     assert.equal(anchorNode.slots.execution_native_v1.credibility_state, "candidate");
     assert.equal(anchorNode.slots.execution_native_v1.selected_tool, "edit");
@@ -335,20 +339,36 @@ test("positive tools feedback writes a provisional recallable pattern anchor", a
     assert.equal(anchorNode.slots.anchor_v1.anchor_level, "L3");
     assert.equal(anchorNode.slots.anchor_v1.pattern_state, "provisional");
     assert.equal(anchorNode.slots.anchor_v1.credibility_state, "candidate");
+    assert.equal(anchorNode.slots.anchor_v1.task_family, "task:repair_export");
+    assert.equal(anchorNode.slots.anchor_v1.error_family, "error:node-export-mismatch");
     assert.equal(anchorNode.slots.anchor_v1.maintenance.maintenance_state, "observe");
-    assert.equal(anchorNode.slots.anchor_v1.maintenance.offline_priority, "promote_candidate");
+    assert.equal(anchorNode.slots.anchor_v1.maintenance.offline_priority, "none");
     assert.equal(anchorNode.slots.anchor_v1.selected_tool, "edit");
     assert.equal(anchorNode.slots.anchor_v1.source.decision_id, selection.decision.decision_id);
     assert.deepEqual(anchorNode.slots.anchor_v1.payload_refs.decision_ids, [selection.decision.decision_id]);
     assert.deepEqual(anchorNode.slots.anchor_v1.payload_refs.node_ids, [ruleNodeId]);
     assert.equal(anchorNode.slots.anchor_v1.metrics.distinct_run_count, 1);
     assert.equal(anchorNode.slots.anchor_v1.promotion.distinct_run_count, 1);
-    assert.equal(anchorNode.slots.anchor_v1.promotion.required_distinct_runs, 2);
+    assert.equal(anchorNode.slots.anchor_v1.promotion.required_distinct_runs, 3);
     assert.equal(anchorNode.slots.anchor_v1.promotion.credibility_state, "candidate");
     assert.equal(anchorNode.slots.anchor_v1.promotion.last_transition, "candidate_observed");
     assert.deepEqual(anchorNode.slots.anchor_v1.promotion.observed_run_ids, [runId]);
+    assert.equal(anchorNode.slots.anchor_v1.trust_hardening.task_family, "task:repair_export");
+    assert.equal(anchorNode.slots.anchor_v1.trust_hardening.error_family, "error:node-export-mismatch");
+    assert.deepEqual(anchorNode.slots.anchor_v1.trust_hardening.observed_task_families, ["task:repair_export"]);
+    assert.deepEqual(anchorNode.slots.anchor_v1.trust_hardening.observed_error_families, ["error:node-export-mismatch"]);
+    assert.equal(anchorNode.slots.anchor_v1.trust_hardening.distinct_task_family_count, 1);
+    assert.equal(anchorNode.slots.anchor_v1.trust_hardening.distinct_error_family_count, 1);
+    assert.equal(anchorNode.slots.anchor_v1.trust_hardening.post_contest_distinct_run_count, 0);
+    assert.equal(anchorNode.slots.anchor_v1.trust_hardening.promotion_gate_kind, "current_distinct_runs_v1");
+    assert.equal(anchorNode.slots.anchor_v1.trust_hardening.promotion_gate_satisfied, false);
+    assert.equal(anchorNode.slots.anchor_v1.trust_hardening.revalidation_floor_kind, "post_contest_two_fresh_runs_v1");
+    assert.equal(anchorNode.slots.anchor_v1.trust_hardening.revalidation_floor_satisfied, true);
+    assert.equal(anchorNode.slots.anchor_v1.trust_hardening.task_affinity_weighting_enabled, false);
     assert.equal(anchorNode.slots.execution_native_v1.promotion.credibility_state, "candidate");
     assert.equal(anchorNode.slots.execution_native_v1.promotion.last_transition, "candidate_observed");
+    assert.equal(anchorNode.slots.execution_native_v1.trust_hardening.task_family, "task:repair_export");
+    assert.equal(anchorNode.slots.execution_native_v1.trust_hardening.error_family, "error:node-export-mismatch");
     assert.equal(anchorNode.slots.execution_native_v1.maintenance.maintenance_state, "observe");
 
     const queryEmbedding = (await FakeEmbeddingProvider.embed([anchorNode.title ?? ""]))[0];
@@ -480,7 +500,7 @@ test("selectTools does not trust provisional pattern anchors after the source ru
     assert.equal(recalled.selection_summary.pattern_lifecycle_summary.candidate_count, 1);
     assert.equal(recalled.selection_summary.pattern_lifecycle_summary.trusted_count, 0);
     assert.equal(recalled.selection_summary.pattern_lifecycle_summary.contested_count, 0);
-    assert.equal(recalled.selection_summary.pattern_lifecycle_summary.near_promotion_count, 1);
+    assert.equal(recalled.selection_summary.pattern_lifecycle_summary.near_promotion_count, 0);
     assert.deepEqual(recalled.selection_summary.pattern_lifecycle_summary.transition_counts, {
       candidate_observed: 1,
       promoted_to_trusted: 0,
@@ -513,7 +533,7 @@ test("selectTools reuses stable pattern anchors after distinct successful runs",
   try {
     const promotionStates: string[] = [];
     let stableAnchorId: string | null = null;
-    for (const runId of [randomUUID(), randomUUID()]) {
+    for (const runId of [randomUUID(), randomUUID(), randomUUID()]) {
       const selection = await selectTools(null, {
         tenant_id: "default",
         scope: "default",
@@ -555,7 +575,7 @@ test("selectTools reuses stable pattern anchors after distinct successful runs",
       promotionStates.push(feedback.pattern_anchor?.pattern_state ?? "missing");
       stableAnchorId = feedback.pattern_anchor?.node_id ?? stableAnchorId;
     }
-    assert.deepEqual(promotionStates, ["provisional", "stable"]);
+    assert.deepEqual(promotionStates, ["provisional", "provisional", "stable"]);
     assert.ok(stableAnchorId);
 
     const { rows } = await liteWriteStore.findNodes({
@@ -569,9 +589,10 @@ test("selectTools reuses stable pattern anchors after distinct successful runs",
     assert.equal(rows[0]?.slots.anchor_v1.pattern_state, "stable");
     assert.equal(rows[0]?.slots.anchor_v1.maintenance.maintenance_state, "retain");
     assert.equal(rows[0]?.slots.anchor_v1.maintenance.offline_priority, "retain_trusted");
-    assert.equal(rows[0]?.slots.anchor_v1.metrics.distinct_run_count, 2);
-    assert.equal(rows[0]?.slots.anchor_v1.promotion.distinct_run_count, 2);
-    assert.equal(rows[0]?.slots.anchor_v1.payload_refs.run_ids.length, 2);
+    assert.equal(rows[0]?.slots.anchor_v1.metrics.distinct_run_count, 3);
+    assert.equal(rows[0]?.slots.anchor_v1.promotion.distinct_run_count, 3);
+    assert.equal(rows[0]?.slots.anchor_v1.promotion.required_distinct_runs, 3);
+    assert.equal(rows[0]?.slots.anchor_v1.payload_refs.run_ids.length, 3);
 
     await liteWriteStore.withTx(() =>
       updateRuleState({} as any, {
@@ -635,6 +656,7 @@ test("selectTools reuses stable pattern anchors after distinct successful runs",
       revalidated_to_trusted: 0,
     });
     assert.deepEqual(recalled.selection_summary.used_trusted_pattern_tools, ["edit"]);
+    assert.deepEqual(recalled.selection_summary.used_trusted_pattern_affinity_levels ?? [], ["exact_task_signature"]);
     assert.deepEqual(recalled.selection_summary.skipped_contested_pattern_tools, []);
     assert.deepEqual(
       recalled.selection_summary.used_trusted_pattern_tools,
@@ -646,7 +668,7 @@ test("selectTools reuses stable pattern anchors after distinct successful runs",
     );
     assert.equal(
       recalled.selection_summary.provenance_explanation,
-      "selected tool: edit; trusted pattern support: edit",
+      "selected tool: edit; trusted pattern support: edit [exact_task_signature]",
     );
     const stableNodeLookup = await liteWriteStore.findNodes({
       scope: "default",
@@ -682,6 +704,8 @@ test("selectTools keeps explicit tool.prefer ahead of trusted pattern preference
     credibility_state: "trusted",
     task_signature: "tools_select:repair-export:edit",
     task_class: "tools_select_pattern",
+    task_family: "task:repair_export",
+    error_family: "error:node-export-mismatch",
     workflow_signature: "stable-edit-pattern",
     summary: "Stable pattern: prefer edit for repair_export after repeated successful runs.",
     tool_set: ["bash", "edit", "test"],
@@ -808,6 +832,7 @@ test("selectTools keeps explicit tool.prefer ahead of trusted pattern preference
       [],
     );
     assert.deepEqual(recalled.selection_summary.used_trusted_pattern_tools, []);
+    assert.deepEqual(recalled.selection_summary.used_trusted_pattern_affinity_levels ?? [], []);
     assert.equal(recalled.selection_summary.pattern_lifecycle_summary.trusted_count, 1);
     assert.equal(
       recalled.selection_summary.pattern_lifecycle_summary.trusted_count,
@@ -815,7 +840,7 @@ test("selectTools keeps explicit tool.prefer ahead of trusted pattern preference
     );
     assert.equal(
       recalled.selection_summary.provenance_explanation,
-      "selected tool: bash; trusted patterns available but not used: edit",
+      "selected tool: bash; trusted patterns available but not used: edit [same_task_family]",
     );
   } finally {
     await liteRecallStore.close();
@@ -836,7 +861,7 @@ test("selectTools excludes suppressed trusted patterns from trusted reuse withou
   };
   try {
     let stableAnchorId: string | null = null;
-    for (const runId of [randomUUID(), randomUUID()]) {
+    for (const runId of [randomUUID(), randomUUID(), randomUUID()]) {
       const selection = await selectTools(null, {
         tenant_id: "default",
         scope: "default",
@@ -1067,6 +1092,7 @@ test("negative tools feedback demotes a stable pattern back to provisional", asy
     assert.equal(rows[0]?.slots.anchor_v1.promotion.credibility_state, "contested");
     assert.equal(rows[0]?.slots.anchor_v1.promotion.last_transition, "counter_evidence_opened");
     assert.equal(rows[0]?.slots.anchor_v1.promotion.last_counter_evidence_at != null, true);
+    assert.equal(rows[0]?.slots.anchor_v1.trust_hardening.post_contest_distinct_run_count, 0);
 
     await liteWriteStore.withTx(() =>
       updateRuleState({} as any, {
@@ -1135,7 +1161,7 @@ test("negative tools feedback demotes a stable pattern back to provisional", asy
   }
 });
 
-test("positive feedback after counter-evidence revalidates a contested pattern back to trusted", async () => {
+test("contested pattern requires two fresh positive runs before revalidation to trusted", async () => {
   const dbPath = tmpDbPath("pattern-revalidation");
   const { liteWriteStore } = await seedActiveRule(dbPath);
   const liteRecallStore = createLiteRecallStore(dbPath);
@@ -1147,7 +1173,7 @@ test("positive feedback after counter-evidence revalidates a contested pattern b
     },
   };
   try {
-    const stableRunIds = [randomUUID(), randomUUID()];
+    const stableRunIds = [randomUUID(), randomUUID(), randomUUID()];
     let anchorId: string | null = null;
     for (const runId of stableRunIds) {
       const selection = await selectTools(null, {
@@ -1227,11 +1253,52 @@ test("positive feedback after counter-evidence revalidates a contested pattern b
       }),
     );
 
-    const revalidationRunId = randomUUID();
-    const revalidationSelection = await selectTools(null, {
+    const firstRevalidationRunId = randomUUID();
+    const firstRevalidationSelection = await selectTools(null, {
       tenant_id: "default",
       scope: "default",
-      run_id: revalidationRunId,
+      run_id: firstRevalidationRunId,
+      context,
+      candidates: ["bash", "edit", "test"],
+      include_shadow: false,
+      rules_limit: 20,
+      strict: true,
+      reorder_candidates: false,
+    }, "default", "default", {
+      embedder: FakeEmbeddingProvider,
+      recallAccess: liteRecallStore.createRecallAccess(),
+      liteWriteStore,
+    });
+    const firstRevalidation = await liteWriteStore.withTx(() =>
+      toolSelectionFeedback(null, {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        run_id: firstRevalidationRunId,
+        decision_id: firstRevalidationSelection.decision.decision_id,
+        outcome: "positive",
+        context,
+        candidates: ["bash", "edit", "test"],
+        selected_tool: "edit",
+        target: "tool",
+        note: "Edit-based repair succeeded after revalidation",
+        input_text: "repair export failure in node tests",
+      }, "default", "default", {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        embedder: FakeEmbeddingProvider,
+        liteWriteStore,
+      }),
+    );
+
+    assert.equal(firstRevalidation.pattern_anchor?.pattern_state, "provisional");
+    assert.equal(firstRevalidation.pattern_anchor?.credibility_state, "contested");
+
+    const secondRevalidationRunId = randomUUID();
+    const secondRevalidationSelection = await selectTools(null, {
+      tenant_id: "default",
+      scope: "default",
+      run_id: secondRevalidationRunId,
       context,
       candidates: ["bash", "edit", "test"],
       include_shadow: false,
@@ -1248,14 +1315,14 @@ test("positive feedback after counter-evidence revalidates a contested pattern b
         tenant_id: "default",
         scope: "default",
         actor: "local-user",
-        run_id: revalidationRunId,
-        decision_id: revalidationSelection.decision.decision_id,
+        run_id: secondRevalidationRunId,
+        decision_id: secondRevalidationSelection.decision.decision_id,
         outcome: "positive",
         context,
         candidates: ["bash", "edit", "test"],
         selected_tool: "edit",
         target: "tool",
-        note: "Edit-based repair succeeded after revalidation",
+        note: "Edit-based repair succeeded after second fresh revalidation",
         input_text: "repair export failure in node tests",
       }, "default", "default", {
         maxTextLen: 10_000,
@@ -1281,6 +1348,8 @@ test("positive feedback after counter-evidence revalidates a contested pattern b
     assert.equal(rows[0]?.slots.anchor_v1.promotion.credibility_state, "trusted");
     assert.equal(rows[0]?.slots.anchor_v1.promotion.counter_evidence_open, false);
     assert.equal(rows[0]?.slots.anchor_v1.promotion.last_transition, "revalidated_to_trusted");
+    assert.equal(rows[0]?.slots.anchor_v1.trust_hardening.post_contest_distinct_run_count, 2);
+    assert.equal(rows[0]?.slots.anchor_v1.trust_hardening.revalidation_floor_satisfied, true);
   } finally {
     await liteRecallStore.close();
     await liteWriteStore.close();

@@ -1,10 +1,10 @@
-name: Lite Release
+name: Aionis Release
 
 on:
   workflow_dispatch:
   push:
     tags:
-      - "lite-v*"
+      - "v*"
 
 jobs:
   lite-release:
@@ -33,10 +33,10 @@ jobs:
         run: echo "version=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
 
       - name: Pack source
-        run: tar --exclude-vcs --exclude='./node_modules' --exclude='./.aionisgo' --exclude='./.tmp' --exclude='./artifacts' -czf "aionis-lite-${{ steps.version.outputs.version }}-source.tgz" .
+        run: tar --exclude-vcs --exclude='./node_modules' --exclude='./.aionisgo' --exclude='./.tmp' --exclude='./artifacts' -czf "aionis-${{ steps.version.outputs.version }}-source.tgz" .
 
       - name: Upload source artifact
         uses: actions/upload-artifact@v4
         with:
-          name: aionis-lite-source
-          path: aionis-lite-${{ steps.version.outputs.version }}-source.tgz
+          name: aionis-source
+          path: aionis-${{ steps.version.outputs.version }}-source.tgz
