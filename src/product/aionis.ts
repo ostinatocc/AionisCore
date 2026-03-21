@@ -5,6 +5,7 @@ import {
   doctorCodexProductShell,
   disableCodexProductShell,
   enableCodexProductShell,
+  readCodexProductShellConfig,
   removeCodexProductShell,
   restoreCodexProductShellHooks,
   startCodexProductShellRuntime,
@@ -26,7 +27,8 @@ function repoRootFromHere() {
 
 async function launchCodex(codexHome?: string): Promise<void> {
   await startCodexProductShellRuntime(codexHome);
-  const child = spawn("codex", [], {
+  const codexBin = process.env.AIONIS_CODEX_BIN || "codex";
+  const child = spawn(codexBin, [], {
     stdio: "inherit",
     env: process.env,
   });
@@ -37,6 +39,81 @@ async function launchCodex(codexHome?: string): Promise<void> {
       resolve();
     });
   });
+}
+
+async function ensureCodexInstalled(args: {
+  codex_home?: string;
+  base_url?: string;
+  scope?: string;
+}): Promise<void> {
+  const existing = await readCodexProductShellConfig(args.codex_home);
+  if (existing) return;
+  await writeCodexProductShellInstall({
+    repo_root: repoRootFromHere(),
+    codex_home: args.codex_home,
+    base_url: args.base_url,
+    scope: args.scope,
+  });
+}
+
+async function executeCodexCommand(args: {
+  subcommand: "setup" | "doctor" | "status" | "enable" | "disable" | "restore" | "remove" | "start" | "launch";
+  codex_home?: string;
+  base_url?: string;
+  scope?: string;
+}): Promise<void> {
+  switch (args.subcommand) {
+    case "setup": {
+      const result = await writeCodexProductShellInstall({
+        repo_root: repoRootFromHere(),
+        codex_home: args.codex_home,
+        base_url: args.base_url,
+        scope: args.scope,
+      });
+      process.stdout.write(JSON.stringify({ ok: true, command: "codex setup", result }, null, 2) + "\n");
+      return;
+    }
+    case "doctor": {
+      const result = await doctorCodexProductShell(args.codex_home);
+      process.stdout.write(JSON.stringify({ ok: true, command: "codex doctor", result }, null, 2) + "\n");
+      return;
+    }
+    case "status": {
+      const result = await doctorCodexProductShell(args.codex_home);
+      process.stdout.write(JSON.stringify({ ok: true, command: "codex status", result }, null, 2) + "\n");
+      return;
+    }
+    case "enable": {
+      const result = await enableCodexProductShell(args.codex_home);
+      process.stdout.write(JSON.stringify({ ok: true, command: "codex enable", result }, null, 2) + "\n");
+      return;
+    }
+    case "disable": {
+      const result = await disableCodexProductShell(args.codex_home);
+      process.stdout.write(JSON.stringify({ ok: true, command: "codex disable", result }, null, 2) + "\n");
+      return;
+    }
+    case "restore": {
+      const result = await restoreCodexProductShellHooks(args.codex_home);
+      process.stdout.write(JSON.stringify({ ok: true, command: "codex restore", result }, null, 2) + "\n");
+      return;
+    }
+    case "remove": {
+      const result = await removeCodexProductShell(args.codex_home);
+      process.stdout.write(JSON.stringify({ ok: true, command: "codex remove", result }, null, 2) + "\n");
+      return;
+    }
+    case "start": {
+      const result = await startCodexProductShellRuntime(args.codex_home);
+      process.stdout.write(JSON.stringify({ ok: true, command: "codex start", result }, null, 2) + "\n");
+      return;
+    }
+    case "launch": {
+      await ensureCodexInstalled(args);
+      await launchCodex(args.codex_home);
+      return;
+    }
+  }
 }
 
 async function main(): Promise<void> {
@@ -51,7 +128,18 @@ async function main(): Promise<void> {
   });
 
   if (command === "launch") {
-    await launchCodex(codex_home);
+    await executeCodexCommand({ subcommand: "launch", codex_home, base_url, scope });
+    return;
+  }
+
+  if (["install", "doctor", "status", "enable", "disable", "restore", "remove", "start"].includes(command)) {
+    const alias = command === "install" ? "setup" : command;
+    await executeCodexCommand({
+      subcommand: alias as "setup" | "doctor" | "status" | "enable" | "disable" | "restore" | "remove" | "start",
+      codex_home,
+      base_url,
+      scope,
+    });
     return;
   }
 
@@ -59,70 +147,27 @@ async function main(): Promise<void> {
     process.stdout.write(JSON.stringify({
       ok: false,
       error: "unsupported_command",
-      supported: ["launch", "codex"],
+      supported: ["launch", "install", "doctor", "status", "enable", "disable", "restore", "remove", "start", "codex"],
     }, null, 2) + "\n");
     process.exitCode = 1;
     return;
   }
 
-  switch (subcommand ?? "status") {
-    case "setup": {
-      const result = await writeCodexProductShellInstall({
-        repo_root: repoRootFromHere(),
-        codex_home,
-        base_url,
-        scope,
-      });
-      process.stdout.write(JSON.stringify({ ok: true, command: "codex setup", result }, null, 2) + "\n");
-      return;
-    }
-    case "doctor": {
-      const result = await doctorCodexProductShell(codex_home);
-      process.stdout.write(JSON.stringify({ ok: true, command: "codex doctor", result }, null, 2) + "\n");
-      return;
-    }
-    case "status": {
-      const result = await doctorCodexProductShell(codex_home);
-      process.stdout.write(JSON.stringify({ ok: true, command: "codex status", result }, null, 2) + "\n");
-      return;
-    }
-    case "enable": {
-      const result = await enableCodexProductShell(codex_home);
-      process.stdout.write(JSON.stringify({ ok: true, command: "codex enable", result }, null, 2) + "\n");
-      return;
-    }
-    case "disable": {
-      const result = await disableCodexProductShell(codex_home);
-      process.stdout.write(JSON.stringify({ ok: true, command: "codex disable", result }, null, 2) + "\n");
-      return;
-    }
-    case "restore": {
-      const result = await restoreCodexProductShellHooks(codex_home);
-      process.stdout.write(JSON.stringify({ ok: true, command: "codex restore", result }, null, 2) + "\n");
-      return;
-    }
-    case "remove": {
-      const result = await removeCodexProductShell(codex_home);
-      process.stdout.write(JSON.stringify({ ok: true, command: "codex remove", result }, null, 2) + "\n");
-      return;
-    }
-    case "start": {
-      const result = await startCodexProductShellRuntime(codex_home);
-      process.stdout.write(JSON.stringify({ ok: true, command: "codex start", result }, null, 2) + "\n");
-      return;
-    }
-    case "launch": {
-      await launchCodex(codex_home);
-      return;
-    }
-    default:
-      process.stdout.write(JSON.stringify({
-        ok: false,
-        error: "unsupported_codex_subcommand",
-        supported: ["setup", "doctor", "status", "enable", "disable", "restore", "remove", "start", "launch"],
-      }, null, 2) + "\n");
-      process.exitCode = 1;
+  if (!["setup", "doctor", "status", "enable", "disable", "restore", "remove", "start", "launch"].includes(subcommand ?? "status")) {
+    process.stdout.write(JSON.stringify({
+      ok: false,
+      error: "unsupported_codex_subcommand",
+      supported: ["setup", "doctor", "status", "enable", "disable", "restore", "remove", "start", "launch"],
+    }, null, 2) + "\n");
+    process.exitCode = 1;
+    return;
   }
+  await executeCodexCommand({
+    subcommand: (subcommand ?? "status") as "setup" | "doctor" | "status" | "enable" | "disable" | "restore" | "remove" | "start" | "launch",
+    codex_home,
+    base_url,
+    scope,
+  });
 }
 
 await main();

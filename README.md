@@ -48,6 +48,8 @@ Fast entry points:
    [docs/AIONIS_FOR_CODEX_PRODUCT_SHELL_GUIDE.md](docs/AIONIS_FOR_CODEX_PRODUCT_SHELL_GUIDE.md)
 16. Aionis product CLI spec:
    [docs/AIONIS_PRODUCT_CLI_SPEC.md](docs/AIONIS_PRODUCT_CLI_SPEC.md)
+17. Aionis product CLI guide:
+   [docs/AIONIS_PRODUCT_CLI_GUIDE.md](docs/AIONIS_PRODUCT_CLI_GUIDE.md)
 
 Current Codex host scripts:
 
@@ -63,6 +65,8 @@ Current Codex host scripts:
 10. `npm run -s product:aionis -- codex restore`
 11. `npm run -s product:aionis -- codex remove`
 12. `npm run -s product:aionis`
+13. `npm run -s product:aionis -- install`
+14. `npm run -s product:aionis -- status`
 
 Repository split:
 
@@ -129,6 +133,7 @@ Integrator docs:
 20. [docs/AIONIS_HOST_INTEGRATION_ARCHITECTURE.md](docs/AIONIS_HOST_INTEGRATION_ARCHITECTURE.md)
 21. [docs/AIONIS_PRODUCT_CLI_SPEC.md](docs/AIONIS_PRODUCT_CLI_SPEC.md)
 22. [docs/plans/2026-03-21-aionis-product-cli.md](docs/plans/2026-03-21-aionis-product-cli.md)
+23. [docs/AIONIS_PRODUCT_CLI_GUIDE.md](docs/AIONIS_PRODUCT_CLI_GUIDE.md)
 
 Internal design docs:
 

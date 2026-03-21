@@ -16,6 +16,7 @@ The user-facing command should become:
 
 1. `aionis`
    - default launch path for the primary host
+   - auto-installs the default host shell when missing
 2. `aionis codex setup`
 3. `aionis codex doctor`
 4. `aionis codex status`
@@ -33,6 +34,7 @@ The top-level CLI should:
 2. make Codex the default host path for now
 3. allow the product shell to generate a local `aionis` launcher
 4. keep host-specific logic behind the `codex` namespace
+5. support top-level aliases for the default host path
 
 ## First Slice
 
@@ -42,6 +44,7 @@ The first slice should include:
 2. a package script for the top-level CLI
 3. a generated user launcher at `~/.local/bin/aionis`
 4. doctor/status visibility for whether the launcher exists and whether that bin directory is on `PATH`
+5. a default bare `aionis` launch path that bootstraps the default host shell when absent
 
 It should not yet include:
 
@@ -57,4 +60,5 @@ This slice is successful when:
 1. `setup` creates a user launcher named `aionis`
 2. the user can manage the Codex shell through `aionis codex ...`
 3. the product shell can report whether the launcher is actually discoverable on `PATH`
-4. the path from installer commands to one branded top-level command is established
+4. `aionis install` and `aionis status` work as top-level aliases
+5. the path from installer commands to one branded top-level command is established

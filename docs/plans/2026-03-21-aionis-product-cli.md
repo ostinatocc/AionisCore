@@ -20,6 +20,7 @@
 Support:
 
 1. `aionis`
+2. `aionis install`
 2. `aionis codex setup`
 3. `aionis codex doctor`
 4. `aionis codex status`
@@ -32,6 +33,14 @@ Support:
 **Step 2: Keep Codex-specific logic delegated**
 
 Do not duplicate Codex product-shell behavior in the new CLI. Delegate to the existing product-shell helpers.
+
+**Step 3: Make the default path usable**
+
+Bare `aionis` should:
+
+1. bootstrap the default Codex shell if missing
+2. ensure the runtime is started
+3. launch the default Codex host
 
 ### Task 2: Generate the user launcher
 

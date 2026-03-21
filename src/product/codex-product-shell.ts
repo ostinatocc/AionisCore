@@ -96,7 +96,7 @@ export function resolveCodexHome(explicit?: string): string {
 export function resolveCodexProductShellPaths(codex_home: string): CodexProductShellPaths {
   const aionis_root = path.join(codex_home, "aionis");
   const bin_dir = path.join(aionis_root, "bin");
-  const user_bin_dir = path.join(path.dirname(codex_home), ".local", "bin");
+  const user_bin_dir = process.env.AIONIS_USER_BIN_DIR ?? path.join(path.dirname(codex_home), ".local", "bin");
   return {
     codex_home,
     aionis_root,
