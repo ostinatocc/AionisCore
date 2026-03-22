@@ -575,7 +575,18 @@ test("positive tools feedback with multiple matched rule sources exposes form_pa
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.review_supplied, false);
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.admissibility_evaluated, false);
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.admissible, null);
-    assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.stage_order, ["review_packet_built"]);
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.applies, false);
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.base_pattern_state, "provisional");
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.effective_pattern_state, "provisional");
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.reason_code, "review_not_supplied");
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.policy_effect_applies, false);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.base_pattern_state, "provisional");
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.effective_pattern_state, "provisional");
+    assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.stage_order, [
+      "review_packet_built",
+      "policy_effect_derived",
+    ]);
+    assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.reason_codes, ["review_not_supplied"]);
   } finally {
     await liteWriteStore.close();
   }
@@ -648,13 +659,23 @@ test("tools feedback form_pattern governance preview evaluates admitted review r
     assert.equal(parsed.governance_preview?.form_pattern.review_result?.adjudication.confidence, 0.89);
     assert.equal(parsed.governance_preview?.form_pattern.admissibility?.admissible, true);
     assert.equal(parsed.governance_preview?.form_pattern.admissibility?.accepted_mutation_count, 1);
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.applies, true);
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.source, "form_pattern_governance_review");
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.base_pattern_state, "provisional");
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.review_suggested_pattern_state, "stable");
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.effective_pattern_state, "stable");
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.reason_code, "high_confidence_pattern_stabilization");
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.review_supplied, true);
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.admissibility_evaluated, true);
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.admissible, true);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.policy_effect_applies, true);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.base_pattern_state, "provisional");
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.effective_pattern_state, "stable");
     assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.stage_order, [
       "review_packet_built",
       "review_result_received",
       "admissibility_evaluated",
+      "policy_effect_derived",
     ]);
     assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.reason_codes, []);
   } finally {
@@ -728,15 +749,27 @@ test("tools feedback form_pattern governance preview rejects low-confidence revi
     const parsed = ToolsFeedbackResponseSchema.parse(feedback);
     assert.equal(parsed.governance_preview?.form_pattern.admissibility?.admissible, false);
     assert.deepEqual(parsed.governance_preview?.form_pattern.admissibility?.reason_codes, ["confidence_too_low"]);
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.applies, false);
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.source, "default_pattern_anchor_state");
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.base_pattern_state, "provisional");
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.effective_pattern_state, "provisional");
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.reason_code, "review_not_admissible");
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.review_supplied, true);
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.admissibility_evaluated, true);
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.admissible, false);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.policy_effect_applies, false);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.base_pattern_state, "provisional");
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.effective_pattern_state, "provisional");
     assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.stage_order, [
       "review_packet_built",
       "review_result_received",
       "admissibility_evaluated",
+      "policy_effect_derived",
     ]);
-    assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.reason_codes, ["confidence_too_low"]);
+    assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.reason_codes, [
+      "confidence_too_low",
+      "review_not_admissible",
+    ]);
   } finally {
     await liteWriteStore.close();
   }

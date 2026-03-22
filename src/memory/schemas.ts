@@ -1239,21 +1239,43 @@ export const ToolsFeedbackFormPatternGovernanceDecisionTraceSchema = z.object({
   review_supplied: z.boolean(),
   admissibility_evaluated: z.boolean(),
   admissible: z.boolean().nullable(),
+  policy_effect_applies: z.boolean(),
+  base_pattern_state: z.enum(["provisional", "stable"]),
+  effective_pattern_state: z.enum(["provisional", "stable"]),
   stage_order: z.array(z.enum([
     "review_packet_built",
     "review_result_received",
     "admissibility_evaluated",
-  ])).min(1).max(3),
+    "policy_effect_derived",
+  ])).min(1).max(4),
   reason_codes: z.array(z.string().min(1).max(128)).max(8).default([]),
 }).passthrough();
 
 export type ToolsFeedbackFormPatternGovernanceDecisionTrace = z.infer<typeof ToolsFeedbackFormPatternGovernanceDecisionTraceSchema>;
+
+export const ToolsFeedbackFormPatternGovernancePolicyEffectSchema = z.object({
+  source: z.enum(["default_pattern_anchor_state", "form_pattern_governance_review"]),
+  applies: z.boolean(),
+  base_pattern_state: z.enum(["provisional", "stable"]),
+  review_suggested_pattern_state: z.enum(["provisional", "stable"]).nullable().optional(),
+  effective_pattern_state: z.enum(["provisional", "stable"]),
+  reason_code: z.enum([
+    "review_not_supplied",
+    "review_not_admissible",
+    "already_stable",
+    "review_did_not_raise_pattern_state",
+    "high_confidence_pattern_stabilization",
+  ]),
+}).passthrough();
+
+export type ToolsFeedbackFormPatternGovernancePolicyEffect = z.infer<typeof ToolsFeedbackFormPatternGovernancePolicyEffectSchema>;
 
 export const ToolsFeedbackGovernancePreviewSchema = z.object({
   form_pattern: z.object({
     review_packet: MemoryFormPatternSemanticReviewPacketSchema,
     review_result: MemoryFormPatternSemanticReviewResultSchema.nullable().optional(),
     admissibility: MemoryAdmissibilityResultSchema.nullable().optional(),
+    policy_effect: ToolsFeedbackFormPatternGovernancePolicyEffectSchema.nullable().optional(),
     decision_trace: ToolsFeedbackFormPatternGovernanceDecisionTraceSchema,
   }).passthrough(),
 }).passthrough();

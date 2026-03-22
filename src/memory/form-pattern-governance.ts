@@ -6,6 +6,8 @@ import {
   type MemoryFormPatternInput,
   type MemoryFormPatternSemanticReviewPacket,
   type MemoryFormPatternSemanticReviewResult,
+  ToolsFeedbackFormPatternGovernancePolicyEffectSchema,
+  type ToolsFeedbackFormPatternGovernancePolicyEffect,
 } from "./schemas.js";
 
 type FormPatternSourceExample = {
@@ -131,5 +133,67 @@ export function evaluateFormPatternSemanticReview(args: {
       review_version: review.review_version,
       confidence: review.adjudication.confidence,
     },
+  });
+}
+
+export function deriveFormPatternSemanticPolicyEffect(args: {
+  basePatternState: "provisional" | "stable";
+  review: MemoryFormPatternSemanticReviewResult | null;
+  admissibility: MemoryAdmissibilityResult | null;
+  minPromotionConfidence?: number;
+}): ToolsFeedbackFormPatternGovernancePolicyEffect {
+  const minPromotionConfidence = args.minPromotionConfidence ?? 0.85;
+
+  if (!args.review) {
+    return ToolsFeedbackFormPatternGovernancePolicyEffectSchema.parse({
+      source: "default_pattern_anchor_state",
+      applies: false,
+      base_pattern_state: args.basePatternState,
+      review_suggested_pattern_state: null,
+      effective_pattern_state: args.basePatternState,
+      reason_code: "review_not_supplied",
+    });
+  }
+
+  if (!args.admissibility?.admissible) {
+    return ToolsFeedbackFormPatternGovernancePolicyEffectSchema.parse({
+      source: "default_pattern_anchor_state",
+      applies: false,
+      base_pattern_state: args.basePatternState,
+      review_suggested_pattern_state: null,
+      effective_pattern_state: args.basePatternState,
+      reason_code: "review_not_admissible",
+    });
+  }
+
+  if (args.basePatternState === "stable") {
+    return ToolsFeedbackFormPatternGovernancePolicyEffectSchema.parse({
+      source: "default_pattern_anchor_state",
+      applies: false,
+      base_pattern_state: args.basePatternState,
+      review_suggested_pattern_state: "stable",
+      effective_pattern_state: args.basePatternState,
+      reason_code: "already_stable",
+    });
+  }
+
+  if (args.review.adjudication.confidence < minPromotionConfidence) {
+    return ToolsFeedbackFormPatternGovernancePolicyEffectSchema.parse({
+      source: "default_pattern_anchor_state",
+      applies: false,
+      base_pattern_state: args.basePatternState,
+      review_suggested_pattern_state: "provisional",
+      effective_pattern_state: args.basePatternState,
+      reason_code: "review_did_not_raise_pattern_state",
+    });
+  }
+
+  return ToolsFeedbackFormPatternGovernancePolicyEffectSchema.parse({
+    source: "form_pattern_governance_review",
+    applies: true,
+    base_pattern_state: args.basePatternState,
+    review_suggested_pattern_state: "stable",
+    effective_pattern_state: "stable",
+    reason_code: "high_confidence_pattern_stabilization",
   });
 }

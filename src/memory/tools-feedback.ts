@@ -18,6 +18,7 @@ import {
   type MemoryFormPatternSemanticReviewResult,
   type MemoryAnchorV1,
   type ToolsFeedbackGovernanceInput,
+  type ToolsFeedbackFormPatternGovernanceDecisionTrace,
   type ToolsFeedbackGovernancePreview,
   type ToolsFeedbackResponse,
 } from "./schemas.js";
@@ -25,7 +26,11 @@ import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
 import { writeToolsDecisionPatternAnchor } from "./tools-pattern-anchor.js";
-import { buildFormPatternSemanticReviewPacket, evaluateFormPatternSemanticReview } from "./form-pattern-governance.js";
+import {
+  buildFormPatternSemanticReviewPacket,
+  deriveFormPatternSemanticPolicyEffect,
+  evaluateFormPatternSemanticReview,
+} from "./form-pattern-governance.js";
 import type {
   EmbeddedExecutionDecisionView,
   EmbeddedMemoryRuntime,
@@ -148,25 +153,38 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
         review: reviewResult,
       })
     : null;
-  const stageOrder: Array<"review_packet_built" | "review_result_received" | "admissibility_evaluated"> = ["review_packet_built"];
+  const policyEffect = deriveFormPatternSemanticPolicyEffect({
+    basePatternState: args.anchor.pattern_state ?? "provisional",
+    review: reviewResult,
+    admissibility,
+  });
+  const stageOrder: Array<"review_packet_built" | "review_result_received" | "admissibility_evaluated" | "policy_effect_derived"> = ["review_packet_built"];
   if (reviewResult) {
     stageOrder.push("review_result_received");
     stageOrder.push("admissibility_evaluated");
   }
+  stageOrder.push("policy_effect_derived");
+  const decisionTrace: ToolsFeedbackFormPatternGovernanceDecisionTrace = {
+    trace_version: "form_pattern_governance_trace_v1",
+    review_supplied: !!reviewResult,
+    admissibility_evaluated: !!reviewResult,
+    admissible: admissibility?.admissible ?? null,
+    policy_effect_applies: policyEffect.applies,
+    base_pattern_state: policyEffect.base_pattern_state,
+    effective_pattern_state: policyEffect.effective_pattern_state,
+    stage_order: stageOrder,
+    reason_codes: policyEffect.applies
+      ? admissibility?.reason_codes ?? []
+      : [...(admissibility?.reason_codes ?? []), policyEffect.reason_code],
+  };
 
   return {
     form_pattern: {
       review_packet: reviewPacket,
       review_result: reviewResult,
       admissibility,
-      decision_trace: {
-        trace_version: "form_pattern_governance_trace_v1",
-        review_supplied: !!reviewResult,
-        admissibility_evaluated: !!reviewResult,
-        admissible: admissibility?.admissible ?? null,
-        stage_order: stageOrder,
-        reason_codes: admissibility?.reason_codes ?? [],
-      },
+      policy_effect: policyEffect,
+      decision_trace: decisionTrace,
     },
   };
 }
