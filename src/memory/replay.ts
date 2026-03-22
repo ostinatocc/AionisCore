@@ -1068,6 +1068,19 @@ function deriveReplayGovernancePolicyEffect(args: {
   };
 }
 
+function applyReplayGovernancePolicyEffect(args: {
+  config: ReplayLearningProjectionResolvedConfig;
+  governancePreview: ReplayRepairReviewGovernancePreview | null;
+}): ReplayLearningProjectionResolvedConfig {
+  const policyEffect = args.governancePreview?.promote_memory.policy_effect ?? null;
+  if (!policyEffect?.applies) return args.config;
+  if (policyEffect.effective_target_rule_state !== "shadow") return args.config;
+  return {
+    ...args.config,
+    target_rule_state: "shadow",
+  };
+}
+
 function asStringArray(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
   return input
