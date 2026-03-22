@@ -25,6 +25,10 @@ import {
   type ReplayLearningProjectionResolvedConfig,
   type ReplayLearningProjectionResult,
 } from "./replay-learning.js";
+import {
+  buildGovernanceReasonCodes,
+  buildGovernanceTraceStageOrder,
+} from "./governance-shared.js";
 import { evaluatePromoteMemorySemanticReview } from "./promote-memory-governance.js";
 import { buildReplayCostSignals } from "./cost-signals.js";
 import {
@@ -1089,11 +1093,11 @@ function buildReplayGovernanceDecisionTrace(args: {
   const reviewSupplied = !!args.governancePreview.promote_memory.review_result;
   const admissibility = args.governancePreview.promote_memory.admissibility ?? null;
   const policyEffect = args.governancePreview.promote_memory.policy_effect ?? null;
-  const stageOrder: ReplayRepairReviewGovernanceDecisionTrace["stage_order"] = ["review_packet_built"];
-  if (reviewSupplied) stageOrder.push("review_result_received");
-  if (admissibility) stageOrder.push("admissibility_evaluated");
-  stageOrder.push("policy_effect_derived");
-  stageOrder.push("runtime_policy_applied");
+  const stageOrder: ReplayRepairReviewGovernanceDecisionTrace["stage_order"] = buildGovernanceTraceStageOrder({
+    reviewSupplied,
+    admissibilityEvaluated: admissibility != null,
+    runtimePolicyApplied: true,
+  });
 
   const baseTargetRuleState = policyEffect?.base_target_rule_state ?? args.effectiveConfig.target_rule_state;
   const effectiveTargetRuleState = args.effectiveConfig.target_rule_state;
@@ -1108,10 +1112,11 @@ function buildReplayGovernanceDecisionTrace(args: {
     effective_target_rule_state: effectiveTargetRuleState,
     runtime_apply_changed_target_rule_state: baseTargetRuleState !== effectiveTargetRuleState,
     stage_order: stageOrder,
-    reason_codes: [
-      ...(admissibility?.reason_codes ?? []),
-      ...(policyEffect?.reason_code ? [policyEffect.reason_code] : []),
-    ],
+    reason_codes: buildGovernanceReasonCodes({
+      admissibility,
+      policyEffectReasonCode: policyEffect?.reason_code ?? null,
+      includePolicyEffectReasonCode: true,
+    }),
   };
 }
 

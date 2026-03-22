@@ -27,6 +27,11 @@ import { resolveTenantScope } from "./tenant.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
 import { writeToolsDecisionPatternAnchor } from "./tools-pattern-anchor.js";
 import {
+  appendGovernanceRuntimePolicyAppliedStage,
+  buildGovernanceReasonCodes,
+  buildGovernanceTraceStageOrder,
+} from "./governance-shared.js";
+import {
   buildFormPatternSemanticReviewPacket,
   deriveFormPatternSemanticPolicyEffect,
   evaluateFormPatternSemanticReview,
@@ -158,12 +163,10 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
     review: reviewResult,
     admissibility,
   });
-  const stageOrder: Array<"review_packet_built" | "review_result_received" | "admissibility_evaluated" | "policy_effect_derived"> = ["review_packet_built"];
-  if (reviewResult) {
-    stageOrder.push("review_result_received");
-    stageOrder.push("admissibility_evaluated");
-  }
-  stageOrder.push("policy_effect_derived");
+  const stageOrder: ToolsFeedbackFormPatternGovernanceDecisionTrace["stage_order"] = buildGovernanceTraceStageOrder({
+    reviewSupplied: !!reviewResult,
+    admissibilityEvaluated: !!reviewResult,
+  });
   const decisionTrace: ToolsFeedbackFormPatternGovernanceDecisionTrace = {
     trace_version: "form_pattern_governance_trace_v1",
     review_supplied: !!reviewResult,
@@ -174,9 +177,11 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
     effective_pattern_state: policyEffect.effective_pattern_state,
     runtime_apply_changed_pattern_state: false,
     stage_order: stageOrder,
-    reason_codes: policyEffect.applies
-      ? admissibility?.reason_codes ?? []
-      : [...(admissibility?.reason_codes ?? []), policyEffect.reason_code],
+    reason_codes: buildGovernanceReasonCodes({
+      admissibility,
+      policyEffectReasonCode: policyEffect.reason_code,
+      includePolicyEffectReasonCode: !policyEffect.applies,
+    }),
   };
 
   return {
@@ -657,10 +662,9 @@ export async function toolSelectionFeedback(
             anchorOut = applied;
             governancePreview.form_pattern.decision_trace.runtime_apply_changed_pattern_state =
               (anchorOut.anchor.pattern_state ?? "provisional") === "stable";
-            governancePreview.form_pattern.decision_trace.stage_order = [
-              ...governancePreview.form_pattern.decision_trace.stage_order,
-              "runtime_policy_applied",
-            ];
+            const nextStageOrder: ToolsFeedbackFormPatternGovernanceDecisionTrace["stage_order"] =
+              appendGovernanceRuntimePolicyAppliedStage(governancePreview.form_pattern.decision_trace.stage_order);
+            governancePreview.form_pattern.decision_trace.stage_order = nextStageOrder;
           }
         }
         patternAnchor = {
@@ -1041,10 +1045,9 @@ export async function toolSelectionFeedback(
           anchorOut = applied;
           governancePreview.form_pattern.decision_trace.runtime_apply_changed_pattern_state =
             (anchorOut.anchor.pattern_state ?? "provisional") === "stable";
-          governancePreview.form_pattern.decision_trace.stage_order = [
-            ...governancePreview.form_pattern.decision_trace.stage_order,
-            "runtime_policy_applied",
-          ];
+          const nextStageOrder: ToolsFeedbackFormPatternGovernanceDecisionTrace["stage_order"] =
+            appendGovernanceRuntimePolicyAppliedStage(governancePreview.form_pattern.decision_trace.stage_order);
+          governancePreview.form_pattern.decision_trace.stage_order = nextStageOrder;
         }
       }
       patternAnchor = {
