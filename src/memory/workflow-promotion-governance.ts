@@ -9,19 +9,11 @@ import {
 } from "./schemas.js";
 import { buildGovernanceReasonCodes, buildGovernanceTraceStageOrder } from "./governance-shared.js";
 import {
-  buildPromoteMemorySemanticReviewPacket,
-  evaluatePromoteMemorySemanticReview,
+  type PromoteMemoryCandidateExample,
 } from "./promote-memory-governance.js";
+import { runPromoteMemoryGovernancePreview } from "./promote-memory-governance-shared.js";
 
-type WorkflowPromotionCandidateExample = {
-  node_id: string;
-  title?: string | null;
-  summary?: string | null;
-  task_signature?: string | null;
-  workflow_signature?: string | null;
-  outcome_status?: string | null;
-  success_score?: number | null;
-};
+type WorkflowPromotionCandidateExample = PromoteMemoryCandidateExample;
 
 export function deriveWorkflowPromotionSemanticPolicyEffect(args: {
   basePromotionState: "candidate" | "stable";
@@ -116,31 +108,18 @@ export function buildWorkflowPromotionGovernancePreview(args: {
     input_sha256: args.inputSha256,
   });
 
-  const reviewPacket = buildPromoteMemorySemanticReviewPacket({
-    input,
-    candidateExamples: args.candidateExamples,
-  });
-  const reviewResult = args.reviewResult ?? null;
-  const admissibility = reviewResult
-    ? evaluatePromoteMemorySemanticReview({
-        packet: reviewPacket,
-        review: reviewResult,
-      })
-    : null;
-
-  const policyEffect = deriveWorkflowPromotionSemanticPolicyEffect({
-    basePromotionState: "candidate",
-    review: reviewResult,
-    admissibility,
-  });
-
   return {
-    promote_memory: {
-      review_packet: reviewPacket,
-      review_result: reviewResult,
-      admissibility,
-      policy_effect: policyEffect,
-      decision_trace: {
+    promote_memory: runPromoteMemoryGovernancePreview({
+      input,
+      candidateExamples: args.candidateExamples,
+      reviewResult: args.reviewResult ?? null,
+      derivePolicyEffect: ({ review, admissibility }) =>
+        deriveWorkflowPromotionSemanticPolicyEffect({
+          basePromotionState: "candidate",
+          review,
+          admissibility,
+        }),
+      buildDecisionTrace: ({ reviewResult, admissibility, policyEffect }) => ({
         trace_version: "workflow_promotion_governance_trace_v1",
         review_supplied: !!reviewResult,
         admissibility_evaluated: admissibility != null,
@@ -157,7 +136,7 @@ export function buildWorkflowPromotionGovernancePreview(args: {
           policyEffectReasonCode: policyEffect.reason_code,
           includePolicyEffectReasonCode: !policyEffect.applies,
         }),
-      },
-    },
+      }),
+    }),
   };
 }

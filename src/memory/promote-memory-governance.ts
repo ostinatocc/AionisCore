@@ -8,7 +8,7 @@ import {
   type MemoryPromoteSemanticReviewResult,
 } from "./schemas.js";
 
-type PromoteMemoryCandidateExample = {
+export type PromoteMemoryCandidateExample = {
   node_id: string;
   title?: string | null;
   summary?: string | null;

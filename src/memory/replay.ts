@@ -29,7 +29,6 @@ import {
   buildGovernanceReasonCodes,
   buildGovernanceTraceStageOrder,
 } from "./governance-shared.js";
-import { evaluatePromoteMemorySemanticReview } from "./promote-memory-governance.js";
 import { buildReplayCostSignals } from "./cost-signals.js";
 import {
   ReplayPlaybookDispatchRequest,
@@ -64,7 +63,7 @@ import {
   type ReplayStepAfterInput,
   type ReplayStepBeforeInput,
 } from "./schemas.js";
-import { buildPromoteMemorySemanticReviewPacket } from "./promote-memory-governance.js";
+import { runPromoteMemoryGovernancePreview } from "./promote-memory-governance-shared.js";
 import { resolveTenantScope } from "./tenant.js";
 import { summarizeToolResult } from "./tool-result-summary.js";
 import { buildAionisUri } from "./uri.js";
@@ -1006,10 +1005,11 @@ function hasExplicitReplayLearningProjectionTargetRuleState(requestObj: Record<s
 function deriveReplayGovernancePolicyEffect(args: {
   baseTargetRuleState: "draft" | "shadow";
   explicitTargetRuleState: boolean;
-  governancePreview: ReplayRepairReviewGovernancePreview;
+  review: ReplayRepairReviewGovernancePreview["promote_memory"]["review_result"] | null;
+  admissibility: ReplayRepairReviewGovernancePreview["promote_memory"]["admissibility"] | null;
 }): ReplayRepairReviewGovernancePolicyEffect {
-  const admissibility = args.governancePreview.promote_memory.admissibility ?? null;
-  const review = args.governancePreview.promote_memory.review_result ?? null;
+  const admissibility = args.admissibility ?? null;
+  const review = args.review ?? null;
   const baseTargetRuleState = args.baseTargetRuleState;
 
   if (!review) {
@@ -1075,9 +1075,9 @@ function deriveReplayGovernancePolicyEffect(args: {
 
 function applyReplayGovernancePolicyEffect(args: {
   config: ReplayLearningProjectionResolvedConfig;
-  governancePreview: ReplayRepairReviewGovernancePreview | null;
+  policyEffect: ReplayRepairReviewGovernancePolicyEffect | null;
 }): ReplayLearningProjectionResolvedConfig {
-  const policyEffect = args.governancePreview?.promote_memory.policy_effect ?? null;
+  const policyEffect = args.policyEffect ?? null;
   if (!policyEffect?.applies) return args.config;
   if (policyEffect.effective_target_rule_state !== "shadow") return args.config;
   return {
@@ -1087,12 +1087,14 @@ function applyReplayGovernancePolicyEffect(args: {
 }
 
 function buildReplayGovernanceDecisionTrace(args: {
-  governancePreview: ReplayRepairReviewGovernancePreview;
+  reviewResult: ReplayRepairReviewGovernancePreview["promote_memory"]["review_result"] | null;
+  admissibility: ReplayRepairReviewGovernancePreview["promote_memory"]["admissibility"] | null;
+  policyEffect: ReplayRepairReviewGovernancePreview["promote_memory"]["policy_effect"] | null;
   effectiveConfig: ReplayLearningProjectionResolvedConfig;
 }): ReplayRepairReviewGovernanceDecisionTrace {
-  const reviewSupplied = !!args.governancePreview.promote_memory.review_result;
-  const admissibility = args.governancePreview.promote_memory.admissibility ?? null;
-  const policyEffect = args.governancePreview.promote_memory.policy_effect ?? null;
+  const reviewSupplied = !!args.reviewResult;
+  const admissibility = args.admissibility ?? null;
+  const policyEffect = args.policyEffect ?? null;
   const stageOrder: ReplayRepairReviewGovernanceDecisionTrace["stage_order"] = buildGovernanceTraceStageOrder({
     reviewSupplied,
     admissibilityEvaluated: admissibility != null,
@@ -4515,47 +4517,50 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
       target_level: "L2",
       input_text: `promote replay repair review ${parsed.playbook_id} v${finalVersion}`,
     });
-    governancePreview = {
-      promote_memory: {
-        review_packet: buildPromoteMemorySemanticReviewPacket({
-          input: promoteInput,
-          candidateExamples: [
-            {
-              node_id: finalNodeId ?? source.id,
-              title: source.title ?? null,
-              summary: source.text_summary ?? null,
-              workflow_signature: toStringOrNull((reviewedSlots as any).workflow_signature) ?? null,
-              outcome_status: nextStatus === "disabled" ? "disabled" : "success",
-              success_score: 1,
-            },
-          ],
-        }),
+    const candidateExamples = [
+      {
+        node_id: finalNodeId ?? source.id,
+        title: source.title ?? null,
+        summary: source.text_summary ?? null,
+        workflow_signature: toStringOrNull((reviewedSlots as any).workflow_signature) ?? null,
+        outcome_status: nextStatus === "disabled" ? "disabled" : "success",
+        success_score: 1,
       },
-    };
+    ];
     const suppliedReview = asObject((parsed as any).governance_review)?.promote_memory
       && asObject(asObject((parsed as any).governance_review)?.promote_memory)?.review_result
       ? (asObject(asObject((parsed as any).governance_review)?.promote_memory)?.review_result as Record<string, unknown>)
       : null;
-    if (suppliedReview) {
-      const reviewResult = suppliedReview as any;
-      governancePreview.promote_memory.review_result = reviewResult;
-      governancePreview.promote_memory.admissibility = evaluatePromoteMemorySemanticReview({
-        packet: governancePreview.promote_memory.review_packet,
-        review: reviewResult,
-      });
-    }
-    governancePreview.promote_memory.policy_effect = deriveReplayGovernancePolicyEffect({
-      baseTargetRuleState: learningProjectionConfig.target_rule_state,
-      explicitTargetRuleState: explicitLearningProjectionTargetRuleState,
-      governancePreview,
-    });
+    governancePreview = {
+      promote_memory: runPromoteMemoryGovernancePreview({
+        input: promoteInput,
+        candidateExamples,
+        reviewResult: (suppliedReview as any) ?? null,
+        derivePolicyEffect: ({ review, admissibility }) =>
+          deriveReplayGovernancePolicyEffect({
+            baseTargetRuleState: learningProjectionConfig.target_rule_state,
+            explicitTargetRuleState: explicitLearningProjectionTargetRuleState,
+            review,
+            admissibility,
+          }),
+        buildDecisionTrace: ({ reviewResult, admissibility, policyEffect }) => {
+          const effectiveConfig = applyReplayGovernancePolicyEffect({
+            config: learningProjectionConfig,
+            policyEffect,
+          });
+          effectiveLearningProjectionConfig = effectiveConfig;
+          return buildReplayGovernanceDecisionTrace({
+            reviewResult,
+            admissibility,
+            policyEffect: policyEffect ?? null,
+            effectiveConfig,
+          });
+        },
+      }),
+    };
     effectiveLearningProjectionConfig = applyReplayGovernancePolicyEffect({
       config: learningProjectionConfig,
-      governancePreview,
-    });
-    governancePreview.promote_memory.decision_trace = buildReplayGovernanceDecisionTrace({
-      governancePreview,
-      effectiveConfig: effectiveLearningProjectionConfig,
+      policyEffect: governancePreview.promote_memory.policy_effect ?? null,
     });
   }
   if (parsed.action !== "approve") {
