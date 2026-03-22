@@ -43,6 +43,7 @@ import {
   ReplayStepBeforeRequest,
   MemoryAnchorV1Schema,
   MemoryPromoteRequest,
+  type ReplayRepairReviewGovernanceDecisionTrace,
   type ReplayRepairReviewGovernancePolicyEffect,
   type ReplayRepairReviewGovernancePreview,
   type ReplayPlaybookDispatchInput,
@@ -1078,6 +1079,39 @@ function applyReplayGovernancePolicyEffect(args: {
   return {
     ...args.config,
     target_rule_state: "shadow",
+  };
+}
+
+function buildReplayGovernanceDecisionTrace(args: {
+  governancePreview: ReplayRepairReviewGovernancePreview;
+  effectiveConfig: ReplayLearningProjectionResolvedConfig;
+}): ReplayRepairReviewGovernanceDecisionTrace {
+  const reviewSupplied = !!args.governancePreview.promote_memory.review_result;
+  const admissibility = args.governancePreview.promote_memory.admissibility ?? null;
+  const policyEffect = args.governancePreview.promote_memory.policy_effect ?? null;
+  const stageOrder: ReplayRepairReviewGovernanceDecisionTrace["stage_order"] = ["review_packet_built"];
+  if (reviewSupplied) stageOrder.push("review_result_received");
+  if (admissibility) stageOrder.push("admissibility_evaluated");
+  stageOrder.push("policy_effect_derived");
+  stageOrder.push("runtime_policy_applied");
+
+  const baseTargetRuleState = policyEffect?.base_target_rule_state ?? args.effectiveConfig.target_rule_state;
+  const effectiveTargetRuleState = args.effectiveConfig.target_rule_state;
+
+  return {
+    trace_version: "replay_governance_trace_v1",
+    review_supplied: reviewSupplied,
+    admissibility_evaluated: admissibility != null,
+    admissible: admissibility?.admissible ?? null,
+    policy_effect_applies: policyEffect?.applies ?? false,
+    base_target_rule_state: baseTargetRuleState,
+    effective_target_rule_state: effectiveTargetRuleState,
+    runtime_apply_changed_target_rule_state: baseTargetRuleState !== effectiveTargetRuleState,
+    stage_order: stageOrder,
+    reason_codes: [
+      ...(admissibility?.reason_codes ?? []),
+      ...(policyEffect?.reason_code ? [policyEffect.reason_code] : []),
+    ],
   };
 }
 
@@ -4466,6 +4500,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
   const explicitLearningProjectionTargetRuleState = hasExplicitReplayLearningProjectionTargetRuleState(
     asObject((parsed as any).learning_projection),
   );
+  let effectiveLearningProjectionConfig = learningProjectionConfig;
   let learningProjectionResult: ReplayLearningProjectionResult | undefined;
   let governancePreview: ReplayRepairReviewGovernancePreview | null = null;
   if (parsed.action === "approve" && reviewState === "approved" && learningProjectionConfig.enabled) {
@@ -4509,35 +4544,43 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
       explicitTargetRuleState: explicitLearningProjectionTargetRuleState,
       governancePreview,
     });
+    effectiveLearningProjectionConfig = applyReplayGovernancePolicyEffect({
+      config: learningProjectionConfig,
+      governancePreview,
+    });
+    governancePreview.promote_memory.decision_trace = buildReplayGovernanceDecisionTrace({
+      governancePreview,
+      effectiveConfig: effectiveLearningProjectionConfig,
+    });
   }
   if (parsed.action !== "approve") {
     learningProjectionResult = {
       triggered: false,
-      delivery: learningProjectionConfig.delivery,
+      delivery: effectiveLearningProjectionConfig.delivery,
       status: "skipped",
       reason: "review_action_not_approve",
     };
   } else if (reviewState !== "approved") {
     learningProjectionResult = {
       triggered: false,
-      delivery: learningProjectionConfig.delivery,
+      delivery: effectiveLearningProjectionConfig.delivery,
       status: "skipped",
       reason: "review_not_approved",
     };
-  } else if (!learningProjectionConfig.enabled) {
+  } else if (!effectiveLearningProjectionConfig.enabled) {
     learningProjectionResult = {
       triggered: false,
-      delivery: learningProjectionConfig.delivery,
+      delivery: effectiveLearningProjectionConfig.delivery,
       status: "skipped",
       reason: "learning_projection_disabled",
     };
-  } else if (learningProjectionConfig.delivery === "async_outbox" && asLiteReplayWriteStore(opts.writeAccess)) {
+  } else if (effectiveLearningProjectionConfig.delivery === "async_outbox" && asLiteReplayWriteStore(opts.writeAccess)) {
     throw new HttpError(
       400,
       "replay_learning_async_outbox_unsupported_in_lite",
       "lite replay repair review requires sync_inline learning projection delivery",
       {
-        delivery: learningProjectionConfig.delivery,
+        delivery: effectiveLearningProjectionConfig.delivery,
         supported_delivery: "sync_inline",
       },
     );
@@ -4563,13 +4606,13 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
         success_ratio: gateMetrics?.success_ratio ?? 1,
       },
     };
-    if (learningProjectionConfig.delivery === "sync_inline") {
+    if (effectiveLearningProjectionConfig.delivery === "sync_inline") {
       try {
-        learningProjectionResult = await applyReplayLearningProjection(client, projectionSource, learningProjectionConfig, opts);
+        learningProjectionResult = await applyReplayLearningProjection(client, projectionSource, effectiveLearningProjectionConfig, opts);
       } catch (err: any) {
         learningProjectionResult = {
           triggered: true,
-          delivery: learningProjectionConfig.delivery,
+          delivery: effectiveLearningProjectionConfig.delivery,
           status: "failed",
           reason: String(err?.code ?? err?.message ?? err),
         };
@@ -4584,7 +4627,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
           playbook_id: parsed.playbook_id,
           playbook_version: finalVersion,
           source_commit_id: finalCommitId ?? null,
-          config: learningProjectionConfig,
+          config: effectiveLearningProjectionConfig,
         };
         const enq = await enqueueReplayLearningProjectionOutbox(client, {
           scopeKey: tenancy.scope_key,
@@ -4594,14 +4637,14 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
         });
         learningProjectionResult = {
           triggered: true,
-          delivery: learningProjectionConfig.delivery,
+          delivery: effectiveLearningProjectionConfig.delivery,
           status: "queued",
           job_key: enq.job_key,
         };
       } catch (err: any) {
         learningProjectionResult = {
           triggered: true,
-          delivery: learningProjectionConfig.delivery,
+          delivery: effectiveLearningProjectionConfig.delivery,
           status: "failed",
           reason: String(err?.code ?? err?.message ?? err),
         };

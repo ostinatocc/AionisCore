@@ -1156,12 +1156,34 @@ export const ReplayRepairReviewGovernancePolicyEffectSchema = z.object({
 
 export type ReplayRepairReviewGovernancePolicyEffect = z.infer<typeof ReplayRepairReviewGovernancePolicyEffectSchema>;
 
+export const ReplayRepairReviewGovernanceDecisionTraceSchema = z.object({
+  trace_version: z.literal("replay_governance_trace_v1"),
+  review_supplied: z.boolean(),
+  admissibility_evaluated: z.boolean(),
+  admissible: z.boolean().nullable(),
+  policy_effect_applies: z.boolean(),
+  base_target_rule_state: z.enum(["draft", "shadow"]),
+  effective_target_rule_state: z.enum(["draft", "shadow"]),
+  runtime_apply_changed_target_rule_state: z.boolean(),
+  stage_order: z.array(z.enum([
+    "review_packet_built",
+    "review_result_received",
+    "admissibility_evaluated",
+    "policy_effect_derived",
+    "runtime_policy_applied",
+  ])).min(2).max(5),
+  reason_codes: z.array(z.string().min(1).max(128)).max(8).default([]),
+}).passthrough();
+
+export type ReplayRepairReviewGovernanceDecisionTrace = z.infer<typeof ReplayRepairReviewGovernanceDecisionTraceSchema>;
+
 export const ReplayRepairReviewGovernancePreviewSchema = z.object({
   promote_memory: z.object({
     review_packet: MemoryPromoteSemanticReviewPacketSchema,
     review_result: MemoryPromoteSemanticReviewResultSchema.nullable().optional(),
     admissibility: MemoryAdmissibilityResultSchema.nullable().optional(),
     policy_effect: ReplayRepairReviewGovernancePolicyEffectSchema.nullable().optional(),
+    decision_trace: ReplayRepairReviewGovernanceDecisionTraceSchema.nullable().optional(),
   }),
 }).passthrough();
 

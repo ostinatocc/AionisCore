@@ -69,6 +69,8 @@ async function updateRuleStateLite(
     scope,
     id: parsed.rule_node_id,
     type: "rule",
+    consumerAgentId: parsed.actor ?? "system",
+    consumerTeamId: null,
   });
   if (!node) {
     badRequest("rule_not_found_in_scope", "rule_node_id was not found in this scope", {

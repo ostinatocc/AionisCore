@@ -129,6 +129,7 @@ export async function startAionisRuntime(): Promise<void> {
     embedder,
     embeddingSurfacePolicy,
     embeddedRuntime,
+    liteWriteStore,
     liteReplayAccess,
     liteReplayStore,
     sandboxAllowedCommands,

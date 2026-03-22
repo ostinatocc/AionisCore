@@ -135,6 +135,7 @@ export function createReplayRuntimeOptionBuilders(args: {
   embedder: any;
   embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
   embeddedRuntime: any;
+  liteWriteStore?: any;
   liteReplayAccess?: any;
   liteReplayStore?: any;
   sandboxAllowedCommands: any;
@@ -148,6 +149,7 @@ export function createReplayRuntimeOptionBuilders(args: {
     embedder,
     embeddingSurfacePolicy,
     embeddedRuntime,
+    liteWriteStore,
     liteReplayAccess,
     liteReplayStore,
     sandboxAllowedCommands,
@@ -171,6 +173,7 @@ export function createReplayRuntimeOptionBuilders(args: {
       writeAccessShadowMirrorV2,
       embedder: writeEmbedder,
       embeddedRuntime,
+      writeAccess: liteWriteStore ?? undefined,
       replayAccess: liteReplayAccess,
       replayMirror: liteReplayStore,
       localExecutor: {
@@ -227,6 +230,7 @@ export function createReplayRuntimeOptionBuilders(args: {
         writeAccessShadowMirrorV2,
         embedder: writeEmbedder,
         embeddedRuntime,
+        writeAccess: liteWriteStore ?? undefined,
         replayAccess: liteReplayAccess,
         replayMirror: liteReplayStore,
       },
