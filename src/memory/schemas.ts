@@ -974,6 +974,7 @@ export const PatternMatchAnchorContractSchema = z.object({
   selected_tool: z.string().nullable().optional(),
   pattern_state: z.string().nullable().optional(),
   credibility_state: z.string().nullable().optional(),
+  trust_hardening: MemoryPatternTrustHardeningSchema.nullable().optional(),
   suppressed: z.boolean().optional(),
   suppression_mode: z.string().nullable().optional(),
   suppression_reason: z.string().nullable().optional(),

@@ -190,6 +190,7 @@ type RecalledToolPattern = {
   similarity: number;
   affinity_level: PatternAffinityLevel;
   affinity_score: number;
+  trust_hardening: Record<string, unknown> | null;
 };
 
 async function recallToolSelectionPatterns(args: {
@@ -247,6 +248,7 @@ async function recallToolSelectionPatterns(args: {
     const patternState = firstString([executionNative?.pattern_state, anchor.pattern_state]) === "stable" ? "stable" : "provisional";
     const toolSet = uniqueStrings(Array.isArray(anchor.tool_set) ? (anchor.tool_set as Array<string | null | undefined>) : []);
     const promotion = asRecord(executionNative?.promotion) ?? asRecord(anchor.promotion);
+    const trustHardening = asRecord(executionNative?.trust_hardening) ?? asRecord(anchor.trust_hardening);
     const maintenance = asRecord(executionNative?.maintenance) ?? asRecord(anchor.maintenance);
     const operatorOverride = readPatternOperatorOverride(slots ?? {});
     const suppressed = isPatternSuppressed(operatorOverride);
@@ -298,6 +300,7 @@ async function recallToolSelectionPatterns(args: {
       similarity: Number(seed?.similarity ?? 0),
       affinity_level: affinity.level,
       affinity_score: affinity.score,
+      trust_hardening: trustHardening,
     });
   }
   return out.sort((a, b) =>
@@ -641,6 +644,7 @@ export async function selectTools(
         offline_priority: pattern.offline_priority,
         distinct_run_count: pattern.distinct_run_count,
         required_distinct_runs: pattern.required_distinct_runs,
+        trust_hardening: pattern.trust_hardening,
         similarity: pattern.similarity,
         confidence: pattern.confidence,
         affinity_level: pattern.affinity_level,

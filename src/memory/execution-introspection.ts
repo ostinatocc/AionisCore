@@ -150,6 +150,7 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
   const execution = asRecord(slots.execution_native_v1);
   const anchor = asRecord(slots.anchor_v1);
   const promotion = asRecord(execution.promotion ?? anchor.promotion);
+  const trustHardening = asRecord(execution.trust_hardening ?? anchor.trust_hardening);
   const maintenance = asRecord(execution.maintenance ?? anchor.maintenance);
   const operatorOverride = readPatternOperatorOverride(slots);
   const suppressed = isPatternSuppressed(operatorOverride);
@@ -180,6 +181,7 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
     suppressed_at: operatorOverride?.updated_at ?? null,
     distinct_run_count: Number.isFinite(distinctRunCount) ? distinctRunCount : null,
     required_distinct_runs: Number.isFinite(requiredDistinctRuns) ? requiredDistinctRuns : null,
+    trust_hardening: Object.keys(trustHardening).length > 0 ? trustHardening : null,
     counter_evidence_count: Number.isFinite(counterEvidenceCount) ? counterEvidenceCount : null,
     counter_evidence_open: counterEvidenceOpen,
     last_transition: firstString(promotion.last_transition),
@@ -206,6 +208,7 @@ function toPatternSignal(entry: ReturnType<typeof toPatternEntry>) {
     suppressed_until: entry.suppressed_until,
     distinct_run_count: entry.distinct_run_count,
     required_distinct_runs: entry.required_distinct_runs,
+    trust_hardening: entry.trust_hardening,
     counter_evidence_count: entry.counter_evidence_count,
     counter_evidence_open: entry.counter_evidence_open,
     last_transition: entry.last_transition,

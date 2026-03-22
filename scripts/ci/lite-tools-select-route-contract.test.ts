@@ -108,6 +108,21 @@ async function seedToolsSelectFixture(dbPath: string) {
       last_validated_at: new Date().toISOString(),
       last_counter_evidence_at: null,
     },
+    trust_hardening: {
+      task_family: "task:repair_export",
+      error_family: "error:node-export-mismatch",
+      observed_task_families: ["task:repair_export"],
+      observed_error_families: ["error:node-export-mismatch"],
+      distinct_task_family_count: 1,
+      distinct_error_family_count: 1,
+      post_contest_observed_run_ids: [],
+      post_contest_distinct_run_count: 0,
+      promotion_gate_kind: "current_distinct_runs_v1",
+      promotion_gate_satisfied: true,
+      revalidation_floor_kind: "post_contest_two_fresh_runs_v1",
+      revalidation_floor_satisfied: true,
+      task_affinity_weighting_enabled: true,
+    },
     maintenance: {
       model: "lazy_online_v1",
       maintenance_state: "retain",
@@ -266,6 +281,9 @@ test("tools_select route returns the stable execution-memory contract surface", 
     assert.equal(body.pattern_matches.anchors[0]?.selected_tool, "edit");
     assert.equal(body.pattern_matches.anchors[0]?.credibility_state, "trusted");
     assert.equal(body.pattern_matches.anchors[0]?.affinity_level, "same_task_family");
+    assert.equal(body.pattern_matches.anchors[0]?.trust_hardening?.promotion_gate_kind, "current_distinct_runs_v1");
+    assert.equal(body.pattern_matches.anchors[0]?.trust_hardening?.revalidation_floor_kind, "post_contest_two_fresh_runs_v1");
+    assert.equal(body.pattern_matches.anchors[0]?.trust_hardening?.task_affinity_weighting_enabled, true);
     assert.deepEqual(body.decision.pattern_summary.used_trusted_pattern_tools, []);
     assert.deepEqual(body.decision.pattern_summary.used_trusted_pattern_anchor_ids, []);
     assert.deepEqual(body.decision.pattern_summary.used_trusted_pattern_affinity_levels ?? [], []);

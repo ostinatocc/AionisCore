@@ -151,6 +151,21 @@ async function seedExecutionIntrospectionFixture(dbPath: string) {
       last_validated_at: "2026-03-20T00:00:00Z",
       last_counter_evidence_at: null,
     },
+    trust_hardening: {
+      task_family: "task:repair_export",
+      error_family: "error:node-export-mismatch",
+      observed_task_families: ["task:repair_export"],
+      observed_error_families: ["error:node-export-mismatch"],
+      distinct_task_family_count: 1,
+      distinct_error_family_count: 1,
+      post_contest_observed_run_ids: [],
+      post_contest_distinct_run_count: 0,
+      promotion_gate_kind: "current_distinct_runs_v1",
+      promotion_gate_satisfied: true,
+      revalidation_floor_kind: "post_contest_two_fresh_runs_v1",
+      revalidation_floor_satisfied: true,
+      task_affinity_weighting_enabled: true,
+    },
     schema_version: "anchor_v1",
   });
   const contestedPattern = MemoryAnchorV1Schema.parse({
@@ -200,6 +215,21 @@ async function seedExecutionIntrospectionFixture(dbPath: string) {
       stable_at: "2026-03-20T00:00:00Z",
       last_validated_at: "2026-03-20T00:00:00Z",
       last_counter_evidence_at: "2026-03-20T00:00:00Z",
+    },
+    trust_hardening: {
+      task_family: "task:repair_export",
+      error_family: "error:node-export-mismatch",
+      observed_task_families: ["task:repair_export"],
+      observed_error_families: ["error:node-export-mismatch"],
+      distinct_task_family_count: 1,
+      distinct_error_family_count: 1,
+      post_contest_observed_run_ids: [randomUUID(), randomUUID()],
+      post_contest_distinct_run_count: 2,
+      promotion_gate_kind: "current_distinct_runs_v1",
+      promotion_gate_satisfied: true,
+      revalidation_floor_kind: "post_contest_two_fresh_runs_v1",
+      revalidation_floor_satisfied: true,
+      task_affinity_weighting_enabled: true,
     },
     schema_version: "anchor_v1",
   });
@@ -684,6 +714,11 @@ test("execution introspection route exposes demo-friendly workflow and pattern s
     assert.equal(body.pattern_maintenance_summary.review_count, 1);
     assert.equal(body.trusted_patterns[0]?.suppressed, true);
     assert.equal(body.trusted_patterns[0]?.suppression_mode, "shadow_learn");
+    assert.equal(body.trusted_patterns[0]?.trust_hardening?.promotion_gate_kind, "current_distinct_runs_v1");
+    assert.equal(body.trusted_patterns[0]?.trust_hardening?.task_affinity_weighting_enabled, true);
+    assert.equal(body.contested_patterns[0]?.trust_hardening?.post_contest_distinct_run_count, 2);
+    assert.equal(body.contested_patterns[0]?.trust_hardening?.revalidation_floor_kind, "post_contest_two_fresh_runs_v1");
+    assert.ok(body.pattern_signals.some((entry) => entry.anchor_id === body.trusted_patterns[0]?.anchor_id && entry.trust_hardening?.promotion_gate_kind === "current_distinct_runs_v1"));
     assert.ok(body.pattern_signals.some((entry) => entry.anchor_id === body.trusted_patterns[0]?.anchor_id && entry.suppressed === true));
     assert.equal(body.candidate_workflows[0]?.projection_generated_by, "execution_write_projection_v1");
     assert.equal(body.candidate_workflows[0]?.projection_source_client_id, "execution-event:ready");

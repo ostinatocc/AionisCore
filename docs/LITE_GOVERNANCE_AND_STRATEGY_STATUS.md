@@ -170,6 +170,7 @@ Current runtime reality:
 19. pattern anchors now persist explicit trust-hardening metadata such as `task_family`, `error_family`, distinct family counts, and current gate metadata, so the next trust-hardening slice no longer depends on implicit branch logic alone
 20. Lite now requires `3` distinct positive runs before a pattern becomes `trusted`, and contested recovery now requires `2` fresh post-contest runs before revalidation
 21. selector reuse now applies deterministic task-affinity weighting, so nearby cross-task recall can remain visible without inheriting flat trusted reuse
+22. selector and execution introspection route contracts now expose persisted pattern `trust_hardening` metadata directly, so operator/debug and benchmark surfaces no longer need to infer current gate and revalidation semantics indirectly from internal anchor payloads
 
 Primary code:
 
@@ -457,8 +458,8 @@ Why:
 Concrete next step:
 
 1. execute the hardening work packages in [docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md](/Volumes/ziel/Aionisgo/docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md)
-2. raise the promotion gate
-3. add a stronger post-contest revalidation floor
+2. treat route-visible `trust_hardening` as the stable contract surface for current promotion and revalidation semantics
+3. only then decide whether to raise the promotion gate or strengthen the post-contest revalidation floor again
 4. keep widening benchmark coverage before expanding selector authority further
 
 ### Priority 4: Define The Lite Position On Tier Lifecycle
