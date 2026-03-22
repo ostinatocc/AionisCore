@@ -3,6 +3,7 @@ import { ExecutionPacketV1Schema, ExecutionStateV1Schema, type ExecutionPacketV1
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema } from "./schemas.js";
 import { sha256Hex } from "../util/crypto.js";
 import { stableUuid } from "../util/uuid.js";
+import { buildWorkflowPromotionGovernancePreview } from "./workflow-promotion-governance.js";
 
 type WriteProjectionSourceNode = {
   id: string;
@@ -629,6 +630,22 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
     if (observedCount >= requiredObservations) {
       const stableClientId = `workflow_projection:stable:${workflowSignature}`;
       const stableNodeId = stableUuid(`${args.scope}:node:${stableClientId}`);
+      const governancePreview = buildWorkflowPromotionGovernancePreview({
+        candidateNodeIds: Array.from(new Set([projectedNodeId, ...existingCandidates.rows.map((row) => row.id)])),
+        inputText: summary,
+        inputSha256: sha256Hex(summary),
+        candidateExamples: [
+          {
+            node_id: projectedNodeId,
+            title,
+            summary,
+            task_signature: taskSignature,
+            workflow_signature: workflowSignature,
+            outcome_status: "candidate",
+            success_score: 0.5,
+          },
+        ],
+      });
       const stableAnchor = buildStableWorkflowAnchor({
         scope: args.scope,
         clientId: stableClientId,
@@ -680,6 +697,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
             workflow_signature: workflowSignature,
             auto_promoted: true,
             observed_count: observedCount,
+            governance_preview: governancePreview,
           },
         },
       });

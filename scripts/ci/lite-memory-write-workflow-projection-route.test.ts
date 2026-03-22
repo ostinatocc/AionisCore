@@ -402,6 +402,35 @@ test("memory/write projects execution-state-backed writes into workflow candidat
       }),
     });
     assert.equal(secondWrite.statusCode, 200);
+    const storedStable = await liteWriteStore.findNodes({
+      scope: "default",
+      type: "procedure",
+      slotsContains: {
+        summary_kind: "workflow_anchor",
+      },
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 20,
+      offset: 0,
+    });
+    const stableWorkflowNode = storedStable.rows.find((row) => {
+      const projection = (row.slots?.workflow_write_projection ?? null) as Record<string, unknown> | null;
+      return projection?.auto_promoted === true;
+    }) ?? null;
+    assert.ok(stableWorkflowNode);
+    const stableProjection = (stableWorkflowNode.slots?.workflow_write_projection ?? {}) as Record<string, unknown>;
+    const governancePreview = (stableProjection.governance_preview ?? {}) as Record<string, unknown>;
+    const promotePreview = (governancePreview.promote_memory ?? {}) as Record<string, unknown>;
+    const reviewPacket = (promotePreview.review_packet ?? {}) as Record<string, unknown>;
+    const decisionTrace = (promotePreview.decision_trace ?? {}) as Record<string, unknown>;
+    const policyEffect = (promotePreview.policy_effect ?? {}) as Record<string, unknown>;
+    assert.equal(reviewPacket.operation, "promote_memory");
+    assert.equal(reviewPacket.requested_target_kind, "workflow");
+    assert.equal(reviewPacket.requested_target_level, "L2");
+    assert.equal(decisionTrace.review_supplied, false);
+    assert.deepEqual(decisionTrace.stage_order, ["review_packet_built", "policy_effect_derived"]);
+    assert.equal(policyEffect.applies, false);
+    assert.equal(policyEffect.reason_code, "review_not_supplied");
 
     const secondPlanning = await app.inject({
       method: "POST",

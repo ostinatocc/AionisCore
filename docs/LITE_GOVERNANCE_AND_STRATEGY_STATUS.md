@@ -532,3 +532,4 @@ In short:
 2. governance is partly live
 3. the next phase is product-boundary clarification, not thesis discovery
 4. live governance paths are starting to share a common internal pipeline for trace/reason/apply plumbing
+5. workflow auto-promotion now exposes a first bounded `promote_memory` governance preview surface
