@@ -11,11 +11,19 @@ import {
   normalizeToolCandidates,
   uniqueRuleIds,
 } from "./execution-provenance.js";
-import { ToolsFeedbackRequest } from "./schemas.js";
+import {
+  MemoryFormPatternRequest,
+  ToolsFeedbackRequest,
+  ToolsFeedbackResponseSchema,
+  type MemoryAnchorV1,
+  type ToolsFeedbackGovernancePreview,
+  type ToolsFeedbackResponse,
+} from "./schemas.js";
 import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
 import { writeToolsDecisionPatternAnchor } from "./tools-pattern-anchor.js";
+import { buildFormPatternSemanticReviewPacket } from "./form-pattern-governance.js";
 import type {
   EmbeddedExecutionDecisionView,
   EmbeddedMemoryRuntime,
@@ -60,6 +68,7 @@ type DecisionRow = {
 };
 
 type RuleDefSyncRow = EmbeddedRuleDefSyncInput;
+type LiteNodeLookup = Pick<LiteWriteStore, "findNodes">;
 
 function isToolTouched(paths: string[]): boolean {
   for (const p of paths) {
@@ -70,6 +79,78 @@ function isToolTouched(paths: string[]): boolean {
 
 function normalizeToolName(v: string): string {
   return String(v ?? "").trim();
+}
+
+function nullableString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function lookupLiteNodeExample(
+  liteWriteStore: LiteNodeLookup,
+  scope: string,
+  nodeId: string,
+): Promise<{ node_id: string; title?: string | null; summary?: string | null } | null> {
+  const { rows } = await liteWriteStore.findNodes({
+    scope,
+    id: nodeId,
+    consumerAgentId: null,
+    consumerTeamId: null,
+    limit: 1,
+    offset: 0,
+  });
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    node_id: nodeId,
+    title: nullableString(row.title),
+    summary: nullableString(row.text_summary),
+  };
+}
+
+async function buildToolsFeedbackFormPatternGovernancePreview(args: {
+  liteWriteStore: LiteNodeLookup;
+  scope: string;
+  inputText: string | null;
+  inputSha256: string;
+  sourceRuleIds: string[];
+  anchor: MemoryAnchorV1;
+}): Promise<ToolsFeedbackGovernancePreview | null> {
+  const sourceNodeIds = uniqueRuleIds(args.sourceRuleIds).slice(0, 6);
+  if (sourceNodeIds.length < 2) return null;
+
+  const input = MemoryFormPatternRequest.parse({
+    source_node_ids: sourceNodeIds,
+    task_signature: nullableString(args.anchor.task_signature),
+    error_signature: nullableString(args.anchor.error_signature),
+    workflow_signature: nullableString(args.anchor.workflow_signature),
+    input_text: args.inputText ?? args.anchor.summary ?? "form pattern from tools feedback",
+    input_sha256: args.inputSha256,
+  });
+
+  const sourceExamples = (
+    await Promise.all(sourceNodeIds.map((nodeId) => lookupLiteNodeExample(args.liteWriteStore, args.scope, nodeId)))
+  ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+  const reviewPacket = buildFormPatternSemanticReviewPacket({
+    input,
+    sourceExamples,
+  });
+
+  return {
+    form_pattern: {
+      review_packet: reviewPacket,
+      decision_trace: {
+        trace_version: "form_pattern_governance_trace_v1",
+        review_supplied: false,
+        admissibility_evaluated: false,
+        admissible: null,
+        stage_order: ["review_packet_built"],
+        reason_codes: [],
+      },
+    },
+  };
 }
 
 function toDecisionRow(row: EmbeddedExecutionDecisionView): DecisionRow {
@@ -341,6 +422,7 @@ export async function toolSelectionFeedback(
     maintenance?: Record<string, unknown>;
     promotion?: Record<string, unknown>;
   } | null = null;
+  let governancePreview: ToolsFeedbackGovernancePreview | null = null;
 
   if (opts.liteWriteStore) {
     let decision = linkedDecisionId
@@ -510,10 +592,18 @@ export async function toolSelectionFeedback(
           maintenance: anchorOut.anchor.maintenance ?? undefined,
           promotion: anchorOut.anchor.promotion ?? undefined,
         };
+        governancePreview = await buildToolsFeedbackFormPatternGovernancePreview({
+          liteWriteStore: opts.liteWriteStore,
+          scope,
+          inputText: redactedInput ?? null,
+          inputSha256: inputSha,
+          sourceRuleIds: uniq,
+          anchor: anchorOut.anchor,
+        });
       }
     }
 
-    return {
+    return ToolsFeedbackResponseSchema.parse({
       ok: true,
       scope: tenancy.scope,
       tenant_id: tenancy.tenant_id,
@@ -537,7 +627,8 @@ export async function toolSelectionFeedback(
       decision_link_mode,
       decision_policy_sha256: decision!.policy_sha256,
       pattern_anchor: patternAnchor,
-    };
+      governance_preview: governancePreview,
+    } satisfies ToolsFeedbackResponse);
   }
 
   if (!client) {
@@ -841,7 +932,7 @@ export async function toolSelectionFeedback(
     }
   }
 
-  return {
+  return ToolsFeedbackResponseSchema.parse({
     ok: true,
     scope: tenancy.scope,
     tenant_id: tenancy.tenant_id,
@@ -865,5 +956,6 @@ export async function toolSelectionFeedback(
     decision_link_mode,
     decision_policy_sha256: decision!.policy_sha256,
     pattern_anchor: patternAnchor,
-  };
+    governance_preview: null,
+  } satisfies ToolsFeedbackResponse);
 }

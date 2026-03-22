@@ -1219,6 +1219,66 @@ export const ReplayPlaybookRepairReviewResponseSchema = z.object({
 
 export type ReplayPlaybookRepairReviewResponse = z.infer<typeof ReplayPlaybookRepairReviewResponseSchema>;
 
+export const ToolsFeedbackPatternAnchorSchema = z.object({
+  node_id: z.string().min(1).max(256),
+  node_uri: z.string().min(1).max(512),
+  client_id: z.string().min(1).max(256),
+  pattern_signature: z.string().min(1).max(256),
+  anchor_kind: z.literal("pattern"),
+  anchor_level: z.literal("L3"),
+  pattern_state: z.enum(["provisional", "stable"]),
+  credibility_state: z.enum(["candidate", "trusted", "contested"]),
+  maintenance: z.record(z.unknown()).optional(),
+  promotion: z.record(z.unknown()).optional(),
+}).passthrough();
+
+export type ToolsFeedbackPatternAnchor = z.infer<typeof ToolsFeedbackPatternAnchorSchema>;
+
+export const ToolsFeedbackFormPatternGovernanceDecisionTraceSchema = z.object({
+  trace_version: z.literal("form_pattern_governance_trace_v1"),
+  review_supplied: z.boolean(),
+  admissibility_evaluated: z.boolean(),
+  admissible: z.boolean().nullable(),
+  stage_order: z.array(z.enum([
+    "review_packet_built",
+    "review_result_received",
+    "admissibility_evaluated",
+  ])).min(1).max(3),
+  reason_codes: z.array(z.string().min(1).max(128)).max(8).default([]),
+}).passthrough();
+
+export type ToolsFeedbackFormPatternGovernanceDecisionTrace = z.infer<typeof ToolsFeedbackFormPatternGovernanceDecisionTraceSchema>;
+
+export const ToolsFeedbackGovernancePreviewSchema = z.object({
+  form_pattern: z.object({
+    review_packet: MemoryFormPatternSemanticReviewPacketSchema,
+    review_result: MemoryFormPatternSemanticReviewResultSchema.nullable().optional(),
+    admissibility: MemoryAdmissibilityResultSchema.nullable().optional(),
+    decision_trace: ToolsFeedbackFormPatternGovernanceDecisionTraceSchema,
+  }).passthrough(),
+}).passthrough();
+
+export type ToolsFeedbackGovernancePreview = z.infer<typeof ToolsFeedbackGovernancePreviewSchema>;
+
+export const ToolsFeedbackResponseSchema = z.object({
+  ok: z.literal(true),
+  scope: z.string(),
+  tenant_id: z.string(),
+  updated_rules: z.number().int().min(0),
+  rule_node_ids: z.array(z.string()),
+  commit_id: z.string(),
+  commit_uri: z.string(),
+  commit_hash: z.string(),
+  decision_id: z.string(),
+  decision_uri: z.string(),
+  decision_link_mode: z.enum(["provided", "inferred", "created_from_feedback"]),
+  decision_policy_sha256: z.string(),
+  pattern_anchor: ToolsFeedbackPatternAnchorSchema.nullable().optional(),
+  governance_preview: ToolsFeedbackGovernancePreviewSchema.nullable().optional(),
+}).passthrough();
+
+export type ToolsFeedbackResponse = z.infer<typeof ToolsFeedbackResponseSchema>;
+
 export const MemoryFindRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),

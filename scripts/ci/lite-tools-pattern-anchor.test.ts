@@ -6,7 +6,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { FakeEmbeddingProvider } from "../../src/embeddings/fake.ts";
 import { updateRuleState } from "../../src/memory/rules.ts";
-import { MemoryAnchorV1Schema, MemoryRecallRequest } from "../../src/memory/schemas.ts";
+import { MemoryAnchorV1Schema, MemoryRecallRequest, ToolsFeedbackResponseSchema } from "../../src/memory/schemas.ts";
 import { suppressPatternAnchorLite } from "../../src/memory/pattern-operator-override.ts";
 import { memoryRecallParsed } from "../../src/memory/recall.ts";
 import { selectTools } from "../../src/memory/tools-select.ts";
@@ -29,6 +29,15 @@ async function seedActiveRule(
   preferredTool = "edit",
 ): Promise<{ liteWriteStore: ReturnType<typeof createLiteWriteStore>; ruleNodeId: string }> {
   const liteWriteStore = createLiteWriteStore(writeStorePath);
+  const ruleNodeId = await insertAndActivateRule(liteWriteStore, preferredTool, `repair-export-${preferredTool}`);
+  return { liteWriteStore, ruleNodeId };
+}
+
+async function insertAndActivateRule(
+  liteWriteStore: ReturnType<typeof createLiteWriteStore>,
+  preferredTool: string,
+  ruleSuffix: string,
+): Promise<string> {
   const prepared = await prepareMemoryWrite(
     {
       tenant_id: "default",
@@ -39,7 +48,7 @@ async function seedActiveRule(
       memory_lane: "shared",
       nodes: [
         {
-          client_id: `rule:prefer-${preferredTool}:repair-export`,
+          client_id: `rule:prefer-${preferredTool}:${ruleSuffix}`,
           type: "rule",
           title: `Prefer ${preferredTool} for export repair`,
           text_summary: `For repair_export tasks, prefer ${preferredTool} over the other tools.`,
@@ -77,7 +86,7 @@ async function seedActiveRule(
       shadowDualWriteStrict: false,
       associativeLinkOrigin: "memory_write",
       write_access: liteWriteStore,
-    }),
+      }),
   );
   const ruleNodeId = out.nodes[0]?.id ?? null;
   assert.ok(ruleNodeId);
@@ -95,7 +104,19 @@ async function seedActiveRule(
       }),
   );
 
-  return { liteWriteStore, ruleNodeId };
+  return ruleNodeId;
+}
+
+async function seedActiveRules(
+  writeStorePath: string,
+  preferredTools: string[],
+): Promise<{ liteWriteStore: ReturnType<typeof createLiteWriteStore>; ruleNodeIds: string[] }> {
+  const liteWriteStore = createLiteWriteStore(writeStorePath);
+  const ruleNodeIds: string[] = [];
+  for (const [index, preferredTool] of preferredTools.entries()) {
+    ruleNodeIds.push(await insertAndActivateRule(liteWriteStore, preferredTool, `repair-export-${preferredTool}-${index + 1}`));
+  }
+  return { liteWriteStore, ruleNodeIds };
 }
 
 test("recall ranking prefers stable pattern anchors over counter-evidence-open candidates", async () => {
@@ -482,6 +503,80 @@ test("positive tools feedback without matched rule sources still writes a provis
     assert.ok(recall.seeds.some((seed) => seed.id === feedback.pattern_anchor?.node_id && seed.type === "concept"));
   } finally {
     await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("positive tools feedback with multiple matched rule sources exposes form_pattern governance preview", async () => {
+  const dbPath = tmpDbPath("pattern-anchor-governance-preview");
+  const { liteWriteStore, ruleNodeIds } = await seedActiveRules(dbPath, ["edit", "edit"]);
+  const runId = randomUUID();
+  const context = {
+    task_kind: "repair_export",
+    goal: "repair export failure in node tests",
+    error: {
+      signature: "node-export-mismatch",
+    },
+  };
+  try {
+    const selection = await selectTools(null, {
+      tenant_id: "default",
+      scope: "default",
+      run_id: runId,
+      context,
+      candidates: ["bash", "edit", "test"],
+      include_shadow: false,
+      rules_limit: 20,
+      strict: true,
+      reorder_candidates: false,
+    }, "default", "default", {
+      liteWriteStore,
+    });
+
+    const feedback = await liteWriteStore.withTx(() =>
+      toolSelectionFeedback(null, {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        run_id: runId,
+        decision_id: selection.decision.decision_id,
+        outcome: "positive",
+        context,
+        candidates: ["bash", "edit", "test"],
+        selected_tool: "edit",
+        target: "tool",
+        note: "Edit-based repair succeeded with two matched rule sources",
+        input_text: "repair export failure in node tests",
+      }, "default", "default", {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        embedder: FakeEmbeddingProvider,
+        liteWriteStore,
+      }),
+    );
+
+    const parsed = ToolsFeedbackResponseSchema.parse(feedback);
+    assert.ok(parsed.pattern_anchor);
+    assert.ok(parsed.governance_preview?.form_pattern);
+    assert.equal(parsed.governance_preview?.form_pattern.review_packet.operation, "form_pattern");
+    assert.equal(parsed.governance_preview?.form_pattern.review_packet.source_count, 2);
+    assert.equal(parsed.governance_preview?.form_pattern.review_packet.deterministic_gate.gate_satisfied, true);
+    assert.equal(
+      parsed.governance_preview?.form_pattern.review_packet.signatures.task_signature,
+      "tools_select:repair-export-failure-in-node-tests:edit",
+    );
+    assert.equal(parsed.governance_preview?.form_pattern.review_packet.signatures.error_signature, "node-export-mismatch");
+    assert.equal(parsed.governance_preview?.form_pattern.review_packet.source_examples.length, 2);
+    assert.deepEqual(
+      uniqueStrings(parsed.governance_preview?.form_pattern.review_packet.source_examples.map((entry) => entry.node_id)),
+      uniqueStrings(ruleNodeIds),
+    );
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.trace_version, "form_pattern_governance_trace_v1");
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.review_supplied, false);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.admissibility_evaluated, false);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.admissible, null);
+    assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.stage_order, ["review_packet_built"]);
+  } finally {
     await liteWriteStore.close();
   }
 });
