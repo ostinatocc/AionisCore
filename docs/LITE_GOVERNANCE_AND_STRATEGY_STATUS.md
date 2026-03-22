@@ -202,7 +202,7 @@ What is real:
 3. proposals and admissibility results have stable contract shapes
 4. rehydration already follows the runtime-governed model in product behavior
 5. Lite now has internal-only semantic-review slices for both `form_pattern` and `promote_memory`, where the runtime builds bounded review packets, accepts bounded review results, and still keeps final admissibility under deterministic runtime control
-6. replay-governed repair review now emits a bounded `promote_memory` governance preview on approved learning-projection paths, and can optionally evaluate a supplied bounded review result through runtime admissibility without changing learning projection behavior yet
+6. replay-governed repair review now emits a bounded `promote_memory` governance preview on approved learning-projection paths, can optionally evaluate a supplied bounded review result through runtime admissibility, and now exposes a first bounded `policy_effect` preview showing when governance would elevate replay learning target rule state from `draft` to `shadow` without mutating writes yet
 
 Primary code:
 
@@ -216,7 +216,7 @@ What is not yet fully real:
 
 1. the general governed operations are not all exposed as public product routes
 2. only `form_pattern` and `promote_memory` have concrete internal semantic-review slices so far; the rest of the governed operations are still contract-first
-3. replay repair review now accepts an optional bounded review result for governance preview, but still does not let that result directly mutate memory
+3. replay repair review now accepts an optional bounded review result for governance preview and exposes a constrained policy-effect preview, but still does not let that result directly mutate memory
 4. the schema family is still ahead of the route/product surface
 
 ## What Is Only Partially Implemented

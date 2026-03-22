@@ -397,6 +397,7 @@ test("lite replay repair review applies learning projection inline by default", 
                 target_level: "L2",
                 reason: "Replay review confirms stable workflow promotion",
                 confidence: 0.82,
+                strategic_value: "high",
               },
             },
           },
@@ -416,6 +417,14 @@ test("lite replay repair review applies learning projection inline by default", 
     assert.equal(body.governance_preview?.promote_memory.review_packet.deterministic_gate.gate_satisfied, true);
     assert.equal(body.governance_preview?.promote_memory.admissibility?.admissible, true);
     assert.equal(body.governance_preview?.promote_memory.admissibility?.accepted_mutation_count, 1);
+    assert.equal(body.governance_preview?.promote_memory.policy_effect?.applies, true);
+    assert.equal(body.governance_preview?.promote_memory.policy_effect?.base_target_rule_state, "draft");
+    assert.equal(body.governance_preview?.promote_memory.policy_effect?.review_suggested_target_rule_state, "shadow");
+    assert.equal(body.governance_preview?.promote_memory.policy_effect?.effective_target_rule_state, "shadow");
+    assert.equal(
+      body.governance_preview?.promote_memory.policy_effect?.reason_code,
+      "high_strategic_value_workflow_promotion",
+    );
 
     const { rows: ruleRows } = await liteWriteStore.findNodes({
       scope: "default",
@@ -519,6 +528,69 @@ test("lite replay repair review keeps low-confidence governance review non-admis
     assert.equal(body.learning_projection_result.status, "applied");
     assert.equal(body.governance_preview?.promote_memory.admissibility?.admissible, false);
     assert.deepEqual(body.governance_preview?.promote_memory.admissibility?.reason_codes, ["confidence_too_low"]);
+    assert.equal(body.governance_preview?.promote_memory.policy_effect?.applies, false);
+    assert.equal(body.governance_preview?.promote_memory.policy_effect?.effective_target_rule_state, "draft");
+    assert.equal(body.governance_preview?.promote_memory.policy_effect?.reason_code, "review_not_admissible");
+  } finally {
+    await app.close();
+    await liteReplayStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("lite replay repair review preserves explicit target_rule_state over governance policy effect preview", async () => {
+  const dbPath = tmpDbPath("repair-review-inline-explicit-target-state");
+  const playbookId = randomUUID();
+  const { liteWriteStore, liteReplayStore } = await seedPendingReviewPlaybook({
+    writeDbPath: dbPath,
+    replayDbPath: tmpDbPath("repair-review-inline-explicit-target-state-replay"),
+    playbookId,
+  });
+  const { app } = registerReplayReviewRoute({ liteWriteStore, liteReplayStore });
+  try {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/memory/replay/playbooks/repair/review",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        playbook_id: playbookId,
+        action: "approve",
+        auto_shadow_validate: false,
+        target_status_on_approve: "shadow",
+        learning_projection: {
+          enabled: true,
+          target_rule_state: "draft",
+        },
+        governance_review: {
+          promote_memory: {
+            review_result: {
+              review_version: "promote_memory_semantic_review_v1",
+              adjudication: {
+                operation: "promote_memory",
+                disposition: "recommend",
+                target_kind: "workflow",
+                target_level: "L2",
+                reason: "Replay review confirms stable workflow promotion",
+                confidence: 0.88,
+                strategic_value: "high",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = ReplayPlaybookRepairReviewResponseSchema.parse(res.json());
+    assert.equal(body.governance_preview?.promote_memory.admissibility?.admissible, true);
+    assert.equal(body.governance_preview?.promote_memory.policy_effect?.applies, false);
+    assert.equal(body.governance_preview?.promote_memory.policy_effect?.base_target_rule_state, "draft");
+    assert.equal(body.governance_preview?.promote_memory.policy_effect?.effective_target_rule_state, "draft");
+    assert.equal(
+      body.governance_preview?.promote_memory.policy_effect?.reason_code,
+      "explicit_target_rule_state_preserved",
+    );
   } finally {
     await app.close();
     await liteReplayStore.close();

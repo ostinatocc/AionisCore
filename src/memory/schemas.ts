@@ -1139,11 +1139,29 @@ export const ReplayLearningProjectionResultContractSchema = z.object({
 
 export type ReplayLearningProjectionResultContract = z.infer<typeof ReplayLearningProjectionResultContractSchema>;
 
+export const ReplayRepairReviewGovernancePolicyEffectSchema = z.object({
+  source: z.enum(["default_learning_projection", "promote_memory_governance_review"]),
+  applies: z.boolean(),
+  base_target_rule_state: z.enum(["draft", "shadow"]),
+  review_suggested_target_rule_state: z.enum(["draft", "shadow"]).nullable().optional(),
+  effective_target_rule_state: z.enum(["draft", "shadow"]),
+  reason_code: z.enum([
+    "review_not_supplied",
+    "review_not_admissible",
+    "explicit_target_rule_state_preserved",
+    "review_did_not_raise_target_rule_state",
+    "high_strategic_value_workflow_promotion",
+  ]),
+}).passthrough();
+
+export type ReplayRepairReviewGovernancePolicyEffect = z.infer<typeof ReplayRepairReviewGovernancePolicyEffectSchema>;
+
 export const ReplayRepairReviewGovernancePreviewSchema = z.object({
   promote_memory: z.object({
     review_packet: MemoryPromoteSemanticReviewPacketSchema,
     review_result: MemoryPromoteSemanticReviewResultSchema.nullable().optional(),
     admissibility: MemoryAdmissibilityResultSchema.nullable().optional(),
+    policy_effect: ReplayRepairReviewGovernancePolicyEffectSchema.nullable().optional(),
   }),
 }).passthrough();
 

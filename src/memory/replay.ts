@@ -43,6 +43,7 @@ import {
   ReplayStepBeforeRequest,
   MemoryAnchorV1Schema,
   MemoryPromoteRequest,
+  type ReplayRepairReviewGovernancePolicyEffect,
   type ReplayRepairReviewGovernancePreview,
   type ReplayPlaybookDispatchInput,
   type ReplayPlaybookCandidateInput,
@@ -990,6 +991,80 @@ function resolveReplayLearningProjectionConfig(
     max_matcher_bytes: clampInt(Number(base.max_matcher_bytes), 1, 1024 * 1024),
     max_tool_prefer: clampInt(Number(base.max_tool_prefer), 1, 64),
     episode_ttl_days: clampInt(Number(base.episode_ttl_days), 1, 3650),
+  };
+}
+
+function hasExplicitReplayLearningProjectionTargetRuleState(requestObj: Record<string, unknown> | null): boolean {
+  return toStringOrNull(requestObj?.target_rule_state) != null;
+}
+
+function deriveReplayGovernancePolicyEffect(args: {
+  baseTargetRuleState: "draft" | "shadow";
+  explicitTargetRuleState: boolean;
+  governancePreview: ReplayRepairReviewGovernancePreview;
+}): ReplayRepairReviewGovernancePolicyEffect {
+  const admissibility = args.governancePreview.promote_memory.admissibility ?? null;
+  const review = args.governancePreview.promote_memory.review_result ?? null;
+  const baseTargetRuleState = args.baseTargetRuleState;
+
+  if (!review) {
+    return {
+      source: "default_learning_projection",
+      applies: false,
+      base_target_rule_state: baseTargetRuleState,
+      review_suggested_target_rule_state: null,
+      effective_target_rule_state: baseTargetRuleState,
+      reason_code: "review_not_supplied",
+    };
+  }
+
+  if (!admissibility?.admissible) {
+    return {
+      source: "default_learning_projection",
+      applies: false,
+      base_target_rule_state: baseTargetRuleState,
+      review_suggested_target_rule_state: null,
+      effective_target_rule_state: baseTargetRuleState,
+      reason_code: "review_not_admissible",
+    };
+  }
+
+  if (args.explicitTargetRuleState) {
+    return {
+      source: "default_learning_projection",
+      applies: false,
+      base_target_rule_state: baseTargetRuleState,
+      review_suggested_target_rule_state: null,
+      effective_target_rule_state: baseTargetRuleState,
+      reason_code: "explicit_target_rule_state_preserved",
+    };
+  }
+
+  const highValueWorkflowPromotion =
+    review.adjudication.disposition === "recommend"
+    && review.adjudication.target_kind === "workflow"
+    && review.adjudication.target_level === "L2"
+    && review.adjudication.strategic_value === "high"
+    && baseTargetRuleState === "draft";
+
+  if (!highValueWorkflowPromotion) {
+    return {
+      source: "default_learning_projection",
+      applies: false,
+      base_target_rule_state: baseTargetRuleState,
+      review_suggested_target_rule_state: null,
+      effective_target_rule_state: baseTargetRuleState,
+      reason_code: "review_did_not_raise_target_rule_state",
+    };
+  }
+
+  return {
+    source: "promote_memory_governance_review",
+    applies: true,
+    base_target_rule_state: baseTargetRuleState,
+    review_suggested_target_rule_state: "shadow",
+    effective_target_rule_state: "shadow",
+    reason_code: "high_strategic_value_workflow_promotion",
   };
 }
 
@@ -4375,6 +4450,9 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
     asObject((parsed as any).learning_projection),
     opts.learningProjectionDefaults,
   );
+  const explicitLearningProjectionTargetRuleState = hasExplicitReplayLearningProjectionTargetRuleState(
+    asObject((parsed as any).learning_projection),
+  );
   let learningProjectionResult: ReplayLearningProjectionResult | undefined;
   let governancePreview: ReplayRepairReviewGovernancePreview | null = null;
   if (parsed.action === "approve" && reviewState === "approved" && learningProjectionConfig.enabled) {
@@ -4413,6 +4491,11 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
         review: reviewResult,
       });
     }
+    governancePreview.promote_memory.policy_effect = deriveReplayGovernancePolicyEffect({
+      baseTargetRuleState: learningProjectionConfig.target_rule_state,
+      explicitTargetRuleState: explicitLearningProjectionTargetRuleState,
+      governancePreview,
+    });
   }
   if (parsed.action !== "approve") {
     learningProjectionResult = {
