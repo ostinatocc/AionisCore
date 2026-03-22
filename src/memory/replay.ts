@@ -25,6 +25,7 @@ import {
   type ReplayLearningProjectionResolvedConfig,
   type ReplayLearningProjectionResult,
 } from "./replay-learning.js";
+import { evaluatePromoteMemorySemanticReview } from "./promote-memory-governance.js";
 import { buildReplayCostSignals } from "./cost-signals.js";
 import {
   ReplayPlaybookDispatchRequest,
@@ -4400,6 +4401,18 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
         }),
       },
     };
+    const suppliedReview = asObject((parsed as any).governance_review)?.promote_memory
+      && asObject(asObject((parsed as any).governance_review)?.promote_memory)?.review_result
+      ? (asObject(asObject((parsed as any).governance_review)?.promote_memory)?.review_result as Record<string, unknown>)
+      : null;
+    if (suppliedReview) {
+      const reviewResult = suppliedReview as any;
+      governancePreview.promote_memory.review_result = reviewResult;
+      governancePreview.promote_memory.admissibility = evaluatePromoteMemorySemanticReview({
+        packet: governancePreview.promote_memory.review_packet,
+        review: reviewResult,
+      });
+    }
   }
   if (parsed.action !== "approve") {
     learningProjectionResult = {

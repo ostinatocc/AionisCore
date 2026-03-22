@@ -386,6 +386,21 @@ test("lite replay repair review applies learning projection inline by default", 
         learning_projection: {
           enabled: true,
         },
+        governance_review: {
+          promote_memory: {
+            review_result: {
+              review_version: "promote_memory_semantic_review_v1",
+              adjudication: {
+                operation: "promote_memory",
+                disposition: "recommend",
+                target_kind: "workflow",
+                target_level: "L2",
+                reason: "Replay review confirms stable workflow promotion",
+                confidence: 0.82,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -399,6 +414,8 @@ test("lite replay repair review applies learning projection inline by default", 
     assert.equal(body.governance_preview?.promote_memory.review_packet.requested_target_kind, "workflow");
     assert.equal(body.governance_preview?.promote_memory.review_packet.requested_target_level, "L2");
     assert.equal(body.governance_preview?.promote_memory.review_packet.deterministic_gate.gate_satisfied, true);
+    assert.equal(body.governance_preview?.promote_memory.admissibility?.admissible, true);
+    assert.equal(body.governance_preview?.promote_memory.admissibility?.accepted_mutation_count, 1);
 
     const { rows: ruleRows } = await liteWriteStore.findNodes({
       scope: "default",
@@ -449,6 +466,59 @@ test("lite replay repair review applies learning projection inline by default", 
     });
     assert.equal(generatedRuleRows.length, 1);
     assert.equal(generatedRuleRows[0]?.owner_agent_id, "local-user");
+  } finally {
+    await app.close();
+    await liteReplayStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("lite replay repair review keeps low-confidence governance review non-admissible without changing learning projection", async () => {
+  const dbPath = tmpDbPath("repair-review-inline-low-confidence");
+  const playbookId = randomUUID();
+  const { liteWriteStore, liteReplayStore } = await seedPendingReviewPlaybook({
+    writeDbPath: dbPath,
+    replayDbPath: tmpDbPath("repair-review-inline-low-confidence-replay"),
+    playbookId,
+  });
+  const { app } = registerReplayReviewRoute({ liteWriteStore, liteReplayStore });
+  try {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/memory/replay/playbooks/repair/review",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        playbook_id: playbookId,
+        action: "approve",
+        auto_shadow_validate: false,
+        target_status_on_approve: "shadow",
+        learning_projection: {
+          enabled: true,
+        },
+        governance_review: {
+          promote_memory: {
+            review_result: {
+              review_version: "promote_memory_semantic_review_v1",
+              adjudication: {
+                operation: "promote_memory",
+                disposition: "recommend",
+                target_kind: "workflow",
+                target_level: "L2",
+                reason: "Maybe promote",
+                confidence: 0.55,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = ReplayPlaybookRepairReviewResponseSchema.parse(res.json());
+    assert.equal(body.learning_projection_result.status, "applied");
+    assert.equal(body.governance_preview?.promote_memory.admissibility?.admissible, false);
+    assert.deepEqual(body.governance_preview?.promote_memory.admissibility?.reason_codes, ["confidence_too_low"]);
   } finally {
     await app.close();
     await liteReplayStore.close();

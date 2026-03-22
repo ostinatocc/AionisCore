@@ -1142,10 +1142,20 @@ export type ReplayLearningProjectionResultContract = z.infer<typeof ReplayLearni
 export const ReplayRepairReviewGovernancePreviewSchema = z.object({
   promote_memory: z.object({
     review_packet: MemoryPromoteSemanticReviewPacketSchema,
+    review_result: MemoryPromoteSemanticReviewResultSchema.nullable().optional(),
+    admissibility: MemoryAdmissibilityResultSchema.nullable().optional(),
   }),
 }).passthrough();
 
 export type ReplayRepairReviewGovernancePreview = z.infer<typeof ReplayRepairReviewGovernancePreviewSchema>;
+
+export const ReplayRepairReviewGovernanceInputSchema = z.object({
+  promote_memory: z.object({
+    review_result: MemoryPromoteSemanticReviewResultSchema,
+  }),
+}).passthrough();
+
+export type ReplayRepairReviewGovernanceInput = z.infer<typeof ReplayRepairReviewGovernanceInputSchema>;
 
 export const ReplayPlaybookRepairReviewResponseSchema = z.object({
   tenant_id: z.string(),
@@ -1928,6 +1938,7 @@ export const ReplayPlaybookRepairReviewRequest = z.object({
     })
     .default({}),
   learning_projection: ReplayLearningProjectionRequest.optional(),
+  governance_review: ReplayRepairReviewGovernanceInputSchema.optional(),
   metadata: z.record(z.any()).optional(),
 });
 
