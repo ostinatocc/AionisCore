@@ -307,6 +307,42 @@ function buildPacketOnlyWritePayload(args: {
   };
 }
 
+function buildLightweightHandoffWritePayload(args: {
+  eventId: string;
+  title: string;
+  inputText: string;
+  taskBrief: string;
+  filePath: string;
+  targetFiles: string[];
+}) {
+  return {
+    tenant_id: "default",
+    scope: "default",
+    input_text: args.inputText,
+    auto_embed: true,
+    memory_lane: "private",
+    nodes: [
+      {
+        client_id: `lightweight-handoff-event:${args.eventId}`,
+        type: "event",
+        title: args.title,
+        text_summary: args.taskBrief,
+        slots: {
+          summary_kind: "handoff",
+          handoff_kind: "patch_handoff",
+          anchor: `resume:${args.filePath}`,
+          file_path: args.filePath,
+          repo_root: "/Volumes/ziel/Aionisgo",
+          target_files: args.targetFiles,
+          next_action: `Patch ${args.filePath} and rerun export tests`,
+          acceptance_checks: ["npm run -s test:lite -- export"],
+        },
+      },
+    ],
+    edges: [],
+  };
+}
+
 test("memory/write projects execution-state-backed writes into workflow candidates and then auto-promotes stable workflow guidance", async () => {
   const dbPath = tmpDbPath("projection");
   const app = Fastify();
@@ -542,6 +578,85 @@ test("memory/write also projects packet-only execution continuity writes into wo
     assert.equal(introspectBody.recommended_workflows.length, 1);
     assert.equal(introspectBody.candidate_workflows.length, 0);
     assert.match(introspectBody.demo_surface.merged_text, /tools=edit, test/i);
+  } finally {
+    await app.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("memory/write projects lightweight handoff-style continuity through the generic workflow producer", async () => {
+  const dbPath = tmpDbPath("lightweight-handoff-projection");
+  const app = Fastify();
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  try {
+    registerApp({ app, liteWriteStore, liteRecallStore });
+
+    const firstWrite = await app.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildLightweightHandoffWritePayload({
+        eventId: randomUUID(),
+        title: "Lightweight export repair handoff",
+        inputText: "continue lightweight export repair",
+        taskBrief: "Fix export failure in node tests",
+        filePath: "src/routes/export.ts",
+        targetFiles: ["src/routes/export.ts"],
+      }),
+    });
+    assert.equal(firstWrite.statusCode, 200);
+
+    const firstPlanning = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "fix export failure in node tests",
+        context: {
+          goal: "fix export failure in node tests",
+        },
+        tool_candidates: ["bash", "edit", "test"],
+      },
+    });
+    assert.equal(firstPlanning.statusCode, 200);
+    const firstBody = PlanningContextRouteContractSchema.parse(firstPlanning.json());
+    assert.equal(firstBody.planner_packet.sections.candidate_workflows.length, 1);
+    assert.equal(firstBody.planner_packet.sections.recommended_workflows.length, 0);
+    assert.equal(firstBody.workflow_signals[0]?.promotion_ready, false);
+
+    const secondWrite = await app.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildLightweightHandoffWritePayload({
+        eventId: randomUUID(),
+        title: "Lightweight export repair handoff second run",
+        inputText: "continue lightweight export repair second run",
+        taskBrief: "Fix export failure in node tests",
+        filePath: "src/routes/export.ts",
+        targetFiles: ["src/routes/export.ts"],
+      }),
+    });
+    assert.equal(secondWrite.statusCode, 200);
+
+    const secondPlanning = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "fix export failure in node tests",
+        context: {
+          goal: "fix export failure in node tests",
+        },
+        tool_candidates: ["bash", "edit", "test"],
+      },
+    });
+    assert.equal(secondPlanning.statusCode, 200);
+    const secondBody = PlanningContextRouteContractSchema.parse(secondPlanning.json());
+    assert.equal(secondBody.planner_packet.sections.recommended_workflows.length, 1);
+    assert.equal(secondBody.planner_packet.sections.candidate_workflows.length, 0);
+    assert.equal(secondBody.workflow_signals[0]?.promotion_state, "stable");
   } finally {
     await app.close();
     await liteWriteStore.close();

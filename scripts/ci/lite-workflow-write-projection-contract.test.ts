@@ -101,6 +101,58 @@ test("workflow write projection accepts packet-only continuity and derives deter
   assert.equal(assessed.ownerAgentId, "local-user");
 });
 
+test("workflow write projection accepts lightweight handoff-style continuity when resumable fields are present", () => {
+  const assessed = assessWorkflowProjectionSourceNode({
+    id: "handoff-source",
+    scope: "default",
+    type: "event",
+    memory_lane: "private",
+    owner_agent_id: "local-user",
+    title: "Export repair handoff",
+    text_summary: "Fix export failure in node tests",
+    slots: {
+      summary_kind: "handoff",
+      handoff_kind: "patch_handoff",
+      anchor: "resume:src/routes/export.ts",
+      file_path: "src/routes/export.ts",
+      repo_root: "/Volumes/ziel/Aionisgo",
+      target_files: ["src/routes/export.ts"],
+      next_action: "Patch src/routes/export.ts and rerun export tests",
+      acceptance_checks: ["npm run -s test:lite -- export"],
+    },
+  });
+
+  assert.equal(assessed.eligible, true);
+  if (!assessed.eligible) return;
+  assert.equal(assessed.state, null);
+  assert.equal(assessed.packet?.task_brief, "Fix export failure in node tests");
+  assert.deepEqual(assessed.packet?.target_files, ["src/routes/export.ts"]);
+  assert.match(assessed.workflowSignature, /^execution_workflow:/);
+  assert.equal(
+    assessed.projectionClientId,
+    `workflow_projection:handoff-source:${assessed.workflowSignature}`,
+  );
+});
+
+test("workflow write projection rejects lightweight handoff-style continuity when resumable target detail is missing", () => {
+  const assessed = assessWorkflowProjectionSourceNode({
+    id: "bad-handoff-source",
+    scope: "default",
+    type: "event",
+    memory_lane: "private",
+    title: "Task-only handoff",
+    text_summary: "Fix export failure in node tests",
+    slots: {
+      summary_kind: "handoff",
+      handoff_kind: "patch_handoff",
+      anchor: "",
+      target_files: [],
+    },
+  });
+
+  assert.deepEqual(assessed, { eligible: false, reason: "missing_execution_continuity" });
+});
+
 test("workflow write projection counts distinct observations by client id with id fallback", () => {
   const count = countDistinctWorkflowObservations([
     { id: "node-1", client_id: "client-a" },

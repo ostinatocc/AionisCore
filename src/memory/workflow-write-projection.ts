@@ -99,6 +99,82 @@ function normalizeFileList(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))).sort();
 }
 
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function synthesizePacketFromLightweightHandoff(source: WriteProjectionSourceNode): ExecutionPacketV1 | null {
+  const slots = asRecord(source.slots);
+  if (!slots) return null;
+  if (firstString(slots.summary_kind) !== "handoff") return null;
+
+  const handoffKind = firstString(slots.handoff_kind);
+  const filePath = firstString(slots.file_path);
+  const repoRoot = firstString(slots.repo_root);
+  const symbol = firstString(slots.symbol);
+  const explicitAnchor = firstString(slots.anchor);
+  const anchor = explicitAnchor ?? (filePath ? `resume:${filePath}` : null);
+  const taskBrief = firstString(slots.summary)
+    ?? firstString(source.text_summary)
+    ?? firstString(source.title);
+  const targetFiles = normalizeFileList([
+    ...stringList(slots.target_files),
+    ...(filePath ? [filePath] : []),
+  ]);
+
+  if (!handoffKind || !taskBrief || (!anchor && targetFiles.length === 0)) {
+    return null;
+  }
+
+  const nextAction = firstString(slots.next_action)
+    ?? firstString(slots.handoff_text)
+    ?? taskBrief;
+  const acceptanceChecks = stringList(slots.acceptance_checks);
+  const mustChange = stringList(slots.must_change);
+  const mustRemove = stringList(slots.must_remove);
+  const mustKeep = stringList(slots.must_keep);
+  const risk = firstString(slots.risk);
+  const stateId = `handoff:${sha256Hex(stableStringify({
+    source_node_id: source.id,
+    handoff_kind: handoffKind,
+    anchor,
+    task_brief: taskBrief,
+  })).slice(0, 24)}`;
+
+  try {
+    return ExecutionPacketV1Schema.parse({
+      version: 1,
+      state_id: stateId,
+      current_stage: "resume",
+      active_role: "resume",
+      task_brief: taskBrief,
+      target_files: targetFiles,
+      next_action: nextAction,
+      hard_constraints: mustChange,
+      accepted_facts: [],
+      rejected_paths: mustRemove,
+      pending_validations: acceptanceChecks,
+      unresolved_blockers: risk ? [risk] : [],
+      rollback_notes: mustKeep,
+      review_contract: null,
+      resume_anchor: anchor ? {
+        anchor,
+        file_path: filePath ?? null,
+        symbol: symbol ?? null,
+        repo_root: repoRoot ?? null,
+      } : null,
+      artifact_refs: [],
+      evidence_refs: [],
+    });
+  } catch {
+    return null;
+  }
+}
+
 function taskBriefFromInputs(state: ExecutionStateV1 | null, packet: ExecutionPacketV1 | null): string | null {
   return firstString(state?.task_brief ?? null) ?? firstString(packet?.task_brief ?? null);
 }
@@ -212,7 +288,7 @@ export function assessWorkflowProjectionSourceNode(source: WriteProjectionSource
   }
 
   const state = stateParsed?.success ? stateParsed.data : null;
-  const packet = packetParsed?.success ? packetParsed.data : null;
+  const packet = packetParsed?.success ? packetParsed.data : synthesizePacketFromLightweightHandoff(source);
   if (!state && !packet) {
     return { eligible: false, reason: "missing_execution_continuity" };
   }

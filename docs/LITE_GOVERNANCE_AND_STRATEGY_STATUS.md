@@ -157,21 +157,19 @@ Current runtime reality:
 6. workflow lifecycle and maintenance summaries are exposed in planner and execution-kernel surfaces
 7. execution-native-only workflow display now carries stable `source` and `tool_set` presentation in planner/introspection surfaces
 8. structured execution-continuity `/v1/memory/write` requests can now project governed workflow memory, including packet-only continuity writes, and repeated unique writes can move that path into stable workflow guidance on the default planner surface
-9. `handoff/store` now also flows through the generic workflow producer, so ordinary handoff-backed continuity writes can progress into planner-visible workflow guidance without going through replay
-10. `memory/events` session-event writes can now also participate in the generic workflow producer when callers provide explicit execution continuity, so session-backed execution runs no longer require replay or handoff to enter workflow guidance
-11. the current continuity-backed producer family now shares one Lite projected-write commit pipeline across `memory/write`, `handoff/store`, and `memory/events`, reducing the risk that workflow projection, commit, and inline embedding semantics drift by route
-12. continuity-backed producer preconditions and distinct-observation semantics are now covered by an explicit projection contract test instead of remaining only implicit in route behavior
-13. `execution/introspect` now exposes continuity-producer provenance and compact inventory counts for projected workflow memory, so operator/debug workflows can see which workflow rows were produced by generic execution-write projection without widening the default planner surface
-14. Lite now has a first `suppress-first` operator intervention slice for learned pattern reuse, with dedicated `patterns/suppress` and `patterns/unsuppress` routes that preserve learned credibility while blocking trusted selector reuse
-15. selector and introspection surfaces now expose suppression as operator overlay state, so a historically trusted pattern can remain learned-trusted while still being operator-blocked in live selection
-16. Lite now has a repeatable `benchmark:lite:real` command that exercises policy learning, cross-task isolation, nearby-task generalization, contested revalidation cost, wrong-turn recovery, workflow progression, multi-step repair continuity, and the slim planner/context boundary on fresh SQLite-backed route fixtures instead of relying only on one-off validation notes
-17. Lite now has a dedicated pattern-trust robustness spec and a follow-on hardening plan, because benchmark evidence was able to expose the original cross-task bleed and cheap contested recovery baseline before the current hardening slices tightened both behaviors
-18. pattern anchors now persist explicit trust-hardening metadata such as `task_family`, `error_family`, distinct family counts, and current gate metadata, so the next trust-hardening slice no longer depends on implicit branch logic alone
-19. Lite now requires `3` distinct positive runs before a pattern becomes `trusted`, and contested recovery now requires `2` fresh post-contest runs before revalidation
-20. selector reuse now applies deterministic task-affinity weighting, so nearby cross-task recall can remain visible without inheriting flat trusted reuse
-21. Aionis now has a source-owned thin MCP surface in `src/mcp/` with five execution-memory tools: planning context, tool selection, feedback recording, task finalization, and introspection
-22. the thin MCP no longer depends on conversational confirmation loops to finish a task; `aionis_finalize_task` now provides the preferred task-boundary completion path while `user_confirmed` and `user_rejected` remain optional high-confidence extra evidence
-23. Aionis now also has a first source-owned execution-adapter baseline in `src/adapter/`, with normalized task-start, pre-tool selection, execution-evidence, task-finalization, and Claude-Code-bridge contracts covered by dedicated tests
+9. lightweight handoff-style `/v1/memory/write` continuity can now also enter the same governed workflow producer even when callers do not provide explicit `execution_state_v1` or `execution_packet_v1`, as long as resumable handoff fields are present
+10. `handoff/store` now also flows through the generic workflow producer, so ordinary handoff-backed continuity writes can progress into planner-visible workflow guidance without going through replay
+11. `memory/events` session-event writes can now also participate in the generic workflow producer when callers provide explicit execution continuity, so session-backed execution runs no longer require replay or handoff to enter workflow guidance
+12. the current continuity-backed producer family now shares one Lite projected-write commit pipeline across `memory/write`, `handoff/store`, and `memory/events`, reducing the risk that workflow projection, commit, and inline embedding semantics drift by route
+13. continuity-backed producer preconditions and distinct-observation semantics are now covered by an explicit projection contract test instead of remaining only implicit in route behavior
+14. `execution/introspect` now exposes continuity-producer provenance and compact inventory counts for projected workflow memory, so operator/debug workflows can see which workflow rows were produced by generic execution-write projection without widening the default planner surface
+15. Lite now has a first `suppress-first` operator intervention slice for learned pattern reuse, with dedicated `patterns/suppress` and `patterns/unsuppress` routes that preserve learned credibility while blocking trusted selector reuse
+16. selector and introspection surfaces now expose suppression as operator overlay state, so a historically trusted pattern can remain learned-trusted while still being operator-blocked in live selection
+17. Lite now has a repeatable `benchmark:lite:real` command that exercises policy learning, cross-task isolation, nearby-task generalization, contested revalidation cost, wrong-turn recovery, workflow progression, multi-step repair continuity, and the slim planner/context boundary on fresh SQLite-backed route fixtures instead of relying only on one-off validation notes
+18. Lite now has a dedicated pattern-trust robustness spec and a follow-on hardening plan, because benchmark evidence was able to expose the original cross-task bleed and cheap contested recovery baseline before the current hardening slices tightened both behaviors
+19. pattern anchors now persist explicit trust-hardening metadata such as `task_family`, `error_family`, distinct family counts, and current gate metadata, so the next trust-hardening slice no longer depends on implicit branch logic alone
+20. Lite now requires `3` distinct positive runs before a pattern becomes `trusted`, and contested recovery now requires `2` fresh post-contest runs before revalidation
+21. selector reuse now applies deterministic task-affinity weighting, so nearby cross-task recall can remain visible without inheriting flat trusted reuse
 
 Primary code:
 
@@ -190,13 +188,6 @@ Primary code:
 13. `scripts/lite-real-task-benchmark.ts`
 14. `docs/plans/2026-03-21-lite-pattern-trust-robustness-spec.md`
 15. `docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md`
-16. `src/mcp/aionis-mcp.ts`
-17. `docs/AIONIS_THIN_MCP_GUIDE.md`
-18. `src/adapter/aionis-adapter.ts`
-19. `src/adapter/claude-code-bridge.ts`
-20. `scripts/ci/aionis-execution-adapter-contract.test.ts`
-21. `scripts/ci/aionis-execution-adapter-feedback.test.ts`
-22. `scripts/ci/aionis-claude-code-bridge.test.ts`
 
 ### 6. Runtime-Governed Adjudication Contract
 
@@ -262,22 +253,20 @@ Current reality:
 3. execution-native writes now carry signatures, anchor metadata, and compression metadata
 4. structured execution-continuity ordinary writes can now project governed workflow memory into the planner recall path
 5. a minimal operator stop-loss path now exists for learned pattern reuse through `patterns/suppress` and `patterns/unsuppress`
-6. a thin MCP compatibility layer now exists for the stable execution-memory mainline
-7. a first execution-adapter baseline now also exists for task-start, selection, execution evidence, and task finalization, but it is still contract-level and not yet wired into a real client runtime by default
+6. lightweight handoff-style continuity can now enter the generic workflow producer without requiring explicit execution-state or packet scaffolding
 
 But:
 
 1. Lite does not yet have a broad automatic promotion pipeline from arbitrary event streams into reusable workflow or pattern memory
 2. the strongest stable promotion paths still come from replay-centered or explicit continuity entry points
 3. Lite still does not have the broader operator intervention surface proposed in ADR-0002 beyond the new `suppress-first` slice
-4. the thin MCP onboarding and auto-calling ergonomics are not yet benchmarked as a first-class product loop
-5. the new adapter baseline still needs real client wiring before Aionis can rely on adapter-first behavior in everyday usage
 
 Primary code:
 
 1. `src/memory/replay.ts`
 2. `src/memory/tools-pattern-anchor.ts`
-3. `src/memory/write.ts`
+3. `src/memory/workflow-write-projection.ts`
+4. `src/memory/write.ts`
 
 ### 3. Strategy-Level Maintenance Model
 
@@ -404,7 +393,7 @@ But:
 | Replay-learning workflow maturity | Implemented | Candidate-to-stable path is visible, aggregated, and route-tested through the replay-governed producer path. |
 | Runtime-governed adjudication model | Partially Implemented | Strong schema/contract, partial public product surface. |
 | Tier-aware memory semantics | Partially Implemented | Tier model exists; lifecycle control plane does not. |
-| Distillation beyond replay/tools entry points | Partially Implemented | Replay/tool-feedback remain strongest, but structured execution-continuity writes now produce governed workflow memory, including conservative generic-path auto-promotion. |
+| Distillation beyond replay/tools entry points | Partially Implemented | Replay/tool-feedback remain strongest, but structured and lightweight continuity writes now produce governed workflow memory, including conservative generic-path auto-promotion. |
 | Maintenance model | Partially Implemented | Summaries exist; full maintenance system does not. |
 | Slim default planner/context response | Implemented | Default planner/context routes are slim; `layered_context` is explicit debug/operator output only. |
 | General governed mutation APIs | Contract-First | Schemas exist, product routes mostly do not. |
@@ -435,7 +424,8 @@ Why:
 
 1. replay- and replay-governed workflow promotion paths are now real and route-tested
 2. structured execution-continuity ordinary writes now also produce governed workflow memory
-3. broader event-to-workflow promotion is still narrower than the overall execution-memory direction
+3. lightweight handoff-style continuity now also enters the same producer without explicit packet/state scaffolding
+4. broader event-to-workflow promotion is still narrower than the overall execution-memory direction
 
 Concrete next step:
 
