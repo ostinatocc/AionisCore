@@ -119,32 +119,23 @@ export function buildWorkflowPromotionGovernancePreview(args: {
           review,
           admissibility,
         }),
-      buildDecisionTrace: ({ reviewResult, admissibility, policyEffect }) => ({
-        ...buildGovernanceDecisionTraceBase({
+      buildDecisionTrace: ({ reviewResult, admissibility, policyEffect }) => {
+        const traceBase = buildGovernanceDecisionTraceBase({
           reviewResult,
           admissibility,
           policyEffectApplies: policyEffect.applies,
           policyEffectReasonCode: policyEffect.reason_code,
           includePolicyEffectReasonCode: !policyEffect.applies,
-        }),
-        trace_version: "workflow_promotion_governance_trace_v1",
-        base_promotion_state: "candidate",
-        effective_promotion_state: policyEffect.effective_promotion_state,
-        stage_order: buildGovernanceDecisionTraceBase({
-          reviewResult,
-          admissibility,
-          policyEffectApplies: policyEffect.applies,
-          policyEffectReasonCode: policyEffect.reason_code,
-          includePolicyEffectReasonCode: !policyEffect.applies,
-        }).stage_order as WorkflowWriteProjectionGovernanceDecisionTrace["stage_order"],
-        reason_codes: buildGovernanceDecisionTraceBase({
-          reviewResult,
-          admissibility,
-          policyEffectApplies: policyEffect.applies,
-          policyEffectReasonCode: policyEffect.reason_code,
-          includePolicyEffectReasonCode: !policyEffect.applies,
-        }).reason_codes,
-      }),
+        });
+        return {
+          ...traceBase,
+          trace_version: "workflow_promotion_governance_trace_v1",
+          base_promotion_state: "candidate",
+          effective_promotion_state: policyEffect.effective_promotion_state,
+          stage_order: traceBase.stage_order as WorkflowWriteProjectionGovernanceDecisionTrace["stage_order"],
+          reason_codes: traceBase.reason_codes,
+        };
+      },
     }),
   };
 }
