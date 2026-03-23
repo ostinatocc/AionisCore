@@ -27,6 +27,7 @@ import {
 } from "./replay-learning.js";
 import {
   buildGovernanceDecisionTraceBase,
+  deriveGovernedStateRaiseRuntimeApply,
   deriveGovernedStateRaisePreview,
 } from "./governance-shared.js";
 import { buildReplayCostSignals } from "./cost-signals.js";
@@ -1050,11 +1051,15 @@ function applyReplayGovernancePolicyEffect(args: {
   policyEffect: ReplayRepairReviewGovernancePolicyEffect | null;
 }): ReplayLearningProjectionResolvedConfig {
   const policyEffect = args.policyEffect ?? null;
-  if (!policyEffect?.applies) return args.config;
-  if (policyEffect.effective_target_rule_state !== "shadow") return args.config;
+  const applyGate = deriveGovernedStateRaiseRuntimeApply({
+    policyEffect,
+    effectiveState: policyEffect?.effective_target_rule_state,
+    appliedState: "shadow",
+  });
+  if (!applyGate.runtimeApplyRequested || !applyGate.governedOverrideState) return args.config;
   return {
     ...args.config,
-    target_rule_state: "shadow",
+    target_rule_state: applyGate.governedOverrideState,
   };
 }
 

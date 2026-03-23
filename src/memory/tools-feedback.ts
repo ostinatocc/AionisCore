@@ -29,6 +29,7 @@ import { writeToolsDecisionPatternAnchor } from "./tools-pattern-anchor.js";
 import {
   buildGovernanceDecisionTraceBase,
   appendGovernanceRuntimePolicyAppliedStage,
+  deriveGovernedStateRaiseRuntimeApply,
 } from "./governance-shared.js";
 import {
   buildFormPatternSemanticReviewPacket,
@@ -615,7 +616,13 @@ export async function toolSelectionFeedback(
             source_rule_count: uniq.length,
           });
         }
-        if (governancePreview?.form_pattern?.policy_effect?.applies) {
+        const formPatternPreview = governancePreview?.form_pattern ?? null;
+        const applyGate = deriveGovernedStateRaiseRuntimeApply({
+          policyEffect: formPatternPreview?.policy_effect ?? null,
+          effectiveState: formPatternPreview?.policy_effect?.effective_pattern_state,
+          appliedState: "stable",
+        });
+        if (formPatternPreview && applyGate.runtimeApplyRequested && applyGate.governedOverrideState) {
           const applied = await writeToolsDecisionPatternAnchor(null, {
             tenant_id: tenancy.tenant_id,
             scope: tenancy.scope,
@@ -630,7 +637,7 @@ export async function toolSelectionFeedback(
             decision: decision!,
             feedback_commit_id: commit_id,
             feedback_outcome: parsed.outcome,
-            governed_pattern_state_override: "stable",
+            governed_pattern_state_override: applyGate.governedOverrideState,
           }, {
             defaultScope,
             defaultTenantId,
@@ -643,11 +650,11 @@ export async function toolSelectionFeedback(
           });
           if (applied) {
             anchorOut = applied;
-            governancePreview.form_pattern.decision_trace.runtime_apply_changed_pattern_state =
+            formPatternPreview.decision_trace.runtime_apply_changed_pattern_state =
               (anchorOut.anchor.pattern_state ?? "provisional") === "stable";
             const nextStageOrder: ToolsFeedbackFormPatternGovernanceDecisionTrace["stage_order"] =
-              appendGovernanceRuntimePolicyAppliedStage(governancePreview.form_pattern.decision_trace.stage_order);
-            governancePreview.form_pattern.decision_trace.stage_order = nextStageOrder;
+              appendGovernanceRuntimePolicyAppliedStage(formPatternPreview.decision_trace.stage_order);
+            formPatternPreview.decision_trace.stage_order = nextStageOrder;
           }
         }
         patternAnchor = {
@@ -999,7 +1006,13 @@ export async function toolSelectionFeedback(
           source_rule_count: uniq.length,
         });
       }
-      if (governancePreview?.form_pattern?.policy_effect?.applies) {
+      const formPatternPreview = governancePreview?.form_pattern ?? null;
+      const applyGate = deriveGovernedStateRaiseRuntimeApply({
+        policyEffect: formPatternPreview?.policy_effect ?? null,
+        effectiveState: formPatternPreview?.policy_effect?.effective_pattern_state,
+        appliedState: "stable",
+      });
+      if (formPatternPreview && applyGate.runtimeApplyRequested && applyGate.governedOverrideState) {
         const applied = await writeToolsDecisionPatternAnchor(client, {
           tenant_id: tenancy.tenant_id,
           scope: tenancy.scope,
@@ -1014,7 +1027,7 @@ export async function toolSelectionFeedback(
           decision: decision!,
           feedback_commit_id: commit_id,
           feedback_outcome: parsed.outcome,
-          governed_pattern_state_override: "stable",
+          governed_pattern_state_override: applyGate.governedOverrideState,
         }, {
           defaultScope,
           defaultTenantId,
@@ -1026,11 +1039,11 @@ export async function toolSelectionFeedback(
         });
         if (applied) {
           anchorOut = applied;
-          governancePreview.form_pattern.decision_trace.runtime_apply_changed_pattern_state =
+          formPatternPreview.decision_trace.runtime_apply_changed_pattern_state =
             (anchorOut.anchor.pattern_state ?? "provisional") === "stable";
           const nextStageOrder: ToolsFeedbackFormPatternGovernanceDecisionTrace["stage_order"] =
-            appendGovernanceRuntimePolicyAppliedStage(governancePreview.form_pattern.decision_trace.stage_order);
-          governancePreview.form_pattern.decision_trace.stage_order = nextStageOrder;
+            appendGovernanceRuntimePolicyAppliedStage(formPatternPreview.decision_trace.stage_order);
+          formPatternPreview.decision_trace.stage_order = nextStageOrder;
         }
       }
       patternAnchor = {

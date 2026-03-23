@@ -159,3 +159,23 @@ export function deriveGovernedStateRaisePreview<
     reasonCode: args.applyReason,
   };
 }
+
+export function deriveGovernedStateRaiseRuntimeApply<
+  TEffectiveState extends string,
+  TAppliedState extends TEffectiveState,
+>(args: {
+  policyEffect: { applies: boolean } | null;
+  effectiveState: TEffectiveState | null | undefined;
+  appliedState: TAppliedState;
+}): {
+  runtimeApplyRequested: boolean;
+  governedOverrideState: TAppliedState | null;
+} {
+  const runtimeApplyRequested =
+    !!args.policyEffect?.applies
+    && args.effectiveState === args.appliedState;
+  return {
+    runtimeApplyRequested,
+    governedOverrideState: runtimeApplyRequested ? args.appliedState : null,
+  };
+}
