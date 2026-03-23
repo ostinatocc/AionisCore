@@ -2,6 +2,10 @@ import type {
   MemoryFormPatternSemanticReviewPacket,
   MemoryPromoteSemanticReviewPacket,
 } from "./schemas.js";
+import {
+  MEMORY_FORM_PATTERN_SEMANTIC_REVIEW_VERSION,
+  MEMORY_PROMOTE_SEMANTIC_REVIEW_VERSION,
+} from "./schemas.js";
 
 export const GOVERNANCE_HTTP_TRANSPORT_CONTRACT_VERSION = "openai_chat_completions_v1";
 export const GOVERNANCE_HTTP_PROMOTE_MEMORY_PROMPT_VERSION = "promote_memory_http_prompt_v1";
@@ -42,9 +46,9 @@ export function buildPromoteMemoryHttpPromptContract(
       operation: "promote_memory",
       response_contract: {
         kind: "strict_json_or_null",
-        review_version: "promote_memory_semantic_review_v1",
+        review_version: MEMORY_PROMOTE_SEMANTIC_REVIEW_VERSION,
         schema_note:
-          "Return null or a promote_memory_semantic_review_v1 object. Do not wrap in markdown or prose.",
+          "Return null or a promote_memory semantic review object matching the current schema version. Do not wrap in markdown or prose.",
       },
       review_packet: reviewPacket,
     },
@@ -69,9 +73,9 @@ export function buildFormPatternHttpPromptContract(
       operation: "form_pattern",
       response_contract: {
         kind: "strict_json_or_null",
-        review_version: "form_pattern_semantic_review_v1",
+        review_version: MEMORY_FORM_PATTERN_SEMANTIC_REVIEW_VERSION,
         schema_note:
-          "Return null or a form_pattern_semantic_review_v1 object. Do not wrap in markdown or prose.",
+          "Return null or a form_pattern semantic review object matching the current schema version. Do not wrap in markdown or prose.",
       },
       review_packet: reviewPacket,
     },

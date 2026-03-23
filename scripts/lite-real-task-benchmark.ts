@@ -9,6 +9,10 @@ import {
   GOVERNANCE_HTTP_PROMOTE_MEMORY_PROMPT_VERSION,
   GOVERNANCE_HTTP_TRANSPORT_CONTRACT_VERSION,
 } from "../src/memory/governance-model-client-http-contract.ts";
+import {
+  MEMORY_FORM_PATTERN_SEMANTIC_REVIEW_VERSION,
+  MEMORY_PROMOTE_SEMANTIC_REVIEW_VERSION,
+} from "../src/memory/schemas.ts";
 import { FakeEmbeddingProvider } from "../src/embeddings/fake.ts";
 import { createRequestGuards } from "../src/app/request-guards.ts";
 import { createReplayRepairReviewPolicy } from "../src/app/replay-repair-review-policy.ts";
@@ -113,6 +117,10 @@ type BenchmarkSuiteProfile = {
     promote_memory_prompt_version: string | null;
     form_pattern_prompt_version: string | null;
   };
+  http_response_contract?: {
+    promote_memory_review_version: string | null;
+    form_pattern_review_version: string | null;
+  };
   slim_surface_boundary?: {
     planning_has_layered_context: boolean | null;
     assemble_has_layered_context: boolean | null;
@@ -159,7 +167,7 @@ type BenchmarkRegressionGate = {
   reasons: string[];
 };
 
-const BENCHMARK_PROFILE_POLICY_VERSION = "v3";
+const BENCHMARK_PROFILE_POLICY_VERSION = "v4";
 const HARD_BENCHMARK_PROFILE_KEYS = new Set<string>([
   "workflow_progression.stable_workflow_count_after_second",
   "multi_step_repair.stable_workflow_count_after_validate",
@@ -182,6 +190,8 @@ const HARD_BENCHMARK_PROFILE_KEYS = new Set<string>([
   "http_prompt_contract.transport_contract_version",
   "http_prompt_contract.promote_memory_prompt_version",
   "http_prompt_contract.form_pattern_prompt_version",
+  "http_response_contract.promote_memory_review_version",
+  "http_response_contract.form_pattern_review_version",
   "slim_surface_boundary.planning_has_layered_context",
   "slim_surface_boundary.assemble_has_layered_context",
 ]);
@@ -430,6 +440,10 @@ function buildSuiteProfile(scenarios: BenchmarkScenarioResult[]): BenchmarkSuite
       transport_contract_version: GOVERNANCE_HTTP_TRANSPORT_CONTRACT_VERSION,
       promote_memory_prompt_version: GOVERNANCE_HTTP_PROMOTE_MEMORY_PROMPT_VERSION,
       form_pattern_prompt_version: GOVERNANCE_HTTP_FORM_PATTERN_PROMPT_VERSION,
+    },
+    http_response_contract: {
+      promote_memory_review_version: MEMORY_PROMOTE_SEMANTIC_REVIEW_VERSION,
+      form_pattern_review_version: MEMORY_FORM_PATTERN_SEMANTIC_REVIEW_VERSION,
     },
     slim_surface_boundary: {
       planning_has_layered_context:

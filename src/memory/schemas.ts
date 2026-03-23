@@ -546,8 +546,11 @@ export const MemoryPromoteSemanticReviewCandidateSchema = z.object({
   success_score: z.number().min(0).max(1).nullable().optional(),
 });
 
+export const MEMORY_PROMOTE_SEMANTIC_REVIEW_VERSION = "promote_memory_semantic_review_v1" as const;
+export const MEMORY_FORM_PATTERN_SEMANTIC_REVIEW_VERSION = "form_pattern_semantic_review_v1" as const;
+
 export const MemoryPromoteSemanticReviewPacketSchema = z.object({
-  review_version: z.literal("promote_memory_semantic_review_v1"),
+  review_version: z.literal(MEMORY_PROMOTE_SEMANTIC_REVIEW_VERSION),
   operation: z.literal("promote_memory"),
   requested_target_kind: z.enum(["execution", "workflow", "pattern", "decision"]),
   requested_target_level: MemoryAnchorLevel,
@@ -564,7 +567,7 @@ export const MemoryPromoteSemanticReviewPacketSchema = z.object({
 export type MemoryPromoteSemanticReviewPacket = z.infer<typeof MemoryPromoteSemanticReviewPacketSchema>;
 
 export const MemoryPromoteSemanticReviewResultSchema = z.object({
-  review_version: z.literal("promote_memory_semantic_review_v1"),
+  review_version: z.literal(MEMORY_PROMOTE_SEMANTIC_REVIEW_VERSION),
   adjudication: MemoryPromoteAdjudicationSchema,
 });
 
@@ -603,7 +606,7 @@ export const MemoryFormPatternSemanticReviewExampleSchema = z.object({
 });
 
 export const MemoryFormPatternSemanticReviewPacketSchema = z.object({
-  review_version: z.literal("form_pattern_semantic_review_v1"),
+  review_version: z.literal(MEMORY_FORM_PATTERN_SEMANTIC_REVIEW_VERSION),
   operation: z.literal("form_pattern"),
   target_level: z.literal("L3"),
   source_count: z.number().int().min(2).max(100),
@@ -623,7 +626,7 @@ export const MemoryFormPatternSemanticReviewPacketSchema = z.object({
 export type MemoryFormPatternSemanticReviewPacket = z.infer<typeof MemoryFormPatternSemanticReviewPacketSchema>;
 
 export const MemoryFormPatternSemanticReviewResultSchema = z.object({
-  review_version: z.literal("form_pattern_semantic_review_v1"),
+  review_version: z.literal(MEMORY_FORM_PATTERN_SEMANTIC_REVIEW_VERSION),
   adjudication: MemoryFormPatternAdjudicationSchema,
 });
 
