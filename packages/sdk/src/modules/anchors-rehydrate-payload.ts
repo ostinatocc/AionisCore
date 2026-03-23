@@ -1,11 +1,14 @@
-import type { AionisHttpClient, AionisRequestPayload, AionisResponsePayload } from "../types.js";
+import type {
+  AionisAnchorsRehydratePayloadRequest,
+  AionisAnchorsRehydratePayloadResponse,
+} from "../contracts.js";
+import type { AionisHttpClient } from "../types.js";
 
 export function createAnchorsRehydratePayloadModule(client: AionisHttpClient) {
-  return async function rehydratePayload<
-    TRequest extends AionisRequestPayload,
-    TResponse = AionisResponsePayload,
-  >(payload: TRequest): Promise<TResponse> {
-    return await client.post<TRequest, TResponse>({
+  return async function rehydratePayload(
+    payload: AionisAnchorsRehydratePayloadRequest,
+  ): Promise<AionisAnchorsRehydratePayloadResponse> {
+    return await client.post<AionisAnchorsRehydratePayloadRequest, AionisAnchorsRehydratePayloadResponse>({
       path: "/v1/memory/anchors/rehydrate_payload",
       payload,
     });

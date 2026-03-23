@@ -1,11 +1,11 @@
-import type { AionisHttpClient, AionisRequestPayload, AionisResponsePayload } from "../types.js";
+import type { AionisPlanningContextRequest, AionisPlanningContextResponse } from "../contracts.js";
+import type { AionisHttpClient } from "../types.js";
 
 export function createPlanningContextModule(client: AionisHttpClient) {
-  return async function planningContext<
-    TRequest extends AionisRequestPayload,
-    TResponse = AionisResponsePayload,
-  >(payload: TRequest): Promise<TResponse> {
-    return await client.post<TRequest, TResponse>({
+  return async function planningContext(
+    payload: AionisPlanningContextRequest,
+  ): Promise<AionisPlanningContextResponse> {
+    return await client.post<AionisPlanningContextRequest, AionisPlanningContextResponse>({
       path: "/v1/memory/planning/context",
       payload,
     });

@@ -41,3 +41,5 @@ It wraps the most stable route-level product surfaces without exposing every int
 
 Repository examples live in [examples/sdk](/Volumes/ziel/Aionisgo/examples/sdk).
 Inside this repository they import the locally built `dist` artifact first; after publish they should import `@aionis/sdk`.
+
+The SDK now also exports first-party typed request/response contracts for the v1 surface, while still allowing additive passthrough fields on route responses.

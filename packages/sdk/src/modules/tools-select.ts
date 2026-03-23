@@ -1,11 +1,9 @@
-import type { AionisHttpClient, AionisRequestPayload, AionisResponsePayload } from "../types.js";
+import type { AionisToolsSelectRequest, AionisToolsSelectResponse } from "../contracts.js";
+import type { AionisHttpClient } from "../types.js";
 
 export function createToolsSelectModule(client: AionisHttpClient) {
-  return async function selectTool<
-    TRequest extends AionisRequestPayload,
-    TResponse = AionisResponsePayload,
-  >(payload: TRequest): Promise<TResponse> {
-    return await client.post<TRequest, TResponse>({
+  return async function selectTool(payload: AionisToolsSelectRequest): Promise<AionisToolsSelectResponse> {
+    return await client.post<AionisToolsSelectRequest, AionisToolsSelectResponse>({
       path: "/v1/memory/tools/select",
       payload,
     });

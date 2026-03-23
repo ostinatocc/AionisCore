@@ -7,8 +7,8 @@ export type AionisJsonValue =
 
 export type AionisJsonObject = { [key: string]: AionisJsonValue };
 
-export type AionisRequestPayload = AionisJsonObject;
-export type AionisResponsePayload = AionisJsonValue;
+export type AionisRequestPayload = Record<string, unknown>;
+export type AionisResponsePayload = unknown;
 
 export type AionisFetch = typeof fetch;
 

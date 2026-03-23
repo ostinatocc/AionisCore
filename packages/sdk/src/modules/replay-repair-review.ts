@@ -1,11 +1,11 @@
-import type { AionisHttpClient, AionisRequestPayload, AionisResponsePayload } from "../types.js";
+import type { AionisReplayRepairReviewRequest, AionisReplayRepairReviewResponse } from "../contracts.js";
+import type { AionisHttpClient } from "../types.js";
 
 export function createReplayRepairReviewModule(client: AionisHttpClient) {
-  return async function repairReview<
-    TRequest extends AionisRequestPayload,
-    TResponse = AionisResponsePayload,
-  >(payload: TRequest): Promise<TResponse> {
-    return await client.post<TRequest, TResponse>({
+  return async function repairReview(
+    payload: AionisReplayRepairReviewRequest,
+  ): Promise<AionisReplayRepairReviewResponse> {
+    return await client.post<AionisReplayRepairReviewRequest, AionisReplayRepairReviewResponse>({
       path: "/v1/memory/replay/playbooks/repair/review",
       payload,
     });

@@ -1,11 +1,9 @@
-import type { AionisHttpClient, AionisRequestPayload, AionisResponsePayload } from "../types.js";
+import type { AionisMemoryWriteRequest, AionisMemoryWriteResponse } from "../contracts.js";
+import type { AionisHttpClient } from "../types.js";
 
 export function createMemoryWriteModule(client: AionisHttpClient) {
-  return async function write<
-    TRequest extends AionisRequestPayload,
-    TResponse = AionisResponsePayload,
-  >(payload: TRequest): Promise<TResponse> {
-    return await client.post<TRequest, TResponse>({
+  return async function write(payload: AionisMemoryWriteRequest): Promise<AionisMemoryWriteResponse> {
+    return await client.post<AionisMemoryWriteRequest, AionisMemoryWriteResponse>({
       path: "/v1/memory/write",
       payload,
     });
