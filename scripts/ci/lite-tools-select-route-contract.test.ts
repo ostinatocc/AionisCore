@@ -8,7 +8,12 @@ import Fastify from "fastify";
 import { FakeEmbeddingProvider } from "../../src/embeddings/fake.ts";
 import { createRequestGuards } from "../../src/app/request-guards.ts";
 import { registerHostErrorHandler } from "../../src/host/http-host.ts";
-import { MemoryAnchorV1Schema, PatternSuppressResponseSchema, ToolsSelectRouteContractSchema } from "../../src/memory/schemas.ts";
+import {
+  MemoryAnchorV1Schema,
+  PatternSuppressResponseSchema,
+  ToolsFeedbackResponseSchema,
+  ToolsSelectRouteContractSchema,
+} from "../../src/memory/schemas.ts";
 import { updateRuleState } from "../../src/memory/rules.ts";
 import { applyMemoryWrite, prepareMemoryWrite } from "../../src/memory/write.ts";
 import { registerMemoryFeedbackToolRoutes } from "../../src/routes/memory-feedback-tools.ts";
@@ -52,6 +57,117 @@ function buildRequestGuards() {
     recallInflightGate: new InflightGate({ maxInflight: 8, maxQueue: 8, queueTimeoutMs: 100 }),
     writeInflightGate: new InflightGate({ maxInflight: 8, maxQueue: 8, queueTimeoutMs: 100 }),
   });
+}
+
+function buildLiteEnv(overrides: Record<string, unknown> = {}) {
+  return {
+    AIONIS_EDITION: "lite",
+    MEMORY_AUTH_MODE: "off",
+    TENANT_QUOTA_ENABLED: false,
+    LITE_LOCAL_ACTOR_ID: "local-user",
+    MEMORY_TENANT_ID: "default",
+    MEMORY_SCOPE: "default",
+    APP_ENV: "test",
+    ADMIN_TOKEN: "",
+    TRUST_PROXY: false,
+    TRUSTED_PROXY_CIDRS: [],
+    RATE_LIMIT_ENABLED: false,
+    RATE_LIMIT_BYPASS_LOOPBACK: false,
+    WRITE_RATE_LIMIT_MAX_WAIT_MS: 0,
+    RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS: 0,
+    MAX_TEXT_LEN: 10000,
+    PII_REDACTION: false,
+    ALLOW_CROSS_SCOPE_EDGES: false,
+    TOOLS_GOVERNANCE_STATIC_FORM_PATTERN_PROVIDER_ENABLED: false,
+    ...overrides,
+  } as any;
+}
+
+async function insertAndActivateRule(
+  liteWriteStore: ReturnType<typeof createLiteWriteStore>,
+  preferredTool: string,
+  ruleSuffix: string,
+): Promise<string> {
+  const prepared = await prepareMemoryWrite(
+    {
+      tenant_id: "default",
+      scope: "default",
+      actor: "local-user",
+      input_text: `create rule prefer ${preferredTool} for export repair`,
+      auto_embed: false,
+      memory_lane: "shared",
+      nodes: [
+        {
+          client_id: `rule:prefer-${preferredTool}:${ruleSuffix}`,
+          type: "rule",
+          title: `Prefer ${preferredTool} for export repair`,
+          text_summary: `For repair_export tasks, prefer ${preferredTool} over the other tools.`,
+          slots: {
+            if: {
+              task_kind: { $eq: "repair_export" },
+            },
+            then: {
+              tool: {
+                prefer: [preferredTool],
+              },
+            },
+            exceptions: [],
+            rule_scope: "global",
+          },
+        },
+      ],
+      edges: [],
+    },
+    "default",
+    "default",
+    {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+    },
+    null,
+  );
+
+  const out = await liteWriteStore.withTx(() =>
+    applyMemoryWrite({} as any, prepared, {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+      shadowDualWriteEnabled: false,
+      shadowDualWriteStrict: false,
+      associativeLinkOrigin: "memory_write",
+      write_access: liteWriteStore,
+    }),
+  );
+  const ruleNodeId = out.nodes[0]?.id ?? null;
+  assert.ok(ruleNodeId);
+
+  await liteWriteStore.withTx(() =>
+    updateRuleState({} as any, {
+      tenant_id: "default",
+      scope: "default",
+      actor: "local-user",
+      rule_node_id: ruleNodeId,
+      state: "active",
+      input_text: `activate prefer ${preferredTool} rule`,
+    }, "default", "default", {
+      liteWriteStore,
+    }),
+  );
+
+  return ruleNodeId;
+}
+
+async function seedActiveRules(
+  dbPath: string,
+  preferredTools: string[],
+): Promise<{ liteWriteStore: ReturnType<typeof createLiteWriteStore>; ruleNodeIds: string[] }> {
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const ruleNodeIds: string[] = [];
+  for (const [index, preferredTool] of preferredTools.entries()) {
+    ruleNodeIds.push(await insertAndActivateRule(liteWriteStore, preferredTool, `route-${preferredTool}-${index + 1}`));
+  }
+  return { liteWriteStore, ruleNodeIds };
 }
 
 async function seedToolsSelectFixture(dbPath: string) {
@@ -399,6 +515,93 @@ test("tools_select keeps suppressed trusted patterns visible but excludes them f
       body.selection_summary.provenance_explanation,
       "selected tool: bash; suppressed patterns visible but operator-blocked: edit",
     );
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("tools feedback route can use internal static form_pattern provider without explicit review", async () => {
+  const app = Fastify();
+  const dbPath = tmpDbPath("tools-feedback-provider-route");
+  const { liteWriteStore } = await seedActiveRules(dbPath, ["edit", "edit"]);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryFeedbackToolRoutes({
+      app,
+      env: buildLiteEnv({
+        TOOLS_GOVERNANCE_STATIC_FORM_PATTERN_PROVIDER_ENABLED: true,
+      }),
+      embedder: FakeEmbeddingProvider,
+      embeddedRuntime: null,
+      liteRecallAccess: liteRecallStore.createRecallAccess(),
+      liteWriteStore,
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const runId = randomUUID();
+    const context = {
+      task_kind: "repair_export",
+      goal: "repair export failure in node tests",
+      error: {
+        signature: "node-export-mismatch",
+      },
+    };
+
+    const selectionResponse = await app.inject({
+      method: "POST",
+      url: "/v1/memory/tools/select",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        run_id: runId,
+        context,
+        candidates: ["bash", "edit", "test"],
+        include_shadow: false,
+        rules_limit: 20,
+        strict: true,
+        reorder_candidates: false,
+      },
+    });
+    assert.equal(selectionResponse.statusCode, 200);
+    const selection = ToolsSelectRouteContractSchema.parse(selectionResponse.json());
+
+    const feedbackResponse = await app.inject({
+      method: "POST",
+      url: "/v1/memory/tools/feedback",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        run_id: runId,
+        decision_id: selection.decision.decision_id,
+        outcome: "positive",
+        context,
+        candidates: ["bash", "edit", "test"],
+        selected_tool: "edit",
+        target: "tool",
+        note: "Edit-based repair succeeded with grouped provider-backed evidence",
+        input_text: "repair export failure in node tests",
+      },
+    });
+    assert.equal(feedbackResponse.statusCode, 200);
+    const parsed = ToolsFeedbackResponseSchema.parse(feedbackResponse.json());
+    assert.equal(parsed.pattern_anchor?.pattern_state, "stable");
+    assert.equal(parsed.pattern_anchor?.credibility_state, "trusted");
+    assert.equal(parsed.governance_preview?.form_pattern.review_result?.review_version, "form_pattern_semantic_review_v1");
+    assert.equal(parsed.governance_preview?.form_pattern.review_result?.adjudication.reason, "static provider found grouped signature evidence");
+    assert.equal(parsed.governance_preview?.form_pattern.review_result?.adjudication.confidence, 0.85);
+    assert.equal(parsed.governance_preview?.form_pattern.admissibility?.admissible, true);
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.applies, true);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.runtime_apply_changed_pattern_state, true);
   } finally {
     await app.close();
     await liteRecallStore.close();
