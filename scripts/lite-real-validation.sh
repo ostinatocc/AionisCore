@@ -7,7 +7,7 @@ cd "${ROOT_DIR}"
 usage() {
   cat <<'EOF'
 Usage:
-  bash scripts/lite-real-validation.sh [--workdir /abs/path] [--baseline-json /abs/path]
+  bash scripts/lite-real-validation.sh [--workdir /abs/path] [--baseline-json /abs/path] [--external-http-shadow]
 
 Behavior:
   - creates an external validation workdir by default
@@ -21,6 +21,7 @@ BASELINE_JSON="${LITE_REAL_VALIDATION_BASELINE_JSON:-}"
 MAX_SUITE_SCORE_DROP="${LITE_REAL_VALIDATION_MAX_SUITE_SCORE_DROP:-0}"
 MAX_SCENARIO_SCORE_DROP="${LITE_REAL_VALIDATION_MAX_SCENARIO_SCORE_DROP:-0}"
 PROFILE_DRIFT_GATE_MODE="${LITE_REAL_VALIDATION_PROFILE_DRIFT_GATE_MODE:-hard}"
+EXTERNAL_HTTP_SHADOW="${LITE_REAL_VALIDATION_EXTERNAL_HTTP_SHADOW:-false}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --workdir)
@@ -30,6 +31,10 @@ while [[ $# -gt 0 ]]; do
     --baseline-json)
       BASELINE_JSON="${2:-}"
       shift 2
+      ;;
+    --external-http-shadow)
+      EXTERNAL_HTTP_SHADOW=true
+      shift
       ;;
     -h|--help)
       usage
@@ -91,6 +96,9 @@ run_step \
       cmd+=(--max-suite-score-drop "'"${MAX_SUITE_SCORE_DROP}"'")
       cmd+=(--max-scenario-score-drop "'"${MAX_SCENARIO_SCORE_DROP}"'")
     fi
+    if [[ "'"${EXTERNAL_HTTP_SHADOW}"'" == "true" ]]; then
+      cmd+=(--external-http-shadow)
+    fi
     cmd+=(--out-json "'"${BENCHMARK_DIR}/lite-benchmark.json"'")
     cmd+=(--out-md "'"${BENCHMARK_DIR}/lite-benchmark.md"'")
     "${cmd[@]}"
@@ -110,6 +118,7 @@ Workdir: ${WORKDIR}
 3. benchmark: ${BENCHMARK_DIR}
 4. baseline: ${BASELINE_JSON:-none}
 5. profile drift gate mode: ${PROFILE_DRIFT_GATE_MODE}
+6. external http shadow: ${EXTERNAL_HTTP_SHADOW}
 
 ## Key Artifacts
 
@@ -119,6 +128,7 @@ Workdir: ${WORKDIR}
 4. smoke local-process log: ${SMOKE_LOCAL_DIR}/run.log
 5. benchmark log: ${BENCHMARK_DIR}/run.log
 6. baseline json: ${BASELINE_JSON:-none}
+7. external http shadow: ${EXTERNAL_HTTP_SHADOW}
 EOF
 
 echo

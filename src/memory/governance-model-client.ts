@@ -8,6 +8,9 @@ import type {
 
 export type GovernanceModelClientOperation = "promote_memory" | "form_pattern";
 export type GovernanceModelClientMode = "off" | "mock" | "builtin" | "http" | "custom";
+export type GovernanceHttpModelClientTransport =
+  | "openai_chat_completions_v1"
+  | "anthropic_messages_v1";
 
 export type GovernanceHttpModelClientConfig = {
   baseUrl: string;
@@ -16,6 +19,7 @@ export type GovernanceHttpModelClientConfig = {
   timeoutMs: number;
   maxTokens: number;
   temperature: number;
+  transport?: GovernanceHttpModelClientTransport;
 };
 
 export type GovernanceModelClient = {

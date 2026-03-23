@@ -495,6 +495,9 @@ const EnvSchema = z.object({
     .transform((v) => (v ?? "false").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
+  GOVERNANCE_MODEL_CLIENT_TRANSPORT: z
+    .enum(["auto", "openai_chat_completions_v1", "anthropic_messages_v1"])
+    .default("auto"),
   GOVERNANCE_MODEL_CLIENT_BASE_URL: z.string().default("https://api.openai.com/v1"),
   GOVERNANCE_MODEL_CLIENT_API_KEY: z.string().default(""),
   GOVERNANCE_MODEL_CLIENT_MODEL: z.string().default("gpt-4.1-mini"),

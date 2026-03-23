@@ -6,8 +6,8 @@ import path from "node:path";
 import Fastify from "fastify";
 import {
   GOVERNANCE_HTTP_FORM_PATTERN_PROMPT_VERSION,
+  GOVERNANCE_HTTP_OPENAI_TRANSPORT_CONTRACT_VERSION,
   GOVERNANCE_HTTP_PROMOTE_MEMORY_PROMPT_VERSION,
-  GOVERNANCE_HTTP_TRANSPORT_CONTRACT_VERSION,
 } from "../src/memory/governance-model-client-http-contract.ts";
 import {
   MEMORY_FORM_PATTERN_SEMANTIC_REVIEW_VERSION,
@@ -41,7 +41,10 @@ import { createLiteRecallStore } from "../src/store/lite-recall-store.ts";
 import { createLiteReplayStore } from "../src/store/lite-replay-store.ts";
 import { createLiteWriteStore } from "../src/store/lite-write-store.ts";
 import { InflightGate } from "../src/util/inflight_gate.ts";
-import type { GovernanceModelClientFactory } from "../src/memory/governance-model-client.ts";
+import type {
+  GovernanceHttpModelClientConfig,
+  GovernanceModelClientFactory,
+} from "../src/memory/governance-model-client.ts";
 
 type AssertionResult = {
   name: string;
@@ -160,6 +163,14 @@ type CliOptions = {
   maxScenarioScoreDropPct: number | null;
   failOnProfileDrift: boolean;
   failOnHardProfileDrift: boolean;
+  externalHttpShadow: boolean;
+  externalHttpBaseUrl: string | null;
+  externalHttpApiKey: string | null;
+  externalHttpModel: string | null;
+  externalHttpTransport: string | null;
+  externalHttpTimeoutMs: number | null;
+  externalHttpMaxTokens: number | null;
+  externalHttpTemperature: number | null;
 };
 
 type BenchmarkRegressionGate = {
@@ -219,6 +230,14 @@ function parseCliArgs(argv: string[]): CliOptions {
   let maxScenarioScoreDropPct: number | null = null;
   let failOnProfileDrift = false;
   let failOnHardProfileDrift = false;
+  let externalHttpShadow = false;
+  let externalHttpBaseUrl: string | null = null;
+  let externalHttpApiKey: string | null = null;
+  let externalHttpModel: string | null = null;
+  let externalHttpTransport: string | null = null;
+  let externalHttpTimeoutMs: number | null = null;
+  let externalHttpMaxTokens: number | null = null;
+  let externalHttpTemperature: number | null = null;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -253,6 +272,57 @@ function parseCliArgs(argv: string[]): CliOptions {
       failOnHardProfileDrift = true;
       continue;
     }
+    if (arg === "--external-http-shadow") {
+      externalHttpShadow = true;
+      continue;
+    }
+    if (arg === "--external-http-base-url") {
+      externalHttpBaseUrl = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    if (arg === "--external-http-api-key") {
+      externalHttpApiKey = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    if (arg === "--external-http-model") {
+      externalHttpModel = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    if (arg === "--external-http-transport") {
+      externalHttpTransport = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    if (arg === "--external-http-timeout-ms") {
+      const raw = argv[i + 1] ?? null;
+      if (raw == null) {
+        throw new Error("--external-http-timeout-ms requires a numeric value");
+      }
+      externalHttpTimeoutMs = Number(raw);
+      i += 1;
+      continue;
+    }
+    if (arg === "--external-http-max-tokens") {
+      const raw = argv[i + 1] ?? null;
+      if (raw == null) {
+        throw new Error("--external-http-max-tokens requires a numeric value");
+      }
+      externalHttpMaxTokens = Number(raw);
+      i += 1;
+      continue;
+    }
+    if (arg === "--external-http-temperature") {
+      const raw = argv[i + 1] ?? null;
+      if (raw == null) {
+        throw new Error("--external-http-temperature requires a numeric value");
+      }
+      externalHttpTemperature = Number(raw);
+      i += 1;
+      continue;
+    }
     if (arg === "--max-suite-score-drop") {
       const raw = argv[i + 1] ?? null;
       if (raw == null) {
@@ -282,6 +352,18 @@ function parseCliArgs(argv: string[]): CliOptions {
   if (!baselineJson && argv.includes("--baseline-json")) {
     throw new Error("--baseline-json requires a file path");
   }
+  if (!externalHttpBaseUrl && argv.includes("--external-http-base-url")) {
+    throw new Error("--external-http-base-url requires a value");
+  }
+  if (!externalHttpApiKey && argv.includes("--external-http-api-key")) {
+    throw new Error("--external-http-api-key requires a value");
+  }
+  if (!externalHttpModel && argv.includes("--external-http-model")) {
+    throw new Error("--external-http-model requires a value");
+  }
+  if (!externalHttpTransport && argv.includes("--external-http-transport")) {
+    throw new Error("--external-http-transport requires a value");
+  }
   if (
     maxSuiteScoreDropPct != null
     && (!Number.isFinite(maxSuiteScoreDropPct) || maxSuiteScoreDropPct < 0)
@@ -294,6 +376,24 @@ function parseCliArgs(argv: string[]): CliOptions {
   ) {
     throw new Error("--max-scenario-score-drop must be a non-negative number");
   }
+  if (
+    externalHttpTimeoutMs != null
+    && (!Number.isFinite(externalHttpTimeoutMs) || externalHttpTimeoutMs <= 0)
+  ) {
+    throw new Error("--external-http-timeout-ms must be a positive number");
+  }
+  if (
+    externalHttpMaxTokens != null
+    && (!Number.isFinite(externalHttpMaxTokens) || externalHttpMaxTokens <= 0)
+  ) {
+    throw new Error("--external-http-max-tokens must be a positive number");
+  }
+  if (
+    externalHttpTemperature != null
+    && (!Number.isFinite(externalHttpTemperature) || externalHttpTemperature < 0 || externalHttpTemperature > 1)
+  ) {
+    throw new Error("--external-http-temperature must be between 0 and 1");
+  }
 
   return {
     json,
@@ -305,6 +405,83 @@ function parseCliArgs(argv: string[]): CliOptions {
     maxScenarioScoreDropPct,
     failOnProfileDrift,
     failOnHardProfileDrift,
+    externalHttpShadow,
+    externalHttpBaseUrl,
+    externalHttpApiKey,
+    externalHttpModel,
+    externalHttpTransport,
+    externalHttpTimeoutMs,
+    externalHttpMaxTokens,
+    externalHttpTemperature,
+  };
+}
+
+function resolveExternalHttpShadowConfig(cli: CliOptions): GovernanceHttpModelClientConfig | null {
+  if (!cli.externalHttpShadow) return null;
+
+  const envNumber = (key: string): number | null => {
+    const raw = process.env[key];
+    if (typeof raw !== "string" || raw.trim().length === 0) return null;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : null;
+  };
+
+  const baseUrl =
+    cli.externalHttpBaseUrl
+    ?? process.env.LITE_EXTERNAL_GOVERNANCE_HTTP_BASE_URL
+    ?? process.env.GOVERNANCE_MODEL_CLIENT_BASE_URL
+    ?? "https://api.openai.com/v1";
+  const apiKey =
+    cli.externalHttpApiKey
+    ?? process.env.LITE_EXTERNAL_GOVERNANCE_HTTP_API_KEY
+    ?? process.env.OPENAI_API_KEY
+    ?? process.env.GOVERNANCE_MODEL_CLIENT_API_KEY
+    ?? "";
+  const model =
+    cli.externalHttpModel
+    ?? process.env.LITE_EXTERNAL_GOVERNANCE_HTTP_MODEL
+    ?? process.env.OPENAI_MODEL
+    ?? process.env.GOVERNANCE_MODEL_CLIENT_MODEL
+    ?? "gpt-4.1-mini";
+  const transport =
+    cli.externalHttpTransport
+    ?? process.env.LITE_EXTERNAL_GOVERNANCE_HTTP_TRANSPORT
+    ?? process.env.GOVERNANCE_MODEL_CLIENT_TRANSPORT
+    ?? undefined;
+  const timeoutMs =
+    cli.externalHttpTimeoutMs
+    ?? envNumber("LITE_EXTERNAL_GOVERNANCE_HTTP_TIMEOUT_MS")
+    ?? envNumber("GOVERNANCE_MODEL_CLIENT_TIMEOUT_MS")
+    ?? 15_000;
+  const maxTokens =
+    cli.externalHttpMaxTokens
+    ?? envNumber("LITE_EXTERNAL_GOVERNANCE_HTTP_MAX_TOKENS")
+    ?? envNumber("GOVERNANCE_MODEL_CLIENT_MAX_TOKENS")
+    ?? 300;
+  const temperature =
+    cli.externalHttpTemperature
+    ?? envNumber("LITE_EXTERNAL_GOVERNANCE_HTTP_TEMPERATURE")
+    ?? envNumber("GOVERNANCE_MODEL_CLIENT_TEMPERATURE")
+    ?? 0.1;
+
+  if (!baseUrl.trim() || !apiKey.trim() || !model.trim()) {
+    throw new Error(
+      "external HTTP shadow run requires base URL, API key, and model via CLI or env "
+      + "(LITE_EXTERNAL_GOVERNANCE_HTTP_* or OPENAI_API_KEY/GOVERNANCE_MODEL_CLIENT_*).",
+    );
+  }
+
+  return {
+    baseUrl: baseUrl.trim(),
+    apiKey: apiKey.trim(),
+    model: model.trim(),
+    transport:
+      transport === "openai_chat_completions_v1" || transport === "anthropic_messages_v1"
+        ? transport
+        : undefined,
+    timeoutMs,
+    maxTokens,
+    temperature,
   };
 }
 
@@ -437,7 +614,7 @@ function buildSuiteProfile(scenarios: BenchmarkScenarioResult[]): BenchmarkSuite
           : null,
     },
     http_prompt_contract: {
-      transport_contract_version: GOVERNANCE_HTTP_TRANSPORT_CONTRACT_VERSION,
+      transport_contract_version: GOVERNANCE_HTTP_OPENAI_TRANSPORT_CONTRACT_VERSION,
       promote_memory_prompt_version: GOVERNANCE_HTTP_PROMOTE_MEMORY_PROMPT_VERSION,
       form_pattern_prompt_version: GOVERNANCE_HTTP_FORM_PATTERN_PROMPT_VERSION,
     },
@@ -3465,6 +3642,7 @@ async function runHttpModelClientRuntimeLoop(): Promise<Omit<BenchmarkScenarioRe
       assert.ok(stableWorkflowNode);
       const stableProjection = (stableWorkflowNode.slots?.workflow_write_projection ?? {}) as Record<string, any>;
       const workflowPreview = ((stableProjection.governance_preview ?? {}) as Record<string, any>).promote_memory as Record<string, any> | undefined;
+      const workflowPacket = workflowPreview?.review_packet as Record<string, any> | undefined;
       assert.equal(workflowPreview?.review_result?.adjudication?.reason, "benchmark http promote_memory client");
       assert.equal(stableProjection.governed_promotion_state_override, "stable");
       assertions.push(pass("workflow runtime path uses http model client"));
@@ -3617,12 +3795,12 @@ async function runHttpModelClientRuntimeLoop(): Promise<Omit<BenchmarkScenarioRe
   });
 }
 
-async function runHttpModelClientShadowCompareRuntimeLoop(): Promise<Omit<BenchmarkScenarioResult, "id" | "title" | "status" | "duration_ms">> {
+async function runHttpModelClientShadowCompareRuntimeLoop(
+  externalConfig?: GovernanceHttpModelClientConfig | null,
+): Promise<Omit<BenchmarkScenarioResult, "id" | "title" | "status" | "duration_ms">> {
   async function runOneSide(args: {
     mode: "baseline" | "http";
-    baseUrl?: string;
-    apiKey?: string;
-    model?: string;
+    httpConfig?: GovernanceHttpModelClientConfig;
   }) {
     const runtimeDbPath = tmpDbPath(`http-shadow-${args.mode}-runtime`);
     const runtimeApp = Fastify();
@@ -3650,15 +3828,9 @@ async function runHttpModelClientShadowCompareRuntimeLoop(): Promise<Omit<Benchm
             : undefined,
         governanceRuntimeProviderBuilderOptions:
           args.mode === "http"
+            && args.httpConfig
             ? {
-                httpClientConfig: {
-                  baseUrl: args.baseUrl!,
-                  apiKey: args.apiKey!,
-                  model: args.model!,
-                  timeoutMs: 2000,
-                  maxTokens: 300,
-                  temperature: 0,
-                },
+                httpClientConfig: args.httpConfig,
                 modelClientModes: {
                   workflowProjection: {
                     promote_memory: "http",
@@ -3720,6 +3892,7 @@ async function runHttpModelClientShadowCompareRuntimeLoop(): Promise<Omit<Benchm
       assert.ok(stableWorkflowNode);
       const stableProjection = (stableWorkflowNode.slots?.workflow_write_projection ?? {}) as Record<string, any>;
       const workflowPreview = ((stableProjection.governance_preview ?? {}) as Record<string, any>).promote_memory as Record<string, any> | undefined;
+      const workflowPacket = workflowPreview?.review_packet as Record<string, any> | undefined;
 
       const toolRuleNodeIds = await seedActiveToolRules(runtimeWriteStore, ["edit", "edit"]);
       const toolsSelectRes = await runtimeApp.inject({
@@ -3811,15 +3984,9 @@ async function runHttpModelClientShadowCompareRuntimeLoop(): Promise<Omit<Benchm
             : undefined,
         governanceRuntimeProviderBuilderOptions:
           args.mode === "http"
+            && args.httpConfig
             ? {
-                httpClientConfig: {
-                  baseUrl: args.baseUrl!,
-                  apiKey: args.apiKey!,
-                  model: args.model!,
-                  timeoutMs: 2000,
-                  maxTokens: 300,
-                  temperature: 0,
-                },
+                httpClientConfig: args.httpConfig,
                 modelClientModes: {
                   replayRepairReview: {
                     promote_memory: "http",
@@ -3850,10 +4017,27 @@ async function runHttpModelClientShadowCompareRuntimeLoop(): Promise<Omit<Benchm
       return {
         workflowState: stableProjection.governed_promotion_state_override ?? null,
         workflowReason: workflowPreview?.review_result?.adjudication?.reason ?? null,
+        workflowConfidence: workflowPreview?.review_result?.adjudication?.confidence ?? null,
+        workflowStrategicValue: workflowPreview?.review_result?.adjudication?.strategic_value ?? null,
+        workflowPacketGateSatisfied: workflowPacket?.deterministic_gate?.gate_satisfied ?? null,
+        workflowPacketTargetKind: workflowPacket?.requested_target_kind ?? null,
+        workflowPacketTargetLevel: workflowPacket?.requested_target_level ?? null,
+        workflowPacketCandidateExampleCount: Array.isArray(workflowPacket?.candidate_examples)
+          ? workflowPacket.candidate_examples.length
+          : null,
+        workflowPacketHasSignature: Array.isArray(workflowPacket?.candidate_examples)
+          ? workflowPacket.candidate_examples.some((example: Record<string, unknown>) =>
+              typeof example?.workflow_signature === "string" && example.workflow_signature.trim().length > 0
+            )
+          : null,
         toolsState: toolsFeedback.pattern_anchor?.pattern_state ?? null,
         toolsReason: toolsFeedback.governance_preview?.form_pattern.review_result?.adjudication.reason ?? null,
+        toolsConfidence: toolsFeedback.governance_preview?.form_pattern.review_result?.adjudication.confidence ?? null,
+        toolsStrategicValue: toolsFeedback.governance_preview?.form_pattern.review_result?.adjudication.strategic_value ?? null,
         replayState: replayReview.learning_projection_result.rule_state ?? null,
         replayReason: replayReview.governance_preview?.promote_memory.review_result?.adjudication.reason ?? null,
+        replayConfidence: replayReview.governance_preview?.promote_memory.review_result?.adjudication.confidence ?? null,
+        replayStrategicValue: replayReview.governance_preview?.promote_memory.review_result?.adjudication.strategic_value ?? null,
       };
     } finally {
       await runtimeApp.close();
@@ -3863,21 +4047,29 @@ async function runHttpModelClientShadowCompareRuntimeLoop(): Promise<Omit<Benchm
     }
   }
 
-  return await withBenchmarkGovernanceChatStub(async ({ baseUrl, apiKey, model }) => {
+  async function runCompare(config: GovernanceHttpModelClientConfig, backendKind: "stub" | "external") {
     const baseline = await runOneSide({ mode: "baseline" });
-    const http = await runOneSide({ mode: "http", baseUrl, apiKey, model });
+    const http = await runOneSide({
+      mode: "http",
+      httpConfig: config,
+    });
 
     const assertions: AssertionResult[] = [];
-    assert.equal(http.workflowState, baseline.workflowState);
+    const compareSnapshot = JSON.stringify({ baseline, http }, null, 2);
+    assert.equal(http.workflowState, baseline.workflowState, compareSnapshot);
     assertions.push(pass("http workflow path preserves governed workflow outcome against builtin/static baseline"));
-    assert.equal(http.toolsState, baseline.toolsState);
+    assert.equal(http.toolsState, baseline.toolsState, compareSnapshot);
     assertions.push(pass("http tools path preserves governed pattern outcome against builtin/static baseline"));
-    assert.equal(http.replayState, baseline.replayState);
+    assert.equal(http.replayState, baseline.replayState, compareSnapshot);
     assertions.push(pass("http replay path preserves governed replay outcome against builtin/static baseline"));
 
     return {
       assertions,
       metrics: {
+        backend_kind: backendKind,
+        backend_base_url: config.baseUrl,
+        backend_model: config.model,
+        backend_transport: config.transport ?? null,
         workflow_state_match: http.workflowState === baseline.workflowState,
         workflow_baseline_state: baseline.workflowState,
         workflow_http_state: http.workflowState,
@@ -3897,7 +4089,22 @@ async function runHttpModelClientShadowCompareRuntimeLoop(): Promise<Omit<Benchm
         "Measures whether the HTTP governance model-client path preserves the same replay-learning outcome as the builtin/static governance baseline.",
       ],
     };
-  });
+  }
+
+  if (externalConfig) {
+    return await runCompare(externalConfig, "external");
+  }
+
+  return await withBenchmarkGovernanceChatStub(async ({ baseUrl, apiKey, model }) =>
+    await runCompare({
+      baseUrl,
+      apiKey,
+      model,
+      timeoutMs: 2000,
+      maxTokens: 300,
+      temperature: 0,
+    }, "stub")
+  );
 }
 
 function printHuman(result: BenchmarkSuiteResult) {
@@ -4036,6 +4243,7 @@ function toMarkdown(result: BenchmarkSuiteResult): string {
 async function main() {
   const cli = parseCliArgs(process.argv.slice(2));
   const baseline = loadBaselineResult(cli.baselineJson);
+  const externalHttpShadowConfig = resolveExternalHttpShadowConfig(cli);
   const scenarios = await Promise.all([
     runScenario("policy_learning_loop", "Policy learning from repeated tool feedback", runPolicyLearningLoop),
     runScenario("cross_task_isolation", "Cross-task isolation for learned pattern reuse", runCrossTaskIsolationLoop),
@@ -4049,7 +4257,13 @@ async function main() {
     runScenario("governance_provider_precedence_runtime_loop", "Explicit governance review precedence over provider fallback", runGovernanceProviderPrecedenceRuntimeLoop),
     runScenario("custom_model_client_runtime_loop", "Custom model-client replacement through live runtime paths", runCustomModelClientRuntimeLoop),
     runScenario("http_model_client_runtime_loop", "HTTP model-client replacement through live runtime paths", runHttpModelClientRuntimeLoop),
-    runScenario("http_model_client_shadow_compare_runtime_loop", "HTTP model-client shadow compare against builtin/static governance", runHttpModelClientShadowCompareRuntimeLoop),
+    runScenario(
+      "http_model_client_shadow_compare_runtime_loop",
+      externalHttpShadowConfig
+        ? "HTTP model-client shadow compare against builtin/static governance (external backend)"
+        : "HTTP model-client shadow compare against builtin/static governance",
+      async () => await runHttpModelClientShadowCompareRuntimeLoop(externalHttpShadowConfig),
+    ),
     runScenario("slim_surface_boundary", "Slim planner/context default surface", runSlimSurfaceBoundary),
   ]);
   const rawResult: BenchmarkSuiteResult = {

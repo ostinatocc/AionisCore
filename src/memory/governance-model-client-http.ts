@@ -1,7 +1,15 @@
-import type { GovernanceModelClient, GovernanceHttpModelClientConfig } from "./governance-model-client.js";
+import type {
+  GovernanceHttpModelClientConfig,
+  GovernanceHttpModelClientTransport,
+  GovernanceModelClient,
+} from "./governance-model-client.js";
 import {
+  buildFormPatternAnthropicHttpPromptContract,
   buildFormPatternHttpPromptContract,
+  buildPromoteMemoryAnthropicHttpPromptContract,
   buildPromoteMemoryHttpPromptContract,
+  GOVERNANCE_HTTP_ANTHROPIC_TRANSPORT_CONTRACT_VERSION,
+  GOVERNANCE_HTTP_OPENAI_TRANSPORT_CONTRACT_VERSION,
 } from "./governance-model-client-http-contract.js";
 import {
   MemoryFormPatternSemanticReviewResultSchema,
@@ -67,6 +75,33 @@ function extractChatCompletionText(payload: unknown): string | null {
   return null;
 }
 
+function extractAnthropicMessageText(payload: unknown): string | null {
+  const root = asObject(payload);
+  if (!root) return null;
+  const content = Array.isArray(root.content) ? root.content : [];
+  const fragments = content
+    .map((item) => {
+      const obj = asObject(item);
+      if (!obj) return "";
+      const text = obj.text;
+      return typeof text === "string" ? text : "";
+    })
+    .filter((v) => v.length > 0);
+  if (fragments.length > 0) return fragments.join("\n");
+  return null;
+}
+
+function inferGovernanceHttpTransport(
+  config: GovernanceHttpModelClientConfig,
+): GovernanceHttpModelClientTransport {
+  if (config.transport) return config.transport;
+  const baseUrl = config.baseUrl.trim().toLowerCase();
+  if (baseUrl.includes("/anthropic")) {
+    return GOVERNANCE_HTTP_ANTHROPIC_TRANSPORT_CONTRACT_VERSION;
+  }
+  return GOVERNANCE_HTTP_OPENAI_TRANSPORT_CONTRACT_VERSION;
+}
+
 async function postGovernanceReviewJson(args: {
   config: GovernanceHttpModelClientConfig;
   systemPrompt: string;
@@ -76,30 +111,65 @@ async function postGovernanceReviewJson(args: {
   const apiKey = args.config.apiKey.trim();
   const model = args.config.model.trim();
   if (!baseUrl || !apiKey || !model) return null;
+  const transport = inferGovernanceHttpTransport(args.config);
+  const maxTokens =
+    transport === GOVERNANCE_HTTP_ANTHROPIC_TRANSPORT_CONTRACT_VERSION
+      ? Math.max(args.config.maxTokens, 1200)
+      : args.config.maxTokens;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), args.config.timeoutMs);
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: args.config.temperature,
-        max_tokens: args.config.maxTokens,
-        messages: [
-          { role: "system", content: args.systemPrompt },
-          { role: "user", content: JSON.stringify(args.userPayload, null, 2) },
-        ],
-      }),
-      signal: controller.signal,
-    });
+    const response =
+      transport === GOVERNANCE_HTTP_ANTHROPIC_TRANSPORT_CONTRACT_VERSION
+        ? await fetch(`${baseUrl}/v1/messages`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model,
+              max_tokens: maxTokens,
+              system: args.systemPrompt,
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "text",
+                      text: JSON.stringify(args.userPayload, null, 2),
+                    },
+                  ],
+                },
+              ],
+            }),
+            signal: controller.signal,
+          })
+        : await fetch(`${baseUrl}/chat/completions`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model,
+              temperature: args.config.temperature,
+              max_tokens: maxTokens,
+              messages: [
+                { role: "system", content: args.systemPrompt },
+                { role: "user", content: JSON.stringify(args.userPayload, null, 2) },
+              ],
+            }),
+            signal: controller.signal,
+          });
     if (!response.ok) return null;
     const payload = await response.json().catch(() => null);
-    const content = extractChatCompletionText(payload);
+    const content =
+      transport === GOVERNANCE_HTTP_ANTHROPIC_TRANSPORT_CONTRACT_VERSION
+        ? extractAnthropicMessageText(payload)
+        : extractChatCompletionText(payload);
     if (!content) return null;
     return extractJsonValueFromText(content);
   } catch {
@@ -115,7 +185,10 @@ export function createHttpPromoteMemoryGovernanceModelClient(
   return {
     reviewPromoteMemory: async ({ reviewPacket, suppliedReviewResult }) => {
       if (suppliedReviewResult) return suppliedReviewResult;
-      const contract = buildPromoteMemoryHttpPromptContract(reviewPacket);
+      const contract =
+        inferGovernanceHttpTransport(config) === GOVERNANCE_HTTP_ANTHROPIC_TRANSPORT_CONTRACT_VERSION
+          ? buildPromoteMemoryAnthropicHttpPromptContract(reviewPacket)
+          : buildPromoteMemoryHttpPromptContract(reviewPacket);
       const parsed = await postGovernanceReviewJson({
         config,
         systemPrompt: contract.system_prompt,
@@ -134,7 +207,10 @@ export function createHttpFormPatternGovernanceModelClient(
   return {
     reviewFormPattern: async ({ reviewPacket, suppliedReviewResult }) => {
       if (suppliedReviewResult) return suppliedReviewResult;
-      const contract = buildFormPatternHttpPromptContract(reviewPacket);
+      const contract =
+        inferGovernanceHttpTransport(config) === GOVERNANCE_HTTP_ANTHROPIC_TRANSPORT_CONTRACT_VERSION
+          ? buildFormPatternAnthropicHttpPromptContract(reviewPacket)
+          : buildFormPatternHttpPromptContract(reviewPacket);
       const parsed = await postGovernanceReviewJson({
         config,
         systemPrompt: contract.system_prompt,

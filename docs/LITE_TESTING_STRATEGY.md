@@ -188,6 +188,14 @@ Current command:
 npm run benchmark:lite:real
 ```
 
+External LLM shadow compare against the same benchmark surface:
+
+```bash
+LITE_EXTERNAL_GOVERNANCE_HTTP_API_KEY=... \
+LITE_EXTERNAL_GOVERNANCE_HTTP_MODEL=... \
+npm run benchmark:lite:real:http-shadow
+```
+
 Baseline compare with regression gates:
 
 ```bash
@@ -222,6 +230,16 @@ Isolated validation against a stored baseline:
 
 ```bash
 bash scripts/lite-real-validation.sh --baseline-json /tmp/lite-benchmark-baseline.json
+```
+
+Isolated validation with a real external HTTP governance shadow run:
+
+```bash
+LITE_EXTERNAL_GOVERNANCE_HTTP_API_KEY=... \
+LITE_EXTERNAL_GOVERNANCE_HTTP_MODEL=... \
+bash scripts/lite-real-validation.sh \
+  --baseline-json /tmp/lite-benchmark-baseline.json \
+  --external-http-shadow
 ```
 
 Primary script:

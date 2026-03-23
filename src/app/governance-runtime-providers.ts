@@ -2,6 +2,7 @@ import type { Env } from "../config.js";
 import type {
   GovernanceModelClientFactory,
   GovernanceHttpModelClientConfig,
+  GovernanceHttpModelClientTransport,
   GovernanceModelClientMode,
 } from "../memory/governance-model-client.js";
 import {
@@ -62,10 +63,15 @@ function buildGovernanceHttpClientConfig(
   ) {
     return undefined;
   }
+  const transport: GovernanceHttpModelClientTransport | undefined =
+    env.GOVERNANCE_MODEL_CLIENT_TRANSPORT === "auto"
+      ? undefined
+      : env.GOVERNANCE_MODEL_CLIENT_TRANSPORT;
   return {
     baseUrl,
     apiKey,
     model,
+    transport,
     timeoutMs: typeof env.GOVERNANCE_MODEL_CLIENT_TIMEOUT_MS === "number"
       ? env.GOVERNANCE_MODEL_CLIENT_TIMEOUT_MS
       : 7000,
