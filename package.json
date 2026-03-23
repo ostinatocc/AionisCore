@@ -4,14 +4,14 @@
   "version": "0.1.0",
   "license": "Apache-2.0",
   "type": "module",
-  "description": "Local execution-memory runtime with SQLite-backed memory, replay, and playbook-driven automation.",
+  "description": "Private runtime mainline for Aionis execution-memory, governance, replay, and learning internals.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Cognary/Aionis.git"
+    "url": "https://github.com/Cognary/Aionis-runtime.git"
   },
-  "homepage": "https://github.com/Cognary/Aionis",
+  "homepage": "https://github.com/Cognary/Aionis-runtime",
   "bugs": {
-    "url": "https://github.com/Cognary/Aionis/issues"
+    "url": "https://github.com/Cognary/Aionis-runtime/issues"
   },
   "engines": {
     "node": ">=22.0.0"
