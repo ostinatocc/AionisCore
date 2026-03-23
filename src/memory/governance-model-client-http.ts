@@ -1,5 +1,9 @@
 import type { GovernanceModelClient, GovernanceHttpModelClientConfig } from "./governance-model-client.js";
 import {
+  buildFormPatternHttpPromptContract,
+  buildPromoteMemoryHttpPromptContract,
+} from "./governance-model-client-http-contract.js";
+import {
   MemoryFormPatternSemanticReviewResultSchema,
   MemoryPromoteSemanticReviewResultSchema,
 } from "./schemas.js";
@@ -111,18 +115,11 @@ export function createHttpPromoteMemoryGovernanceModelClient(
   return {
     reviewPromoteMemory: async ({ reviewPacket, suppliedReviewResult }) => {
       if (suppliedReviewResult) return suppliedReviewResult;
+      const contract = buildPromoteMemoryHttpPromptContract(reviewPacket);
       const parsed = await postGovernanceReviewJson({
         config,
-        systemPrompt:
-          "You are an internal governance reviewer for Aionis execution-memory. "
-          + "Return strict JSON only. Return either null or an object matching "
-          + "promote_memory_semantic_review_v1 with adjudication fields: "
-          + "operation, disposition, target_kind, target_level, reason, confidence, strategic_value. "
-          + "Be conservative. If the packet does not justify recommendation, return null.",
-        userPayload: {
-          operation: "promote_memory",
-          review_packet: reviewPacket,
-        },
+        systemPrompt: contract.system_prompt,
+        userPayload: contract.user_payload,
       });
       if (parsed == null) return null;
       const result = MemoryPromoteSemanticReviewResultSchema.safeParse(parsed);
@@ -137,18 +134,11 @@ export function createHttpFormPatternGovernanceModelClient(
   return {
     reviewFormPattern: async ({ reviewPacket, suppliedReviewResult }) => {
       if (suppliedReviewResult) return suppliedReviewResult;
+      const contract = buildFormPatternHttpPromptContract(reviewPacket);
       const parsed = await postGovernanceReviewJson({
         config,
-        systemPrompt:
-          "You are an internal governance reviewer for Aionis execution-memory. "
-          + "Return strict JSON only. Return either null or an object matching "
-          + "form_pattern_semantic_review_v1 with adjudication fields: "
-          + "operation, disposition, target_kind, target_level, reason, confidence. "
-          + "Be conservative. If the packet does not justify recommendation, return null.",
-        userPayload: {
-          operation: "form_pattern",
-          review_packet: reviewPacket,
-        },
+        systemPrompt: contract.system_prompt,
+        userPayload: contract.user_payload,
       });
       if (parsed == null) return null;
       const result = MemoryFormPatternSemanticReviewResultSchema.safeParse(parsed);
