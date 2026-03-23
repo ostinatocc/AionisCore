@@ -1,4 +1,7 @@
-import type { PromoteMemoryGovernanceReviewProvider } from "./governance-provider-types.js";
+import type {
+  FormPatternGovernanceReviewProvider,
+  PromoteMemoryGovernanceReviewProvider,
+} from "./governance-provider-types.js";
 
 function hasWorkflowSignature(packet: {
   candidate_examples: Array<{ workflow_signature?: string | null }>;
@@ -38,6 +41,35 @@ export function createStaticPromoteMemoryGovernanceReviewProvider(args?: {
           reason,
           confidence,
           strategic_value: "high",
+        },
+      };
+    },
+  };
+}
+
+export function createStaticFormPatternGovernanceReviewProvider(args?: {
+  confidence?: number;
+  reason?: string;
+}): FormPatternGovernanceReviewProvider {
+  const confidence = args?.confidence ?? 0.85;
+  const reason = args?.reason ?? "static provider found grouped signature evidence";
+  return {
+    resolveReviewResult: ({ reviewPacket, suppliedReviewResult }) => {
+      if (suppliedReviewResult) {
+        return suppliedReviewResult;
+      }
+      if (!reviewPacket.deterministic_gate.gate_satisfied) {
+        return null;
+      }
+      return {
+        review_version: "form_pattern_semantic_review_v1",
+        adjudication: {
+          operation: "form_pattern",
+          disposition: "recommend",
+          target_kind: "pattern",
+          target_level: "L3",
+          reason,
+          confidence,
         },
       };
     },

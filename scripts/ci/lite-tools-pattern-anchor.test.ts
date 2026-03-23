@@ -11,6 +11,7 @@ import { suppressPatternAnchorLite } from "../../src/memory/pattern-operator-ove
 import { memoryRecallParsed } from "../../src/memory/recall.ts";
 import { selectTools } from "../../src/memory/tools-select.ts";
 import { toolSelectionFeedback } from "../../src/memory/tools-feedback.ts";
+import { createStaticFormPatternGovernanceReviewProvider } from "../../src/memory/governance-provider-static.ts";
 import { applyMemoryWrite, prepareMemoryWrite } from "../../src/memory/write.ts";
 import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
 import { createLiteWriteStore } from "../../src/store/lite-write-store.ts";
@@ -791,6 +792,73 @@ test("tools feedback form_pattern governance preview rejects low-confidence revi
       "confidence_too_low",
       "review_not_admissible",
     ]);
+  } finally {
+    await liteWriteStore.close();
+  }
+});
+
+test("tools feedback form_pattern governance can use internal static provider without explicit review", async () => {
+  const dbPath = tmpDbPath("pattern-anchor-governance-provider");
+  const { liteWriteStore } = await seedActiveRules(dbPath, ["edit", "edit"]);
+  const runId = randomUUID();
+  const context = {
+    task_kind: "repair_export",
+    goal: "repair export failure in node tests",
+    error: {
+      signature: "node-export-mismatch",
+    },
+  };
+  try {
+    const selection = await selectTools(null, {
+      tenant_id: "default",
+      scope: "default",
+      run_id: runId,
+      context,
+      candidates: ["bash", "edit", "test"],
+      include_shadow: false,
+      rules_limit: 20,
+      strict: true,
+      reorder_candidates: false,
+    }, "default", "default", {
+      liteWriteStore,
+    });
+
+    const feedback = await liteWriteStore.withTx(() =>
+      toolSelectionFeedback(null, {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        run_id: runId,
+        decision_id: selection.decision.decision_id,
+        outcome: "positive",
+        context,
+        candidates: ["bash", "edit", "test"],
+        selected_tool: "edit",
+        target: "tool",
+        note: "Edit-based repair succeeded with grouped provider-backed evidence",
+        input_text: "repair export failure in node tests",
+      }, "default", "default", {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        embedder: FakeEmbeddingProvider,
+        governanceReviewProviders: {
+          form_pattern: createStaticFormPatternGovernanceReviewProvider(),
+        },
+        liteWriteStore,
+      }),
+    );
+
+    const parsed = ToolsFeedbackResponseSchema.parse(feedback);
+    assert.equal(parsed.pattern_anchor?.pattern_state, "stable");
+    assert.equal(parsed.pattern_anchor?.credibility_state, "trusted");
+    assert.equal(parsed.governance_preview?.form_pattern.review_result?.review_version, "form_pattern_semantic_review_v1");
+    assert.equal(parsed.governance_preview?.form_pattern.review_result?.adjudication.reason, "static provider found grouped signature evidence");
+    assert.equal(parsed.governance_preview?.form_pattern.review_result?.adjudication.confidence, 0.85);
+    assert.equal(parsed.governance_preview?.form_pattern.admissibility?.admissible, true);
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.applies, true);
+    assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.effective_pattern_state, "stable");
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.review_supplied, true);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.runtime_apply_changed_pattern_state, true);
   } finally {
     await liteWriteStore.close();
   }
