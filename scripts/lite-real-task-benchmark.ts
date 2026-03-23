@@ -98,6 +98,11 @@ type BenchmarkSuiteProfile = {
     tools_pattern_state: string | null;
     replay_learning_rule_state: string | null;
   };
+  http_shadow_compare?: {
+    workflow_state_match: boolean | null;
+    tools_state_match: boolean | null;
+    replay_state_match: boolean | null;
+  };
   slim_surface_boundary?: {
     planning_has_layered_context: boolean | null;
     assemble_has_layered_context: boolean | null;
@@ -161,6 +166,9 @@ const HARD_BENCHMARK_PROFILE_KEYS = new Set<string>([
   "http_model_client.workflow_governed_state",
   "http_model_client.tools_pattern_state",
   "http_model_client.replay_learning_rule_state",
+  "http_shadow_compare.workflow_state_match",
+  "http_shadow_compare.tools_state_match",
+  "http_shadow_compare.replay_state_match",
   "slim_surface_boundary.planning_has_layered_context",
   "slim_surface_boundary.assemble_has_layered_context",
 ]);
@@ -299,6 +307,7 @@ function buildSuiteProfile(scenarios: BenchmarkScenarioResult[]): BenchmarkSuite
   const precedence = getScenarioMetrics(scenarios, "governance_provider_precedence_runtime_loop");
   const customModelClient = getScenarioMetrics(scenarios, "custom_model_client_runtime_loop");
   const httpModelClient = getScenarioMetrics(scenarios, "http_model_client_runtime_loop");
+  const httpShadowCompare = getScenarioMetrics(scenarios, "http_model_client_shadow_compare_runtime_loop");
   const slimSurface = getScenarioMetrics(scenarios, "slim_surface_boundary");
 
   return {
@@ -388,6 +397,20 @@ function buildSuiteProfile(scenarios: BenchmarkScenarioResult[]): BenchmarkSuite
       replay_learning_rule_state:
         typeof httpModelClient.replay_learning_rule_state === "string"
           ? httpModelClient.replay_learning_rule_state
+          : null,
+    },
+    http_shadow_compare: {
+      workflow_state_match:
+        typeof httpShadowCompare.workflow_state_match === "boolean"
+          ? httpShadowCompare.workflow_state_match
+          : null,
+      tools_state_match:
+        typeof httpShadowCompare.tools_state_match === "boolean"
+          ? httpShadowCompare.tools_state_match
+          : null,
+      replay_state_match:
+        typeof httpShadowCompare.replay_state_match === "boolean"
+          ? httpShadowCompare.replay_state_match
           : null,
     },
     slim_surface_boundary: {
@@ -3562,6 +3585,289 @@ async function runHttpModelClientRuntimeLoop(): Promise<Omit<BenchmarkScenarioRe
   });
 }
 
+async function runHttpModelClientShadowCompareRuntimeLoop(): Promise<Omit<BenchmarkScenarioResult, "id" | "title" | "status" | "duration_ms">> {
+  async function runOneSide(args: {
+    mode: "baseline" | "http";
+    baseUrl?: string;
+    apiKey?: string;
+    model?: string;
+  }) {
+    const runtimeDbPath = tmpDbPath(`http-shadow-${args.mode}-runtime`);
+    const runtimeApp = Fastify();
+    const runtimeWriteStore = createLiteWriteStore(runtimeDbPath);
+    const runtimeRecallStore = createLiteRecallStore(runtimeDbPath);
+
+    const replayWriteDbPath = tmpDbPath(`http-shadow-${args.mode}-replay-write`);
+    const replayDbPath = tmpDbPath(`http-shadow-${args.mode}-replay-store`);
+    const replayApp = Fastify();
+    const replayWriteStore = createLiteWriteStore(replayWriteDbPath);
+    const replayStore = createLiteReplayStore(replayDbPath);
+    const replayRecallStore = createLiteRecallStore(replayWriteDbPath);
+
+    try {
+      registerBenchmarkApp({
+        app: runtimeApp,
+        liteWriteStore: runtimeWriteStore,
+        liteRecallStore: runtimeRecallStore,
+        envOverrides:
+          args.mode === "baseline"
+            ? {
+                WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+                TOOLS_GOVERNANCE_STATIC_FORM_PATTERN_PROVIDER_ENABLED: true,
+              }
+            : undefined,
+        governanceRuntimeProviderBuilderOptions:
+          args.mode === "http"
+            ? {
+                httpClientConfig: {
+                  baseUrl: args.baseUrl!,
+                  apiKey: args.apiKey!,
+                  model: args.model!,
+                  timeoutMs: 2000,
+                  maxTokens: 300,
+                  temperature: 0,
+                },
+                modelClientModes: {
+                  workflowProjection: {
+                    promote_memory: "http",
+                  },
+                  toolsFeedback: {
+                    form_pattern: "http",
+                  },
+                },
+              }
+            : undefined,
+      });
+
+      const taskBrief = "Fix export failure in node tests";
+      const filePath = "src/routes/export.ts";
+
+      const firstWrite = await runtimeApp.inject({
+        method: "POST",
+        url: "/v1/memory/write",
+        payload: buildBenchmarkWritePayload({
+          eventId: randomUUID(),
+          title: `${args.mode} compare inspect export path`,
+          inputText: `${args.mode} compare first continuity write`,
+          taskBrief,
+          stateId: `state:${randomUUID()}`,
+          filePath,
+        }),
+      });
+      assert.equal(firstWrite.statusCode, 200);
+
+      const secondWrite = await runtimeApp.inject({
+        method: "POST",
+        url: "/v1/memory/write",
+        payload: buildBenchmarkWritePayload({
+          eventId: randomUUID(),
+          title: `${args.mode} compare patch export path`,
+          inputText: `${args.mode} compare second continuity write`,
+          taskBrief,
+          stateId: `state:${randomUUID()}`,
+          filePath,
+        }),
+      });
+      assert.equal(secondWrite.statusCode, 200);
+
+      const storedStable = await runtimeWriteStore.findNodes({
+        scope: "default",
+        type: "procedure",
+        slotsContains: {
+          summary_kind: "workflow_anchor",
+        },
+        consumerAgentId: "local-user",
+        consumerTeamId: null,
+        limit: 20,
+        offset: 0,
+      });
+      const stableWorkflowNode = storedStable.rows.find((row) => {
+        const projection = (row.slots?.workflow_write_projection ?? null) as Record<string, unknown> | null;
+        return projection?.auto_promoted === true;
+      }) ?? null;
+      assert.ok(stableWorkflowNode);
+      const stableProjection = (stableWorkflowNode.slots?.workflow_write_projection ?? {}) as Record<string, any>;
+      const workflowPreview = ((stableProjection.governance_preview ?? {}) as Record<string, any>).promote_memory as Record<string, any> | undefined;
+
+      const toolRuleNodeIds = await seedActiveToolRules(runtimeWriteStore, ["edit", "edit"]);
+      const toolsSelectRes = await runtimeApp.inject({
+        method: "POST",
+        url: "/v1/memory/tools/select",
+        payload: {
+          tenant_id: "default",
+          scope: "default",
+          run_id: `${args.mode}-shadow-tools-run`,
+          context: {
+            task_kind: "repair_export",
+            goal: "repair export failure in node tests",
+            error: {
+              signature: "node-export-mismatch",
+            },
+          },
+          candidates: ["bash", "edit", "test"],
+          include_shadow: false,
+          rules_limit: 20,
+          strict: true,
+          reorder_candidates: false,
+        },
+      });
+      assert.equal(toolsSelectRes.statusCode, 200);
+      const toolsSelection = ToolsSelectRouteContractSchema.parse(toolsSelectRes.json());
+      const toolsFeedbackRes = await runtimeApp.inject({
+        method: "POST",
+        url: "/v1/memory/tools/feedback",
+        payload: {
+          tenant_id: "default",
+          scope: "default",
+          actor: "local-user",
+          run_id: `${args.mode}-shadow-tools-run`,
+          decision_id: toolsSelection.decision.decision_id,
+          outcome: "positive",
+          context: {
+            task_kind: "repair_export",
+            goal: "repair export failure in node tests",
+            error: {
+              signature: "node-export-mismatch",
+            },
+          },
+          candidates: ["bash", "edit", "test"],
+          selected_tool: "edit",
+          target: "tool",
+          note: `${args.mode} shadow compare grouped evidence`,
+          input_text: "repair export failure in node tests",
+        },
+      });
+      assert.equal(toolsFeedbackRes.statusCode, 200);
+      const toolsFeedback = ToolsFeedbackResponseSchema.parse(toolsFeedbackRes.json());
+
+      for (const ruleNodeId of toolRuleNodeIds) {
+        await runtimeWriteStore.withTx(() =>
+          updateRuleState(
+            {} as any,
+            {
+              tenant_id: "default",
+              scope: "default",
+              actor: "local-user",
+              rule_node_id: ruleNodeId,
+              state: "disabled",
+              input_text: `disable ${args.mode} shadow compare tool source rules`,
+            },
+            "default",
+            "default",
+            { liteWriteStore: runtimeWriteStore },
+          ),
+        );
+      }
+
+      const replayPlaybookId = randomUUID();
+      await seedPendingReplayBenchmarkPlaybook({
+        liteWriteStore: replayWriteStore,
+        liteReplayStore: replayStore,
+        playbookId: replayPlaybookId,
+        workflowSignature: `wf:replay:${args.mode}:shadow-compare-export-fix`,
+      });
+      registerReplayBenchmarkApp({
+        app: replayApp,
+        liteWriteStore: replayWriteStore,
+        liteReplayStore: replayStore,
+        liteRecallStore: replayRecallStore,
+        envOverrides:
+          args.mode === "baseline"
+            ? {
+                REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+              }
+            : undefined,
+        governanceRuntimeProviderBuilderOptions:
+          args.mode === "http"
+            ? {
+                httpClientConfig: {
+                  baseUrl: args.baseUrl!,
+                  apiKey: args.apiKey!,
+                  model: args.model!,
+                  timeoutMs: 2000,
+                  maxTokens: 300,
+                  temperature: 0,
+                },
+                modelClientModes: {
+                  replayRepairReview: {
+                    promote_memory: "http",
+                  },
+                },
+              }
+            : undefined,
+      });
+
+      const replayReviewRes = await replayApp.inject({
+        method: "POST",
+        url: "/v1/memory/replay/playbooks/repair/review",
+        payload: {
+          tenant_id: "default",
+          scope: "default",
+          playbook_id: replayPlaybookId,
+          action: "approve",
+          auto_shadow_validate: false,
+          target_status_on_approve: "shadow",
+          learning_projection: {
+            enabled: true,
+          },
+        },
+      });
+      assert.equal(replayReviewRes.statusCode, 200);
+      const replayReview = ReplayPlaybookRepairReviewResponseSchema.parse(replayReviewRes.json());
+
+      return {
+        workflowState: stableProjection.governed_promotion_state_override ?? null,
+        workflowReason: workflowPreview?.review_result?.adjudication?.reason ?? null,
+        toolsState: toolsFeedback.pattern_anchor?.pattern_state ?? null,
+        toolsReason: toolsFeedback.governance_preview?.form_pattern.review_result?.adjudication.reason ?? null,
+        replayState: replayReview.learning_projection_result.rule_state ?? null,
+        replayReason: replayReview.governance_preview?.promote_memory.review_result?.adjudication.reason ?? null,
+      };
+    } finally {
+      await runtimeApp.close();
+      await replayApp.close();
+      await runtimeWriteStore.close();
+      await replayWriteStore.close();
+    }
+  }
+
+  return await withBenchmarkGovernanceChatStub(async ({ baseUrl, apiKey, model }) => {
+    const baseline = await runOneSide({ mode: "baseline" });
+    const http = await runOneSide({ mode: "http", baseUrl, apiKey, model });
+
+    const assertions: AssertionResult[] = [];
+    assert.equal(http.workflowState, baseline.workflowState);
+    assertions.push(pass("http workflow path preserves governed workflow outcome against builtin/static baseline"));
+    assert.equal(http.toolsState, baseline.toolsState);
+    assertions.push(pass("http tools path preserves governed pattern outcome against builtin/static baseline"));
+    assert.equal(http.replayState, baseline.replayState);
+    assertions.push(pass("http replay path preserves governed replay outcome against builtin/static baseline"));
+
+    return {
+      assertions,
+      metrics: {
+        workflow_state_match: http.workflowState === baseline.workflowState,
+        workflow_baseline_state: baseline.workflowState,
+        workflow_http_state: http.workflowState,
+        workflow_reason_changed: http.workflowReason !== baseline.workflowReason,
+        tools_state_match: http.toolsState === baseline.toolsState,
+        tools_baseline_state: baseline.toolsState,
+        tools_http_state: http.toolsState,
+        tools_reason_changed: http.toolsReason !== baseline.toolsReason,
+        replay_state_match: http.replayState === baseline.replayState,
+        replay_baseline_state: baseline.replayState,
+        replay_http_state: http.replayState,
+        replay_reason_changed: http.replayReason !== baseline.replayReason,
+      },
+      notes: [
+        "Measures whether the HTTP governance model-client path preserves the same workflow outcome as the builtin/static governance baseline.",
+        "Measures whether the HTTP governance model-client path preserves the same tools pattern outcome as the builtin/static governance baseline.",
+        "Measures whether the HTTP governance model-client path preserves the same replay-learning outcome as the builtin/static governance baseline.",
+      ],
+    };
+  });
+}
+
 function printHuman(result: BenchmarkSuiteResult) {
   const lines: string[] = [];
   lines.push("Aionis Real-Task Benchmark Suite");
@@ -3711,6 +4017,7 @@ async function main() {
     runScenario("governance_provider_precedence_runtime_loop", "Explicit governance review precedence over provider fallback", runGovernanceProviderPrecedenceRuntimeLoop),
     runScenario("custom_model_client_runtime_loop", "Custom model-client replacement through live runtime paths", runCustomModelClientRuntimeLoop),
     runScenario("http_model_client_runtime_loop", "HTTP model-client replacement through live runtime paths", runHttpModelClientRuntimeLoop),
+    runScenario("http_model_client_shadow_compare_runtime_loop", "HTTP model-client shadow compare against builtin/static governance", runHttpModelClientShadowCompareRuntimeLoop),
     runScenario("slim_surface_boundary", "Slim planner/context default surface", runSlimSurfaceBoundary),
   ]);
   const rawResult: BenchmarkSuiteResult = {

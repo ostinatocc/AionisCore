@@ -241,7 +241,9 @@ Current benchmark scenarios:
 9. `governed_replay_runtime_loop`
 10. `governance_provider_precedence_runtime_loop`
 11. `custom_model_client_runtime_loop`
-12. `slim_surface_boundary`
+12. `http_model_client_runtime_loop`
+13. `http_model_client_shadow_compare_runtime_loop`
+14. `slim_surface_boundary`
 
 What this layer should catch:
 
@@ -259,6 +261,7 @@ What this layer should catch:
 12. scenario score regressions beyond an allowed threshold
 13. benchmark profile drift across the stable core execution-memory metrics
 14. hard-profile drift across the long-lived execution-memory product contract
+15. outcome drift between builtin/static governance and HTTP model-client governance on the same runtime task arc
 
 Current stable suite profile keys:
 
@@ -277,8 +280,14 @@ Current stable suite profile keys:
 13. `custom_model_client.workflow_governed_state`
 14. `custom_model_client.tools_pattern_state`
 15. `custom_model_client.replay_learning_rule_state`
-16. `slim_surface_boundary.planning_has_layered_context`
-17. `slim_surface_boundary.assemble_has_layered_context`
+16. `http_model_client.workflow_governed_state`
+17. `http_model_client.tools_pattern_state`
+18. `http_model_client.replay_learning_rule_state`
+19. `http_shadow_compare.workflow_state_match`
+20. `http_shadow_compare.tools_state_match`
+21. `http_shadow_compare.replay_state_match`
+22. `slim_surface_boundary.planning_has_layered_context`
+23. `slim_surface_boundary.assemble_has_layered_context`
 
 Current benchmark profile policy:
 
@@ -296,8 +305,14 @@ Hard regression indicators:
 10. `custom_model_client.workflow_governed_state`
 11. `custom_model_client.tools_pattern_state`
 12. `custom_model_client.replay_learning_rule_state`
-13. `slim_surface_boundary.planning_has_layered_context`
-14. `slim_surface_boundary.assemble_has_layered_context`
+13. `http_model_client.workflow_governed_state`
+14. `http_model_client.tools_pattern_state`
+15. `http_model_client.replay_learning_rule_state`
+16. `http_shadow_compare.workflow_state_match`
+17. `http_shadow_compare.tools_state_match`
+18. `http_shadow_compare.replay_state_match`
+19. `slim_surface_boundary.planning_has_layered_context`
+20. `slim_surface_boundary.assemble_has_layered_context`
 
 Soft profile indicators:
 
