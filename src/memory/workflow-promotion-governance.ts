@@ -8,7 +8,7 @@ import {
   type WorkflowWriteProjectionGovernancePolicyEffect,
 } from "./schemas.js";
 import {
-  buildGovernanceDecisionTraceBase,
+  buildGovernedStateDecisionTrace,
   deriveGovernedStateRaisePreview,
 } from "./governance-shared.js";
 import {
@@ -96,20 +96,21 @@ export function buildWorkflowPromotionGovernancePreview(args: {
           admissibility,
         }),
       buildDecisionTrace: ({ reviewResult, admissibility, policyEffect }) => {
-        const traceBase = buildGovernanceDecisionTraceBase({
+        const trace = buildGovernedStateDecisionTrace({
           reviewResult,
           admissibility,
-          policyEffectApplies: policyEffect.applies,
-          policyEffectReasonCode: policyEffect.reason_code,
+          policyEffect,
           includePolicyEffectReasonCode: !policyEffect.applies,
+          baseState: "candidate",
+          effectiveState: policyEffect.effective_promotion_state,
         });
         return {
-          ...traceBase,
+          ...trace,
           trace_version: "workflow_promotion_governance_trace_v1",
-          base_promotion_state: "candidate",
-          effective_promotion_state: policyEffect.effective_promotion_state,
-          stage_order: traceBase.stage_order as WorkflowWriteProjectionGovernanceDecisionTrace["stage_order"],
-          reason_codes: traceBase.reason_codes,
+          base_promotion_state: trace.baseState,
+          effective_promotion_state: trace.effectiveState,
+          stage_order: trace.stage_order as WorkflowWriteProjectionGovernanceDecisionTrace["stage_order"],
+          reason_codes: trace.reason_codes,
         };
       },
     }),

@@ -26,6 +26,7 @@ import {
   type ReplayLearningProjectionResult,
 } from "./replay-learning.js";
 import {
+  buildGovernedStateDecisionTrace,
   buildGovernanceDecisionTraceBase,
   deriveGovernedStateRaiseRuntimeApply,
   deriveGovernedStateRaisePreview,
@@ -1073,26 +1074,27 @@ function buildReplayGovernanceDecisionTrace(args: {
   const policyEffect = args.policyEffect ?? null;
   const baseTargetRuleState = policyEffect?.base_target_rule_state ?? args.effectiveConfig.target_rule_state;
   const effectiveTargetRuleState = args.effectiveConfig.target_rule_state;
-  const traceBase = buildGovernanceDecisionTraceBase({
+  const trace = buildGovernedStateDecisionTrace({
     reviewResult: args.reviewResult,
     admissibility,
-    policyEffectApplies: policyEffect?.applies ?? false,
-    policyEffectReasonCode: policyEffect?.reason_code ?? null,
+    policyEffect,
     includePolicyEffectReasonCode: true,
     runtimePolicyApplied: true,
+    baseState: baseTargetRuleState,
+    effectiveState: effectiveTargetRuleState,
   });
 
   return {
     trace_version: "replay_governance_trace_v1",
-    review_supplied: traceBase.review_supplied,
-    admissibility_evaluated: traceBase.admissibility_evaluated,
-    admissible: traceBase.admissible,
-    policy_effect_applies: traceBase.policy_effect_applies,
-    base_target_rule_state: baseTargetRuleState,
-    effective_target_rule_state: effectiveTargetRuleState,
-    runtime_apply_changed_target_rule_state: baseTargetRuleState !== effectiveTargetRuleState,
-    stage_order: traceBase.stage_order as ReplayRepairReviewGovernanceDecisionTrace["stage_order"],
-    reason_codes: traceBase.reason_codes,
+    review_supplied: trace.review_supplied,
+    admissibility_evaluated: trace.admissibility_evaluated,
+    admissible: trace.admissible,
+    policy_effect_applies: trace.policy_effect_applies,
+    base_target_rule_state: trace.baseState,
+    effective_target_rule_state: trace.effectiveState,
+    runtime_apply_changed_target_rule_state: trace.runtimeApplyChanged,
+    stage_order: trace.stage_order as ReplayRepairReviewGovernanceDecisionTrace["stage_order"],
+    reason_codes: trace.reason_codes,
   };
 }
 

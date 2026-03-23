@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildGovernanceDecisionTraceBase } from "../../src/memory/governance-shared.ts";
+import { buildGovernanceDecisionTraceBase, buildGovernedStateDecisionTrace } from "../../src/memory/governance-shared.ts";
 
 test("shared governance decision trace base stays stable for preview-only flows", () => {
   assert.deepEqual(
@@ -51,6 +51,46 @@ test("shared governance decision trace base appends runtime apply stage when req
         "runtime_policy_applied",
       ],
       reason_codes: [],
+    },
+  );
+});
+
+test("shared governed state decision trace derives base/effective/apply delta consistently", () => {
+  assert.deepEqual(
+    buildGovernedStateDecisionTrace({
+      reviewResult: { supplied: true },
+      admissibility: {
+        operation: "promote_memory",
+        admissible: true,
+        accepted_mutation_count: 1,
+        reason_codes: [],
+        notes: {},
+      },
+      policyEffect: {
+        applies: true,
+        reason_code: "raised",
+      },
+      includePolicyEffectReasonCode: false,
+      runtimePolicyApplied: true,
+      baseState: "draft",
+      effectiveState: "shadow",
+    }),
+    {
+      review_supplied: true,
+      admissibility_evaluated: true,
+      admissible: true,
+      policy_effect_applies: true,
+      stage_order: [
+        "review_packet_built",
+        "review_result_received",
+        "admissibility_evaluated",
+        "policy_effect_derived",
+        "runtime_policy_applied",
+      ],
+      reason_codes: [],
+      baseState: "draft",
+      effectiveState: "shadow",
+      runtimeApplyChanged: true,
     },
   );
 });

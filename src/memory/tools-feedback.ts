@@ -27,6 +27,7 @@ import { resolveTenantScope } from "./tenant.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
 import { writeToolsDecisionPatternAnchor } from "./tools-pattern-anchor.js";
 import {
+  buildGovernedStateDecisionTrace,
   buildGovernanceDecisionTraceBase,
   appendGovernanceRuntimePolicyAppliedStage,
   deriveGovernedStateRaiseRuntimeApply,
@@ -158,21 +159,22 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
           admissibility,
         }),
       buildDecisionTrace: ({ reviewResult, admissibility, policyEffect }) => {
-        const traceBase = buildGovernanceDecisionTraceBase({
+        const trace = buildGovernedStateDecisionTrace({
           reviewResult,
           admissibility,
-          policyEffectApplies: policyEffect.applies,
-          policyEffectReasonCode: policyEffect.reason_code,
+          policyEffect,
           includePolicyEffectReasonCode: !policyEffect.applies,
+          baseState: policyEffect.base_pattern_state,
+          effectiveState: policyEffect.effective_pattern_state,
         });
         return {
-          ...traceBase,
+          ...trace,
           trace_version: "form_pattern_governance_trace_v1",
-          base_pattern_state: policyEffect.base_pattern_state,
-          effective_pattern_state: policyEffect.effective_pattern_state,
+          base_pattern_state: trace.baseState,
+          effective_pattern_state: trace.effectiveState,
           runtime_apply_changed_pattern_state: false,
-          stage_order: traceBase.stage_order as ToolsFeedbackFormPatternGovernanceDecisionTrace["stage_order"],
-          reason_codes: traceBase.reason_codes,
+          stage_order: trace.stage_order as ToolsFeedbackFormPatternGovernanceDecisionTrace["stage_order"],
+          reason_codes: trace.reason_codes,
         };
       },
     }),

@@ -73,6 +73,44 @@ export function buildGovernanceDecisionTraceBase(args: {
   };
 }
 
+export function buildGovernedStateDecisionTrace<TState extends string>(args: {
+  reviewResult: unknown | null;
+  admissibility: MemoryAdmissibilityResult | null;
+  policyEffect: {
+    applies: boolean;
+    reason_code?: string | null;
+  } | null;
+  includePolicyEffectReasonCode: boolean;
+  runtimePolicyApplied?: boolean;
+  baseState: TState;
+  effectiveState: TState;
+}): {
+  review_supplied: boolean;
+  admissibility_evaluated: boolean;
+  admissible: boolean | null;
+  policy_effect_applies: boolean;
+  stage_order: GovernanceTraceStage[];
+  reason_codes: string[];
+  baseState: TState;
+  effectiveState: TState;
+  runtimeApplyChanged: boolean;
+} {
+  const traceBase = buildGovernanceDecisionTraceBase({
+    reviewResult: args.reviewResult,
+    admissibility: args.admissibility,
+    policyEffectApplies: args.policyEffect?.applies ?? false,
+    policyEffectReasonCode: args.policyEffect?.reason_code ?? null,
+    includePolicyEffectReasonCode: args.includePolicyEffectReasonCode,
+    runtimePolicyApplied: args.runtimePolicyApplied,
+  });
+  return {
+    ...traceBase,
+    baseState: args.baseState,
+    effectiveState: args.effectiveState,
+    runtimeApplyChanged: args.baseState !== args.effectiveState,
+  };
+}
+
 export function deriveGovernedStateRaisePreview<
   TState extends string,
   TReview,
