@@ -14,6 +14,7 @@ test("root start:lite delegates to apps/lite", () => {
   assert.equal(rootPkg.scripts["start:lite"], "npm --prefix apps/lite run start --");
   assert.equal(rootPkg.scripts["start:lite:local-process"], "npm --prefix apps/lite run start:local-process --");
   assert.equal(rootPkg.scripts["smoke:lite:local-process"], "LITE_SANDBOX_PROFILE=local_process_echo bash scripts/lite-smoke.sh");
+  assert.equal(rootPkg.scripts["validate:lite:real"], "bash scripts/lite-real-validation.sh");
 });
 
 test("apps/lite owns the startup script", () => {

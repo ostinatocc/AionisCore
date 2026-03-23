@@ -204,11 +204,11 @@ npx tsx scripts/lite-real-task-benchmark.ts --json
 Persist artifacts:
 
 ```bash
-npx tsx scripts/lite-real-task-benchmark.ts --out-json tmp/lite-benchmark.json --out-md tmp/lite-benchmark.md
+npx tsx scripts/lite-real-task-benchmark.ts --out-json /tmp/lite-benchmark.json --out-md /tmp/lite-benchmark.md
 ```
 
 Compare against a baseline:
 
 ```bash
-npx tsx scripts/lite-real-task-benchmark.ts --baseline-json tmp/lite-benchmark.json
+npx tsx scripts/lite-real-task-benchmark.ts --baseline-json /tmp/lite-benchmark.json
 ```

@@ -34,7 +34,15 @@ async function canListen(port) {
 JS
 }
 
-TMP_DIR="$(mktemp -d /tmp/aionis_lite_repo_smoke_XXXXXX)"
+CALLER_WORKDIR="${LITE_SMOKE_WORKDIR:-}"
+if [[ -n "${CALLER_WORKDIR}" ]]; then
+  mkdir -p "${CALLER_WORKDIR}"
+  TMP_DIR="${CALLER_WORKDIR}"
+  CLEANUP_TMP_DIR=0
+else
+  TMP_DIR="$(mktemp -d /tmp/aionis_lite_repo_smoke_XXXXXX)"
+  CLEANUP_TMP_DIR=1
+fi
 PORT="${PORT:-$(pick_free_port)}"
 BASE_URL="http://127.0.0.1:${PORT}"
 LOG_FILE="${TMP_DIR}/lite-smoke.log"
@@ -50,7 +58,9 @@ cleanup() {
     kill "${PID}" >/dev/null 2>&1 || true
     wait "${PID}" >/dev/null 2>&1 || true
   fi
-  rm -rf "${TMP_DIR}" >/dev/null 2>&1 || true
+  if [[ "${CLEANUP_TMP_DIR}" == "1" ]]; then
+    rm -rf "${TMP_DIR}" >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 

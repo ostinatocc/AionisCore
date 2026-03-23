@@ -157,6 +157,7 @@ Current commands:
 npm run test:lite
 npm run smoke:lite
 npm run smoke:lite:local-process
+npm run validate:lite:real
 ```
 
 Primary script:
@@ -190,7 +191,13 @@ npm run benchmark:lite:real
 Artifact mode:
 
 ```bash
-npx tsx scripts/lite-real-task-benchmark.ts --out-json tmp/lite-benchmark.json --out-md tmp/lite-benchmark.md
+npx tsx scripts/lite-real-task-benchmark.ts --out-json /tmp/lite-benchmark.json --out-md /tmp/lite-benchmark.md
+```
+
+Isolated full validation:
+
+```bash
+npm run validate:lite:real
 ```
 
 Primary script:
@@ -229,6 +236,7 @@ Today the repository exposes:
 2. `npm run smoke:lite`
 3. `npm run smoke:lite:local-process`
 4. `npm run benchmark:lite:real`
+5. `npm run validate:lite:real`
 
 This is acceptable for now, but conceptually `test:lite` already contains multiple layers at once.
 
@@ -264,6 +272,7 @@ For changes that affect runtime, routes, or contracts:
 2. run `npm run test:lite`
 3. run `npm run smoke:lite` for startup/runtime-affecting changes
 4. run `npm run benchmark:lite:real` for changes that affect workflow learning, tool-pattern learning, or planner/context slimness
+5. prefer `npm run validate:lite:real` when you want one reviewable external workdir with smoke plus benchmark artifacts
 
 For changes that specifically affect slim/default versus debug/operator boundaries:
 
