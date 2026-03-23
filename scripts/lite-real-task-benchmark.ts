@@ -4,6 +4,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Fastify from "fastify";
+import {
+  GOVERNANCE_HTTP_FORM_PATTERN_PROMPT_VERSION,
+  GOVERNANCE_HTTP_PROMOTE_MEMORY_PROMPT_VERSION,
+  GOVERNANCE_HTTP_TRANSPORT_CONTRACT_VERSION,
+} from "../src/memory/governance-model-client-http-contract.ts";
 import { FakeEmbeddingProvider } from "../src/embeddings/fake.ts";
 import { createRequestGuards } from "../src/app/request-guards.ts";
 import { createReplayRepairReviewPolicy } from "../src/app/replay-repair-review-policy.ts";
@@ -103,6 +108,11 @@ type BenchmarkSuiteProfile = {
     tools_state_match: boolean | null;
     replay_state_match: boolean | null;
   };
+  http_prompt_contract?: {
+    transport_contract_version: string | null;
+    promote_memory_prompt_version: string | null;
+    form_pattern_prompt_version: string | null;
+  };
   slim_surface_boundary?: {
     planning_has_layered_context: boolean | null;
     assemble_has_layered_context: boolean | null;
@@ -149,7 +159,7 @@ type BenchmarkRegressionGate = {
   reasons: string[];
 };
 
-const BENCHMARK_PROFILE_POLICY_VERSION = "v2";
+const BENCHMARK_PROFILE_POLICY_VERSION = "v3";
 const HARD_BENCHMARK_PROFILE_KEYS = new Set<string>([
   "workflow_progression.stable_workflow_count_after_second",
   "multi_step_repair.stable_workflow_count_after_validate",
@@ -169,6 +179,9 @@ const HARD_BENCHMARK_PROFILE_KEYS = new Set<string>([
   "http_shadow_compare.workflow_state_match",
   "http_shadow_compare.tools_state_match",
   "http_shadow_compare.replay_state_match",
+  "http_prompt_contract.transport_contract_version",
+  "http_prompt_contract.promote_memory_prompt_version",
+  "http_prompt_contract.form_pattern_prompt_version",
   "slim_surface_boundary.planning_has_layered_context",
   "slim_surface_boundary.assemble_has_layered_context",
 ]);
@@ -412,6 +425,11 @@ function buildSuiteProfile(scenarios: BenchmarkScenarioResult[]): BenchmarkSuite
         typeof httpShadowCompare.replay_state_match === "boolean"
           ? httpShadowCompare.replay_state_match
           : null,
+    },
+    http_prompt_contract: {
+      transport_contract_version: GOVERNANCE_HTTP_TRANSPORT_CONTRACT_VERSION,
+      promote_memory_prompt_version: GOVERNANCE_HTTP_PROMOTE_MEMORY_PROMPT_VERSION,
+      form_pattern_prompt_version: GOVERNANCE_HTTP_FORM_PATTERN_PROMPT_VERSION,
     },
     slim_surface_boundary: {
       planning_has_layered_context:

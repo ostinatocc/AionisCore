@@ -262,6 +262,7 @@ What this layer should catch:
 13. benchmark profile drift across the stable core execution-memory metrics
 14. hard-profile drift across the long-lived execution-memory product contract
 15. outcome drift between builtin/static governance and HTTP model-client governance on the same runtime task arc
+16. HTTP governance prompt-contract drift across transport and operation prompt versions
 
 Current stable suite profile keys:
 
@@ -286,8 +287,11 @@ Current stable suite profile keys:
 19. `http_shadow_compare.workflow_state_match`
 20. `http_shadow_compare.tools_state_match`
 21. `http_shadow_compare.replay_state_match`
-22. `slim_surface_boundary.planning_has_layered_context`
-23. `slim_surface_boundary.assemble_has_layered_context`
+22. `http_prompt_contract.transport_contract_version`
+23. `http_prompt_contract.promote_memory_prompt_version`
+24. `http_prompt_contract.form_pattern_prompt_version`
+25. `slim_surface_boundary.planning_has_layered_context`
+26. `slim_surface_boundary.assemble_has_layered_context`
 
 Current benchmark profile policy:
 
@@ -311,8 +315,11 @@ Hard regression indicators:
 16. `http_shadow_compare.workflow_state_match`
 17. `http_shadow_compare.tools_state_match`
 18. `http_shadow_compare.replay_state_match`
-19. `slim_surface_boundary.planning_has_layered_context`
-20. `slim_surface_boundary.assemble_has_layered_context`
+19. `http_prompt_contract.transport_contract_version`
+20. `http_prompt_contract.promote_memory_prompt_version`
+21. `http_prompt_contract.form_pattern_prompt_version`
+22. `slim_surface_boundary.planning_has_layered_context`
+23. `slim_surface_boundary.assemble_has_layered_context`
 
 Soft profile indicators:
 
