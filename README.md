@@ -10,6 +10,12 @@ Public product direction:
 2. Aionis SDK
 3. adapters and integrations later
 
+SDK entry points:
+
+1. [packages/sdk/README.md](/Volumes/ziel/Aionisgo/packages/sdk/README.md)
+2. [docs/SDK_QUICKSTART.md](/Volumes/ziel/Aionisgo/docs/SDK_QUICKSTART.md)
+3. [docs/SDK_PUBLISHING.md](/Volumes/ziel/Aionisgo/docs/SDK_PUBLISHING.md)
+
 Recommended mental model:
 
 1. Aionis captures execution evidence, not just chat history
@@ -106,6 +112,8 @@ Recommended public hierarchy:
 For the current SDK release design, see:
 
 1. [docs/plans/2026-03-23-aionis-sdk-release-design.md](/Volumes/ziel/Aionisgo/docs/plans/2026-03-23-aionis-sdk-release-design.md)
+2. [docs/SDK_QUICKSTART.md](/Volumes/ziel/Aionisgo/docs/SDK_QUICKSTART.md)
+3. [docs/SDK_PUBLISHING.md](/Volumes/ziel/Aionisgo/docs/SDK_PUBLISHING.md)
 
 ## Local Identity
 

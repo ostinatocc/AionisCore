@@ -2,6 +2,12 @@
 
 First-party SDK for the Aionis execution-memory runtime.
 
+Install:
+
+```bash
+npm install @aionis/sdk
+```
+
 This package is intended to become the primary developer-facing surface for:
 
 1. writing execution continuity
@@ -30,11 +36,30 @@ const aionis = createAionisClient({
   baseUrl: "http://127.0.0.1:3001",
 });
 
+await aionis.memory.write({
+  tenant_id: "default",
+  scope: "default",
+  actor: "sdk-demo",
+  run_id: "run-1",
+  observations: [
+    {
+      kind: "workflow_step",
+      summary: "Fetched a report and normalized it",
+    },
+  ],
+});
+
 const result = await aionis.memory.planningContext({
   tenant_id: "default",
   scope: "default",
 });
 ```
+
+Quickstart docs:
+
+1. [SDK Quickstart](/Volumes/ziel/Aionisgo/docs/SDK_QUICKSTART.md)
+2. [SDK Publishing Guide](/Volumes/ziel/Aionisgo/docs/SDK_PUBLISHING.md)
+3. [Repository SDK examples](/Volumes/ziel/Aionisgo/examples/sdk/README.md)
 
 This package is intentionally small at first.
 It wraps the most stable route-level product surfaces without exposing every internal runtime capability.
@@ -57,3 +82,19 @@ npm run sdk:release:check
 ```
 
 That flow builds the SDK, runs package tests, creates a tarball from `packages/sdk`, and verifies a clean install/import smoke test in an isolated `/tmp` workspace outside the repository.
+
+Repository example verification:
+
+```bash
+npm run sdk:build
+npm run start:lite
+```
+
+Then in another terminal:
+
+```bash
+npm run sdk:example:workflow
+npm run sdk:example:tools-feedback
+npm run sdk:example:introspect
+npm run sdk:example:context-assemble
+```
