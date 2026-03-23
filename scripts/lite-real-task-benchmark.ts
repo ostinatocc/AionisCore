@@ -63,6 +63,42 @@ type BenchmarkScenarioResult = {
   error?: string;
 };
 
+type BenchmarkSuiteProfile = {
+  policy_learning?: {
+    trusted_pattern_count_after_revalidation: number | null;
+    contested_revalidation_fresh_runs_needed: number | null;
+  };
+  workflow_progression?: {
+    stable_workflow_count_after_second: number | null;
+  };
+  multi_step_repair?: {
+    stable_workflow_count_after_validate: number | null;
+  };
+  governed_learning?: {
+    workflow_promotion_state: string | null;
+    tools_pattern_state: string | null;
+    tools_credibility_state: string | null;
+  };
+  governed_replay?: {
+    replay_learning_rule_state: string | null;
+    stable_workflow_count_after_replay: number | null;
+  };
+  governance_provider_precedence?: {
+    workflow_provider_override_blocked: boolean | null;
+    tools_provider_override_blocked: boolean | null;
+    tools_pattern_state: string | null;
+  };
+  custom_model_client?: {
+    workflow_governed_state: string | null;
+    tools_pattern_state: string | null;
+    replay_learning_rule_state: string | null;
+  };
+  slim_surface_boundary?: {
+    planning_has_layered_context: boolean | null;
+    assemble_has_layered_context: boolean | null;
+  };
+};
+
 type BenchmarkSuiteResult = {
   generated_at: string;
   overall_status: "pass" | "fail";
@@ -71,10 +107,12 @@ type BenchmarkSuiteResult = {
     total_scenarios: number;
     score_pct: number;
   };
+  suite_profile: BenchmarkSuiteProfile;
   compare_summary?: {
     baseline_score_pct: number | null;
     score_delta_pct: number | null;
     scenarios_with_status_change: string[];
+    changed_profile_keys: string[];
   };
   scenarios: BenchmarkScenarioResult[];
 };
@@ -87,6 +125,7 @@ type CliOptions = {
   failOnStatusRegression: boolean;
   maxSuiteScoreDropPct: number | null;
   maxScenarioScoreDropPct: number | null;
+  failOnProfileDrift: boolean;
 };
 
 type BenchmarkRegressionGate = {
@@ -111,6 +150,7 @@ function parseCliArgs(argv: string[]): CliOptions {
   let failOnStatusRegression = false;
   let maxSuiteScoreDropPct: number | null = null;
   let maxScenarioScoreDropPct: number | null = null;
+  let failOnProfileDrift = false;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -135,6 +175,10 @@ function parseCliArgs(argv: string[]): CliOptions {
     }
     if (arg === "--fail-on-status-regression") {
       failOnStatusRegression = true;
+      continue;
+    }
+    if (arg === "--fail-on-profile-drift") {
+      failOnProfileDrift = true;
       continue;
     }
     if (arg === "--max-suite-score-drop") {
@@ -187,6 +231,7 @@ function parseCliArgs(argv: string[]): CliOptions {
     failOnStatusRegression,
     maxSuiteScoreDropPct,
     maxScenarioScoreDropPct,
+    failOnProfileDrift,
   };
 }
 
@@ -194,6 +239,127 @@ function loadBaselineResult(filePath: string | null): BenchmarkSuiteResult | nul
   if (!filePath) return null;
   const raw = fs.readFileSync(filePath, "utf8");
   return JSON.parse(raw) as BenchmarkSuiteResult;
+}
+
+function getScenarioMetrics(
+  scenarios: BenchmarkScenarioResult[],
+  id: string,
+): Record<string, unknown> {
+  return scenarios.find((scenario) => scenario.id === id)?.metrics ?? {};
+}
+
+function buildSuiteProfile(scenarios: BenchmarkScenarioResult[]): BenchmarkSuiteProfile {
+  const policyLearning = getScenarioMetrics(scenarios, "policy_learning_loop");
+  const workflowProgression = getScenarioMetrics(scenarios, "workflow_progression_loop");
+  const multiStepRepair = getScenarioMetrics(scenarios, "multi_step_repair_loop");
+  const governedLearning = getScenarioMetrics(scenarios, "governed_learning_runtime_loop");
+  const governedReplay = getScenarioMetrics(scenarios, "governed_replay_runtime_loop");
+  const precedence = getScenarioMetrics(scenarios, "governance_provider_precedence_runtime_loop");
+  const customModelClient = getScenarioMetrics(scenarios, "custom_model_client_runtime_loop");
+  const slimSurface = getScenarioMetrics(scenarios, "slim_surface_boundary");
+
+  return {
+    policy_learning: {
+      trusted_pattern_count_after_revalidation:
+        typeof policyLearning.trusted_pattern_count_after_revalidation === "number"
+          ? policyLearning.trusted_pattern_count_after_revalidation
+          : null,
+      contested_revalidation_fresh_runs_needed:
+        typeof policyLearning.contested_revalidation_fresh_runs_needed === "number"
+          ? policyLearning.contested_revalidation_fresh_runs_needed
+          : null,
+    },
+    workflow_progression: {
+      stable_workflow_count_after_second:
+        typeof workflowProgression.stable_workflow_count_after_second === "number"
+          ? workflowProgression.stable_workflow_count_after_second
+          : null,
+    },
+    multi_step_repair: {
+      stable_workflow_count_after_validate:
+        typeof multiStepRepair.stable_workflow_count_after_validate === "number"
+          ? multiStepRepair.stable_workflow_count_after_validate
+          : null,
+    },
+    governed_learning: {
+      workflow_promotion_state:
+        typeof governedLearning.workflow_governed_promotion_state_override === "string"
+          ? governedLearning.workflow_governed_promotion_state_override
+          : null,
+      tools_pattern_state:
+        typeof governedLearning.tools_pattern_state === "string"
+          ? governedLearning.tools_pattern_state
+          : null,
+      tools_credibility_state:
+        typeof governedLearning.tools_pattern_credibility_state === "string"
+          ? governedLearning.tools_pattern_credibility_state
+          : null,
+    },
+    governed_replay: {
+      replay_learning_rule_state:
+        typeof governedReplay.replay_learning_rule_state === "string"
+          ? governedReplay.replay_learning_rule_state
+          : null,
+      stable_workflow_count_after_replay:
+        typeof governedReplay.stable_workflow_count_after_replay === "number"
+          ? governedReplay.stable_workflow_count_after_replay
+          : null,
+    },
+    governance_provider_precedence: {
+      workflow_provider_override_blocked:
+        typeof precedence.workflow_provider_override_blocked === "boolean"
+          ? precedence.workflow_provider_override_blocked
+          : null,
+      tools_provider_override_blocked:
+        typeof precedence.tools_provider_override_blocked === "boolean"
+          ? precedence.tools_provider_override_blocked
+          : null,
+      tools_pattern_state:
+        typeof precedence.tools_pattern_state === "string"
+          ? precedence.tools_pattern_state
+          : null,
+    },
+    custom_model_client: {
+      workflow_governed_state:
+        typeof customModelClient.workflow_governed_state === "string"
+          ? customModelClient.workflow_governed_state
+          : null,
+      tools_pattern_state:
+        typeof customModelClient.tools_pattern_state === "string"
+          ? customModelClient.tools_pattern_state
+          : null,
+      replay_learning_rule_state:
+        typeof customModelClient.replay_learning_rule_state === "string"
+          ? customModelClient.replay_learning_rule_state
+          : null,
+    },
+    slim_surface_boundary: {
+      planning_has_layered_context:
+        typeof slimSurface.planning_has_layered_context === "boolean"
+          ? slimSurface.planning_has_layered_context
+          : null,
+      assemble_has_layered_context:
+        typeof slimSurface.assemble_has_layered_context === "boolean"
+          ? slimSurface.assemble_has_layered_context
+          : null,
+    },
+  };
+}
+
+function flattenProfile(
+  value: Record<string, unknown>,
+  prefix = "",
+): Array<[string, unknown]> {
+  const out: Array<[string, unknown]> = [];
+  for (const [key, entry] of Object.entries(value)) {
+    const nextKey = prefix ? `${prefix}.${key}` : key;
+    if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+      out.push(...flattenProfile(entry as Record<string, unknown>, nextKey));
+      continue;
+    }
+    out.push([nextKey, entry]);
+  }
+  return out;
 }
 
 function applyBaselineComparison(result: BenchmarkSuiteResult, baseline: BenchmarkSuiteResult | null): BenchmarkSuiteResult {
@@ -215,6 +381,17 @@ function applyBaselineComparison(result: BenchmarkSuiteResult, baseline: Benchma
     };
   });
 
+  const currentProfile = flattenProfile(result.suite_profile as Record<string, unknown>);
+  const baselineProfile = baseline.suite_profile
+    ? new Map(flattenProfile(baseline.suite_profile as Record<string, unknown>))
+    : null;
+  const changedProfileKeys =
+    baselineProfile == null
+      ? []
+      : currentProfile
+          .filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(baselineProfile.get(key)))
+          .map(([key]) => key);
+
   return {
     ...result,
     scenarios,
@@ -227,6 +404,7 @@ function applyBaselineComparison(result: BenchmarkSuiteResult, baseline: Benchma
       scenarios_with_status_change: scenarios
         .filter((scenario) => scenario.compare_summary?.status_changed)
         .map((scenario) => scenario.id),
+      changed_profile_keys: changedProfileKeys,
     },
   };
 }
@@ -240,6 +418,7 @@ function evaluateRegressionGate(args: {
     !result.compare_summary
     || (
       !options.failOnStatusRegression
+      && !options.failOnProfileDrift
       && options.maxSuiteScoreDropPct == null
       && options.maxScenarioScoreDropPct == null
     )
@@ -253,6 +432,13 @@ function evaluateRegressionGate(args: {
     const changed = result.compare_summary.scenarios_with_status_change;
     if (changed.length > 0) {
       reasons.push(`status regression detected in scenarios: ${changed.join(", ")}`);
+    }
+  }
+
+  if (options.failOnProfileDrift) {
+    const changedProfileKeys = result.compare_summary.changed_profile_keys;
+    if (changedProfileKeys.length > 0) {
+      reasons.push(`profile drift detected in keys: ${changedProfileKeys.join(", ")}`);
     }
   }
 
@@ -3010,6 +3196,13 @@ function printHuman(result: BenchmarkSuiteResult) {
       `Baseline compare: ${result.compare_summary.baseline_score_pct == null ? "none" : `${result.compare_summary.baseline_score_pct}%`} -> ${result.suite_summary.score_pct}%` +
         `${result.compare_summary.score_delta_pct == null ? "" : ` (delta ${result.compare_summary.score_delta_pct >= 0 ? "+" : ""}${result.compare_summary.score_delta_pct})`}`,
     );
+    lines.push(
+      `Profile drift: ${result.compare_summary.changed_profile_keys.length === 0 ? "none" : result.compare_summary.changed_profile_keys.join(", ")}`,
+    );
+  }
+  lines.push("Suite profile:");
+  for (const [key, value] of flattenProfile(result.suite_profile as Record<string, unknown>)) {
+    lines.push(`- ${key}: ${JSON.stringify(value)}`);
   }
   lines.push("");
   for (const scenario of result.scenarios) {
@@ -3060,6 +3253,13 @@ function toMarkdown(result: BenchmarkSuiteResult): string {
       `Baseline compare: \`${result.compare_summary.baseline_score_pct == null ? "none" : `${result.compare_summary.baseline_score_pct}%`}\` -> \`${result.suite_summary.score_pct}%\`` +
         `${result.compare_summary.score_delta_pct == null ? "" : ` (delta \`${result.compare_summary.score_delta_pct >= 0 ? "+" : ""}${result.compare_summary.score_delta_pct}\`)`}`,
     );
+    lines.push(`Profile drift: \`${result.compare_summary.changed_profile_keys.length === 0 ? "none" : result.compare_summary.changed_profile_keys.join(", ")}\``);
+  }
+  lines.push("");
+  lines.push("Suite profile:");
+  lines.push("");
+  for (const [key, value] of flattenProfile(result.suite_profile as Record<string, unknown>)) {
+    lines.push(`- \`${key}\`: \`${JSON.stringify(value)}\``);
   }
   lines.push("");
   for (const scenario of result.scenarios) {
@@ -3135,6 +3335,7 @@ async function main() {
       total_scenarios: scenarios.length,
       score_pct: scenarios.length === 0 ? 0 : Math.round((scenarios.filter((scenario) => scenario.status === "pass").length / scenarios.length) * 100),
     },
+    suite_profile: buildSuiteProfile(scenarios),
     scenarios,
   };
   const result = applyBaselineComparison(rawResult, baseline);

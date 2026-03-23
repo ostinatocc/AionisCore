@@ -1,6 +1,6 @@
 # Lite Testing Strategy
 
-Last reviewed: 2026-03-21
+Last reviewed: 2026-03-23
 
 This document defines how `Aionis Lite` should be tested in its current product shape.
 
@@ -194,8 +194,15 @@ Baseline compare with regression gates:
 npx tsx scripts/lite-real-task-benchmark.ts \
   --baseline-json /tmp/lite-benchmark-baseline.json \
   --fail-on-status-regression \
+  --fail-on-profile-drift \
   --max-suite-score-drop 0 \
   --max-scenario-score-drop 0
+```
+
+Stable suite-profile artifact:
+
+```bash
+npx tsx scripts/lite-real-task-benchmark.ts --out-json /tmp/lite-benchmark-baseline.json
 ```
 
 Artifact mode:
@@ -249,6 +256,27 @@ What this layer should catch:
 10. benchmark score drift across the fixed scenario set
 11. scenario status regressions against a stored baseline artifact
 12. scenario score regressions beyond an allowed threshold
+13. benchmark profile drift across the stable core execution-memory metrics
+
+Current stable suite profile keys:
+
+1. `policy_learning.trusted_pattern_count_after_revalidation`
+2. `policy_learning.contested_revalidation_fresh_runs_needed`
+3. `workflow_progression.stable_workflow_count_after_second`
+4. `multi_step_repair.stable_workflow_count_after_validate`
+5. `governed_learning.workflow_promotion_state`
+6. `governed_learning.tools_pattern_state`
+7. `governed_learning.tools_credibility_state`
+8. `governed_replay.replay_learning_rule_state`
+9. `governed_replay.stable_workflow_count_after_replay`
+10. `governance_provider_precedence.workflow_provider_override_blocked`
+11. `governance_provider_precedence.tools_provider_override_blocked`
+12. `governance_provider_precedence.tools_pattern_state`
+13. `custom_model_client.workflow_governed_state`
+14. `custom_model_client.tools_pattern_state`
+15. `custom_model_client.replay_learning_rule_state`
+16. `slim_surface_boundary.planning_has_layered_context`
+17. `slim_surface_boundary.assemble_has_layered_context`
 
 ## Current Command Model
 

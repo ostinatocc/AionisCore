@@ -20,6 +20,7 @@ WORKDIR="${LITE_REAL_VALIDATION_WORKDIR:-}"
 BASELINE_JSON="${LITE_REAL_VALIDATION_BASELINE_JSON:-}"
 MAX_SUITE_SCORE_DROP="${LITE_REAL_VALIDATION_MAX_SUITE_SCORE_DROP:-0}"
 MAX_SCENARIO_SCORE_DROP="${LITE_REAL_VALIDATION_MAX_SCENARIO_SCORE_DROP:-0}"
+FAIL_ON_PROFILE_DRIFT="${LITE_REAL_VALIDATION_FAIL_ON_PROFILE_DRIFT:-true}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --workdir)
@@ -82,6 +83,9 @@ run_step \
     if [[ -n "'"${BASELINE_JSON}"'" ]]; then
       cmd+=(--baseline-json "'"${BASELINE_JSON}"'")
       cmd+=(--fail-on-status-regression)
+      if [[ "'"${FAIL_ON_PROFILE_DRIFT}"'" == "true" ]]; then
+        cmd+=(--fail-on-profile-drift)
+      fi
       cmd+=(--max-suite-score-drop "'"${MAX_SUITE_SCORE_DROP}"'")
       cmd+=(--max-scenario-score-drop "'"${MAX_SCENARIO_SCORE_DROP}"'")
     fi
