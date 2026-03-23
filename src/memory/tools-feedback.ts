@@ -153,7 +153,7 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
   ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
   return {
-    form_pattern: runFormPatternGovernancePreview({
+    form_pattern: await runFormPatternGovernancePreview({
       input,
       sourceExamples,
       reviewResult: args.governanceReview?.review_result ?? null,

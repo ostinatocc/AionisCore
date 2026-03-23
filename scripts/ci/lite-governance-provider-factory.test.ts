@@ -10,11 +10,11 @@ test("promote_memory provider factory returns undefined when both paths are disa
   assert.equal(provider, undefined);
 });
 
-test("promote_memory provider factory falls back to static provider", () => {
+test("promote_memory provider factory falls back to static provider", async () => {
   const provider = buildPromoteMemoryGovernanceReviewProvider({
     staticEnabled: true,
   });
-  const review = provider?.resolveReviewResult({
+  const review = await provider?.resolveReviewResult({
     reviewPacket: {
       deterministic_gate: { gate_satisfied: true },
       requested_target_kind: "workflow",
@@ -27,12 +27,12 @@ test("promote_memory provider factory falls back to static provider", () => {
   assert.equal(review?.adjudication.reason, "static provider found workflow-signature evidence");
 });
 
-test("promote_memory provider factory prefers mock-model-backed provider", () => {
+test("promote_memory provider factory prefers mock-model-backed provider", async () => {
   const provider = buildPromoteMemoryGovernanceReviewProvider({
     modelClientMode: "builtin",
     staticEnabled: true,
   });
-  const review = provider?.resolveReviewResult({
+  const review = await provider?.resolveReviewResult({
     reviewPacket: {
       deterministic_gate: { gate_satisfied: true },
       requested_target_kind: "workflow",
@@ -45,12 +45,12 @@ test("promote_memory provider factory prefers mock-model-backed provider", () =>
   assert.equal(review?.adjudication.reason, "mock model found workflow-signature evidence");
 });
 
-test("form_pattern provider factory prefers mock-model-backed provider", () => {
+test("form_pattern provider factory prefers mock-model-backed provider", async () => {
   const provider = buildFormPatternGovernanceReviewProvider({
     modelClientMode: "builtin",
     staticEnabled: true,
   });
-  const review = provider?.resolveReviewResult({
+  const review = await provider?.resolveReviewResult({
     reviewPacket: {
       deterministic_gate: { gate_satisfied: true },
     } as any,

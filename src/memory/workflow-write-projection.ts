@@ -636,7 +636,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
       const stableNodeId = stableUuid(`${args.scope}:node:${stableClientId}`);
       const workflowPromotionGovernanceReview = asRecord(source.slots?.workflow_promotion_governance_review);
       const promoteMemoryGovernanceReview = asRecord(workflowPromotionGovernanceReview?.promote_memory);
-      const governancePreview = buildWorkflowPromotionGovernancePreview({
+      const governancePreview = await buildWorkflowPromotionGovernancePreview({
         candidateNodeIds: Array.from(new Set([projectedNodeId, ...existingCandidates.rows.map((row) => row.id)])),
         inputText: summary,
         inputSha256: sha256Hex(summary),

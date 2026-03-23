@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { MemoryFormPatternRequest } from "../../src/memory/schemas.ts";
 import { runFormPatternGovernancePreview } from "../../src/memory/form-pattern-governance-shared.ts";
 
-test("shared form-pattern runner accepts provider-supplied review results", () => {
-  const preview = runFormPatternGovernancePreview({
+test("shared form-pattern runner accepts provider-supplied review results", async () => {
+  const preview = await runFormPatternGovernancePreview({
     input: MemoryFormPatternRequest.parse({
       source_node_ids: ["node-1", "node-2"],
       task_signature: "task:sig",

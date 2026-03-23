@@ -1,12 +1,17 @@
 import type {
   GovernanceModelClient,
   GovernanceModelClientFactory,
+  GovernanceHttpModelClientConfig,
   GovernanceModelClientMode,
 } from "./governance-model-client.js";
 import {
   createBuiltinFormPatternGovernanceModelClient,
   createBuiltinPromoteMemoryGovernanceModelClient,
 } from "./governance-model-client-builtin.js";
+import {
+  createHttpFormPatternGovernanceModelClient,
+  createHttpPromoteMemoryGovernanceModelClient,
+} from "./governance-model-client-http.js";
 import {
   createMockFormPatternGovernanceModelClient,
   createMockPromoteMemoryGovernanceModelClient,
@@ -23,6 +28,7 @@ export function buildLiteGovernanceModelClient(args: {
   formPattern?: LiteGovernanceModelClientSelection;
 }, options?: {
   modelClientFactory?: GovernanceModelClientFactory;
+  httpClientConfig?: GovernanceHttpModelClientConfig;
 }): GovernanceModelClient {
   const client: GovernanceModelClient = {};
 
@@ -46,6 +52,9 @@ export function buildLiteGovernanceModelClient(args: {
       reason: args.promoteMemory.reason,
     });
     client.reviewPromoteMemory = mockClient.reviewPromoteMemory;
+  } else if (args.promoteMemory?.mode === "http" && options?.httpClientConfig) {
+    const httpClient = createHttpPromoteMemoryGovernanceModelClient(options.httpClientConfig);
+    client.reviewPromoteMemory = httpClient.reviewPromoteMemory;
   }
 
   if (args.formPattern?.mode === "custom") {
@@ -68,6 +77,9 @@ export function buildLiteGovernanceModelClient(args: {
       reason: args.formPattern.reason,
     });
     client.reviewFormPattern = mockClient.reviewFormPattern;
+  } else if (args.formPattern?.mode === "http" && options?.httpClientConfig) {
+    const httpClient = createHttpFormPatternGovernanceModelClient(options.httpClientConfig);
+    client.reviewFormPattern = httpClient.reviewFormPattern;
   }
 
   return client;

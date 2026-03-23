@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { MemoryPromoteRequest } from "../../src/memory/schemas.ts";
 import { runPromoteMemoryGovernancePreview } from "../../src/memory/promote-memory-governance-shared.ts";
 
-test("shared promote-memory runner keeps packet-only preview stable without review", () => {
-  const preview = runPromoteMemoryGovernancePreview({
+test("shared promote-memory runner keeps packet-only preview stable without review", async () => {
+  const preview = await runPromoteMemoryGovernancePreview({
     input: MemoryPromoteRequest.parse({
       candidate_node_ids: ["node-1"],
       target_kind: "workflow",
@@ -39,7 +39,7 @@ test("shared promote-memory runner keeps packet-only preview stable without revi
   });
 });
 
-test("shared promote-memory runner evaluates admissibility before delegating policy effect", () => {
+test("shared promote-memory runner evaluates admissibility before delegating policy effect", async () => {
   const reviewResult = {
     review_version: "promote_memory_semantic_review_v1",
     adjudication: {
@@ -53,7 +53,7 @@ test("shared promote-memory runner evaluates admissibility before delegating pol
     },
   } as const;
 
-  const preview = runPromoteMemoryGovernancePreview({
+  const preview = await runPromoteMemoryGovernancePreview({
     input: MemoryPromoteRequest.parse({
       candidate_node_ids: ["node-1"],
       target_kind: "workflow",
@@ -90,8 +90,8 @@ test("shared promote-memory runner evaluates admissibility before delegating pol
   });
 });
 
-test("shared promote-memory runner accepts provider-supplied review results", () => {
-  const preview = runPromoteMemoryGovernancePreview({
+test("shared promote-memory runner accepts provider-supplied review results", async () => {
+  const preview = await runPromoteMemoryGovernancePreview({
     input: MemoryPromoteRequest.parse({
       candidate_node_ids: ["node-1"],
       target_kind: "workflow",

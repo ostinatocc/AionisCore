@@ -93,6 +93,11 @@ type BenchmarkSuiteProfile = {
     tools_pattern_state: string | null;
     replay_learning_rule_state: string | null;
   };
+  http_model_client?: {
+    workflow_governed_state: string | null;
+    tools_pattern_state: string | null;
+    replay_learning_rule_state: string | null;
+  };
   slim_surface_boundary?: {
     planning_has_layered_context: boolean | null;
     assemble_has_layered_context: boolean | null;
@@ -139,7 +144,7 @@ type BenchmarkRegressionGate = {
   reasons: string[];
 };
 
-const BENCHMARK_PROFILE_POLICY_VERSION = "v1";
+const BENCHMARK_PROFILE_POLICY_VERSION = "v2";
 const HARD_BENCHMARK_PROFILE_KEYS = new Set<string>([
   "workflow_progression.stable_workflow_count_after_second",
   "multi_step_repair.stable_workflow_count_after_validate",
@@ -153,6 +158,9 @@ const HARD_BENCHMARK_PROFILE_KEYS = new Set<string>([
   "custom_model_client.workflow_governed_state",
   "custom_model_client.tools_pattern_state",
   "custom_model_client.replay_learning_rule_state",
+  "http_model_client.workflow_governed_state",
+  "http_model_client.tools_pattern_state",
+  "http_model_client.replay_learning_rule_state",
   "slim_surface_boundary.planning_has_layered_context",
   "slim_surface_boundary.assemble_has_layered_context",
 ]);
@@ -290,6 +298,7 @@ function buildSuiteProfile(scenarios: BenchmarkScenarioResult[]): BenchmarkSuite
   const governedReplay = getScenarioMetrics(scenarios, "governed_replay_runtime_loop");
   const precedence = getScenarioMetrics(scenarios, "governance_provider_precedence_runtime_loop");
   const customModelClient = getScenarioMetrics(scenarios, "custom_model_client_runtime_loop");
+  const httpModelClient = getScenarioMetrics(scenarios, "http_model_client_runtime_loop");
   const slimSurface = getScenarioMetrics(scenarios, "slim_surface_boundary");
 
   return {
@@ -365,6 +374,20 @@ function buildSuiteProfile(scenarios: BenchmarkScenarioResult[]): BenchmarkSuite
       replay_learning_rule_state:
         typeof customModelClient.replay_learning_rule_state === "string"
           ? customModelClient.replay_learning_rule_state
+          : null,
+    },
+    http_model_client: {
+      workflow_governed_state:
+        typeof httpModelClient.workflow_governed_state === "string"
+          ? httpModelClient.workflow_governed_state
+          : null,
+      tools_pattern_state:
+        typeof httpModelClient.tools_pattern_state === "string"
+          ? httpModelClient.tools_pattern_state
+          : null,
+      replay_learning_rule_state:
+        typeof httpModelClient.replay_learning_rule_state === "string"
+          ? httpModelClient.replay_learning_rule_state
           : null,
     },
     slim_surface_boundary: {
@@ -810,6 +833,68 @@ function createBenchmarkCustomGovernanceModelClientFactory(): GovernanceModelCli
     }
     return undefined;
   };
+}
+
+async function withBenchmarkGovernanceChatStub<T>(
+  fn: (args: { baseUrl: string; apiKey: string; model: string }) => Promise<T>,
+): Promise<T> {
+  const app = Fastify();
+  app.post("/chat/completions", async (request) => {
+    const body = request.body as Record<string, any> | null;
+    const messages = Array.isArray(body?.messages) ? body.messages : [];
+    const userPayloadRaw = typeof messages[1]?.content === "string" ? messages[1].content : "{}";
+    let userPayload: Record<string, any> = {};
+    try {
+      userPayload = JSON.parse(userPayloadRaw);
+    } catch {
+      userPayload = {};
+    }
+    const operation = userPayload.operation;
+    const content =
+      operation === "form_pattern"
+        ? JSON.stringify({
+            review_version: "form_pattern_semantic_review_v1",
+            adjudication: {
+              operation: "form_pattern",
+              disposition: "recommend",
+              target_kind: "pattern",
+              target_level: "L3",
+              reason: "benchmark http form_pattern client",
+              confidence: 0.95,
+            },
+          })
+        : JSON.stringify({
+            review_version: "promote_memory_semantic_review_v1",
+            adjudication: {
+              operation: "promote_memory",
+              disposition: "recommend",
+              target_kind: "workflow",
+              target_level: "L2",
+              reason: "benchmark http promote_memory client",
+              confidence: 0.95,
+              strategic_value: "high",
+            },
+          });
+    return {
+      choices: [
+        {
+          message: {
+            content,
+          },
+        },
+      ],
+    };
+  });
+  const baseUrl = await app.listen({ host: "127.0.0.1", port: 0 });
+  try {
+    return await fn({
+      baseUrl,
+      apiKey: "benchmark-http-key",
+      model: "benchmark-http-model",
+    });
+  } finally {
+    await app.close();
+  }
 }
 
 function buildBenchmarkSessionEventPayload(args: {
@@ -3236,6 +3321,247 @@ async function runCustomModelClientRuntimeLoop(): Promise<Omit<BenchmarkScenario
   }
 }
 
+async function runHttpModelClientRuntimeLoop(): Promise<Omit<BenchmarkScenarioResult, "id" | "title" | "status" | "duration_ms">> {
+  return await withBenchmarkGovernanceChatStub(async ({ baseUrl, apiKey, model }) => {
+    const runtimeDbPath = tmpDbPath("http-model-client-runtime");
+    const runtimeApp = Fastify();
+    const runtimeWriteStore = createLiteWriteStore(runtimeDbPath);
+    const runtimeRecallStore = createLiteRecallStore(runtimeDbPath);
+
+    const replayWriteDbPath = tmpDbPath("http-model-client-replay-write");
+    const replayDbPath = tmpDbPath("http-model-client-replay-store");
+    const replayApp = Fastify();
+    const replayWriteStore = createLiteWriteStore(replayWriteDbPath);
+    const replayStore = createLiteReplayStore(replayDbPath);
+    const replayRecallStore = createLiteRecallStore(replayWriteDbPath);
+
+    const assertions: AssertionResult[] = [];
+    try {
+      registerBenchmarkApp({
+        app: runtimeApp,
+        liteWriteStore: runtimeWriteStore,
+        liteRecallStore: runtimeRecallStore,
+        governanceRuntimeProviderBuilderOptions: {
+          httpClientConfig: {
+            baseUrl,
+            apiKey,
+            model,
+            timeoutMs: 2000,
+            maxTokens: 300,
+            temperature: 0,
+          },
+          modelClientModes: {
+            workflowProjection: {
+              promote_memory: "http",
+            },
+            toolsFeedback: {
+              form_pattern: "http",
+            },
+          },
+        },
+      });
+
+      const taskBrief = "Fix export failure in node tests";
+      const filePath = "src/routes/export.ts";
+
+      const firstWrite = await runtimeApp.inject({
+        method: "POST",
+        url: "/v1/memory/write",
+        payload: buildBenchmarkWritePayload({
+          eventId: randomUUID(),
+          title: "HTTP client inspect export path",
+          inputText: "http client benchmark first continuity write",
+          taskBrief,
+          stateId: `state:${randomUUID()}`,
+          filePath,
+        }),
+      });
+      assert.equal(firstWrite.statusCode, 200);
+
+      const secondWrite = await runtimeApp.inject({
+        method: "POST",
+        url: "/v1/memory/write",
+        payload: buildBenchmarkWritePayload({
+          eventId: randomUUID(),
+          title: "HTTP client patch export path",
+          inputText: "http client benchmark second continuity write",
+          taskBrief,
+          stateId: `state:${randomUUID()}`,
+          filePath,
+        }),
+      });
+      assert.equal(secondWrite.statusCode, 200);
+
+      const storedStable = await runtimeWriteStore.findNodes({
+        scope: "default",
+        type: "procedure",
+        slotsContains: {
+          summary_kind: "workflow_anchor",
+        },
+        consumerAgentId: "local-user",
+        consumerTeamId: null,
+        limit: 20,
+        offset: 0,
+      });
+      const stableWorkflowNode = storedStable.rows.find((row) => {
+        const projection = (row.slots?.workflow_write_projection ?? null) as Record<string, unknown> | null;
+        return projection?.auto_promoted === true;
+      }) ?? null;
+      assert.ok(stableWorkflowNode);
+      const stableProjection = (stableWorkflowNode.slots?.workflow_write_projection ?? {}) as Record<string, any>;
+      const workflowPreview = ((stableProjection.governance_preview ?? {}) as Record<string, any>).promote_memory as Record<string, any> | undefined;
+      assert.equal(workflowPreview?.review_result?.adjudication?.reason, "benchmark http promote_memory client");
+      assert.equal(stableProjection.governed_promotion_state_override, "stable");
+      assertions.push(pass("workflow runtime path uses http model client"));
+
+      const toolRuleNodeIds = await seedActiveToolRules(runtimeWriteStore, ["edit", "edit"]);
+      const toolsSelectRes = await runtimeApp.inject({
+        method: "POST",
+        url: "/v1/memory/tools/select",
+        payload: {
+          tenant_id: "default",
+          scope: "default",
+          run_id: "http-client-tools-run",
+          context: {
+            task_kind: "repair_export",
+            goal: "repair export failure in node tests",
+            error: {
+              signature: "node-export-mismatch",
+            },
+          },
+          candidates: ["bash", "edit", "test"],
+          include_shadow: false,
+          rules_limit: 20,
+          strict: true,
+          reorder_candidates: false,
+        },
+      });
+      assert.equal(toolsSelectRes.statusCode, 200);
+      const toolsSelection = ToolsSelectRouteContractSchema.parse(toolsSelectRes.json());
+      const toolsFeedbackRes = await runtimeApp.inject({
+        method: "POST",
+        url: "/v1/memory/tools/feedback",
+        payload: {
+          tenant_id: "default",
+          scope: "default",
+          actor: "local-user",
+          run_id: "http-client-tools-run",
+          decision_id: toolsSelection.decision.decision_id,
+          outcome: "positive",
+          context: {
+            task_kind: "repair_export",
+            goal: "repair export failure in node tests",
+            error: {
+              signature: "node-export-mismatch",
+            },
+          },
+          candidates: ["bash", "edit", "test"],
+          selected_tool: "edit",
+          target: "tool",
+          note: "HTTP client grouped evidence benchmark",
+          input_text: "repair export failure in node tests",
+        },
+      });
+      assert.equal(toolsFeedbackRes.statusCode, 200);
+      const toolsFeedback = ToolsFeedbackResponseSchema.parse(toolsFeedbackRes.json());
+      assert.equal(toolsFeedback.governance_preview?.form_pattern.review_result?.adjudication.reason, "benchmark http form_pattern client");
+      assert.equal(toolsFeedback.pattern_anchor?.pattern_state, "stable");
+      assertions.push(pass("tools runtime path uses http model client"));
+
+      for (const ruleNodeId of toolRuleNodeIds) {
+        await runtimeWriteStore.withTx(() =>
+          updateRuleState(
+            {} as any,
+            {
+              tenant_id: "default",
+              scope: "default",
+              actor: "local-user",
+              rule_node_id: ruleNodeId,
+              state: "disabled",
+              input_text: "disable http client benchmark tool source rules",
+            },
+            "default",
+            "default",
+            { liteWriteStore: runtimeWriteStore },
+          ),
+        );
+      }
+
+      const replayPlaybookId = randomUUID();
+      await seedPendingReplayBenchmarkPlaybook({
+        liteWriteStore: replayWriteStore,
+        liteReplayStore: replayStore,
+        playbookId: replayPlaybookId,
+        workflowSignature: "wf:replay:http-client-export-fix",
+      });
+      registerReplayBenchmarkApp({
+        app: replayApp,
+        liteWriteStore: replayWriteStore,
+        liteReplayStore: replayStore,
+        liteRecallStore: replayRecallStore,
+        governanceRuntimeProviderBuilderOptions: {
+          httpClientConfig: {
+            baseUrl,
+            apiKey,
+            model,
+            timeoutMs: 2000,
+            maxTokens: 300,
+            temperature: 0,
+          },
+          modelClientModes: {
+            replayRepairReview: {
+              promote_memory: "http",
+            },
+          },
+        },
+      });
+
+      const replayReviewRes = await replayApp.inject({
+        method: "POST",
+        url: "/v1/memory/replay/playbooks/repair/review",
+        payload: {
+          tenant_id: "default",
+          scope: "default",
+          playbook_id: replayPlaybookId,
+          action: "approve",
+          auto_shadow_validate: false,
+          target_status_on_approve: "shadow",
+          learning_projection: {
+            enabled: true,
+          },
+        },
+      });
+      assert.equal(replayReviewRes.statusCode, 200);
+      const replayReview = ReplayPlaybookRepairReviewResponseSchema.parse(replayReviewRes.json());
+      assert.equal(replayReview.governance_preview?.promote_memory.review_result?.adjudication.reason, "benchmark http promote_memory client");
+      assert.equal(replayReview.learning_projection_result.rule_state, "shadow");
+      assertions.push(pass("replay runtime path uses http model client"));
+
+      return {
+        assertions,
+        metrics: {
+          workflow_http_reason: workflowPreview?.review_result?.adjudication?.reason ?? null,
+          workflow_governed_state: stableProjection.governed_promotion_state_override ?? null,
+          tools_http_reason: toolsFeedback.governance_preview?.form_pattern.review_result?.adjudication.reason ?? null,
+          tools_pattern_state: toolsFeedback.pattern_anchor?.pattern_state ?? null,
+          replay_http_reason: replayReview.governance_preview?.promote_memory.review_result?.adjudication.reason ?? null,
+          replay_learning_rule_state: replayReview.learning_projection_result.rule_state ?? null,
+        },
+        notes: [
+          "Measures whether workflow runtime wiring honors an HTTP model-backed governance client.",
+          "Measures whether tools runtime wiring honors an HTTP model-backed governance client.",
+          "Measures whether replay runtime wiring honors an HTTP model-backed governance client.",
+        ],
+      };
+    } finally {
+      await runtimeApp.close();
+      await replayApp.close();
+      await runtimeWriteStore.close();
+      await replayWriteStore.close();
+    }
+  });
+}
+
 function printHuman(result: BenchmarkSuiteResult) {
   const lines: string[] = [];
   lines.push("Aionis Real-Task Benchmark Suite");
@@ -3384,6 +3710,7 @@ async function main() {
     runScenario("governed_replay_runtime_loop", "Replay-governed learning through provider-backed repair review", runGovernedReplayRuntimeLoop),
     runScenario("governance_provider_precedence_runtime_loop", "Explicit governance review precedence over provider fallback", runGovernanceProviderPrecedenceRuntimeLoop),
     runScenario("custom_model_client_runtime_loop", "Custom model-client replacement through live runtime paths", runCustomModelClientRuntimeLoop),
+    runScenario("http_model_client_runtime_loop", "HTTP model-client replacement through live runtime paths", runHttpModelClientRuntimeLoop),
     runScenario("slim_surface_boundary", "Slim planner/context default surface", runSlimSurfaceBoundary),
   ]);
   const rawResult: BenchmarkSuiteResult = {

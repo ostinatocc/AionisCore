@@ -12,7 +12,7 @@ import {
 } from "./form-pattern-governance.js";
 import { runGovernedSemanticPreview } from "./governance-operation-runner.js";
 
-export function runFormPatternGovernancePreview<
+export async function runFormPatternGovernancePreview<
   TPolicyEffect extends { applies: boolean; reason_code?: string | null },
   TDecisionTrace,
 >(args: {
@@ -30,14 +30,14 @@ export function runFormPatternGovernancePreview<
     admissibility: MemoryAdmissibilityResult | null;
     policyEffect: TPolicyEffect;
   }) => TDecisionTrace;
-}): {
+}): Promise<{
   review_packet: MemoryFormPatternSemanticReviewPacket;
   review_result: MemoryFormPatternSemanticReviewResult | null;
   admissibility: MemoryAdmissibilityResult | null;
   policy_effect: TPolicyEffect;
   decision_trace: TDecisionTrace;
-} {
-  return runGovernedSemanticPreview({
+}> {
+  return await runGovernedSemanticPreview({
     buildPacket: () =>
       buildFormPatternSemanticReviewPacket({
         input: args.input,

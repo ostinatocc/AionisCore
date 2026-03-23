@@ -4512,7 +4512,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
       ? (asObject(asObject((parsed as any).governance_review)?.promote_memory)?.review_result as Record<string, unknown>)
       : null;
     governancePreview = {
-      promote_memory: runPromoteMemoryGovernancePreview({
+      promote_memory: await runPromoteMemoryGovernancePreview({
         input: promoteInput,
         candidateExamples,
         reviewResult: (suppliedReview as any) ?? null,

@@ -1,6 +1,7 @@
 import { buildLiteGovernanceModelClient } from "./governance-model-client-factory.js";
 import type {
   GovernanceModelClientFactory,
+  GovernanceHttpModelClientConfig,
   GovernanceModelClientMode,
 } from "./governance-model-client.js";
 import {
@@ -20,6 +21,7 @@ export function buildPromoteMemoryGovernanceReviewProvider(args: {
   modelClientMode?: GovernanceModelClientMode;
   staticEnabled?: boolean;
   modelClientFactory?: GovernanceModelClientFactory;
+  httpClientConfig?: GovernanceHttpModelClientConfig;
   mockModel?: {
     confidence?: number;
     reason?: string;
@@ -40,6 +42,7 @@ export function buildPromoteMemoryGovernanceReviewProvider(args: {
             },
           }, {
             modelClientFactory: args.modelClientFactory,
+            httpClientConfig: args.httpClientConfig,
           }),
         })
       : undefined)
@@ -56,6 +59,7 @@ export function buildFormPatternGovernanceReviewProvider(args: {
   modelClientMode?: GovernanceModelClientMode;
   staticEnabled?: boolean;
   modelClientFactory?: GovernanceModelClientFactory;
+  httpClientConfig?: GovernanceHttpModelClientConfig;
   mockModel?: {
     confidence?: number;
     reason?: string;
@@ -76,6 +80,7 @@ export function buildFormPatternGovernanceReviewProvider(args: {
             },
           }, {
             modelClientFactory: args.modelClientFactory,
+            httpClientConfig: args.httpClientConfig,
           }),
         })
       : undefined)

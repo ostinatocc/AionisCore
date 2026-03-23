@@ -12,7 +12,7 @@ import {
 } from "./promote-memory-governance.js";
 import { runGovernedSemanticPreview } from "./governance-operation-runner.js";
 
-export function runPromoteMemoryGovernancePreview<
+export async function runPromoteMemoryGovernancePreview<
   TPolicyEffect extends { applies: boolean; reason_code?: string | null },
   TDecisionTrace,
 >(args: {
@@ -30,14 +30,14 @@ export function runPromoteMemoryGovernancePreview<
     admissibility: MemoryAdmissibilityResult | null;
     policyEffect: TPolicyEffect;
   }) => TDecisionTrace;
-}): {
+}): Promise<{
   review_packet: MemoryPromoteSemanticReviewPacket;
   review_result: MemoryPromoteSemanticReviewResult | null;
   admissibility: MemoryAdmissibilityResult | null;
   policy_effect: TPolicyEffect;
   decision_trace: TDecisionTrace;
-} {
-  return runGovernedSemanticPreview({
+}> {
+  return await runGovernedSemanticPreview({
     buildPacket: () =>
       buildPromoteMemorySemanticReviewPacket({
         input: args.input,

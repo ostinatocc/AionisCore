@@ -7,7 +7,16 @@ import type {
 } from "./schemas.js";
 
 export type GovernanceModelClientOperation = "promote_memory" | "form_pattern";
-export type GovernanceModelClientMode = "off" | "mock" | "builtin" | "custom";
+export type GovernanceModelClientMode = "off" | "mock" | "builtin" | "http" | "custom";
+
+export type GovernanceHttpModelClientConfig = {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  timeoutMs: number;
+  maxTokens: number;
+  temperature: number;
+};
 
 export type GovernanceModelClient = {
   reviewPromoteMemory?: GovernanceReviewResolver<

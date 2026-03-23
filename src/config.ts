@@ -453,6 +453,12 @@ const EnvSchema = z.object({
     .transform((v) => (v ?? "false").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
+  REPLAY_GOVERNANCE_HTTP_MODEL_PROMOTE_MEMORY_PROVIDER_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
   WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: z
     .string()
     .optional()
@@ -460,6 +466,12 @@ const EnvSchema = z.object({
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
   WORKFLOW_GOVERNANCE_MOCK_MODEL_PROMOTE_MEMORY_PROVIDER_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  WORKFLOW_GOVERNANCE_HTTP_MODEL_PROMOTE_MEMORY_PROVIDER_ENABLED: z
     .string()
     .optional()
     .transform((v) => (v ?? "false").toLowerCase())
@@ -477,6 +489,18 @@ const EnvSchema = z.object({
     .transform((v) => (v ?? "false").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
+  TOOLS_GOVERNANCE_HTTP_MODEL_FORM_PATTERN_PROVIDER_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  GOVERNANCE_MODEL_CLIENT_BASE_URL: z.string().default("https://api.openai.com/v1"),
+  GOVERNANCE_MODEL_CLIENT_API_KEY: z.string().default(""),
+  GOVERNANCE_MODEL_CLIENT_MODEL: z.string().default("gpt-4.1-mini"),
+  GOVERNANCE_MODEL_CLIENT_TIMEOUT_MS: z.coerce.number().int().positive().max(60000).default(7000),
+  GOVERNANCE_MODEL_CLIENT_MAX_TOKENS: z.coerce.number().int().positive().max(4000).default(300),
+  GOVERNANCE_MODEL_CLIENT_TEMPERATURE: z.coerce.number().min(0).max(1).default(0.1),
   EPISODE_GC_TTL_DAYS: z.coerce.number().int().positive().max(3650).default(30),
   EPISODE_GC_RULE_STABLE_POSITIVE_MIN: z.coerce.number().int().min(1).max(100000).default(10),
   EPISODE_GC_RULE_STABLE_NEGATIVE_WINDOW_DAYS: z.coerce.number().int().min(1).max(365).default(7),

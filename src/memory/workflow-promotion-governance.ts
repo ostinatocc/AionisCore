@@ -64,14 +64,14 @@ export function deriveWorkflowPromotionSemanticPolicyEffect(args: {
   });
 }
 
-export function buildWorkflowPromotionGovernancePreview(args: {
+export async function buildWorkflowPromotionGovernancePreview(args: {
   candidateNodeIds: string[];
   inputText: string;
   inputSha256: string;
   candidateExamples: WorkflowPromotionCandidateExample[];
   reviewResult?: MemoryPromoteSemanticReviewResult | null;
   reviewProvider?: PromoteMemoryGovernanceReviewProvider | null;
-}): {
+}): Promise<{
   promote_memory: {
     review_packet: MemoryPromoteSemanticReviewPacket;
     review_result: MemoryPromoteSemanticReviewResult | null;
@@ -83,7 +83,7 @@ export function buildWorkflowPromotionGovernancePreview(args: {
     promotion_state_override: "stable" | null;
     changed_promotion_state: boolean;
   };
-} {
+}> {
   const input = MemoryPromoteRequest.parse({
     candidate_node_ids: args.candidateNodeIds,
     target_kind: "workflow",
@@ -93,7 +93,7 @@ export function buildWorkflowPromotionGovernancePreview(args: {
     input_sha256: args.inputSha256,
   });
 
-  const promotePreview = runPromoteMemoryGovernancePreview({
+  const promotePreview = await runPromoteMemoryGovernancePreview({
       input,
       candidateExamples: args.candidateExamples,
       reviewResult: args.reviewResult ?? null,
