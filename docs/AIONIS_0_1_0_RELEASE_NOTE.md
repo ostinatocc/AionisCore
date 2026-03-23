@@ -60,7 +60,7 @@ Release validation for `0.1.0` is based on:
 3. `npm run smoke:lite`
 4. `npm run smoke:lite:local-process`
 
-Current release-validation result:
+Current release-validation result at the original `0.1.0` cutoff:
 
 1. `test:lite` passed
 2. `benchmark:lite:real` passed with `8/8 PASS` and `100% suite score`
@@ -85,6 +85,23 @@ Related report:
 3. Reproducible Markdown artifact path: `/tmp/lite-benchmark-0.1.0.md`
 
 These benchmark artifacts are generated locally during release validation and are not committed to the repository.
+
+## Post-Release Validation Update
+
+As of `2026-03-23`, the current Lite baseline has advanced materially beyond the original `0.1.0` validation snapshot.
+
+Current practical validation status:
+
+1. `benchmark:lite:real` now passes at `14/14 PASS`
+2. benchmark baseline/profile regression gates are now part of the validation posture
+3. replay, workflow, and tools all now have real governance paths with bounded apply behavior
+4. Lite has now also passed a real external HTTP governance shadow benchmark against an Anthropic-compatible backend with outcome match across:
+   - workflow
+   - tools
+   - replay
+
+This does not retroactively change what `0.1.0` originally meant.
+It does mean the current Lite runtime has moved well beyond the original release baseline in technical maturity.
 
 ## Current Readiness Judgment
 

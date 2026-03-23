@@ -18,6 +18,19 @@ The highest-risk regressions are:
 3. default slim surface versus debug/operator surface drift
 4. startup/runtime path breakage
 
+## Current Validation Status
+
+Current practical status:
+
+1. the local real-task benchmark baseline currently passes `14/14`
+2. the suite profile now covers hard/soft profile drift, HTTP prompt drift, and HTTP response-schema drift
+3. isolated validation can run fully outside the repository worktree
+4. real external HTTP governance shadow runs are now supported and benchmarked on the same scenario surface
+5. a real Anthropic-compatible external backend has already been run in shadow mode with current outcome:
+   - `workflow_state_match = true`
+   - `tools_state_match = true`
+   - `replay_state_match = true`
+
 ## Test Stack
 
 Lite testing should be treated as a five-layer stack plus one repeatable benchmark command:
@@ -191,8 +204,10 @@ npm run benchmark:lite:real
 External LLM shadow compare against the same benchmark surface:
 
 ```bash
+LITE_EXTERNAL_GOVERNANCE_HTTP_BASE_URL=... \
 LITE_EXTERNAL_GOVERNANCE_HTTP_API_KEY=... \
 LITE_EXTERNAL_GOVERNANCE_HTTP_MODEL=... \
+LITE_EXTERNAL_GOVERNANCE_HTTP_TRANSPORT=anthropic_messages_v1 \
 npm run benchmark:lite:real:http-shadow
 ```
 
@@ -235,8 +250,10 @@ bash scripts/lite-real-validation.sh --baseline-json /tmp/lite-benchmark-baselin
 Isolated validation with a real external HTTP governance shadow run:
 
 ```bash
+LITE_EXTERNAL_GOVERNANCE_HTTP_BASE_URL=... \
 LITE_EXTERNAL_GOVERNANCE_HTTP_API_KEY=... \
 LITE_EXTERNAL_GOVERNANCE_HTTP_MODEL=... \
+LITE_EXTERNAL_GOVERNANCE_HTTP_TRANSPORT=anthropic_messages_v1 \
 bash scripts/lite-real-validation.sh \
   --baseline-json /tmp/lite-benchmark-baseline.json \
   --external-http-shadow
@@ -282,6 +299,7 @@ What this layer should catch:
 15. outcome drift between builtin/static governance and HTTP model-client governance on the same runtime task arc
 16. HTTP governance prompt-contract drift across transport and operation prompt versions
 17. HTTP governance response-schema drift across accepted semantic review schema versions
+18. outcome drift against a real external HTTP governance backend on the same task arcs
 
 Current stable suite profile keys:
 
@@ -371,6 +389,18 @@ Future cleanup should consider splitting it into:
 5. `benchmark:lite:real`
 
 This is an execution convenience improvement, not a correctness requirement.
+
+## Current Interpretation
+
+The current testing posture means Lite is no longer only protected by unit-like route tests.
+
+It is now protected by:
+
+1. route and contract tests
+2. real route-level benchmark scenarios
+3. isolated validation artifacts outside the repository
+4. profile-based regression gates
+5. external HTTP governance shadow validation on the same benchmark surface
 
 ## What Not To Over-Invest In
 
