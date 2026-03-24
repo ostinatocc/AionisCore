@@ -73,3 +73,9 @@ Use the public repo for SDK publishing/quickstart work.
 Use this repo for runtime evolution.
 
 The SDK copy inside this private repo is a mirrored integration surface, not the release source of truth.
+
+For the private full-runtime SDK, use:
+
+1. `@cognary/aionis-sdk`
+2. [/Volumes/ziel/Aionis-runtime/docs/FULL_SDK_QUICKSTART.md](/Volumes/ziel/Aionis-runtime/docs/FULL_SDK_QUICKSTART.md)
+3. [/Volumes/ziel/Aionis-runtime/examples/full-sdk/README.md](/Volumes/ziel/Aionis-runtime/examples/full-sdk/README.md)

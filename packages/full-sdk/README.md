@@ -29,3 +29,20 @@ const recall = await aionis.memory.recallText({
   query_text: "debug the failed replay run",
 });
 ```
+
+## Local workflow
+
+```bash
+cd /Volumes/ziel/Aionis-runtime
+npm install
+npm run full-sdk:build
+npm run start:lite
+```
+
+Then run one of the bundled examples:
+
+```bash
+npm run full-sdk:example:recall
+npm run full-sdk:example:replay
+npm run full-sdk:example:sessions
+```
