@@ -25,6 +25,8 @@ Run examples:
 npm run full-sdk:example:recall
 npm run full-sdk:example:replay
 npm run full-sdk:example:sessions
+npm run full-sdk:example:automation
+npm run full-sdk:example:sandbox
 ```
 
 Examples:
@@ -35,3 +37,7 @@ Examples:
   exercises replay run start, step before/after, end, and get
 - `03-sessions-and-handoff.ts`
   creates a session, writes an event, lists session data, and stores a handoff
+- `04-automation-kernel.ts`
+  validates, creates, lists, and runs a self-contained automation graph
+- `05-sandbox-runtime.ts`
+  creates a sandbox session, executes a sync command, and inspects run outputs

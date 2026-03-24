@@ -53,4 +53,6 @@ const replay = await aionis.memory.replay.run.start({
 npm run full-sdk:example:recall
 npm run full-sdk:example:replay
 npm run full-sdk:example:sessions
+npm run full-sdk:example:automation
+npm run full-sdk:example:sandbox
 ```

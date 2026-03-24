@@ -34,6 +34,8 @@
     "full-sdk:example:recall": "npx tsx examples/full-sdk/01-recall-and-context.ts",
     "full-sdk:example:replay": "npx tsx examples/full-sdk/02-replay-run-lifecycle.ts",
     "full-sdk:example:sessions": "npx tsx examples/full-sdk/03-sessions-and-handoff.ts",
+    "full-sdk:example:automation": "npx tsx examples/full-sdk/04-automation-kernel.ts",
+    "full-sdk:example:sandbox": "npx tsx examples/full-sdk/05-sandbox-runtime.ts",
     "build": "npm run -s build:runtime-host && npm run -s runtime-core:build && npm run -s sdk:build && npm run -s full-sdk:build && npm run -s build:app:lite",
     "start:lite": "npm --prefix apps/lite run start --",
     "start:lite:local-process": "npm --prefix apps/lite run start:local-process --",
