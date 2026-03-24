@@ -1,6 +1,26 @@
-# Aionis SDK Publishing
+# Aionis Suite SDK Publishing
 
-This document defines the current release checklist for `@aionis/sdk`.
+This document defines the current release checklist for the public Aionis Suite SDK packages.
+
+Private repo note:
+
+1. this file is mirrored into `Aionis-runtime` for reference only
+2. the authoritative publish flow lives in [Cognary/Aionis](https://github.com/Cognary/Aionis)
+3. do not publish the SDK from `Aionis-runtime`
+
+Current package names:
+
+1. npm: `@cognary/aionis`
+2. PyPI: `cognary-aionis`
+
+Published package page:
+
+1. [npm: `@cognary/aionis`](https://www.npmjs.com/package/@cognary/aionis)
+
+CLI entrypoint:
+
+1. binary: `aionis`
+2. package form: `npx @cognary/aionis doctor`
 
 ## Release goals
 
@@ -16,9 +36,12 @@ Each SDK release should prove:
 From the repository root:
 
 ```bash
+npm run sdk:release:status
+npm run sdk:release:prepare
 npm run sdk:build
 npm run sdk:test
 npm run sdk:pack:dry-run
+npm run sdk:publish:dry-run
 npm run sdk:release:check
 ```
 
@@ -26,7 +49,7 @@ npm run sdk:release:check
 
 The release baseline script:
 
-1. builds `@aionis/sdk`
+1. builds `@cognary/aionis`
 2. runs package-level SDK tests
 3. creates a tarball from `packages/sdk`
 4. installs it in a clean `/tmp` consumer
@@ -46,16 +69,26 @@ npm publish --access public
 ```
 
 Run the baseline checks first. Do not publish straight from an unverified local build.
+Do not treat this private mirror as the npm release source.
 
 ## Recommended release checklist
 
-1. confirm version in [packages/sdk/package.json](/Volumes/ziel/Aionisgo/packages/sdk/package.json)
-2. run `npm run sdk:build`
-3. run `npm run sdk:test`
-4. run `npm run sdk:pack:dry-run`
-5. run `npm run sdk:release:check`
-6. check [packages/sdk/README.md](/Volumes/ziel/Aionisgo/packages/sdk/README.md)
-7. publish from `packages/sdk`
+1. confirm version in [packages/sdk/package.json](../packages/sdk/package.json)
+2. run `npm run sdk:release:status`
+3. run `npm run sdk:release:prepare`
+4. run `npm run sdk:build`
+5. run `npm run sdk:test`
+6. run `npm run sdk:pack:dry-run`
+7. run `npm run sdk:publish:dry-run`
+8. run `npm run sdk:release:check`
+9. check [packages/sdk/README.md](../packages/sdk/README.md)
+10. create and push the release tag
+11. publish from `packages/sdk`
+
+Supporting docs:
+
+1. [docs/SDK_RELEASE_CHECKLIST.md](SDK_RELEASE_CHECKLIST.md)
+2. [docs/SDK_RELEASE_NOTE_TEMPLATE.md](SDK_RELEASE_NOTE_TEMPLATE.md)
 
 ## Non-goals for the current release flow
 

@@ -1,0 +1,47 @@
+{
+  "name": "@cognary/aionis-sdk",
+  "version": "0.1.0-private.0",
+  "private": true,
+  "description": "Private full-runtime SDK for the complete Aionis runtime mainline surface.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cognary/Aionis-runtime.git",
+    "directory": "packages/full-sdk"
+  },
+  "homepage": "https://github.com/Cognary/Aionis-runtime/tree/main/packages/full-sdk",
+  "bugs": {
+    "url": "https://github.com/Cognary/Aionis-runtime/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "test": "node ../../node_modules/tsx/dist/cli.mjs --test test/*.test.ts"
+  },
+  "keywords": [
+    "aionis",
+    "sdk",
+    "runtime",
+    "memory",
+    "governance",
+    "replay"
+  ],
+  "author": "Aionis Core",
+  "license": "Apache-2.0"
+}

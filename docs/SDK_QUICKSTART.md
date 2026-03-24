@@ -1,13 +1,22 @@
-# Aionis SDK Quickstart
+# Aionis Suite Quickstart
 
-This guide is the fastest way to get from a running Aionis Lite runtime to a working `@aionis/sdk` integration.
+This guide is the fastest way to get from a running Aionis Lite runtime to a working `@cognary/aionis` integration.
+
+Private repo note:
+
+1. this quickstart is mirrored here so runtime work can stay aligned with the public SDK surface
+2. the authoritative SDK onboarding path remains the public repo
+
+Package page:
+
+1. [npm: `@cognary/aionis`](https://www.npmjs.com/package/@cognary/aionis)
 
 ## 1. Start the runtime
 
 From the repository:
 
 ```bash
-cd /Volumes/ziel/Aionisgo
+cd /Volumes/ziel/Aionis-runtime
 npm install
 npm run start:lite
 ```
@@ -21,13 +30,32 @@ The default local SDK target is:
 In your own project:
 
 ```bash
-npm install @aionis/sdk
+npm install @cognary/aionis
+```
+
+Optional CLI sanity check:
+
+```bash
+npx @cognary/aionis doctor
+```
+
+Optional runtime launcher if you already have the public repo checked out:
+
+```bash
+npx @cognary/aionis dev --repo /path/to/Aionis
+```
+
+If `3001` is occupied, the CLI will choose a free local port automatically.
+You can also pin one:
+
+```bash
+npx @cognary/aionis dev --repo /path/to/Aionis --port 3101
 ```
 
 ## 3. Create a client
 
 ```ts
-import { createAionisClient } from "@aionis/sdk";
+import { createAionisClient } from "@cognary/aionis";
 
 const aionis = createAionisClient({
   baseUrl: "http://127.0.0.1:3001",
@@ -93,7 +121,7 @@ Current stable SDK v1 methods:
 If you are working from this repository instead of npm:
 
 ```bash
-cd /Volumes/ziel/Aionisgo
+cd /Volumes/ziel/Aionis-runtime
 npm run sdk:build
 npm run start:lite
 ```
@@ -109,4 +137,4 @@ npm run sdk:example:context-assemble
 
 Repository examples are documented here:
 
-1. [examples/sdk/README.md](/Volumes/ziel/Aionisgo/examples/sdk/README.md)
+1. [examples/sdk/README.md](../examples/sdk/README.md)

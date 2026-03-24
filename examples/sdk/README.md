@@ -1,8 +1,12 @@
-# Aionis SDK Examples
+# Aionis Suite SDK Examples
 
-These examples are meant to be run from the repository before `@aionis/sdk` is published.
+These examples are meant to be run from the repository, even though `@cognary/aionis` is now published.
 
-They import the locally built SDK artifact from [packages/sdk/dist](/Volumes/ziel/Aionisgo/packages/sdk/dist), so build the SDK first:
+Package page:
+
+1. [npm: `@cognary/aionis`](https://www.npmjs.com/package/@cognary/aionis)
+
+They import the locally built SDK artifact from [packages/sdk/dist](../../packages/sdk/dist), so build the SDK first:
 
 ```bash
 cd /Volumes/ziel/Aionisgo
@@ -13,7 +17,7 @@ Start the Lite runtime in another terminal:
 
 ```bash
 cd /Volumes/ziel/Aionisgo
-npm run start:lite
+npm run start:lite:sdk-demo
 ```
 
 Defaults:
@@ -22,6 +26,11 @@ Defaults:
 2. `AIONIS_TENANT_ID=default`
 3. `AIONIS_SCOPE=default`
 4. `AIONIS_ACTOR=local-user`
+
+Recommended public-demo runtime:
+
+1. `npm run start:lite:sdk-demo`
+2. this profile keeps the route surface closer to the future public demo shell
 
 Examples:
 
@@ -40,4 +49,4 @@ Notes:
 
 1. The replay example is the only one that is not fully self-seeding. It assumes you already have a pending replay playbook id.
 2. The examples intentionally stay on the route-level SDK surface. They do not reach into runtime internals or Lite stores directly.
-3. Once `@aionis/sdk` is published, the example imports should move from local `dist` paths to `@aionis/sdk`.
+3. Once `@cognary/aionis` is published, the example imports should move from local `dist` paths to `@cognary/aionis`.

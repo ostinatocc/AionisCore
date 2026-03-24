@@ -1,14 +1,18 @@
 {
-  "name": "@aionis/sdk",
-  "version": "0.1.0",
-  "description": "First-party SDK for the Aionis execution-memory runtime.",
+  "name": "@cognary/aionis",
+  "version": "0.1.2",
+  "private": true,
+  "description": "Mirrored Aionis Suite SDK surface for private runtime integration work. Publish from the public Aionis repository only.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "aionis": "dist/cli.js"
+  },
   "sideEffects": false,
   "repository": {
     "type": "git",
-    "url": "https://github.com/Cognary/Aionis.git",
+    "url": "git+https://github.com/Cognary/Aionis.git",
     "directory": "packages/sdk"
   },
   "homepage": "https://github.com/Cognary/Aionis/tree/main/packages/sdk",
@@ -35,7 +39,8 @@
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
     "test": "node ../../node_modules/tsx/dist/cli.mjs --test test/*.test.ts",
-    "pack:dry-run": "npm run build && npm pack --dry-run --json --cache /tmp/aionis-npm-cache"
+    "pack:dry-run": "npm run build && npm pack --dry-run --json --cache /tmp/aionis-npm-cache",
+    "publish:dry-run": "npm run build && npm publish --dry-run"
   },
   "keywords": [
     "aionis",

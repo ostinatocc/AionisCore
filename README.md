@@ -12,7 +12,7 @@ This repository is the source of truth for:
 Public product direction remains:
 
 1. Aionis Runtime
-2. Aionis SDK
+2. Aionis Suite SDK
 3. adapters and integrations later
 
 ## Repository Split
@@ -22,7 +22,7 @@ Public product direction remains:
 
 The public repo should stay focused on:
 
-1. `@aionis/sdk`
+1. `@cognary/aionis`
 2. docs and examples
 3. the `sdk_demo` quickstart shell
 
@@ -71,3 +71,5 @@ npm run -s benchmark:lite:real
 
 Use the public repo for SDK publishing/quickstart work.
 Use this repo for runtime evolution.
+
+The SDK copy inside this private repo is a mirrored integration surface, not the release source of truth.

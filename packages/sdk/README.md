@@ -1,24 +1,19 @@
-# @aionis/sdk
+# @cognary/aionis
 
-First-party SDK for the Aionis execution-memory runtime.
+`@cognary/aionis` is the official TypeScript SDK for **Aionis Suite**.
 
-This package is meant to stay as the primary open developer surface for Aionis, even when stronger runtime learning and governance layers are distributed more selectively.
+Private repo note:
 
-Install:
+1. this copy is mirrored into `Aionis-runtime` for integration work
+2. the public publish source remains [Cognary/Aionis](https://github.com/Cognary/Aionis)
+3. do not publish from `Aionis-runtime`
 
-```bash
-npm install @aionis/sdk
-```
+Package page:
 
-This package is intended to become the primary developer-facing surface for:
+1. [npm: `@cognary/aionis`](https://www.npmjs.com/package/@cognary/aionis)
+2. CLI command: `aionis`
 
-1. writing execution continuity
-2. reading planner-visible workflow and pattern guidance
-3. recording tool feedback
-4. driving replay-governed learning
-5. rehydrating anchor payloads
-
-Current v1 SDK surface:
+It connects to an Aionis runtime and exposes the first stable public SDK surface for:
 
 1. `memory.write`
 2. `memory.planningContext`
@@ -29,75 +24,101 @@ Current v1 SDK surface:
 7. `memory.replay.repairReview`
 8. `memory.anchors.rehydratePayload`
 
-Example:
+## Install
+
+```bash
+npm install @cognary/aionis
+```
+
+Run the CLI without a global install:
+
+```bash
+npx @cognary/aionis doctor
+```
+
+Start the public demo runtime shell from a checked out Aionis repository:
+
+```bash
+npx @cognary/aionis dev --repo /path/to/Aionis
+```
+
+If `3001` is already in use, the CLI now picks a free local port automatically.
+You can also force one:
+
+```bash
+npx @cognary/aionis dev --repo /path/to/Aionis --port 3101
+```
+
+## Quickstart
 
 ```ts
-import { createAionisClient } from "@aionis/sdk";
+import { createAionisClient } from "@cognary/aionis";
 
-const aionis = createAionisClient({
+const client = createAionisClient({
   baseUrl: "http://127.0.0.1:3001",
 });
 
-await aionis.memory.write({
+const result = await client.memory.write({
   tenant_id: "default",
   scope: "default",
-  actor: "sdk-demo",
-  run_id: "run-1",
-  observations: [
-    {
-      kind: "workflow_step",
-      summary: "Fetched a report and normalized it",
-    },
-  ],
+  input_text: "Fix export failure in node tests",
 });
 
-const result = await aionis.memory.planningContext({
-  tenant_id: "default",
-  scope: "default",
-});
+console.log(result);
 ```
 
-Quickstart docs:
+## Local Development
 
-1. [SDK Quickstart](/Volumes/ziel/Aionisgo/docs/SDK_QUICKSTART.md)
-2. [SDK Publishing Guide](/Volumes/ziel/Aionisgo/docs/SDK_PUBLISHING.md)
-3. [Repository SDK examples](/Volumes/ziel/Aionisgo/examples/sdk/README.md)
-4. [Open-core boundary](/Volumes/ziel/Aionisgo/docs/OPEN_CORE_BOUNDARY.md)
+Build the package:
 
-This package is intentionally small at first.
-It wraps the most stable route-level product surfaces without exposing every internal runtime capability.
+```bash
+npm --prefix packages/sdk run build
+```
 
-Repository examples live in [examples/sdk](/Volumes/ziel/Aionisgo/examples/sdk).
-Inside this repository they import the locally built `dist` artifact first; after publish they should import `@aionis/sdk`.
-
-The SDK now also exports first-party typed request/response contracts for the v1 surface, while still allowing additive passthrough fields on route responses.
-
-Local package verification:
+Run package tests:
 
 ```bash
 npm --prefix packages/sdk run test
 ```
 
-Release baseline verification:
+Run the release baseline:
 
 ```bash
-npm run sdk:release:check
+npm run -s sdk:release:check
 ```
 
-That flow builds the SDK, runs package tests, creates a tarball from `packages/sdk`, and verifies a clean install/import smoke test in an isolated `/tmp` workspace outside the repository.
-
-Repository example verification:
+Run a publish dry-run:
 
 ```bash
-npm run sdk:build
-npm run start:lite
+npm run -s sdk:publish:dry-run
 ```
 
-Then in another terminal:
+For real npm release work, use the public repo, not this private mirror.
 
-```bash
-npm run sdk:example:workflow
-npm run sdk:example:tools-feedback
-npm run sdk:example:introspect
-npm run sdk:example:context-assemble
-```
+## CLI
+
+Current thin CLI commands:
+
+1. `aionis doctor`
+2. `aionis example`
+3. `aionis dev --repo /path/to/Aionis`
+4. `aionis dev --repo /path/to/Aionis --port 3101`
+5. `aionis dev --repo /path/to/Aionis --local-process`
+6. `aionis dev --repo /path/to/Aionis --dry-run`
+
+## Examples
+
+Repository examples live under:
+
+1. [examples/sdk/README.md](../../examples/sdk/README.md)
+2. [docs/SDK_QUICKSTART.md](../../docs/SDK_QUICKSTART.md)
+
+Inside this repository they import the locally built `dist` artifact first; after publish they should import `@cognary/aionis`.
+
+## Naming
+
+Public branding:
+
+1. product name: `Aionis Suite`
+2. npm package: `@cognary/aionis`
+3. PyPI package: `cognary-aionis`
