@@ -6,6 +6,7 @@ import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { InMemoryExecutionStateStore } from "../execution/state-store.js";
 import { ExecutionStateV1Schema } from "../execution/types.js";
 import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
+import { buildLiteGovernanceRuntimeProviders } from "../app/governance-runtime-providers.js";
 import { buildHandoffWriteBody, recoverHandoff } from "../memory/handoff.js";
 import type { HandoffRecoverInput, HandoffStoreInput } from "../memory/schemas.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "../memory/write.js";
@@ -94,6 +95,7 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
   const embeddingSurfacePolicy =
     embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
   const writeEmbedder = embeddingSurfacePolicy.providerFor("write_auto_embed", embedder);
+  const governanceProviders = buildLiteGovernanceRuntimeProviders(env);
   const buildPrincipalHandoffWriteBody = (body: HandoffStoreInput, principal: AuthPrincipal | null) => {
     const actorId = typeof body.actor === "string" && body.actor.trim().length > 0 ? body.actor.trim() : null;
     return buildHandoffWriteBody({
@@ -109,6 +111,7 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
       prepared: prepared as any,
       liteWriteStore,
       embedder: writeEmbedder,
+      governanceReviewProviders: governanceProviders.workflowProjection,
       writeOptions: {
         maxTextLen: env.MAX_TEXT_LEN,
         piiRedaction: env.PII_REDACTION,

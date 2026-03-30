@@ -3,6 +3,7 @@ import type pg from "pg";
 import type { Env } from "../config.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
+import { buildLiteGovernanceRuntimeProviders } from "../app/governance-runtime-providers.js";
 import { memoryFindLite } from "../memory/find.js";
 import {
   buildExperienceIntelligenceLite,
@@ -90,6 +91,7 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
   const embeddingSurfacePolicy =
     embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
   const writeEmbedder = embeddingSurfacePolicy.providerFor("write_auto_embed", embedder);
+  const governanceProviders = buildLiteGovernanceRuntimeProviders(env);
 
   const writeDefaults = {
     defaultScope: env.MEMORY_SCOPE,
@@ -102,6 +104,7 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     writeAccessShadowMirrorV2,
     embedder: writeEmbedder,
     liteWriteStore,
+    governanceReviewProviders: governanceProviders.workflowProjection,
   } satisfies SessionWriteOptionsLike;
 
   const runMemoryAccessRoute = async <TResult>(args: {

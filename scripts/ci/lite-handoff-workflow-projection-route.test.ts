@@ -24,7 +24,7 @@ function tmpDbPath(name: string): string {
   return path.join(dir, `${name}.sqlite`);
 }
 
-function buildEnv() {
+function buildEnv(overrides: Record<string, unknown> = {}) {
   return {
     AIONIS_EDITION: "lite",
     MEMORY_AUTH_MODE: "off",
@@ -53,6 +53,8 @@ function buildEnv() {
     MEMORY_RECALL_ADAPTIVE_HARD_CAP_WAIT_MS: 0,
     MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT: "balanced",
     MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT: "balanced",
+    WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: false,
+    ...overrides,
   } as any;
 }
 
@@ -60,8 +62,9 @@ function registerApp(args: {
   app: ReturnType<typeof Fastify>;
   liteWriteStore: ReturnType<typeof createLiteWriteStore>;
   liteRecallStore: ReturnType<typeof createLiteRecallStore>;
+  envOverrides?: Record<string, unknown>;
 }) {
-  const env = buildEnv();
+  const env = buildEnv(args.envOverrides);
   const guards = createRequestGuards({
     env,
     embedder: FakeEmbeddingProvider,
@@ -246,7 +249,14 @@ test("handoff/store projects workflow memory into planner guidance through the g
   const liteWriteStore = createLiteWriteStore(dbPath);
   const liteRecallStore = createLiteRecallStore(dbPath);
   try {
-    registerApp({ app, liteWriteStore, liteRecallStore });
+    registerApp({
+      app,
+      liteWriteStore,
+      liteRecallStore,
+      envOverrides: {
+        WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+      },
+    });
 
     const firstStore = await app.inject({
       method: "POST",

@@ -19,6 +19,7 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { buildAionisUri } from "./uri.js";
 import { commitLitePreparedWriteWithProjection } from "../routes/lite-projected-write.js";
+import type { LiteGovernanceRuntimeProviders } from "../app/governance-runtime-providers.js";
 
 type SessionWriteOptions = {
   defaultScope: string;
@@ -32,6 +33,7 @@ type SessionWriteOptions = {
   embedder: EmbeddingProvider | null;
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
   liteWriteStore?: LiteWriteStore | null;
+  governanceReviewProviders?: LiteGovernanceRuntimeProviders["workflowProjection"];
 };
 
 type SessionEventListOptions = {
@@ -413,6 +415,7 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
           prepared: prepared as any,
           liteWriteStore: opts.liteWriteStore as any,
           embedder: opts.embedder,
+          governanceReviewProviders: opts.governanceReviewProviders,
           writeOptions: {
             maxTextLen: opts.maxTextLen,
             piiRedaction: opts.piiRedaction,
