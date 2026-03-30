@@ -26,6 +26,11 @@
 3. [FULL_SDK_QUICKSTART.md](/Volumes/ziel/AionisTest/Aioniscc/docs/FULL_SDK_QUICKSTART.md)
 4. [apps/lite/README.md](/Volumes/ziel/AionisTest/Aioniscc/apps/lite/README.md)
 
+## Published Packages
+
+1. [packages/full-sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk) -> `@cognary/aionis`
+2. [packages/runtime-core](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core) -> `@cognary/aionis-rtc`
+
 ## Repository Areas
 
 1. [src/memory](/Volumes/ziel/AionisTest/Aioniscc/src/memory)
@@ -34,8 +39,7 @@
 4. [src/store](/Volumes/ziel/AionisTest/Aioniscc/src/store)
 5. [packages/runtime-core](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core)
 6. [packages/full-sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk)
-7. [packages/sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/sdk)
-8. [apps/lite](/Volumes/ziel/AionisTest/Aioniscc/apps/lite)
+7. [apps/lite](/Volumes/ziel/AionisTest/Aioniscc/apps/lite)
 
 ## Validation
 

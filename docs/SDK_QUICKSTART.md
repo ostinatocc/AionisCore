@@ -149,4 +149,3 @@ npm run example:integration:task-start-learning-loop
 Repository examples:
 
 1. [examples/full-sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/examples/full-sdk/README.md)
-2. [examples/sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/examples/sdk/README.md)

@@ -1,13 +1,13 @@
 {
-  "name": "@cognary/aionis-compat-sdk",
+  "name": "@cognary/aionis-internal-sdk",
   "version": "0.1.2",
   "private": true,
-  "description": "Internal compatibility SDK surface for legacy narrow Aionis Core integrations.",
+  "description": "Internal SDK surface for narrow and legacy Aionis Core integrations.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "aionis-compat": "dist/cli.js"
+    "aionis-internal": "dist/cli.js"
   },
   "sideEffects": false,
   "repository": {
@@ -41,7 +41,7 @@
   },
   "keywords": [
     "aionis",
-    "compat-sdk",
+    "internal-sdk",
     "memory",
     "agent",
     "workflow"
