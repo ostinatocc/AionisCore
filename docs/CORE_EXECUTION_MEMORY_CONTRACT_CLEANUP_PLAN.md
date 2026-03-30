@@ -6,12 +6,12 @@ This document turns the `canonical vs transitional` split in the execution-memor
 
 Primary references:
 
-1. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
-2. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
-3. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
-4. [docs/CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md)
-5. [docs/CORE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md)
-6. [docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
+1. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
+2. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+3. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
+4. [docs/CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md](CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md)
+5. [docs/CORE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md](CORE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md)
+6. [docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
 
 ## Purpose
 
@@ -115,10 +115,10 @@ Required changes:
 
 Primary files:
 
-1. [src/memory/schemas.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/schemas.ts)
-2. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
-3. [src/memory/context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
-4. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-runtime-packet-contract.test.ts)
+1. [src/memory/schemas.ts](../src/memory/schemas.ts)
+2. [src/routes/memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
+3. [src/memory/context-orchestrator.ts](../src/memory/context-orchestrator.ts)
+4. [scripts/ci/lite-context-runtime-packet-contract.test.ts](../scripts/ci/lite-context-runtime-packet-contract.test.ts)
 
 Exit criteria:
 
@@ -143,10 +143,10 @@ Required changes:
 
 Primary files:
 
-1. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
-2. [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
-3. [src/memory/context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
-4. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-lifecycle-summary.ts)
+1. [src/routes/memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
+2. [src/app/planning-summary.ts](../src/app/planning-summary.ts)
+3. [src/memory/context-orchestrator.ts](../src/memory/context-orchestrator.ts)
+4. [src/memory/tools-lifecycle-summary.ts](../src/memory/tools-lifecycle-summary.ts)
 
 Exit criteria:
 
@@ -169,11 +169,11 @@ Required changes:
 
 Primary files:
 
-1. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-runtime-packet-contract.test.ts)
-2. [scripts/ci/lite-planning-summary.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-planning-summary.test.ts)
-3. [scripts/ci/lite-tools-pattern-anchor.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-tools-pattern-anchor.test.ts)
-4. [scripts/ci/lite-replay-governed-learning-projection-route.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-replay-governed-learning-projection-route.test.ts)
-5. [scripts/ci/lite-tools-select-route-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-tools-select-route-contract.test.ts)
+1. [scripts/ci/lite-context-runtime-packet-contract.test.ts](../scripts/ci/lite-context-runtime-packet-contract.test.ts)
+2. [scripts/ci/lite-planning-summary.test.ts](../scripts/ci/lite-planning-summary.test.ts)
+3. [scripts/ci/lite-tools-pattern-anchor.test.ts](../scripts/ci/lite-tools-pattern-anchor.test.ts)
+4. [scripts/ci/lite-replay-governed-learning-projection-route.test.ts](../scripts/ci/lite-replay-governed-learning-projection-route.test.ts)
+5. [scripts/ci/lite-tools-select-route-contract.test.ts](../scripts/ci/lite-tools-select-route-contract.test.ts)
 
 Exit criteria:
 
@@ -196,10 +196,10 @@ Required changes:
 
 Primary files:
 
-1. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
-2. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
-3. [docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](/Volumes/ziel/AionisTest/Aioniscc/docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md)
-4. [README.md](/Volumes/ziel/AionisTest/Aioniscc/README.md)
+1. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
+2. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
+3. [docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md)
+4. [README.md](../README.md)
 
 Exit criteria:
 

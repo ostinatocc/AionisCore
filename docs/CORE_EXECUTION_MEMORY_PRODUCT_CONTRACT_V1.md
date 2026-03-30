@@ -6,12 +6,12 @@ This document defines the stable execution-memory contract for `Aionis Core`.
 
 It sits above:
 
-1. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
-2. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
-3. [docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md)
-4. [docs/CORE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md)
-5. [docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
-6. [docs/CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
+1. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+2. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
+3. [docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md](CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md)
+4. [docs/CORE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md](CORE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md)
+5. [docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
+6. [docs/CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
 
 It exists to make one thing explicit:
 
@@ -25,21 +25,21 @@ Status:
 
 Primary runtime references:
 
-1. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
-2. [src/memory/context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
-3. [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
-4. [src/memory/schemas.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/schemas.ts)
-5. [src/memory/tools-select.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-select.ts)
-6. [src/memory/replay.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/replay.ts)
-7. [src/routes/memory-replay-governed.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-replay-governed.ts)
+1. [src/routes/memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
+2. [src/memory/context-orchestrator.ts](../src/memory/context-orchestrator.ts)
+3. [src/app/planning-summary.ts](../src/app/planning-summary.ts)
+4. [src/memory/schemas.ts](../src/memory/schemas.ts)
+5. [src/memory/tools-select.ts](../src/memory/tools-select.ts)
+6. [src/memory/replay.ts](../src/memory/replay.ts)
+7. [src/routes/memory-replay-governed.ts](../src/routes/memory-replay-governed.ts)
 
 Primary test references:
 
-1. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-runtime-packet-contract.test.ts)
-2. [scripts/ci/lite-planning-summary.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-planning-summary.test.ts)
-3. [scripts/ci/lite-tools-pattern-anchor.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-tools-pattern-anchor.test.ts)
-4. [scripts/ci/lite-tools-select-route-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-tools-select-route-contract.test.ts)
-5. [scripts/ci/lite-replay-governed-learning-projection-route.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-replay-governed-learning-projection-route.test.ts)
+1. [scripts/ci/lite-context-runtime-packet-contract.test.ts](../scripts/ci/lite-context-runtime-packet-contract.test.ts)
+2. [scripts/ci/lite-planning-summary.test.ts](../scripts/ci/lite-planning-summary.test.ts)
+3. [scripts/ci/lite-tools-pattern-anchor.test.ts](../scripts/ci/lite-tools-pattern-anchor.test.ts)
+4. [scripts/ci/lite-tools-select-route-contract.test.ts](../scripts/ci/lite-tools-select-route-contract.test.ts)
+5. [scripts/ci/lite-replay-governed-learning-projection-route.test.ts](../scripts/ci/lite-replay-governed-learning-projection-route.test.ts)
 
 ## Product Thesis
 
@@ -123,8 +123,8 @@ Canonical summary objects:
 
 Primary runtime reference:
 
-1. [src/memory/tools-select.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-select.ts)
-2. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-lifecycle-summary.ts)
+1. [src/memory/tools-select.ts](../src/memory/tools-select.ts)
+2. [src/memory/tools-lifecycle-summary.ts](../src/memory/tools-lifecycle-summary.ts)
 
 Primary route contract:
 
@@ -141,8 +141,8 @@ Canonical selector-facing outputs:
 
 Primary runtime reference:
 
-1. [src/memory/replay.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/replay.ts)
-2. [src/routes/memory-replay-governed.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-replay-governed.ts)
+1. [src/memory/replay.ts](../src/memory/replay.ts)
+2. [src/routes/memory-replay-governed.ts](../src/routes/memory-replay-governed.ts)
 
 Primary route contract:
 

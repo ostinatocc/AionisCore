@@ -10,11 +10,11 @@ Status:
 
 Primary implementation references:
 
-1. [src/memory/context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
-2. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
-3. [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
-4. [src/memory/schemas.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/schemas.ts)
-5. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-lifecycle-summary.ts)
+1. [src/memory/context-orchestrator.ts](../src/memory/context-orchestrator.ts)
+2. [src/routes/memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
+3. [src/app/planning-summary.ts](../src/app/planning-summary.ts)
+4. [src/memory/schemas.ts](../src/memory/schemas.ts)
+5. [src/memory/tools-lifecycle-summary.ts](../src/memory/tools-lifecycle-summary.ts)
 
 ## Purpose
 
@@ -48,8 +48,8 @@ Current schema entrypoints:
 
 Companion route-contract reference:
 
-1. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
-2. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
+1. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
+2. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
 
 Interpretation:
 

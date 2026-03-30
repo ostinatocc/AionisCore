@@ -6,13 +6,13 @@ Most files in this directory are implementation plans, validation slices, or pac
 
 ## Keep Active
 
-1. [2026-03-28-experience-intelligence-product-surface.md](/Volumes/ziel/AionisTest/Aioniscc/docs/plans/2026-03-28-experience-intelligence-product-surface.md)
+1. [2026-03-28-experience-intelligence-product-surface.md](2026-03-28-experience-intelligence-product-surface.md)
 
 ## Needs Retitle
 
 These still contain useful reasoning, but their titles or framing lag behind the current `Aionis Core` identity.
 
-1. [2026-03-23-aionis-sdk-release-design.md](/Volumes/ziel/AionisTest/Aioniscc/docs/plans/2026-03-23-aionis-sdk-release-design.md)
+1. [2026-03-23-aionis-sdk-release-design.md](2026-03-23-aionis-sdk-release-design.md)
 
 ## Historical Archive
 

@@ -56,7 +56,7 @@ This means Aionis Core treats the LLM as a bounded adjudicator inside a governed
 
 Practical trigger reference:
 
-1. [docs/CORE_MEMORY_TRIGGER_MATRIX.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_MEMORY_TRIGGER_MATRIX.md)
+1. [docs/CORE_MEMORY_TRIGGER_MATRIX.md](CORE_MEMORY_TRIGGER_MATRIX.md)
 
 ## Why This Model Exists
 

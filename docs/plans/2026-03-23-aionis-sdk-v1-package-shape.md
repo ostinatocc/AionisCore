@@ -18,7 +18,7 @@ Its goal is to answer:
 
 Current package state:
 
-1. [packages/runtime-core](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core) already exists
+1. [packages/runtime-core](../../packages/runtime-core) already exists
 2. `@ostinato/aionis-rtc` is currently a shared-boundary package, not the main SDK surface
 3. the repository's strongest stable public behavior still lives at the HTTP route/runtime layer
 

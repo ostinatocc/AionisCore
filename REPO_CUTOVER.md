@@ -12,6 +12,6 @@ Current repository posture:
 
 For current repository structure and release posture, use:
 
-1. [README.md](/Volumes/ziel/AionisTest/Aioniscc/README.md)
-2. [docs/README.md](/Volumes/ziel/AionisTest/Aioniscc/docs/README.md)
-3. [docs/SDK_PUBLISHING.md](/Volumes/ziel/AionisTest/Aioniscc/docs/SDK_PUBLISHING.md)
+1. [README.md](README.md)
+2. [docs/README.md](docs/README.md)
+3. [docs/SDK_PUBLISHING.md](docs/SDK_PUBLISHING.md)

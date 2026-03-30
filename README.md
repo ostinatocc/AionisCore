@@ -47,25 +47,25 @@ console.log(taskStart.first_action);
 
 ## Public Packages
 
-1. [packages/full-sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk) -> `@ostinato/aionis`
-2. [packages/runtime-core](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core) -> `@ostinato/aionis-rtc`
+1. [packages/full-sdk](packages/full-sdk) -> `@ostinato/aionis`
+2. [packages/runtime-core](packages/runtime-core) -> `@ostinato/aionis-rtc`
 
 ## Start Here
 
-1. [SDK Quickstart](/Volumes/ziel/AionisTest/Aioniscc/docs/SDK_QUICKSTART.md)
-2. [SDK README](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk/README.md)
-3. [Docs Overview](/Volumes/ziel/AionisTest/Aioniscc/docs/README.md)
-4. [Bundled SDK Examples](/Volumes/ziel/AionisTest/Aioniscc/examples/full-sdk/README.md)
+1. [SDK Quickstart](docs/SDK_QUICKSTART.md)
+2. [SDK README](packages/full-sdk/README.md)
+3. [Docs Overview](docs/README.md)
+4. [Bundled SDK Examples](examples/full-sdk/README.md)
 
 ## Core Areas
 
-1. [src/memory](/Volumes/ziel/AionisTest/Aioniscc/src/memory)
-2. [src/routes](/Volumes/ziel/AionisTest/Aioniscc/src/routes)
-3. [src/execution](/Volumes/ziel/AionisTest/Aioniscc/src/execution)
-4. [src/store](/Volumes/ziel/AionisTest/Aioniscc/src/store)
-5. [packages/runtime-core](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core)
-6. [packages/full-sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk)
-7. [apps/lite](/Volumes/ziel/AionisTest/Aioniscc/apps/lite)
+1. [src/memory](src/memory)
+2. [src/routes](src/routes)
+3. [src/execution](src/execution)
+4. [src/store](src/store)
+5. [packages/runtime-core](packages/runtime-core)
+6. [packages/full-sdk](packages/full-sdk)
+7. [apps/lite](apps/lite)
 
 ## Validation
 

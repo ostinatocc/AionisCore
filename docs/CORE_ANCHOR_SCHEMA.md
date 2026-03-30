@@ -6,8 +6,8 @@ This document defines the first concrete `anchor schema` for `Aionis Core`.
 
 Related governance reference:
 
-1. [docs/CORE_MEMORY_GOVERNANCE_MODEL.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_MEMORY_GOVERNANCE_MODEL.md)
-2. [docs/CORE_MEMORY_TRIGGER_MATRIX.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_MEMORY_TRIGGER_MATRIX.md)
+1. [docs/CORE_MEMORY_GOVERNANCE_MODEL.md](CORE_MEMORY_GOVERNANCE_MODEL.md)
+2. [docs/CORE_MEMORY_TRIGGER_MATRIX.md](CORE_MEMORY_TRIGGER_MATRIX.md)
 
 The design goal is simple:
 

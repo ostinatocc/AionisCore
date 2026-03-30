@@ -4,7 +4,7 @@ Last reviewed: 2026-03-20
 
 This document describes the current local-runtime architecture inside the `Aionis Core` repository and records the present completion level of each major capability area.
 
-For the endpoint-level public surface, see [docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](/Volumes/ziel/AionisTest/Aioniscc/docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md).
+For the endpoint-level public surface, see [docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md).
 
 ## Executive Summary
 

@@ -10,11 +10,11 @@ It exists to answer one practical question:
 
 Primary references:
 
-1. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
-2. [docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md)
-3. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
-4. [src/memory/context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
-5. [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
+1. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
+2. [docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md](CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md)
+3. [src/routes/memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
+4. [src/memory/context-orchestrator.ts](../src/memory/context-orchestrator.ts)
+5. [src/app/planning-summary.ts](../src/app/planning-summary.ts)
 
 ## Audit Status
 
@@ -25,10 +25,10 @@ Status:
 Current implementation note:
 
 1. `planning_context` and `context_assemble` now emit packet mirrors through one shared helper:
-   [buildPlannerPacketResponseSurface()](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
+   [buildPlannerPacketResponseSurface()](../src/routes/memory-context-runtime.ts)
 2. this removes one clear source of accidental response-shape drift between the two route handlers
 3. execution-memory summary families are now also produced through one shared bundle:
-   [buildExecutionMemorySummaryBundle()](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
+   [buildExecutionMemorySummaryBundle()](../src/app/planning-summary.ts)
 4. the default planner/context routes no longer emit top-level full collection mirrors or `action_recall_packet`
 5. heavy collection inspection now belongs on introspection or internal surfaces instead of the default planner/context response
 
@@ -141,11 +141,11 @@ Reason:
 This audit already removed one implementation-level duplicate:
 
 1. `planning_context` and `context_assemble` no longer hand-maintain separate field spreads for planner packet mirrors
-2. both now use the same response-surface helper in [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
+2. both now use the same response-surface helper in [src/routes/memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
 3. `execution_kernel` and `planning_summary` no longer each hand-assemble the same execution-memory summary family
-4. both now consume the same summary bundle logic in [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
+4. both now consume the same summary bundle logic in [src/app/planning-summary.ts](../src/app/planning-summary.ts)
 5. `execution_introspection` no longer hand-assembles a separate signal/lifecycle summary family
-6. it now reuses the same summary bundle logic in [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
+6. it now reuses the same summary bundle logic in [src/app/planning-summary.ts](../src/app/planning-summary.ts)
 7. the default planner/context routes no longer re-expose packet sections as top-level full collection fields
 
 This is an implementation cleanup, not a public contract change.

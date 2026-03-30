@@ -10,12 +10,12 @@ This document turns `V3` of the foundation memory roadmap into an implementation
 
 Primary reference:
 
-1. [docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
-2. [docs/CORE_CONTINUITY_STRATEGY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_CONTINUITY_STRATEGY.md)
-3. [docs/CORE_MEMORY_GOVERNANCE_MODEL.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_MEMORY_GOVERNANCE_MODEL.md)
-4. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
-5. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
-6. [docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md)
+1. [docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
+2. [docs/CORE_CONTINUITY_STRATEGY.md](CORE_CONTINUITY_STRATEGY.md)
+3. [docs/CORE_MEMORY_GOVERNANCE_MODEL.md](CORE_MEMORY_GOVERNANCE_MODEL.md)
+4. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+5. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
+6. [docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md](CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md)
 
 ## V3 Objective
 
@@ -70,27 +70,27 @@ What is still missing is the broader automatic workflow-production path beyond e
 
 What is now also clearly missing is the rest of a production-hardened pattern trust model. The current benchmark suite proves the trust loop is real, and promotion, contested recovery, and task-affinity-weighted selector reuse are now all live. The next hardening slice is to widen benchmark coverage and finish contract locking around the hardened model, tracked in:
 
-1. [docs/plans/2026-03-21-lite-pattern-trust-robustness-spec.md](/Volumes/ziel/AionisTest/Aioniscc/docs/plans/2026-03-21-lite-pattern-trust-robustness-spec.md)
-2. [docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md](/Volumes/ziel/AionisTest/Aioniscc/docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md)
+1. [docs/plans/2026-03-21-lite-pattern-trust-robustness-spec.md](plans/2026-03-21-lite-pattern-trust-robustness-spec.md)
+2. [docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md](plans/2026-03-21-lite-pattern-trust-hardening-plan.md)
 
 Current implementation references:
 
-1. [src/memory/replay.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/replay.ts)
-2. [src/memory/tools-feedback.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-feedback.ts)
-3. [src/memory/tools-pattern-anchor.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-pattern-anchor.ts)
-4. [src/memory/tools-select.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-select.ts)
-5. [src/store/recall-access.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/recall-access.ts)
-6. [src/store/lite-recall-store.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/lite-recall-store.ts)
-7. [src/memory/runtime-tool-hints.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/runtime-tool-hints.ts)
-8. [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
-9. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-lifecycle-summary.ts)
-10. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
-11. [scripts/ci/lite-tools-pattern-anchor.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-tools-pattern-anchor.test.ts)
-12. [scripts/ci/lite-replay-anchor.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-replay-anchor.test.ts)
-13. [scripts/ci/lite-planning-summary.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-planning-summary.test.ts)
-14. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-runtime-packet-contract.test.ts)
-15. [src/memory/workflow-write-projection.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/workflow-write-projection.ts)
-16. [scripts/ci/lite-memory-write-workflow-projection-route.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-memory-write-workflow-projection-route.test.ts)
+1. [src/memory/replay.ts](../src/memory/replay.ts)
+2. [src/memory/tools-feedback.ts](../src/memory/tools-feedback.ts)
+3. [src/memory/tools-pattern-anchor.ts](../src/memory/tools-pattern-anchor.ts)
+4. [src/memory/tools-select.ts](../src/memory/tools-select.ts)
+5. [src/store/recall-access.ts](../src/store/recall-access.ts)
+6. [src/store/lite-recall-store.ts](../src/store/lite-recall-store.ts)
+7. [src/memory/runtime-tool-hints.ts](../src/memory/runtime-tool-hints.ts)
+8. [src/app/planning-summary.ts](../src/app/planning-summary.ts)
+9. [src/memory/tools-lifecycle-summary.ts](../src/memory/tools-lifecycle-summary.ts)
+10. [src/routes/memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
+11. [scripts/ci/lite-tools-pattern-anchor.test.ts](../scripts/ci/lite-tools-pattern-anchor.test.ts)
+12. [scripts/ci/lite-replay-anchor.test.ts](../scripts/ci/lite-replay-anchor.test.ts)
+13. [scripts/ci/lite-planning-summary.test.ts](../scripts/ci/lite-planning-summary.test.ts)
+14. [scripts/ci/lite-context-runtime-packet-contract.test.ts](../scripts/ci/lite-context-runtime-packet-contract.test.ts)
+15. [src/memory/workflow-write-projection.ts](../src/memory/workflow-write-projection.ts)
+16. [scripts/ci/lite-memory-write-workflow-projection-route.test.ts](../scripts/ci/lite-memory-write-workflow-projection-route.test.ts)
 
 ## Scope
 
@@ -134,8 +134,8 @@ Make `event -> workflow candidate -> workflow anchor` a more explicit and govern
 
 ### Primary files
 
-1. [src/memory/replay.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/replay.ts)
-2. [src/memory/schemas.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/schemas.ts)
+1. [src/memory/replay.ts](../src/memory/replay.ts)
+2. [src/memory/schemas.ts](../src/memory/schemas.ts)
 
 ### Output expectations
 
@@ -161,9 +161,9 @@ Turn pattern reuse into an explicit credibility state machine rather than a thin
 
 ### Primary files
 
-1. [src/memory/tools-pattern-anchor.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-pattern-anchor.ts)
-2. [src/memory/schemas.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/schemas.ts)
-3. [src/memory/tools-feedback.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-feedback.ts)
+1. [src/memory/tools-pattern-anchor.ts](../src/memory/tools-pattern-anchor.ts)
+2. [src/memory/schemas.ts](../src/memory/schemas.ts)
+3. [src/memory/tools-feedback.ts](../src/memory/tools-feedback.ts)
 
 ### Output expectations
 
@@ -185,11 +185,11 @@ Ensure negative evidence changes all runtime surfaces coherently.
 
 ### Primary files
 
-1. [src/store/recall-access.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/recall-access.ts)
-2. [src/store/lite-recall-store.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/lite-recall-store.ts)
-3. [src/memory/tools-select.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-select.ts)
-4. [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
-5. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-lifecycle-summary.ts)
+1. [src/store/recall-access.ts](../src/store/recall-access.ts)
+2. [src/store/lite-recall-store.ts](../src/store/lite-recall-store.ts)
+3. [src/memory/tools-select.ts](../src/memory/tools-select.ts)
+4. [src/app/planning-summary.ts](../src/app/planning-summary.ts)
+5. [src/memory/tools-lifecycle-summary.ts](../src/memory/tools-lifecycle-summary.ts)
 
 ### Output expectations
 
@@ -212,9 +212,9 @@ Introduce explicit low-cost maintenance behavior for execution-memory value.
 
 ### Primary files
 
-1. [src/memory/tools-pattern-anchor.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-pattern-anchor.ts)
-2. [src/memory/replay.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/replay.ts)
-3. [docs/CORE_CONTINUITY_STRATEGY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_CONTINUITY_STRATEGY.md)
+1. [src/memory/tools-pattern-anchor.ts](../src/memory/tools-pattern-anchor.ts)
+2. [src/memory/replay.ts](../src/memory/replay.ts)
+3. [docs/CORE_CONTINUITY_STRATEGY.md](CORE_CONTINUITY_STRATEGY.md)
 
 ### Output expectations
 
@@ -236,10 +236,10 @@ Expose lifecycle and credibility state more directly to planner/runtime consumer
 
 ### Primary files
 
-1. [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
-2. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
-3. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-lifecycle-summary.ts)
-4. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+1. [src/app/planning-summary.ts](../src/app/planning-summary.ts)
+2. [src/routes/memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
+3. [src/memory/tools-lifecycle-summary.ts](../src/memory/tools-lifecycle-summary.ts)
+4. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
 
 ### Output expectations
 
@@ -262,10 +262,10 @@ Lock V3 credibility and lifecycle behavior down as a contract.
 
 ### Primary files
 
-1. [scripts/ci/lite-tools-pattern-anchor.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-tools-pattern-anchor.test.ts)
-2. [scripts/ci/lite-replay-anchor.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-replay-anchor.test.ts)
-3. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-runtime-packet-contract.test.ts)
-4. [scripts/ci/lite-planning-summary.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-planning-summary.test.ts)
+1. [scripts/ci/lite-tools-pattern-anchor.test.ts](../scripts/ci/lite-tools-pattern-anchor.test.ts)
+2. [scripts/ci/lite-replay-anchor.test.ts](../scripts/ci/lite-replay-anchor.test.ts)
+3. [scripts/ci/lite-context-runtime-packet-contract.test.ts](../scripts/ci/lite-context-runtime-packet-contract.test.ts)
+4. [scripts/ci/lite-planning-summary.test.ts](../scripts/ci/lite-planning-summary.test.ts)
 
 ## Recommended Delivery Order
 

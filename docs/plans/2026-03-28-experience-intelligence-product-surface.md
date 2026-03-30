@@ -164,8 +164,8 @@ Current benchmark metrics:
 
 These metrics are now reported by:
 
-- [lite-real-task-benchmark.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/lite-real-task-benchmark.ts)
-- [LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md)
+- [lite-real-task-benchmark.ts](../../scripts/lite-real-task-benchmark.ts)
+- [LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md](../LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md)
 
 Current repeated-task fixtures now span five families:
 

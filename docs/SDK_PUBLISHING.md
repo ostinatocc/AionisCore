@@ -4,8 +4,8 @@ This document defines the release checklist for the public Aionis Core npm packa
 
 ## Public package set
 
-1. [@ostinato/aionis](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk/package.json)
-2. [@ostinato/aionis-rtc](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core/package.json)
+1. [@ostinato/aionis](../packages/full-sdk/package.json)
+2. [@ostinato/aionis-rtc](../packages/runtime-core/package.json)
 
 ## Release goals
 
@@ -74,7 +74,7 @@ npm publish --access public
 
 ## Recommended release checklist
 
-1. confirm versions in [packages/full-sdk/package.json](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk/package.json) and [packages/runtime-core/package.json](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core/package.json)
+1. confirm versions in [packages/full-sdk/package.json](../packages/full-sdk/package.json) and [packages/runtime-core/package.json](../packages/runtime-core/package.json)
 2. run `npm run sdk:build`
 3. run `npm run sdk:test`
 4. run `npm run sdk:pack:dry-run`
@@ -85,6 +85,6 @@ npm publish --access public
 9. run `npm run runtime-core:publish:dry-run`
 10. run `npm run runtime-core:release:check`
 11. run `npm run packages:release:check`
-12. check [packages/full-sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk/README.md) and [packages/runtime-core/README.md](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core/README.md)
+12. check [packages/full-sdk/README.md](../packages/full-sdk/README.md) and [packages/runtime-core/README.md](../packages/runtime-core/README.md)
 13. create and push the release tag
 14. publish each package from its package directory

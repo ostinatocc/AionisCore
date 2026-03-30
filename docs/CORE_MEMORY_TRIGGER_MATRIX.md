@@ -25,9 +25,9 @@ This matrix defines when Aionis Core should:
 
 This document should be treated as an execution-oriented companion to:
 
-1. [docs/CORE_MEMORY_GOVERNANCE_MODEL.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_MEMORY_GOVERNANCE_MODEL.md)
-2. [docs/CORE_CONTINUITY_STRATEGY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_CONTINUITY_STRATEGY.md)
-3. [docs/CORE_ANCHOR_SCHEMA.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_ANCHOR_SCHEMA.md)
+1. [docs/CORE_MEMORY_GOVERNANCE_MODEL.md](CORE_MEMORY_GOVERNANCE_MODEL.md)
+2. [docs/CORE_CONTINUITY_STRATEGY.md](CORE_CONTINUITY_STRATEGY.md)
+3. [docs/CORE_ANCHOR_SCHEMA.md](CORE_ANCHOR_SCHEMA.md)
 
 ## Trigger Classes
 

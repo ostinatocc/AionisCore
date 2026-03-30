@@ -10,9 +10,9 @@ This document turns `V1` of the foundation memory roadmap into an implementation
 
 Primary reference:
 
-1. [docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
-2. [docs/CORE_CONTINUITY_STRATEGY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_CONTINUITY_STRATEGY.md)
-3. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+1. [docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
+2. [docs/CORE_CONTINUITY_STRATEGY.md](CORE_CONTINUITY_STRATEGY.md)
+3. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
 
 ## V1 Objective
 
@@ -44,16 +44,16 @@ Completed work packages:
 
 Current implementation references:
 
-1. [src/memory/recall.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/recall.ts)
-2. [src/memory/context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
-3. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
-4. [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
-5. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-lifecycle-summary.ts)
-6. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-runtime-packet-contract.test.ts)
+1. [src/memory/recall.ts](../src/memory/recall.ts)
+2. [src/memory/context-orchestrator.ts](../src/memory/context-orchestrator.ts)
+3. [src/routes/memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
+4. [src/app/planning-summary.ts](../src/app/planning-summary.ts)
+5. [src/memory/tools-lifecycle-summary.ts](../src/memory/tools-lifecycle-summary.ts)
+6. [scripts/ci/lite-context-runtime-packet-contract.test.ts](../scripts/ci/lite-context-runtime-packet-contract.test.ts)
 
 Current contract references:
 
-1. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+1. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
 
 Residual follow-up:
 
@@ -113,9 +113,9 @@ Introduce an explicit internal split between action recall and knowledge recall.
 
 ### Primary files
 
-1. [src/memory/recall.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/recall.ts)
-2. [src/store/recall-access.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/recall-access.ts)
-3. [src/store/lite-recall-store.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/lite-recall-store.ts)
+1. [src/memory/recall.ts](../src/memory/recall.ts)
+2. [src/store/recall-access.ts](../src/store/recall-access.ts)
+3. [src/store/lite-recall-store.ts](../src/store/lite-recall-store.ts)
 
 ### Output expectations
 
@@ -139,9 +139,9 @@ Make planning-oriented routes prefer action-oriented seeds before broad semantic
 
 ### Primary files
 
-1. [src/memory/recall.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/recall.ts)
-2. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
-3. [src/memory/runtime-tool-hints.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/runtime-tool-hints.ts)
+1. [src/memory/recall.ts](../src/memory/recall.ts)
+2. [src/routes/memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
+3. [src/memory/runtime-tool-hints.ts](../src/memory/runtime-tool-hints.ts)
 
 ### Output expectations
 
@@ -168,9 +168,9 @@ Turn context assembly into a stable planner packet instead of a mixed bag of use
 
 ### Primary files
 
-1. [src/memory/context.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context.ts)
-2. [src/memory/context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
-3. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
+1. [src/memory/context.ts](../src/memory/context.ts)
+2. [src/memory/context-orchestrator.ts](../src/memory/context-orchestrator.ts)
+3. [src/routes/memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
 
 ### Output expectations
 
@@ -196,9 +196,9 @@ Make the packet explain itself.
 
 ### Primary files
 
-1. [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
-2. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-lifecycle-summary.ts)
-3. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
+1. [src/app/planning-summary.ts](../src/app/planning-summary.ts)
+2. [src/memory/tools-lifecycle-summary.ts](../src/memory/tools-lifecycle-summary.ts)
+3. [src/routes/memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
 
 ### Output expectations
 
@@ -224,9 +224,9 @@ Lock the new runtime behavior down as contract, not aspiration.
 
 ### Primary files
 
-1. [scripts/ci/lite-runtime-tool-hints.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-runtime-tool-hints.test.ts)
-2. [scripts/ci/lite-planning-summary.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-planning-summary.test.ts)
-3. new packet-oriented tests under [scripts/ci](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci)
+1. [scripts/ci/lite-runtime-tool-hints.test.ts](../scripts/ci/lite-runtime-tool-hints.test.ts)
+2. [scripts/ci/lite-planning-summary.test.ts](../scripts/ci/lite-planning-summary.test.ts)
+3. new packet-oriented tests under [scripts/ci](../scripts/ci)
 
 ## Recommended Delivery Order
 

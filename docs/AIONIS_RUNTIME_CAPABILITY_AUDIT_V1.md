@@ -53,9 +53,9 @@ This audit uses four labels:
 
 The core self-description is already clear:
 
-1. [package.json](/Volumes/ziel/AionisTest/Aioniscc/package.json)
-2. [RUNTIME_MAINLINE.md](/Volumes/ziel/AionisTest/Aioniscc/docs/RUNTIME_MAINLINE.md)
-3. [OPEN_CORE_BOUNDARY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/OPEN_CORE_BOUNDARY.md)
+1. [package.json](../package.json)
+2. [RUNTIME_MAINLINE.md](RUNTIME_MAINLINE.md)
+3. [OPEN_CORE_BOUNDARY.md](OPEN_CORE_BOUNDARY.md)
 
 It is shaped as an execution-memory-first kernel with replay, handoff, governance, and workflow learning.
 
@@ -67,8 +67,8 @@ Status: `real_and_exposed`
 
 Primary evidence:
 
-1. [sessions.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/sessions.ts)
-2. [memory-access.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-access.ts)
+1. [sessions.ts](../src/memory/sessions.ts)
+2. [memory-access.ts](../src/routes/memory-access.ts)
 
 What is real:
 
@@ -95,11 +95,11 @@ Status: `real_and_exposed`
 
 Primary evidence:
 
-1. [recall.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/recall.ts)
-2. [find.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/find.ts)
-3. [resolve.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/resolve.ts)
-4. [memory-recall.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-recall.ts)
-5. [memory-access.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-access.ts)
+1. [recall.ts](../src/memory/recall.ts)
+2. [find.ts](../src/memory/find.ts)
+3. [resolve.ts](../src/memory/resolve.ts)
+4. [memory-recall.ts](../src/routes/memory-recall.ts)
+5. [memory-access.ts](../src/routes/memory-access.ts)
 
 What is real:
 
@@ -119,10 +119,10 @@ Status: `real_and_exposed`
 
 Primary evidence:
 
-1. [memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
-2. [context.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context.ts)
-3. [context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
-4. [CORE_TESTING_STRATEGY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_TESTING_STRATEGY.md)
+1. [memory-context-runtime.ts](../src/routes/memory-context-runtime.ts)
+2. [context.ts](../src/memory/context.ts)
+3. [context-orchestrator.ts](../src/memory/context-orchestrator.ts)
+4. [CORE_TESTING_STRATEGY.md](CORE_TESTING_STRATEGY.md)
 
 What is real:
 
@@ -143,8 +143,8 @@ Status: `real_and_exposed`
 
 Primary evidence:
 
-1. [handoff.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/handoff.ts)
-2. [handoff.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/handoff.ts)
+1. [handoff.ts](../src/memory/handoff.ts)
+2. [handoff.ts](../src/routes/handoff.ts)
 
 What is real:
 
@@ -168,9 +168,9 @@ Status: `real_and_exposed`
 
 Primary evidence:
 
-1. [replay.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/replay.ts)
-2. [memory-replay-core.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-replay-core.ts)
-3. [memory-replay-governed.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-replay-governed.ts)
+1. [replay.ts](../src/memory/replay.ts)
+2. [memory-replay-core.ts](../src/routes/memory-replay-core.ts)
+3. [memory-replay-governed.ts](../src/routes/memory-replay-governed.ts)
 
 What is real:
 
@@ -197,9 +197,9 @@ Status: `real_but_not_activated_in_claude_code`
 
 Primary evidence:
 
-1. [replay-learning.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/replay-learning.ts)
-2. [workflow-promotion-governance.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/workflow-promotion-governance.ts)
-3. [workflow-write-projection.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/workflow-write-projection.ts)
+1. [replay-learning.ts](../src/memory/replay-learning.ts)
+2. [workflow-promotion-governance.ts](../src/memory/workflow-promotion-governance.ts)
+3. [workflow-write-projection.ts](../src/memory/workflow-write-projection.ts)
 
 What is real:
 
@@ -220,9 +220,9 @@ Status: `real_and_exposed`
 
 Primary evidence:
 
-1. [tools-feedback.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-feedback.ts)
-2. [tools-pattern-anchor.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-pattern-anchor.ts)
-3. [memory-feedback-tools.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-feedback-tools.ts)
+1. [tools-feedback.ts](../src/memory/tools-feedback.ts)
+2. [tools-pattern-anchor.ts](../src/memory/tools-pattern-anchor.ts)
+3. [memory-feedback-tools.ts](../src/routes/memory-feedback-tools.ts)
 
 What is real:
 
@@ -251,12 +251,12 @@ Status: `real_and_exposed`
 
 Primary evidence:
 
-1. [context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
-2. [layer-policy.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/layer-policy.ts)
-3. [rehydrate.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/rehydrate.ts)
-4. [rehydrate-anchor.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/rehydrate-anchor.ts)
-5. [memory-lifecycle.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-lifecycle.ts)
-6. [embedded-memory-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/embedded-memory-runtime.ts)
+1. [context-orchestrator.ts](../src/memory/context-orchestrator.ts)
+2. [layer-policy.ts](../src/memory/layer-policy.ts)
+3. [rehydrate.ts](../src/memory/rehydrate.ts)
+4. [rehydrate-anchor.ts](../src/memory/rehydrate-anchor.ts)
+5. [memory-lifecycle.ts](../src/routes/memory-lifecycle.ts)
+6. [embedded-memory-runtime.ts](../src/store/embedded-memory-runtime.ts)
 
 What is real:
 
@@ -279,11 +279,11 @@ Status: `real_and_exposed`
 
 Primary evidence:
 
-1. [governance-operation-runner.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/governance-operation-runner.ts)
-2. [governance-model-client.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/governance-model-client.ts)
-3. [governance-model-client-http.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/governance-model-client-http.ts)
-4. [promote-memory-governance.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/promote-memory-governance.ts)
-5. [form-pattern-governance.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/form-pattern-governance.ts)
+1. [governance-operation-runner.ts](../src/memory/governance-operation-runner.ts)
+2. [governance-model-client.ts](../src/memory/governance-model-client.ts)
+3. [governance-model-client-http.ts](../src/memory/governance-model-client-http.ts)
+4. [promote-memory-governance.ts](../src/memory/promote-memory-governance.ts)
+5. [form-pattern-governance.ts](../src/memory/form-pattern-governance.ts)
 
 What is real:
 
@@ -303,9 +303,9 @@ Status: `real_and_exposed`
 
 Primary evidence:
 
-1. [sandbox.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/sandbox.ts)
-2. [memory-sandbox.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-sandbox.ts)
-3. [runtime-services.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/runtime-services.ts)
+1. [sandbox.ts](../src/memory/sandbox.ts)
+2. [memory-sandbox.ts](../src/routes/memory-sandbox.ts)
+3. [runtime-services.ts](../src/app/runtime-services.ts)
 
 What is real:
 
@@ -327,9 +327,9 @@ Status: `lite_kernel_only`
 
 Primary evidence:
 
-1. [automation-lite.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/automation-lite.ts)
-2. [automations.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/automations.ts)
-3. [lite-automation-kernel.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-automation-kernel.test.ts)
+1. [automation-lite.ts](../src/memory/automation-lite.ts)
+2. [automations.ts](../src/routes/automations.ts)
+3. [lite-automation-kernel.test.ts](../scripts/ci/lite-automation-kernel.test.ts)
 
 What is real:
 
@@ -357,9 +357,9 @@ Status: `real_and_exposed`
 
 Primary evidence:
 
-1. [control-plane.ts](/Volumes/ziel/AionisTest/Aioniscc/src/control-plane.ts)
-2. [http-observability.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/http-observability.ts)
-3. [request-guards.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/request-guards.ts)
+1. [control-plane.ts](../src/control-plane.ts)
+2. [http-observability.ts](../src/app/http-observability.ts)
+3. [request-guards.ts](../src/app/request-guards.ts)
 
 What is real:
 
@@ -380,9 +380,9 @@ It is also validated in layers.
 
 Primary evidence:
 
-1. [CORE_TESTING_STRATEGY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_TESTING_STRATEGY.md)
-2. [LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md)
-3. `41` files under [scripts/ci](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci)
+1. [CORE_TESTING_STRATEGY.md](CORE_TESTING_STRATEGY.md)
+2. [LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md](LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md)
+3. `41` files under [scripts/ci](../scripts/ci)
 
 Current validation signals:
 
