@@ -2,7 +2,7 @@
 
 These examples use the main Aionis Core SDK package:
 
-- `@cognary/aionis`
+- `@ostinato/aionis`
 
 Build the SDK first:
 

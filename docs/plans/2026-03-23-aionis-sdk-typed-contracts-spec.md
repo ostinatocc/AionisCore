@@ -4,7 +4,7 @@ Date: 2026-03-23
 
 ## Goal
 
-Move the first `@cognary/aionis` surface from generic `payload -> response` pass-through functions to stable route-level typed contracts.
+Move the first `@ostinato/aionis` surface from generic `payload -> response` pass-through functions to stable route-level typed contracts.
 
 ## Scope
 

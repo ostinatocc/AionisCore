@@ -28,8 +28,8 @@
 
 ## Published Packages
 
-1. [packages/full-sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk) -> `@cognary/aionis`
-2. [packages/runtime-core](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core) -> `@cognary/aionis-rtc`
+1. [packages/full-sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk) -> `@ostinato/aionis`
+2. [packages/runtime-core](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core) -> `@ostinato/aionis-rtc`
 
 ## Repository Areas
 

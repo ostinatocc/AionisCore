@@ -1,6 +1,6 @@
 # Aionis Core SDK Quickstart
 
-This guide is the fastest way to get from a running Aionis Core runtime to a working `@cognary/aionis` integration.
+This guide is the fastest way to get from a running Aionis Core runtime to a working `@ostinato/aionis` integration.
 
 ## 1. Start Aionis Core
 
@@ -19,25 +19,25 @@ Default local SDK target:
 In your own project:
 
 ```bash
-npm install @cognary/aionis
+npm install @ostinato/aionis
 ```
 
 Optional CLI sanity check:
 
 ```bash
-npx @cognary/aionis doctor
+npx @ostinato/aionis doctor
 ```
 
 Optional runtime launcher:
 
 ```bash
-npx @cognary/aionis dev --repo /path/to/Aionis --port 3101
+npx @ostinato/aionis dev --repo /path/to/Aionis --port 3101
 ```
 
 ## 3. Create a client
 
 ```ts
-import { createAionisClient } from "@cognary/aionis";
+import { createAionisClient } from "@ostinato/aionis";
 
 const aionis = createAionisClient({
   baseUrl: "http://127.0.0.1:3001",

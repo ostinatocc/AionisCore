@@ -12,9 +12,9 @@ import {
 
 const require = createRequire(import.meta.url);
 const packageJson = require("../package.json") as { name?: string; version?: string };
-const PACKAGE_NAME = packageJson.name ?? "@cognary/aionis";
+const PACKAGE_NAME = packageJson.name ?? "@ostinato/aionis";
 const PACKAGE_VERSION = packageJson.version ?? "0.1.0";
-const PACKAGE_PAGE = "https://www.npmjs.com/package/@cognary/aionis";
+const PACKAGE_PAGE = "https://www.npmjs.com/package/@ostinato/aionis";
 const REPO_URL = "https://github.com/Cognary/Aionis";
 
 async function main() {
@@ -93,7 +93,7 @@ function runExample() {
     `   npx ${PACKAGE_NAME} dev --repo /path/to/Aionis`,
     "",
     "3. Connect from your app:",
-    "   import { createAionisClient } from \"@cognary/aionis\";",
+    "   import { createAionisClient } from \"@ostinato/aionis\";",
     "   const aionis = createAionisClient({ baseUrl: \"http://127.0.0.1:3001\" });",
     "",
     `Package page: ${PACKAGE_PAGE}`,

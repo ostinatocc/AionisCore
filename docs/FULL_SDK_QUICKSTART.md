@@ -1,6 +1,6 @@
 # Aionis Core Runtime Client Quickstart
 
-`@cognary/aionis` exposes the full runtime client surface for Aionis Core.
+`@ostinato/aionis` exposes the full runtime client surface for Aionis Core.
 
 It covers:
 
@@ -39,7 +39,7 @@ http://127.0.0.1:3001
 ## 4. Use the SDK
 
 ```ts
-import { createAionisRuntimeClient } from "@cognary/aionis";
+import { createAionisRuntimeClient } from "@ostinato/aionis";
 
 const aionis = createAionisRuntimeClient({
   baseUrl: "http://127.0.0.1:3001",

@@ -1,5 +1,5 @@
 {
-  "name": "@cognary/aionis-internal-sdk",
+  "name": "@ostinato/aionis-internal-sdk",
   "version": "0.1.2",
   "private": true,
   "description": "Internal SDK surface for narrow and legacy Aionis Core integrations.",

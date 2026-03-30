@@ -6,7 +6,7 @@ This document describes the recommended boundary for Aionis Core.
 
 Recommended distribution stance:
 
-1. keep `@cognary/aionis` open
+1. keep `@ostinato/aionis` open
 2. keep core route and SDK contracts explicit
 3. keep the strongest kernel learning and governance implementation under tighter control
 
@@ -29,7 +29,7 @@ At the same time, Aionis Core benefits from:
 
 The default open surface should be:
 
-1. `@cognary/aionis`
+1. `@ostinato/aionis`
 2. typed SDK contracts
 3. public route-level integration contracts
 4. examples, quickstart, and publishing guidance
@@ -50,7 +50,7 @@ The more controlled layer can include:
 Recommended public phrasing:
 
 1. Aionis Core is an execution-memory kernel
-2. `@cognary/aionis` is the primary developer interface
+2. `@ostinato/aionis` is the primary developer interface
 3. stronger kernel layers are distributed selectively as the product matures
 
 ## Immediate implication

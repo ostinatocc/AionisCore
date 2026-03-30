@@ -7,9 +7,8 @@ Current repository posture:
 1. `Cognary/Aionis` is the main Aionis Core repository
 2. the canonical public npm packages live from this repository
 3. current package names are:
-   - `@cognary/aionis`
-   - `@cognary/aionis-sdk`
-   - `@cognary/aionis-rtc`
+   - `@ostinato/aionis`
+   - `@ostinato/aionis-rtc`
 
 For current repository structure and release posture, use:
 

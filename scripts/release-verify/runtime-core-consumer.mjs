@@ -2,7 +2,7 @@ import {
   RUNTIME_CORE_BOUNDARY,
   RUNTIME_CORE_SHARED_SURFACES,
   runtimeCoreBoundarySummary,
-} from "@cognary/aionis-rtc";
+} from "@ostinato/aionis-rtc";
 
 if (!Array.isArray(RUNTIME_CORE_BOUNDARY) || RUNTIME_CORE_BOUNDARY.length === 0) {
   throw new Error("RUNTIME_CORE_BOUNDARY export missing");
@@ -20,7 +20,7 @@ if (!summary || !Array.isArray(summary.shared_core)) {
 
 console.log(JSON.stringify({
   ok: true,
-  package_name: "@cognary/aionis-rtc",
+  package_name: "@ostinato/aionis-rtc",
   exports_checked: [
     "RUNTIME_CORE_BOUNDARY",
     "RUNTIME_CORE_SHARED_SURFACES",

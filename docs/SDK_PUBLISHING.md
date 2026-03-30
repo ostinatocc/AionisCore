@@ -4,8 +4,8 @@ This document defines the release checklist for the public Aionis Core npm packa
 
 ## Public package set
 
-1. [@cognary/aionis](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk/package.json)
-2. [@cognary/aionis-rtc](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core/package.json)
+1. [@ostinato/aionis](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk/package.json)
+2. [@ostinato/aionis-rtc](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core/package.json)
 
 ## Release goals
 
@@ -18,7 +18,7 @@ Each package release should prove:
 
 ## Root commands
 
-### `@cognary/aionis`
+### `@ostinato/aionis`
 
 ```bash
 npm run sdk:build
@@ -28,7 +28,7 @@ npm run sdk:publish:dry-run
 npm run sdk:release:check
 ```
 
-### `@cognary/aionis-rtc`
+### `@ostinato/aionis-rtc`
 
 ```bash
 npm run runtime-core:build
@@ -65,7 +65,7 @@ cd /Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk
 npm publish --access public
 ```
 
-### `@cognary/aionis-rtc`
+### `@ostinato/aionis-rtc`
 
 ```bash
 cd /Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core

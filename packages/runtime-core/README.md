@@ -1,11 +1,11 @@
-# @cognary/aionis-rtc
+# @ostinato/aionis-rtc
 
 Shared runtime-core boundary for Aionis Core.
 
 ## Install
 
 ```bash
-npm install @cognary/aionis-rtc
+npm install @ostinato/aionis-rtc
 ```
 
 This package is intentionally small. Its purpose is to define the stable shared boundary for core runtime contracts.

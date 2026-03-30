@@ -1,11 +1,11 @@
-# @cognary/aionis
+# @ostinato/aionis
 
 Complete Aionis Core SDK.
 
 ## Install
 
 ```bash
-npm install @cognary/aionis
+npm install @ostinato/aionis
 ```
 
 ## Coverage
@@ -21,7 +21,7 @@ npm install @cognary/aionis
 ## Usage
 
 ```ts
-import { createAionisClient } from "@cognary/aionis";
+import { createAionisClient } from "@ostinato/aionis";
 
 const aionis = createAionisClient({
   baseUrl: "http://127.0.0.1:3001",

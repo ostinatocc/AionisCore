@@ -3,7 +3,7 @@ import {
   createAionisRuntimeClient,
   createAionisHostBridge,
   AionisRuntimeSdkHttpError,
-} from "@cognary/aionis";
+} from "@ostinato/aionis";
 
 const client = createAionisRuntimeClient({
   baseUrl: "http://127.0.0.1:3001",
@@ -82,7 +82,7 @@ if (typeof bridge.startTask !== "function" || typeof bridge.completeTask !== "fu
 
 console.log(JSON.stringify({
   ok: true,
-  package_name: "@cognary/aionis",
+  package_name: "@ostinato/aionis",
   exports_checked: [
     "createAionisClient",
     "createAionisRuntimeClient",

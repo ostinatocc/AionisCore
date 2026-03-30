@@ -85,7 +85,7 @@ It should wrap only the surfaces that are already stable and benchmark-defended.
 
 Recommended first package:
 
-1. `@cognary/aionis`
+1. `@ostinato/aionis`
 
 Recommended client:
 
@@ -267,7 +267,7 @@ Short-term recommendation:
 
 Suggested public package sequence:
 
-1. `@cognary/aionis`
+1. `@ostinato/aionis`
 
 ## Launch Sequence
 
@@ -305,7 +305,7 @@ Only after SDK positioning is established:
 
 1. rewrite README first screen around SDK identity
 2. add `/examples` or `docs/examples` for the first 3 to 5 SDK flows
-3. define package/release structure for `@cognary/aionis`
+3. define package/release structure for `@ostinato/aionis`
 
 ### Later
 
