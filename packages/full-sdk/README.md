@@ -1,17 +1,22 @@
 # @cognary/aionis-sdk
 
-Private full-runtime SDK for the complete Aionis runtime mainline.
+Full SDK surface for Aionis Core.
 
-This package is for internal use with the private `Aionis-runtime` repository. It is not the public SDK release surface. The public package remains `@cognary/aionis`.
+## Install
 
-## What it covers
+```bash
+npm install @cognary/aionis-sdk
+```
 
-- Full memory write/recall/context surfaces
-- Replay core and governed playbook operations
-- Handoff storage and recovery
-- Automation definitions and runs
-- Sandbox session, execution, and run inspection
-- Lifecycle, packs, sessions, and rule/tool operator surfaces
+## Coverage
+
+- memory write / recall / context surfaces
+- replay core and governed playbook operations
+- handoff storage and recovery
+- automation definitions and runs
+- sandbox session, execution, and run inspection
+- lifecycle, packs, sessions, and rule/tool operator surfaces
+- host bridge integration
 
 ## Usage
 
@@ -33,18 +38,27 @@ const recall = await aionis.memory.recallText({
 ## Local workflow
 
 ```bash
-cd /Volumes/ziel/Aionis-runtime
+cd /Volumes/ziel/AionisTest/Aioniscc
 npm install
 npm run full-sdk:build
-npm run start:lite
+npm run lite:start
 ```
 
 Then run one of the bundled examples:
 
 ```bash
-npm run full-sdk:example:recall
-npm run full-sdk:example:replay
-npm run full-sdk:example:sessions
-npm run full-sdk:example:automation
-npm run full-sdk:example:sandbox
+npm run example:full-sdk:recall
+npm run example:full-sdk:replay
+npm run example:full-sdk:sessions
+npm run example:full-sdk:automation
+npm run example:full-sdk:sandbox
+```
+
+## Release checks
+
+```bash
+npm run full-sdk:test
+npm run full-sdk:pack:dry-run
+npm run full-sdk:publish:dry-run
+npm run full-sdk:release:check
 ```

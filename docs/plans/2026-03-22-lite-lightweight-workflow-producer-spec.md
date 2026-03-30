@@ -1,4 +1,4 @@
-# Aionis Lite Lightweight Workflow Producer Spec
+# Aionis Core Lightweight Workflow Producer Spec
 
 ## Goal
 

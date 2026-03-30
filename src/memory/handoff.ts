@@ -602,52 +602,71 @@ export async function recoverHandoff(args: {
   const normalizedSymbol = normalizeOptionalString(parsed.symbol);
   const consumerAgentId = normalizeOptionalString(args.consumerAgentId ?? undefined) ?? null;
   const consumerTeamId = normalizeOptionalString(args.consumerTeamId ?? undefined) ?? null;
-  const findInput: MemoryFindInput = {
-    tenant_id: parsed.tenant_id,
-    scope: parsed.scope,
-    type: "event",
-    memory_lane: parsed.memory_lane,
-    ...(consumerAgentId ? { consumer_agent_id: consumerAgentId } : {}),
-    ...(consumerTeamId ? { consumer_team_id: consumerTeamId } : {}),
-    include_meta: true,
-    include_slots: false,
-    include_slots_preview: true,
-    slots_preview_keys: 20,
-    limit: parsed.limit,
-    offset: 0,
-    slots_contains: {
-      summary_kind: "handoff",
-      handoff_kind: parsed.handoff_kind,
-      anchor: parsed.anchor,
-      ...(normalizedRepoRoot ? { repo_root: normalizedRepoRoot } : {}),
-      ...(normalizedFilePath ? { file_path: normalizedFilePath } : {}),
-      ...(normalizedSymbol ? { symbol: normalizedSymbol } : {}),
-    },
-  };
+  let matchedNodes = 0;
+  let resolvedScope = parsed.scope ?? args.defaultScope;
+  let resolvedTenantId = parsed.tenant_id ?? args.defaultTenantId;
+  let resolvedUri: string | null = normalizeOptionalString(parsed.handoff_uri);
 
-  const findResult = args.liteWriteStore
-    ? await memoryFindLite(args.liteWriteStore as any, findInput, args.defaultScope, args.defaultTenantId)
-    : await memoryFind(args.client!, findInput, args.defaultScope, args.defaultTenantId);
+  if (!resolvedUri) {
+    const findInput: MemoryFindInput = {
+      tenant_id: parsed.tenant_id,
+      scope: parsed.scope,
+      type: "event",
+      id: normalizeOptionalString(parsed.handoff_id),
+      memory_lane: parsed.memory_lane,
+      ...(consumerAgentId ? { consumer_agent_id: consumerAgentId } : {}),
+      ...(consumerTeamId ? { consumer_team_id: consumerTeamId } : {}),
+      include_meta: true,
+      include_slots: false,
+      include_slots_preview: true,
+      slots_preview_keys: 20,
+      limit: parsed.limit,
+      offset: 0,
+      ...(parsed.handoff_id
+        ? {}
+        : {
+            slots_contains: {
+              summary_kind: "handoff",
+              handoff_kind: parsed.handoff_kind,
+              anchor: parsed.anchor,
+              ...(normalizedRepoRoot ? { repo_root: normalizedRepoRoot } : {}),
+              ...(normalizedFilePath ? { file_path: normalizedFilePath } : {}),
+              ...(normalizedSymbol ? { symbol: normalizedSymbol } : {}),
+            },
+          }),
+    };
 
-  const matchedNodeList = Array.isArray(findResult.nodes) ? findResult.nodes : [];
-  const matchedNodes = matchedNodeList.length;
-  const topNode = pickLatestHandoffCandidate(matchedNodeList);
-  if (!topNode || typeof topNode.uri !== "string") {
-    throw new HttpError(404, "handoff_not_found", "handoff was not found in this scope", {
-      anchor: parsed.anchor,
-      repo_root: parsed.repo_root ?? null,
-      file_path: parsed.file_path ?? null,
-      symbol: parsed.symbol ?? null,
-      handoff_kind: parsed.handoff_kind,
-      scope: findResult.scope,
-      tenant_id: findResult.tenant_id,
-    });
+    const findResult = args.liteWriteStore
+      ? await memoryFindLite(args.liteWriteStore as any, findInput, args.defaultScope, args.defaultTenantId)
+      : await memoryFind(args.client!, findInput, args.defaultScope, args.defaultTenantId);
+
+    const matchedNodeList = Array.isArray(findResult.nodes) ? findResult.nodes : [];
+    matchedNodes = matchedNodeList.length;
+    const topNode = pickLatestHandoffCandidate(matchedNodeList);
+    if (!topNode || typeof topNode.uri !== "string") {
+      throw new HttpError(404, "handoff_not_found", "handoff was not found in this scope", {
+        handoff_id: parsed.handoff_id ?? null,
+        handoff_uri: parsed.handoff_uri ?? null,
+        anchor: parsed.anchor ?? null,
+        repo_root: parsed.repo_root ?? null,
+        file_path: parsed.file_path ?? null,
+        symbol: parsed.symbol ?? null,
+        handoff_kind: parsed.handoff_kind,
+        scope: findResult.scope,
+        tenant_id: findResult.tenant_id,
+      });
+    }
+    resolvedUri = topNode.uri;
+    resolvedScope = findResult.scope;
+    resolvedTenantId = findResult.tenant_id;
+  } else {
+    matchedNodes = 1;
   }
 
   const resolveInput: MemoryResolveInput = {
-    tenant_id: findResult.tenant_id,
-    scope: findResult.scope,
-    uri: topNode.uri,
+    tenant_id: resolvedTenantId,
+    scope: resolvedScope,
+    uri: resolvedUri,
     ...(consumerAgentId ? { consumer_agent_id: consumerAgentId } : {}),
     ...(consumerTeamId ? { consumer_team_id: consumerTeamId } : {}),
     include_meta: true,
@@ -662,16 +681,18 @@ export async function recoverHandoff(args: {
 
   if (!resolved || typeof resolved !== "object" || !("node" in resolved) || !resolved.node) {
     throw new HttpError(500, "handoff_resolve_invalid", "handoff resolve did not return a node payload", {
-      anchor: parsed.anchor,
-      scope: findResult.scope,
-      tenant_id: findResult.tenant_id,
+      handoff_id: parsed.handoff_id ?? null,
+      handoff_uri: parsed.handoff_uri ?? null,
+      anchor: parsed.anchor ?? null,
+      scope: resolvedScope,
+      tenant_id: resolvedTenantId,
       resolved_type: resolved && typeof resolved === "object" && "type" in resolved ? (resolved as any).type : null,
     });
   }
 
   return {
-    tenant_id: findResult.tenant_id,
-    scope: findResult.scope,
+    tenant_id: resolvedTenantId,
+    scope: resolvedScope,
     ...normalizeRecoveredHandoff(resolved.node as HandoffNode, matchedNodes, parsed, args.executionStateStore),
   };
 }

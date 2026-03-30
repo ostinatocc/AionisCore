@@ -9,12 +9,13 @@ function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
-test("root start:lite delegates to apps/lite", () => {
+test("root lite scripts delegate to apps/lite", () => {
   const rootPkg = readJson(path.join(ROOT, "package.json"));
-  assert.equal(rootPkg.scripts["start:lite"], "npm --prefix apps/lite run start --");
-  assert.equal(rootPkg.scripts["start:lite:local-process"], "npm --prefix apps/lite run start:local-process --");
-  assert.equal(rootPkg.scripts["smoke:lite:local-process"], "LITE_SANDBOX_PROFILE=local_process_echo bash scripts/lite-smoke.sh");
-  assert.equal(rootPkg.scripts["validate:lite:real"], "bash scripts/lite-real-validation.sh");
+  assert.equal(rootPkg.scripts["lite:build"], "npm --prefix apps/lite run build");
+  assert.equal(rootPkg.scripts["lite:start"], "npm --prefix apps/lite run start --");
+  assert.equal(rootPkg.scripts["lite:start:local-process"], "npm --prefix apps/lite run start:local-process --");
+  assert.equal(rootPkg.scripts["lite:smoke:local-process"], "LITE_SANDBOX_PROFILE=local_process_echo bash scripts/lite-smoke.sh");
+  assert.equal(rootPkg.scripts["lite:validate:real"], "bash scripts/lite-real-validation.sh");
 });
 
 test("apps/lite owns the startup script", () => {

@@ -56,7 +56,7 @@ async function main() {
     actor: "full-sdk-example",
     handoff_kind: "task_handoff",
     anchor: `handoff:${sessionId}`,
-    summary: "Continue private runtime repair workflow",
+    summary: "Continue Aionis Core repair workflow",
     handoff_text: "Inspect replay state, review session events, then proceed with the next repair step.",
     target_files: ["src/routes/memory-replay-core.ts"],
     next_action: "Inspect the latest replay run and verify the repaired step sequence.",

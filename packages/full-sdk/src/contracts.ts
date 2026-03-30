@@ -173,6 +173,52 @@ export type AionisPlanningContextRequest = {
   execution_packet_v1?: Record<string, unknown>;
 } & AionisRequestPayload;
 
+export type AionisKickoffRecommendation = {
+  source_kind: "experience_intelligence" | "tool_selection";
+  history_applied: boolean;
+  selected_tool: string | null;
+  file_path: string | null;
+  next_action: string | null;
+} & AionisPassthroughObject;
+
+export type AionisKickoffRecommendationRequest = {
+  tenant_id?: string;
+  scope?: string;
+  query_text: string;
+  consumer_agent_id?: string;
+  consumer_team_id?: string;
+  context?: unknown;
+  candidates?: string[];
+  workflow_limit?: number;
+} & AionisRequestPayload;
+
+export type AionisKickoffRecommendationResponse = {
+  summary_version: "kickoff_recommendation_v1";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  kickoff_recommendation: AionisKickoffRecommendation | null;
+  rationale: {
+    summary: string;
+  } & AionisPassthroughObject;
+} & AionisRuntimeResponse;
+
+export type AionisTaskStartRequest = AionisKickoffRecommendationRequest;
+
+export type AionisTaskStartAction = {
+  action_kind: "file_step" | "tool_step";
+  source_kind: "experience_intelligence" | "tool_selection";
+  history_applied: boolean;
+  selected_tool: string;
+  file_path: string | null;
+  next_action: string | null;
+} & AionisPassthroughObject;
+
+export type AionisTaskStartResponse = Omit<AionisKickoffRecommendationResponse, "summary_version"> & {
+  summary_version: "task_start_v1";
+  first_action: AionisTaskStartAction | null;
+};
+
 export type AionisContextAssembleRequest = AionisPlanningContextRequest;
 export type AionisExecutionIntrospectRequest = {
   tenant_id?: string;
@@ -407,6 +453,10 @@ export type AionisHandoffRecoverRequest = {
   handoff_id?: string;
   handoff_uri?: string;
   anchor?: string;
+  handoff_kind?: string;
+  repo_root?: string;
+  file_path?: string;
+  symbol?: string;
   include_payload?: boolean;
 } & AionisRequestPayload;
 

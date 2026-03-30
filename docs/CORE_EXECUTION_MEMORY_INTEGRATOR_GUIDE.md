@@ -1,8 +1,8 @@
-# Aionis Execution-Memory Integrator Guide
+# Aionis Core Execution-Memory Integrator Guide
 
 Last reviewed: 2026-03-20
 
-This guide is for consumers integrating against the Aionis execution-memory routes.
+This guide is for consumers integrating against the current Aionis Core execution-memory routes.
 
 It does not explain the full cleanup plan or contract history.
 
@@ -12,10 +12,10 @@ It answers a simpler question:
 
 Primary references:
 
-1. [docs/LITE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
-2. [docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
-3. [docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
-4. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+1. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
+2. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
+3. [docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
+4. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
 
 ## Recommended Read Path
 

@@ -1,32 +1,32 @@
-# Full-Runtime SDK Examples
+# Aionis Core Full SDK Examples
 
-These examples use the private full-runtime SDK package:
+These examples use the full Aionis Core SDK package:
 
 - `@cognary/aionis-sdk`
 
 Build the SDK first:
 
 ```bash
-cd /Volumes/ziel/Aionis-runtime
+cd /Volumes/ziel/AionisTest/Aioniscc
 npm install
 npm run full-sdk:build
 ```
 
-Start the private runtime:
+Start the local Aionis Core runtime shell:
 
 ```bash
-cd /Volumes/ziel/Aionis-runtime
-npm run start:lite
+cd /Volumes/ziel/AionisTest/Aioniscc
+npm run lite:start
 ```
 
 Run examples:
 
 ```bash
-npm run full-sdk:example:recall
-npm run full-sdk:example:replay
-npm run full-sdk:example:sessions
-npm run full-sdk:example:automation
-npm run full-sdk:example:sandbox
+npm run example:full-sdk:recall
+npm run example:full-sdk:replay
+npm run example:full-sdk:sessions
+npm run example:full-sdk:automation
+npm run example:full-sdk:sandbox
 ```
 
 Examples:

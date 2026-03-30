@@ -1,8 +1,8 @@
-# Aionis Lite Memory Trigger Matrix
+# Aionis Core Memory Trigger Matrix
 
 Last reviewed: 2026-03-20
 
-This document turns the Lite memory governance principles into a practical trigger table.
+This document turns the Aionis Core memory governance principles into a practical trigger table.
 
 Preferred module term:
 
@@ -16,7 +16,7 @@ Design principle:
 
 The governance model defines who decides what.
 
-This matrix defines when Lite should:
+This matrix defines when Aionis Core should:
 
 1. stay fully deterministic
 2. trigger LLM adjudication
@@ -25,13 +25,13 @@ This matrix defines when Lite should:
 
 This document should be treated as an execution-oriented companion to:
 
-1. [docs/LITE_MEMORY_GOVERNANCE_MODEL.md](/Volumes/ziel/Aionisgo/docs/LITE_MEMORY_GOVERNANCE_MODEL.md)
-2. [docs/LITE_EXECUTION_MEMORY_STRATEGY.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_STRATEGY.md)
-3. [docs/LITE_ANCHOR_SCHEMA.md](/Volumes/ziel/Aionisgo/docs/LITE_ANCHOR_SCHEMA.md)
+1. [docs/CORE_MEMORY_GOVERNANCE_MODEL.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_MEMORY_GOVERNANCE_MODEL.md)
+2. [docs/CORE_CONTINUITY_STRATEGY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_CONTINUITY_STRATEGY.md)
+3. [docs/CORE_ANCHOR_SCHEMA.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_ANCHOR_SCHEMA.md)
 
 ## Trigger Classes
 
-Lite should recognize four trigger classes:
+Aionis Core should recognize four trigger classes:
 
 1. `deterministic_only`
 2. `llm_adjudication`
@@ -60,7 +60,7 @@ Lite should recognize four trigger classes:
 
 ### Rule 1: Promotion Trigger
 
-Lite should trigger LLM adjudication when:
+Aionis Core should trigger LLM adjudication when:
 
 1. a candidate memory passes deterministic nomination filters
 2. the promotion target is not obvious from rules alone
@@ -74,7 +74,7 @@ Typical operations:
 
 ### Rule 2: Threshold Ambiguity Trigger
 
-Lite should trigger LLM adjudication when a memory sits near a deterministic boundary.
+Aionis Core should trigger LLM adjudication when a memory sits near a deterministic boundary.
 
 Examples:
 

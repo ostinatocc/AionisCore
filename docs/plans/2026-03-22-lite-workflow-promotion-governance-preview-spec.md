@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add the third governed call site to Lite runtime/core by exposing a bounded governance preview on
+Add the third governed call site to local runtime/core by exposing a bounded governance preview on
 workflow auto-promotion.
 
 ## Scope

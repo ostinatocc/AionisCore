@@ -4,7 +4,7 @@ Date: 2026-03-23
 
 ## Goal
 
-Add one real benchmark scenario that proves explicit governance reviews override internal provider fallback on live Lite runtime paths.
+Add one real benchmark scenario that proves explicit governance reviews override internal provider fallback on live local runtime paths.
 
 ## Why
 
@@ -48,7 +48,7 @@ Both paths should also receive an explicit low-confidence review result that con
 This benchmark should only extend:
 
 1. `scripts/lite-real-task-benchmark.ts`
-2. `docs/LITE_TESTING_STRATEGY.md`
+2. `docs/CORE_TESTING_STRATEGY.md`
 
 No public route changes.
 No governance semantic changes.

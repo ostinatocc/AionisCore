@@ -1,6 +1,6 @@
-# Lite SDK Typed Contracts
+# Aionis Core SDK Typed Contracts
 
-This step moves `@aionis/sdk` from a transport wrapper toward a real SDK surface.
+This step moves `@cognary/aionis` from a thin transport layer toward a real SDK surface.
 
 ## What changed
 

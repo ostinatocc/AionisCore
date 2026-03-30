@@ -42,5 +42,10 @@ export function nodeSqliteSupportError(): Error {
 export function createSqliteDatabase(path: string): SqliteDatabase {
   const mod = loadSqliteModule();
   if (!mod) throw nodeSqliteSupportError();
-  return new mod.DatabaseSync(path);
+  const db = new mod.DatabaseSync(path);
+  db.exec(`
+    PRAGMA busy_timeout = 5000;
+    PRAGMA synchronous = NORMAL;
+  `);
+  return db;
 }

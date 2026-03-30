@@ -1,20 +1,20 @@
-# Aionis Lite Real-Task Benchmark Suite Spec
+# Aionis Core Real-Task Benchmark Suite Spec
 
 ## Goal
 
-Add a repeatable `Lite` benchmark suite that measures execution-memory product value through live route behavior instead of only static contract tests.
+Add a repeatable Aionis Core benchmark suite that measures execution-memory value through live route behavior instead of only static contract tests.
 
 The benchmark suite should answer:
 
-1. does Lite learn execution policy from repeated successful tool use
-2. does Lite correct that policy when counter-evidence appears
-3. does Lite turn repeated structured execution continuity into planner-visible workflow guidance
-4. does Lite carry that workflow guidance through a longer inspect/patch/validate repair sequence
+1. does the core runtime learn execution policy from repeated successful tool use
+2. does the core runtime correct that policy when counter-evidence appears
+3. does the core runtime turn repeated structured execution continuity into planner-visible workflow guidance
+4. does the core runtime carry that workflow guidance through a longer inspect/patch/validate repair sequence
 5. does the default planner/context surface stay slim while the heavy inspection surface remains available
 
 ## Problem
 
-Lite now has strong route contracts and real validation coverage, but those validations still live mostly as:
+Aionis Core now has strong route contracts and real validation coverage, but those validations still live mostly as:
 
 1. one-off route tests
 2. one-off validation writeups
@@ -29,7 +29,7 @@ This leaves a product gap:
 ## Design Principles
 
 1. benchmark real route behavior, not helper functions
-2. keep the first slice Lite-native and SQLite-backed
+2. keep the first slice local-runtime-native and SQLite-backed
 3. prefer fresh temporary databases per scenario
 4. verify both route contract and product-value transitions
 5. keep the suite outside default CI until it stabilizes
@@ -48,7 +48,7 @@ The current suite should benchmark eight scenarios:
 7. `multi_step_repair_loop`
 8. `slim_surface_boundary`
 
-These are the highest-signal demonstrations of current Lite value.
+These are the highest-signal demonstrations of current core value.
 
 ## Scenario 1: Policy Learning Loop
 

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Reduce duplicated stateful decision-trace assembly across governed Lite runtime call sites without
+Reduce duplicated stateful decision-trace assembly across governed local runtime call sites without
 changing current governance semantics.
 
 ## Scope

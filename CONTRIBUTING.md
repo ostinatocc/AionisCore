@@ -16,12 +16,12 @@ npm run smoke:lite
 
 ## Scope
 
-This repository is for the standalone Lite runtime:
+This repository is for Aionis Core and its local runtime shell:
 
 1. single-user local operation
 2. SQLite-backed memory, replay, and playbook flows
-3. Lite automation kernel
-4. Lite operator and public-beta docs
+3. local automation kernel
+4. local runtime shell and operator docs
 
 Keep changes aligned with that scope. Multi-tenant control-plane and server-only governance surfaces do not belong here.
 
@@ -41,4 +41,4 @@ If you change external behavior, keep these contracts coherent:
 1. automation response envelopes
 2. health response envelopes
 3. error response envelopes
-4. Lite route boundary semantics
+4. local runtime route boundary semantics

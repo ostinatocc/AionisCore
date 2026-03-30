@@ -217,9 +217,9 @@ git commit -m "Cover generic workflow projection in Lite test suite"
 ### Task 5: Update roadmap/status docs after code lands
 
 **Files:**
-- Modify: `docs/LITE_GOVERNANCE_AND_STRATEGY_STATUS.md`
-- Modify: `docs/LITE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md`
-- Modify: `docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md`
+- Modify: `docs/CORE_GOVERNANCE_AND_STRATEGY_STATUS.md`
+- Modify: `docs/CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md`
+- Modify: `docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md`
 
 **Step 1: Record the new producer slice**
 
@@ -238,7 +238,7 @@ Update docs so they say:
 Run:
 
 ```bash
-rg -n "execution_write_projection|workflow candidate" docs/LITE_GOVERNANCE_AND_STRATEGY_STATUS.md docs/LITE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md
+rg -n "execution_write_projection|workflow candidate" docs/CORE_GOVERNANCE_AND_STRATEGY_STATUS.md docs/CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md
 ```
 
 Expected:
@@ -248,7 +248,7 @@ Updated wording appears in all three files.
 **Step 3: Commit**
 
 ```bash
-git add docs/LITE_GOVERNANCE_AND_STRATEGY_STATUS.md docs/LITE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md
+git add docs/CORE_GOVERNANCE_AND_STRATEGY_STATUS.md docs/CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md
 git commit -m "Document generic workflow projection slice"
 ```
 

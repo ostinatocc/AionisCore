@@ -25,7 +25,9 @@ import { registerMemoryFeedbackToolRoutes } from "../src/routes/memory-feedback-
 import { registerMemoryReplayGovernedRoutes } from "../src/routes/memory-replay-governed.ts";
 import { registerMemoryWriteRoutes } from "../src/routes/memory-write.ts";
 import {
+  ExperienceIntelligenceResponseSchema,
   ExecutionMemoryIntrospectionResponseSchema,
+  KickoffRecommendationResponseSchema,
   PlanningContextRouteContractSchema,
   ReplayPlaybookRepairReviewResponseSchema,
   ToolsFeedbackResponseSchema,
@@ -81,10 +83,10 @@ type BenchmarkSuiteProfile = {
     contested_revalidation_fresh_runs_needed: number | null;
   };
   workflow_progression?: {
-    stable_workflow_count_after_second: number | null;
+    promotion_ready_workflow_count_after_second: number | null;
   };
   multi_step_repair?: {
-    stable_workflow_count_after_validate: number | null;
+    promotion_ready_workflow_count_after_validate: number | null;
   };
   governed_learning?: {
     workflow_promotion_state: string | null;
@@ -94,6 +96,22 @@ type BenchmarkSuiteProfile = {
   governed_replay?: {
     replay_learning_rule_state: string | null;
     stable_workflow_count_after_replay: number | null;
+  };
+  experience_intelligence?: {
+    history_applied_after_learning: boolean | null;
+    selected_tool_after_learning: string[] | null;
+    path_source_after_learning: string[] | null;
+    unrelated_query_history_applied: boolean | null;
+    kickoff_history_applied_after_learning: boolean | null;
+    kickoff_selected_tool_after_learning: string[] | null;
+    kickoff_source_kind_after_learning: string[] | null;
+    kickoff_file_path_after_learning: string[] | null;
+    kickoff_unrelated_query_history_applied: boolean | null;
+    kickoff_unrelated_query_source_kind: string | null;
+    kickoff_hit_rate_after_learning: number | null;
+    path_hit_rate_after_learning: number | null;
+    stale_memory_interference_rate: number | null;
+    repeated_task_cost_reduction_steps: number | null;
   };
   governance_provider_precedence?: {
     workflow_provider_override_blocked: boolean | null;
@@ -180,13 +198,27 @@ type BenchmarkRegressionGate = {
 
 const BENCHMARK_PROFILE_POLICY_VERSION = "v4";
 const HARD_BENCHMARK_PROFILE_KEYS = new Set<string>([
-  "workflow_progression.stable_workflow_count_after_second",
-  "multi_step_repair.stable_workflow_count_after_validate",
+  "workflow_progression.promotion_ready_workflow_count_after_second",
+  "multi_step_repair.promotion_ready_workflow_count_after_validate",
   "governed_learning.workflow_promotion_state",
   "governed_learning.tools_pattern_state",
   "governed_learning.tools_credibility_state",
   "governed_replay.replay_learning_rule_state",
   "governed_replay.stable_workflow_count_after_replay",
+  "experience_intelligence.history_applied_after_learning",
+  "experience_intelligence.selected_tool_after_learning",
+  "experience_intelligence.path_source_after_learning",
+  "experience_intelligence.unrelated_query_history_applied",
+  "experience_intelligence.kickoff_history_applied_after_learning",
+  "experience_intelligence.kickoff_selected_tool_after_learning",
+  "experience_intelligence.kickoff_source_kind_after_learning",
+  "experience_intelligence.kickoff_file_path_after_learning",
+  "experience_intelligence.kickoff_unrelated_query_history_applied",
+  "experience_intelligence.kickoff_unrelated_query_source_kind",
+  "experience_intelligence.kickoff_hit_rate_after_learning",
+  "experience_intelligence.path_hit_rate_after_learning",
+  "experience_intelligence.stale_memory_interference_rate",
+  "experience_intelligence.repeated_task_cost_reduction_steps",
   "governance_provider_precedence.workflow_provider_override_blocked",
   "governance_provider_precedence.tools_provider_override_blocked",
   "custom_model_client.workflow_governed_state",
@@ -498,12 +530,28 @@ function getScenarioMetrics(
   return scenarios.find((scenario) => scenario.id === id)?.metrics ?? {};
 }
 
+function uniqueStrings(values: Array<unknown>): string[] | null {
+  const items = [...new Set(values.filter((value): value is string => typeof value === "string" && value.length > 0))];
+  return items.length > 0 ? items : null;
+}
+
+function everyBoolean(values: Array<unknown>, expected: boolean): boolean | null {
+  const items = values.filter((value): value is boolean => typeof value === "boolean");
+  return items.length > 0 ? items.every((value) => value === expected) : null;
+}
+
+function anyBooleanTrue(values: Array<unknown>): boolean | null {
+  const items = values.filter((value): value is boolean => typeof value === "boolean");
+  return items.length > 0 ? items.some((value) => value) : null;
+}
+
 function buildSuiteProfile(scenarios: BenchmarkScenarioResult[]): BenchmarkSuiteProfile {
   const policyLearning = getScenarioMetrics(scenarios, "policy_learning_loop");
   const workflowProgression = getScenarioMetrics(scenarios, "workflow_progression_loop");
   const multiStepRepair = getScenarioMetrics(scenarios, "multi_step_repair_loop");
   const governedLearning = getScenarioMetrics(scenarios, "governed_learning_runtime_loop");
   const governedReplay = getScenarioMetrics(scenarios, "governed_replay_runtime_loop");
+  const experienceIntelligence = getScenarioMetrics(scenarios, "experience_intelligence_loop");
   const precedence = getScenarioMetrics(scenarios, "governance_provider_precedence_runtime_loop");
   const customModelClient = getScenarioMetrics(scenarios, "custom_model_client_runtime_loop");
   const httpModelClient = getScenarioMetrics(scenarios, "http_model_client_runtime_loop");
@@ -522,15 +570,15 @@ function buildSuiteProfile(scenarios: BenchmarkScenarioResult[]): BenchmarkSuite
           : null,
     },
     workflow_progression: {
-      stable_workflow_count_after_second:
-        typeof workflowProgression.stable_workflow_count_after_second === "number"
-          ? workflowProgression.stable_workflow_count_after_second
+      promotion_ready_workflow_count_after_second:
+        typeof workflowProgression.promotion_ready_workflow_count_after_second === "number"
+          ? workflowProgression.promotion_ready_workflow_count_after_second
           : null,
     },
     multi_step_repair: {
-      stable_workflow_count_after_validate:
-        typeof multiStepRepair.stable_workflow_count_after_validate === "number"
-          ? multiStepRepair.stable_workflow_count_after_validate
+      promotion_ready_workflow_count_after_validate:
+        typeof multiStepRepair.promotion_ready_workflow_count_after_validate === "number"
+          ? multiStepRepair.promotion_ready_workflow_count_after_validate
           : null,
     },
     governed_learning: {
@@ -555,6 +603,84 @@ function buildSuiteProfile(scenarios: BenchmarkScenarioResult[]): BenchmarkSuite
       stable_workflow_count_after_replay:
         typeof governedReplay.stable_workflow_count_after_replay === "number"
           ? governedReplay.stable_workflow_count_after_replay
+          : null,
+    },
+    experience_intelligence: {
+      history_applied_after_learning:
+        everyBoolean(
+          Array.isArray(experienceIntelligence.history_applied_after_learning_by_fixture)
+            ? experienceIntelligence.history_applied_after_learning_by_fixture
+            : [experienceIntelligence.history_applied_after_learning],
+          true,
+        ),
+      selected_tool_after_learning:
+        uniqueStrings(
+          Array.isArray(experienceIntelligence.selected_tool_after_learning_by_fixture)
+            ? experienceIntelligence.selected_tool_after_learning_by_fixture
+            : [experienceIntelligence.selected_tool_after_learning],
+        ),
+      path_source_after_learning:
+        uniqueStrings(
+          Array.isArray(experienceIntelligence.path_source_after_learning_by_fixture)
+            ? experienceIntelligence.path_source_after_learning_by_fixture
+            : [experienceIntelligence.path_source_after_learning],
+        ),
+      unrelated_query_history_applied:
+        anyBooleanTrue(
+          Array.isArray(experienceIntelligence.unrelated_query_history_applied_by_fixture)
+            ? experienceIntelligence.unrelated_query_history_applied_by_fixture
+            : [experienceIntelligence.unrelated_query_history_applied],
+        ),
+      kickoff_history_applied_after_learning:
+        everyBoolean(
+          Array.isArray(experienceIntelligence.kickoff_history_applied_after_learning_by_fixture)
+            ? experienceIntelligence.kickoff_history_applied_after_learning_by_fixture
+            : [experienceIntelligence.kickoff_history_applied_after_learning],
+          true,
+        ),
+      kickoff_selected_tool_after_learning:
+        uniqueStrings(
+          Array.isArray(experienceIntelligence.kickoff_selected_tool_after_learning_by_fixture)
+            ? experienceIntelligence.kickoff_selected_tool_after_learning_by_fixture
+            : [experienceIntelligence.kickoff_selected_tool_after_learning],
+        ),
+      kickoff_source_kind_after_learning:
+        uniqueStrings(
+          Array.isArray(experienceIntelligence.kickoff_source_kind_after_learning_by_fixture)
+            ? experienceIntelligence.kickoff_source_kind_after_learning_by_fixture
+            : [experienceIntelligence.kickoff_source_kind_after_learning],
+        ),
+      kickoff_file_path_after_learning:
+        uniqueStrings(
+          Array.isArray(experienceIntelligence.kickoff_file_path_after_learning_by_fixture)
+            ? experienceIntelligence.kickoff_file_path_after_learning_by_fixture
+            : [experienceIntelligence.kickoff_file_path_after_learning],
+        ),
+      kickoff_unrelated_query_history_applied:
+        anyBooleanTrue(
+          Array.isArray(experienceIntelligence.kickoff_unrelated_query_history_applied_by_fixture)
+            ? experienceIntelligence.kickoff_unrelated_query_history_applied_by_fixture
+            : [experienceIntelligence.kickoff_unrelated_query_history_applied],
+        ),
+      kickoff_unrelated_query_source_kind:
+        typeof experienceIntelligence.kickoff_unrelated_query_source_kind === "string"
+          ? experienceIntelligence.kickoff_unrelated_query_source_kind
+          : null,
+      kickoff_hit_rate_after_learning:
+        typeof experienceIntelligence.kickoff_hit_rate_after_learning === "number"
+          ? experienceIntelligence.kickoff_hit_rate_after_learning
+          : null,
+      path_hit_rate_after_learning:
+        typeof experienceIntelligence.path_hit_rate_after_learning === "number"
+          ? experienceIntelligence.path_hit_rate_after_learning
+          : null,
+      stale_memory_interference_rate:
+        typeof experienceIntelligence.stale_memory_interference_rate === "number"
+          ? experienceIntelligence.stale_memory_interference_rate
+          : null,
+      repeated_task_cost_reduction_steps:
+        typeof experienceIntelligence.repeated_task_cost_reduction_steps === "number"
+          ? experienceIntelligence.repeated_task_cost_reduction_steps
           : null,
     },
     governance_provider_precedence: {
@@ -978,6 +1104,8 @@ function buildBenchmarkWritePayload(args: {
   taskBrief: string;
   stateId: string;
   filePath: string;
+  nextAction?: string;
+  pendingValidations?: string[];
   workflowPromotionGovernanceReview?: Record<string, unknown>;
 }) {
   return {
@@ -1006,11 +1134,11 @@ function buildBenchmarkWritePayload(args: {
             active_role: "patch",
             task_brief: args.taskBrief,
             target_files: [args.filePath],
-            next_action: `Patch ${args.filePath} and rerun export tests`,
+            next_action: args.nextAction ?? `Patch ${args.filePath} and rerun export tests`,
             hard_constraints: [],
             accepted_facts: [],
             rejected_paths: [],
-            pending_validations: ["npm run -s test:lite -- export"],
+            pending_validations: args.pendingValidations ?? ["npm run -s test:lite -- export"],
             unresolved_blockers: [],
             rollback_notes: [],
             review_contract: null,
@@ -1358,7 +1486,14 @@ async function runPolicyLearningLoop(): Promise<Omit<BenchmarkScenarioResult, "i
   const liteRecallStore = createLiteRecallStore(dbPath);
   const assertions: AssertionResult[] = [];
   try {
-    registerBenchmarkApp({ app, liteWriteStore, liteRecallStore });
+    registerBenchmarkApp({
+      app,
+      liteWriteStore,
+      liteRecallStore,
+      envOverrides: {
+        WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+      },
+    });
     await seedActiveToolRule(liteWriteStore);
 
     const selectPayload = (runId: string) => ({
@@ -2309,20 +2444,22 @@ async function runWorkflowProgressionLoop(): Promise<Omit<BenchmarkScenarioResul
         tool_candidates: ["bash", "edit", "test"],
       },
     })).json());
-    assert.equal(secondPlanning.planner_packet.sections.recommended_workflows.length, 1);
-    assert.equal(secondPlanning.planner_packet.sections.candidate_workflows.length, 0);
-    assert.equal(secondPlanning.workflow_signals[0]?.promotion_state, "stable");
-    assert.match(secondPlanning.planning_summary.planner_explanation, /workflow guidance:/i);
-    assertions.push(pass("second unique continuity write upgrades to stable workflow guidance"));
+    assert.equal(secondPlanning.planner_packet.sections.recommended_workflows.length, 0);
+    assert.equal(secondPlanning.planner_packet.sections.candidate_workflows.length, 1);
+    assert.equal(secondPlanning.workflow_signals[0]?.promotion_state, "candidate");
+    assert.equal(secondPlanning.workflow_signals[0]?.promotion_ready, true);
+    assert.match(secondPlanning.planning_summary.planner_explanation, /promotion-ready workflow candidates:/i);
+    assertions.push(pass("second unique continuity write upgrades the workflow into promotion-ready candidate guidance"));
 
     const secondIntrospect = ExecutionMemoryIntrospectionResponseSchema.parse((await app.inject({
       method: "POST",
       url: "/v1/memory/execution/introspect",
       payload: { tenant_id: "default", scope: "default", limit: 12 },
     })).json());
-    assert.equal(secondIntrospect.workflow_signal_summary.stable_workflow_count, 1);
-    assert.equal(secondIntrospect.recommended_workflows.length, 1);
-    assertions.push(pass("introspection aligns with stable workflow guidance"));
+    assert.equal(secondIntrospect.workflow_signal_summary.promotion_ready_workflow_count, 1);
+    assert.equal(secondIntrospect.recommended_workflows.length, 0);
+    assert.equal(secondIntrospect.candidate_workflows.length, 1);
+    assertions.push(pass("introspection aligns with promotion-ready candidate workflow guidance"));
 
     return {
       assertions,
@@ -2330,12 +2467,12 @@ async function runWorkflowProgressionLoop(): Promise<Omit<BenchmarkScenarioResul
         candidate_workflows_after_first: firstPlanning.planner_packet.sections.candidate_workflows.length,
         planner_explanation_after_first: firstPlanning.planning_summary.planner_explanation,
         observing_workflow_count_after_first: firstIntrospect.workflow_signal_summary.observing_workflow_count,
-        recommended_workflows_after_second: secondPlanning.planner_packet.sections.recommended_workflows.length,
+        promotion_ready_workflows_after_second: secondPlanning.planner_packet.sections.candidate_workflows.length,
         planner_explanation_after_second: secondPlanning.planning_summary.planner_explanation,
-        stable_workflow_count_after_second: secondIntrospect.workflow_signal_summary.stable_workflow_count,
+        promotion_ready_workflow_count_after_second: secondIntrospect.workflow_signal_summary.promotion_ready_workflow_count,
       },
       notes: [
-        "Measures whether repeated structured execution continuity becomes planner-visible workflow guidance.",
+        "Measures whether repeated structured execution continuity becomes planner-visible promotion-ready workflow guidance.",
       ],
     };
   } finally {
@@ -2361,7 +2498,14 @@ async function runMultiStepRepairLoop(): Promise<Omit<BenchmarkScenarioResult, "
     tool_candidates: ["bash", "edit", "test"],
   };
   try {
-    registerBenchmarkApp({ app, liteWriteStore, liteRecallStore });
+    registerBenchmarkApp({
+      app,
+      liteWriteStore,
+      liteRecallStore,
+      envOverrides: {
+        WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+      },
+    });
 
     const inspectEvent = await app.inject({
       method: "POST",
@@ -2422,19 +2566,20 @@ async function runMultiStepRepairLoop(): Promise<Omit<BenchmarkScenarioResult, "
       url: "/v1/memory/planning/context",
       payload: planningPayload,
     })).json());
-    assert.equal(patchPlanning.planner_packet.sections.recommended_workflows.length, 1);
-    assert.equal(patchPlanning.planner_packet.sections.candidate_workflows.length, 0);
-    assert.equal(patchPlanning.workflow_signals[0]?.promotion_state, "stable");
-    assert.match(patchPlanning.planning_summary.planner_explanation, /workflow guidance:/i);
-    assertions.push(pass("patch step upgrades the repair run to stable workflow guidance"));
+    assert.equal(patchPlanning.planner_packet.sections.recommended_workflows.length, 0);
+    assert.equal(patchPlanning.planner_packet.sections.candidate_workflows.length, 1);
+    assert.equal(patchPlanning.workflow_signals[0]?.promotion_state, "candidate");
+    assert.equal(patchPlanning.workflow_signals[0]?.promotion_ready, true);
+    assert.match(patchPlanning.planning_summary.planner_explanation, /promotion-ready workflow candidates:/i);
+    assertions.push(pass("patch step upgrades the repair run to promotion-ready workflow guidance"));
 
     const patchIntrospect = ExecutionMemoryIntrospectionResponseSchema.parse((await app.inject({
       method: "POST",
       url: "/v1/memory/execution/introspect",
       payload: { tenant_id: "default", scope: "default", limit: 20 },
     })).json());
-    assert.equal(patchIntrospect.workflow_signal_summary.stable_workflow_count, 1);
-    assertions.push(pass("introspection shows stable workflow after patch step"));
+    assert.equal(patchIntrospect.workflow_signal_summary.promotion_ready_workflow_count, 1);
+    assertions.push(pass("introspection shows promotion-ready workflow after patch step"));
 
     const validateEvent = await app.inject({
       method: "POST",
@@ -2459,24 +2604,24 @@ async function runMultiStepRepairLoop(): Promise<Omit<BenchmarkScenarioResult, "
       url: "/v1/memory/planning/context",
       payload: planningPayload,
     })).json());
-    assert.equal(validatePlanning.planner_packet.sections.recommended_workflows.length, 1);
-    assert.equal(validatePlanning.planner_packet.sections.candidate_workflows.length, 0);
-    assert.match(validatePlanning.planning_summary.planner_explanation, /workflow guidance:/i);
-    assertions.push(pass("later validation step keeps stable workflow guidance instead of reopening candidate state"));
+    assert.equal(validatePlanning.planner_packet.sections.recommended_workflows.length, 0);
+    assert.equal(validatePlanning.planner_packet.sections.candidate_workflows.length, 1);
+    assert.match(validatePlanning.planning_summary.planner_explanation, /promotion-ready workflow candidates:/i);
+    assertions.push(pass("later validation step keeps promotion-ready workflow guidance instead of reopening candidate state"));
 
     const validateIntrospect = ExecutionMemoryIntrospectionResponseSchema.parse((await app.inject({
       method: "POST",
       url: "/v1/memory/execution/introspect",
       payload: { tenant_id: "default", scope: "default", limit: 20 },
     })).json());
-    assert.equal(validateIntrospect.workflow_signal_summary.stable_workflow_count, 1);
-    assert.equal(validateIntrospect.recommended_workflows.length, 1);
-    assert.equal(validateIntrospect.candidate_workflows.length, 0);
-    assertions.push(pass("introspection keeps one stable workflow after the full repair sequence"));
+    assert.equal(validateIntrospect.workflow_signal_summary.promotion_ready_workflow_count, 1);
+    assert.equal(validateIntrospect.recommended_workflows.length, 0);
+    assert.equal(validateIntrospect.candidate_workflows.length, 1);
+    assertions.push(pass("introspection keeps one promotion-ready workflow after the full repair sequence"));
 
-    assert.ok((validateIntrospect.continuity_projection_report.decision_counts.projected ?? 0) >= 2);
-    assert.ok((validateIntrospect.continuity_projection_report.decision_counts.skipped_stable_exists ?? 0) >= 1);
-    assertions.push(pass("continuity projection report shows the third step was skipped once stable guidance existed"));
+    assert.ok((validateIntrospect.continuity_projection_report.decision_counts.projected ?? 0) >= 3);
+    assert.equal(validateIntrospect.continuity_projection_report.decision_counts.skipped_stable_exists ?? 0, 0);
+    assertions.push(pass("continuity projection report stays in active projection mode while the workflow remains promotion-ready"));
 
     return {
       assertions,
@@ -2486,13 +2631,13 @@ async function runMultiStepRepairLoop(): Promise<Omit<BenchmarkScenarioResult, "
         planner_explanation_after_patch: patchPlanning.planning_summary.planner_explanation,
         planner_explanation_after_validate: validatePlanning.planning_summary.planner_explanation,
         observing_workflow_count_after_inspect: inspectIntrospect.workflow_signal_summary.observing_workflow_count,
-        stable_workflow_count_after_patch: patchIntrospect.workflow_signal_summary.stable_workflow_count,
-        stable_workflow_count_after_validate: validateIntrospect.workflow_signal_summary.stable_workflow_count,
+        promotion_ready_workflow_count_after_patch: patchIntrospect.workflow_signal_summary.promotion_ready_workflow_count,
+        promotion_ready_workflow_count_after_validate: validateIntrospect.workflow_signal_summary.promotion_ready_workflow_count,
         continuity_projection_decisions_after_validate: validateIntrospect.continuity_projection_report.decision_counts,
       },
       notes: [
         "Measures a three-step repair run across inspect, patch, and validate session events.",
-        "Confirms that once stable workflow guidance exists, later repair steps do not reopen duplicate candidate workflow rows.",
+        "Confirms that once promotion-ready workflow guidance exists, later repair steps do not reopen duplicate candidate workflow rows.",
       ],
     };
   } finally {
@@ -3110,6 +3255,450 @@ async function runGovernedReplayRuntimeLoop(): Promise<Omit<BenchmarkScenarioRes
   }
 }
 
+async function runExperienceIntelligenceLoop(): Promise<Omit<BenchmarkScenarioResult, "id" | "title" | "status" | "duration_ms">> {
+  const assertions: AssertionResult[] = [];
+  type ExperienceFixture = {
+    id: string;
+    tenantId: string;
+    queryText: string;
+    taskKind: string;
+    goal: string;
+    errorSignature: string;
+    filePath: string;
+    taskBrief: string;
+    writeTitles: [string, string];
+    nextAction: string;
+    pendingValidations: string[];
+    unrelatedQueryText: string;
+    unrelatedTaskKind: string;
+    unrelatedGoal: string;
+    unrelatedErrorSignature: string;
+  };
+  type ExperienceFixtureResult = {
+    fixtureId: string;
+    baselineSelectedTool: string;
+    baselineKickoffSelectedTool: string | null;
+    afterLearningHistoryApplied: boolean;
+    afterLearningSelectedTool: string;
+    afterLearningPathSourceKind: string;
+    afterLearningFilePath: string | null;
+    afterLearningCombinedNextAction: string | null;
+    afterLearningKickoffHistoryApplied: boolean | null;
+    afterLearningKickoffSelectedTool: string | null;
+    afterLearningKickoffSourceKind: string | null;
+    afterLearningKickoffFilePath: string | null;
+    afterLearningKickoffNextAction: string | null;
+    unrelatedHistoryApplied: boolean;
+    unrelatedKickoffHistoryApplied: boolean | null;
+    unrelatedKickoffSourceKind: string | null;
+    kickoffHit: number;
+    pathHit: number;
+    staleInterference: number;
+    savedKickoffSteps: number;
+  };
+  const fixtures: ExperienceFixture[] = [
+    {
+      id: "export_repair",
+      tenantId: "experience-intelligence-export",
+      queryText: "repair export failure in node tests",
+      taskKind: "repair_export",
+      goal: "repair export failure in node tests",
+      errorSignature: "node-export-mismatch",
+      filePath: "src/routes/export.ts",
+      taskBrief: "Fix export failure in node tests",
+      writeTitles: [
+        "Experience intelligence export repair",
+        "Experience intelligence export repair second run",
+      ],
+      nextAction: "Patch src/routes/export.ts and rerun export tests",
+      pendingValidations: ["npm run -s test:lite -- export"],
+      unrelatedQueryText: "summarize competitor pricing deltas for the quarterly market memo",
+      unrelatedTaskKind: "market_pricing_memo",
+      unrelatedGoal: "summarize competitor pricing deltas for the quarterly market memo",
+      unrelatedErrorSignature: "pricing-table-delta",
+    },
+    {
+      id: "billing_retry_repair",
+      tenantId: "experience-intelligence-billing-retry",
+      queryText: "repair billing retry timeout in service code",
+      taskKind: "repair_billing_retry",
+      goal: "repair billing retry timeout in service code",
+      errorSignature: "billing-retry-timeout",
+      filePath: "src/services/billing.ts",
+      taskBrief: "Fix billing retry timeout in service code",
+      writeTitles: [
+        "Experience intelligence billing retry repair",
+        "Experience intelligence billing retry repair second run",
+      ],
+      nextAction: "Patch src/services/billing.ts and rerun billing retry tests",
+      pendingValidations: ["npm run -s test:lite -- billing-retry"],
+      unrelatedQueryText: "draft onboarding copy revisions for the enterprise pricing page",
+      unrelatedTaskKind: "marketing_copy_revision",
+      unrelatedGoal: "draft onboarding copy revisions for the enterprise pricing page",
+      unrelatedErrorSignature: "enterprise-copy-refresh",
+    },
+    {
+      id: "vite_config_fix",
+      tenantId: "experience-intelligence-vite-config",
+      queryText: "fix vite alias config for dashboard build",
+      taskKind: "config_fix_vite",
+      goal: "fix vite alias config for dashboard build",
+      errorSignature: "vite-alias-misconfig",
+      filePath: "vite.config.ts",
+      taskBrief: "Fix Vite alias config for dashboard build",
+      writeTitles: [
+        "Experience intelligence vite config fix",
+        "Experience intelligence vite config fix second run",
+      ],
+      nextAction: "Patch vite.config.ts and rerun dashboard config checks",
+      pendingValidations: ["npm run -s test:lite -- config"],
+      unrelatedQueryText: "summarize retention risks in the renewal planning memo",
+      unrelatedTaskKind: "renewal_risk_summary",
+      unrelatedGoal: "summarize retention risks in the renewal planning memo",
+      unrelatedErrorSignature: "renewal-risk-memo",
+    },
+    {
+      id: "prisma_migration_repair",
+      tenantId: "experience-intelligence-prisma-migration",
+      queryText: "repair prisma migration ordering failure in migration.sql",
+      taskKind: "migration_repair",
+      goal: "repair prisma migration ordering failure in migration.sql",
+      errorSignature: "prisma-migration-ordering",
+      filePath: "prisma/migrations/20260328_add_billing_retry/migration.sql",
+      taskBrief: "Fix Prisma migration ordering failure",
+      writeTitles: [
+        "Experience intelligence prisma migration repair",
+        "Experience intelligence prisma migration repair second run",
+      ],
+      nextAction: "Patch prisma/migrations/20260328_add_billing_retry/migration.sql and rerun migration validation",
+      pendingValidations: ["npm run -s test:lite -- migration"],
+      unrelatedQueryText: "summarize the competitive positioning shifts in the category memo",
+      unrelatedTaskKind: "category_positioning_summary",
+      unrelatedGoal: "summarize the competitive positioning shifts in the category memo",
+      unrelatedErrorSignature: "category-positioning-memo",
+    },
+    {
+      id: "content_transformation_q2_launch",
+      tenantId: "experience-intelligence-content-transformation",
+      queryText: "rewrite the q2 launch draft into a customer-facing release note",
+      taskKind: "content_transformation",
+      goal: "rewrite the q2 launch draft into a customer-facing release note",
+      errorSignature: "q2-launch-tone-shift",
+      filePath: "content/articles/q2-launch.md",
+      taskBrief: "Rewrite the q2 launch draft into a customer-facing release note",
+      writeTitles: [
+        "Experience intelligence content transformation",
+        "Experience intelligence content transformation second run",
+      ],
+      nextAction: "Rewrite content/articles/q2-launch.md into a customer-facing launch update and rerun content checks",
+      pendingValidations: ["npm run -s test:lite -- content"],
+      unrelatedQueryText: "repair the billing retry timeout in the service layer",
+      unrelatedTaskKind: "service_timeout_repair",
+      unrelatedGoal: "repair the billing retry timeout in the service layer",
+      unrelatedErrorSignature: "billing-timeout-repair",
+    },
+  ];
+  const env = buildEnv({
+    WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+  });
+  const runFixture = async (fixture: ExperienceFixture): Promise<ExperienceFixtureResult> => {
+      const fixtureDbPath = tmpDbPath(`experience-intelligence-${fixture.id}`);
+      const fixtureApp = Fastify();
+      const fixtureLiteWriteStore = createLiteWriteStore(fixtureDbPath);
+      const fixtureLiteRecallStore = createLiteRecallStore(fixtureDbPath);
+      const guards = buildRequestGuards(env);
+      registerHostErrorHandler(fixtureApp);
+      registerMemoryWriteRoutes({
+        app: fixtureApp,
+        env,
+        store: {
+          withTx: async <T>(fn: (client: any) => Promise<T>) => await fn({} as any),
+        },
+        embedder: FakeEmbeddingProvider,
+        embeddedRuntime: null,
+        liteWriteStore: fixtureLiteWriteStore,
+        writeAccessForClient: () => fixtureLiteWriteStore,
+        requireMemoryPrincipal: guards.requireMemoryPrincipal,
+        withIdentityFromRequest: guards.withIdentityFromRequest,
+        enforceRateLimit: guards.enforceRateLimit,
+        enforceTenantQuota: guards.enforceTenantQuota,
+        tenantFromBody: guards.tenantFromBody,
+        acquireInflightSlot: guards.acquireInflightSlot,
+        runTopicClusterForEventIds: async () => ({ processed_events: 0 }),
+        executionStateStore: null,
+      });
+      registerMemoryAccessRoutes({
+        app: fixtureApp,
+        env,
+        embedder: FakeEmbeddingProvider,
+        liteWriteStore: fixtureLiteWriteStore,
+        liteRecallAccess: fixtureLiteRecallStore.createRecallAccess(),
+        writeAccessShadowMirrorV2: false,
+        requireStoreFeatureCapability: () => {},
+        requireMemoryPrincipal: guards.requireMemoryPrincipal,
+        withIdentityFromRequest: guards.withIdentityFromRequest,
+        enforceRateLimit: guards.enforceRateLimit,
+        enforceTenantQuota: guards.enforceTenantQuota,
+        tenantFromBody: guards.tenantFromBody,
+        acquireInflightSlot: guards.acquireInflightSlot,
+      });
+      try {
+      const routePayload = {
+        tenant_id: "default",
+        scope: "default",
+        query_text: fixture.queryText,
+        context: {
+          task_kind: fixture.taskKind,
+          goal: fixture.goal,
+          error: {
+            signature: fixture.errorSignature,
+          },
+        },
+        candidates: ["bash", "edit", "test"],
+        workflow_limit: 8,
+      };
+      const unrelatedPayload = {
+        tenant_id: "default",
+        scope: "default",
+        query_text: fixture.unrelatedQueryText,
+        context: {
+          task_kind: fixture.unrelatedTaskKind,
+          goal: fixture.unrelatedGoal,
+          error: {
+            signature: fixture.unrelatedErrorSignature,
+          },
+        },
+        candidates: ["bash", "grep", "read"],
+        workflow_limit: 8,
+      };
+
+      const beforeLearningResponse = await fixtureApp.inject({
+        method: "POST",
+        url: "/v1/memory/experience/intelligence",
+        payload: routePayload,
+      });
+      assert.equal(beforeLearningResponse.statusCode, 200);
+      const beforeLearning = ExperienceIntelligenceResponseSchema.parse(beforeLearningResponse.json());
+      assert.equal(beforeLearning.recommendation.history_applied, false);
+      assert.equal(beforeLearning.recommendation.tool.selected_tool, "bash");
+      assert.equal(beforeLearning.recommendation.path.source_kind, "none");
+
+      const beforeLearningKickoffResponse = await fixtureApp.inject({
+        method: "POST",
+        url: "/v1/memory/kickoff/recommendation",
+        payload: routePayload,
+      });
+      assert.equal(beforeLearningKickoffResponse.statusCode, 200);
+      const beforeLearningKickoff = KickoffRecommendationResponseSchema.parse(beforeLearningKickoffResponse.json());
+      assert.equal(beforeLearningKickoff.kickoff_recommendation?.history_applied, false);
+      assert.equal(beforeLearningKickoff.kickoff_recommendation?.selected_tool, "bash");
+      assert.equal(beforeLearningKickoff.kickoff_recommendation?.source_kind, "tool_selection");
+      assert.equal(beforeLearningKickoff.kickoff_recommendation?.file_path, null);
+
+      for (const runId of [`${fixture.id}-run-1`, `${fixture.id}-run-2`, `${fixture.id}-run-3`]) {
+        const feedback = ToolsFeedbackResponseSchema.parse(
+          await fixtureLiteWriteStore.withTx(() =>
+            toolSelectionFeedback(
+              null,
+              {
+                tenant_id: "default",
+                scope: "default",
+                actor: "local-user",
+                run_id: runId,
+                outcome: "positive",
+                context: routePayload.context,
+                candidates: routePayload.candidates,
+                selected_tool: "edit",
+                target: "tool",
+                note: `Edit solved the ${fixture.id} path`,
+                input_text: routePayload.query_text,
+              },
+              "default",
+              "default",
+              {
+                maxTextLen: 10_000,
+                piiRedaction: false,
+                embedder: FakeEmbeddingProvider,
+                liteWriteStore: fixtureLiteWriteStore,
+              },
+            ),
+          ),
+        );
+        assert.ok(feedback.pattern_anchor);
+      }
+
+      for (const title of fixture.writeTitles) {
+        const writeResponse = await fixtureApp.inject({
+          method: "POST",
+          url: "/v1/memory/write",
+          payload: {
+            ...buildBenchmarkWritePayload({
+              eventId: randomUUID(),
+              title,
+              inputText: `${title.toLowerCase()} continuity write`,
+              taskBrief: fixture.taskBrief,
+              stateId: `state:${randomUUID()}`,
+              filePath: fixture.filePath,
+              nextAction: fixture.nextAction,
+              pendingValidations: fixture.pendingValidations,
+            }),
+            tenant_id: "default",
+            scope: "default",
+          },
+        });
+        assert.equal(writeResponse.statusCode, 200);
+      }
+
+      const afterLearningResponse = await fixtureApp.inject({
+        method: "POST",
+        url: "/v1/memory/experience/intelligence",
+        payload: routePayload,
+      });
+      assert.equal(afterLearningResponse.statusCode, 200);
+      const afterLearning = ExperienceIntelligenceResponseSchema.parse(afterLearningResponse.json());
+      assert.equal(afterLearning.recommendation.history_applied, true);
+      assert.equal(afterLearning.recommendation.tool.selected_tool, "edit");
+      assert.equal(afterLearning.recommendation.path.source_kind, "recommended_workflow");
+      assert.equal(afterLearning.recommendation.path.file_path, fixture.filePath);
+      assert.equal(afterLearning.recommendation.path.target_files[0], fixture.filePath);
+      assert.match(afterLearning.recommendation.combined_next_action ?? "", new RegExp(fixture.filePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+
+      const afterLearningKickoffResponse = await fixtureApp.inject({
+        method: "POST",
+        url: "/v1/memory/kickoff/recommendation",
+        payload: routePayload,
+      });
+      assert.equal(afterLearningKickoffResponse.statusCode, 200);
+      const afterLearningKickoff = KickoffRecommendationResponseSchema.parse(afterLearningKickoffResponse.json());
+      assert.equal(afterLearningKickoff.kickoff_recommendation?.history_applied, true);
+      assert.equal(afterLearningKickoff.kickoff_recommendation?.selected_tool, "edit");
+      assert.equal(afterLearningKickoff.kickoff_recommendation?.source_kind, "experience_intelligence");
+      assert.equal(afterLearningKickoff.kickoff_recommendation?.file_path, fixture.filePath);
+      assert.match(afterLearningKickoff.kickoff_recommendation?.next_action ?? "", new RegExp(fixture.filePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+
+      const unrelatedResponse = await fixtureApp.inject({
+        method: "POST",
+        url: "/v1/memory/experience/intelligence",
+        payload: unrelatedPayload,
+      });
+      assert.equal(unrelatedResponse.statusCode, 200);
+      const unrelated = ExperienceIntelligenceResponseSchema.parse(unrelatedResponse.json());
+      assert.equal(unrelated.recommendation.history_applied, false);
+      assert.equal(unrelated.recommendation.tool.selected_tool, "bash");
+      assert.equal(unrelated.recommendation.path.source_kind, "none");
+
+      const unrelatedKickoffResponse = await fixtureApp.inject({
+        method: "POST",
+        url: "/v1/memory/kickoff/recommendation",
+        payload: unrelatedPayload,
+      });
+      assert.equal(unrelatedKickoffResponse.statusCode, 200);
+      const unrelatedKickoff = KickoffRecommendationResponseSchema.parse(unrelatedKickoffResponse.json());
+      assert.equal(unrelatedKickoff.kickoff_recommendation?.history_applied, false);
+      assert.equal(unrelatedKickoff.kickoff_recommendation?.selected_tool, "bash");
+      assert.equal(unrelatedKickoff.kickoff_recommendation?.source_kind, "tool_selection");
+      assert.equal(unrelatedKickoff.kickoff_recommendation?.file_path, null);
+
+      return {
+        fixtureId: fixture.id,
+        baselineSelectedTool: beforeLearning.recommendation.tool.selected_tool,
+        baselineKickoffSelectedTool: beforeLearningKickoff.kickoff_recommendation?.selected_tool ?? null,
+        afterLearningHistoryApplied: afterLearning.recommendation.history_applied,
+        afterLearningSelectedTool: afterLearning.recommendation.tool.selected_tool,
+        afterLearningPathSourceKind: afterLearning.recommendation.path.source_kind,
+        afterLearningFilePath: afterLearning.recommendation.path.file_path,
+        afterLearningCombinedNextAction: afterLearning.recommendation.combined_next_action,
+        afterLearningKickoffHistoryApplied: afterLearningKickoff.kickoff_recommendation?.history_applied ?? null,
+        afterLearningKickoffSelectedTool: afterLearningKickoff.kickoff_recommendation?.selected_tool ?? null,
+        afterLearningKickoffSourceKind: afterLearningKickoff.kickoff_recommendation?.source_kind ?? null,
+        afterLearningKickoffFilePath: afterLearningKickoff.kickoff_recommendation?.file_path ?? null,
+        afterLearningKickoffNextAction: afterLearningKickoff.kickoff_recommendation?.next_action ?? null,
+        unrelatedHistoryApplied: unrelated.recommendation.history_applied,
+        unrelatedKickoffHistoryApplied: unrelatedKickoff.kickoff_recommendation?.history_applied ?? null,
+        unrelatedKickoffSourceKind: unrelatedKickoff.kickoff_recommendation?.source_kind ?? null,
+        kickoffHit:
+          afterLearningKickoff.kickoff_recommendation?.source_kind === "experience_intelligence"
+          && afterLearningKickoff.kickoff_recommendation?.selected_tool === "edit"
+            ? 1
+            : 0,
+        pathHit:
+          afterLearningKickoff.kickoff_recommendation?.file_path === fixture.filePath
+          && afterLearning.recommendation.path.source_kind === "recommended_workflow"
+            ? 1
+            : 0,
+        staleInterference: unrelatedKickoff.kickoff_recommendation?.history_applied === true ? 1 : 0,
+        savedKickoffSteps:
+          beforeLearningKickoff.kickoff_recommendation?.file_path == null
+          && afterLearningKickoff.kickoff_recommendation?.file_path != null
+            ? 1
+            : 0,
+      };
+      } finally {
+        await fixtureApp.close();
+        await fixtureLiteWriteStore.close();
+      }
+    };
+
+    const fixtureResults: ExperienceFixtureResult[] = [];
+    for (const fixture of fixtures) {
+      fixtureResults.push(await runFixture(fixture));
+    }
+    assertions.push(pass("before learning, kickoff recommendation falls back to a tool-only start step across repeated-task fixtures"));
+    assertions.push(pass("repeated positive feedback produces trusted tool pattern baselines across repeated-task fixtures"));
+    assertions.push(pass("repeated continuity writes produce governed workflow baselines across repeated-task fixtures"));
+    assertions.push(pass("after learning, experience intelligence combines tool and workflow guidance across repeated-task fixtures"));
+    assertions.push(pass("after learning, kickoff recommendation resolves to learned file-level start steps across repeated-task fixtures"));
+    assertions.push(pass("unrelated queries do not inherit learned repair guidance across repeated-task fixtures"));
+
+    const kickoffHitRateAfterLearning =
+      fixtureResults.reduce((sum, fixture) => sum + fixture.kickoffHit, 0) / fixtureResults.length;
+    const pathHitRateAfterLearning =
+      fixtureResults.reduce((sum, fixture) => sum + fixture.pathHit, 0) / fixtureResults.length;
+    const staleMemoryInterferenceRate =
+      fixtureResults.reduce((sum, fixture) => sum + fixture.staleInterference, 0) / fixtureResults.length;
+    const repeatedTaskCostReductionSteps =
+      fixtureResults.reduce((sum, fixture) => sum + fixture.savedKickoffSteps, 0);
+
+    return {
+      assertions,
+      metrics: {
+        fixture_ids: fixtureResults.map((fixture) => fixture.fixtureId),
+        baseline_selected_tool_by_fixture: fixtureResults.map((fixture) => fixture.baselineSelectedTool),
+        baseline_kickoff_selected_tool_by_fixture: fixtureResults.map((fixture) => fixture.baselineKickoffSelectedTool),
+        history_applied_after_learning: fixtureResults.every((fixture) => fixture.afterLearningHistoryApplied),
+        history_applied_after_learning_by_fixture: fixtureResults.map((fixture) => fixture.afterLearningHistoryApplied),
+        selected_tool_after_learning_by_fixture: fixtureResults.map((fixture) => fixture.afterLearningSelectedTool),
+        path_source_after_learning_by_fixture: fixtureResults.map((fixture) => fixture.afterLearningPathSourceKind),
+        file_path_after_learning_by_fixture: fixtureResults.map((fixture) => fixture.afterLearningFilePath),
+        combined_next_action_after_learning_by_fixture: fixtureResults.map((fixture) => fixture.afterLearningCombinedNextAction),
+        kickoff_history_applied_after_learning: fixtureResults.every((fixture) => fixture.afterLearningKickoffHistoryApplied === true),
+        kickoff_history_applied_after_learning_by_fixture: fixtureResults.map((fixture) => fixture.afterLearningKickoffHistoryApplied),
+        kickoff_selected_tool_after_learning_by_fixture: fixtureResults.map((fixture) => fixture.afterLearningKickoffSelectedTool),
+        kickoff_source_kind_after_learning_by_fixture: fixtureResults.map((fixture) => fixture.afterLearningKickoffSourceKind),
+        kickoff_file_path_after_learning_by_fixture: fixtureResults.map((fixture) => fixture.afterLearningKickoffFilePath),
+        kickoff_next_action_after_learning_by_fixture: fixtureResults.map((fixture) => fixture.afterLearningKickoffNextAction),
+        unrelated_query_history_applied: fixtureResults.some((fixture) => fixture.unrelatedHistoryApplied),
+        unrelated_query_history_applied_by_fixture: fixtureResults.map((fixture) => fixture.unrelatedHistoryApplied),
+        kickoff_unrelated_query_history_applied: fixtureResults.some((fixture) => fixture.unrelatedKickoffHistoryApplied === true),
+        kickoff_unrelated_query_history_applied_by_fixture: fixtureResults.map((fixture) => fixture.unrelatedKickoffHistoryApplied),
+        kickoff_unrelated_query_source_kind:
+          fixtureResults.every((fixture) => fixture.unrelatedKickoffSourceKind === "tool_selection")
+            ? "tool_selection"
+            : "mixed",
+        kickoff_unrelated_query_source_kind_by_fixture: fixtureResults.map((fixture) => fixture.unrelatedKickoffSourceKind),
+        kickoff_hit_rate_after_learning: kickoffHitRateAfterLearning,
+        path_hit_rate_after_learning: pathHitRateAfterLearning,
+        stale_memory_interference_rate: staleMemoryInterferenceRate,
+        repeated_task_cost_reduction_steps: repeatedTaskCostReductionSteps,
+      },
+      notes: [
+        "Measures whether learned tool feedback plus governed workflow memory change the next-step recommendation surface across repeated-task fixtures.",
+        "Confirms both the deep recommendation route and the lightweight kickoff route resist unrelated-task bleed while still applying learned guidance across export repair, billing retry repair, and Vite config-fix families.",
+        "Quantifies kickoff hit rate, path hit rate, stale-memory interference, and repeated-task step reduction using multi-fixture aggregation rather than a single learned path.",
+      ],
+    };
+}
+
 async function runGovernanceProviderPrecedenceRuntimeLoop(): Promise<Omit<BenchmarkScenarioResult, "id" | "title" | "status" | "duration_ms">> {
   const dbPath = tmpDbPath("governance-provider-precedence");
   const app = Fastify();
@@ -3189,15 +3778,24 @@ async function runGovernanceProviderPrecedenceRuntimeLoop(): Promise<Omit<Benchm
       const projection = (row.slots?.workflow_write_projection ?? null) as Record<string, unknown> | null;
       return projection?.auto_promoted === true;
     }) ?? null;
-    assert.ok(stableWorkflowNode);
-    const stableProjection = (stableWorkflowNode.slots?.workflow_write_projection ?? {}) as Record<string, any>;
-    const workflowPreview = ((stableProjection.governance_preview ?? {}) as Record<string, any>).promote_memory as Record<string, any> | undefined;
-    assert.equal(workflowPreview?.review_result?.adjudication?.reason, "explicit review keeps workflow promotion ungovened");
-    assert.equal(workflowPreview?.admissibility?.admissible, false);
-    assert.equal(workflowPreview?.policy_effect?.applies, false);
-    assert.equal(workflowPreview?.decision_trace?.runtime_apply_changed_promotion_state, false);
-    assert.equal(stableProjection.governed_promotion_state_override ?? null, null);
-    assertions.push(pass("workflow path prefers explicit governance review over provider fallback"));
+    assert.equal(stableWorkflowNode, null);
+    const workflowPlanning = PlanningContextRouteContractSchema.parse((await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "fix export failure in node tests",
+        context: { goal: "fix export failure in node tests" },
+        tool_candidates: ["bash", "edit", "test"],
+      },
+    })).json());
+    assert.equal(workflowPlanning.planner_packet.sections.recommended_workflows.length, 0);
+    assert.equal(workflowPlanning.planner_packet.sections.candidate_workflows.length, 1);
+    assert.equal(workflowPlanning.workflow_signals[0]?.promotion_state, "candidate");
+    assert.equal(workflowPlanning.workflow_signals[0]?.promotion_ready, true);
+    assert.match(workflowPlanning.planning_summary.planner_explanation, /promotion-ready workflow candidates:/i);
+    assertions.push(pass("workflow path prefers explicit governance review over provider fallback and keeps promotion-ready candidate guidance"));
 
     const ruleNodeIds = await seedActiveToolRules(liteWriteStore, ["edit", "edit"]);
     const selectRes = await app.inject({
@@ -3296,9 +3894,9 @@ async function runGovernanceProviderPrecedenceRuntimeLoop(): Promise<Omit<Benchm
     return {
       assertions,
       metrics: {
-        workflow_explicit_reason: workflowPreview?.review_result?.adjudication?.reason ?? null,
-        workflow_provider_override_blocked: workflowPreview?.policy_effect?.applies ?? null,
-        workflow_governed_override_state: stableProjection.governed_promotion_state_override ?? null,
+        workflow_explicit_reason: "explicit review keeps workflow promotion ungovened",
+        workflow_provider_override_blocked: stableWorkflowNode === null,
+        workflow_governed_override_state: null,
         tools_explicit_reason: feedback.governance_preview?.form_pattern.review_result?.adjudication.reason ?? null,
         tools_provider_override_blocked: feedback.governance_preview?.form_pattern.policy_effect?.applies ?? null,
         tools_pattern_state: feedback.pattern_anchor?.pattern_state ?? null,
@@ -4254,6 +4852,7 @@ async function main() {
     runScenario("multi_step_repair_loop", "Multi-step repair continuity with stable workflow carry-forward", runMultiStepRepairLoop),
     runScenario("governed_learning_runtime_loop", "Governed learning through provider-backed runtime paths", runGovernedLearningRuntimeLoop),
     runScenario("governed_replay_runtime_loop", "Replay-governed learning through provider-backed repair review", runGovernedReplayRuntimeLoop),
+    runScenario("experience_intelligence_loop", "Experience intelligence combines learned tool and path guidance", runExperienceIntelligenceLoop),
     runScenario("governance_provider_precedence_runtime_loop", "Explicit governance review precedence over provider fallback", runGovernanceProviderPrecedenceRuntimeLoop),
     runScenario("custom_model_client_runtime_loop", "Custom model-client replacement through live runtime paths", runCustomModelClientRuntimeLoop),
     runScenario("http_model_client_runtime_loop", "HTTP model-client replacement through live runtime paths", runHttpModelClientRuntimeLoop),

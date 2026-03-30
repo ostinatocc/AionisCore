@@ -4,15 +4,27 @@ import type { Env } from "../config.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { memoryFindLite } from "../memory/find.js";
+import {
+  buildExperienceIntelligenceLite,
+  buildKickoffRecommendationResponseFromExperience,
+} from "../memory/experience-intelligence.js";
 import { buildExecutionMemoryIntrospectionLite } from "../memory/execution-introspection.js";
 import { exportMemoryPack, importMemoryPack } from "../memory/packs.js";
 import { rehydrateAnchorPayloadLite } from "../memory/rehydrate-anchor.js";
 import { memoryResolveLite } from "../memory/resolve.js";
 import { createSession, listSessions, listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
+import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
 
-type MemoryAccessRequestKind = "write" | "find" | "resolve" | "rehydrate_payload" | "execution_introspect";
+type MemoryAccessRequestKind =
+  | "write"
+  | "find"
+  | "resolve"
+  | "rehydrate_payload"
+  | "execution_introspect"
+  | "experience_intelligence"
+  | "kickoff_recommendation";
 type MemoryAccessInflightKind = "write" | "recall";
 
 type MemoryAccessRequest = FastifyRequest<{ Body: unknown; Querystring: Record<string, unknown>; Params: Record<string, unknown> }>;
@@ -35,6 +47,7 @@ type RegisterMemoryAccessRoutesArgs = {
   embedder: EmbeddingProvider | null;
   embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
   liteWriteStore: MemoryAccessLiteStoreLike;
+  liteRecallAccess: RecallStoreAccess;
   writeAccessShadowMirrorV2: boolean;
   requireStoreFeatureCapability: (capability: "sessions_graph" | "packs_export" | "packs_import") => void;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
@@ -61,6 +74,7 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     embedder,
     embeddingSurfacePolicy: embeddingSurfacePolicyArg,
     liteWriteStore,
+    liteRecallAccess,
     writeAccessShadowMirrorV2,
     requireStoreFeatureCapability,
     requireMemoryPrincipal,
@@ -235,6 +249,42 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
         env.MEMORY_SCOPE,
         env.MEMORY_TENANT_ID,
         env.LITE_LOCAL_ACTOR_ID,
+      ),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/experience/intelligence",
+    requestKind: "experience_intelligence",
+    inflightKind: "recall",
+    execute: (body) =>
+      buildExperienceIntelligenceLite({
+        liteWriteStore,
+        liteRecallAccess,
+        embedder,
+        body,
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        defaultActorId: env.LITE_LOCAL_ACTOR_ID,
+      }),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/kickoff/recommendation",
+    requestKind: "kickoff_recommendation",
+    inflightKind: "recall",
+    execute: async (body) =>
+      buildKickoffRecommendationResponseFromExperience(
+        await buildExperienceIntelligenceLite({
+          liteWriteStore,
+          liteRecallAccess,
+          embedder,
+          body,
+          defaultScope: env.MEMORY_SCOPE,
+          defaultTenantId: env.MEMORY_TENANT_ID,
+          defaultActorId: env.LITE_LOCAL_ACTOR_ID,
+        }),
       ),
   });
 

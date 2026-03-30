@@ -350,7 +350,7 @@ function buildLightweightHandoffWritePayload(args: {
   };
 }
 
-test("memory/write projects execution-state-backed writes into workflow candidates and then auto-promotes stable workflow guidance", async () => {
+test("memory/write keeps workflow candidates promotion-ready until governance admits stable workflow promotion", async () => {
   const dbPath = tmpDbPath("projection");
   const app = Fastify();
   const liteWriteStore = createLiteWriteStore(dbPath);
@@ -424,9 +424,25 @@ test("memory/write projects execution-state-backed writes into workflow candidat
       const projection = (row.slots?.workflow_write_projection ?? null) as Record<string, unknown> | null;
       return projection?.auto_promoted === true;
     }) ?? null;
-    assert.ok(stableWorkflowNode);
-    const stableProjection = (stableWorkflowNode.slots?.workflow_write_projection ?? {}) as Record<string, unknown>;
-    const governancePreview = (stableProjection.governance_preview ?? {}) as Record<string, unknown>;
+    assert.equal(stableWorkflowNode, null);
+    const storedCandidates = await liteWriteStore.findNodes({
+      scope: "default",
+      type: "event",
+      slotsContains: {
+        summary_kind: "workflow_candidate",
+      },
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 20,
+      offset: 0,
+    });
+    const latestCandidate = storedCandidates.rows.find((row) => {
+      const projection = (row.slots?.workflow_write_projection ?? null) as Record<string, unknown> | null;
+      return projection?.source_node_id != null;
+    }) ?? null;
+    assert.ok(latestCandidate);
+    const candidateProjection = (latestCandidate?.slots?.workflow_write_projection ?? {}) as Record<string, unknown>;
+    const governancePreview = (candidateProjection.governance_preview ?? {}) as Record<string, unknown>;
     const promotePreview = (governancePreview.promote_memory ?? {}) as Record<string, unknown>;
     const reviewPacket = (promotePreview.review_packet ?? {}) as Record<string, unknown>;
     const decisionTrace = (promotePreview.decision_trace ?? {}) as Record<string, unknown>;
@@ -454,11 +470,12 @@ test("memory/write projects execution-state-backed writes into workflow candidat
     });
     assert.equal(secondPlanning.statusCode, 200);
     const secondBody = PlanningContextRouteContractSchema.parse(secondPlanning.json());
-    assert.equal(secondBody.planner_packet.sections.recommended_workflows.length, 1);
-    assert.equal(secondBody.planner_packet.sections.candidate_workflows.length, 0);
+    assert.equal(secondBody.planner_packet.sections.recommended_workflows.length, 0);
+    assert.equal(secondBody.planner_packet.sections.candidate_workflows.length, 1);
     assert.equal(secondBody.workflow_signals.length, 1);
-    assert.equal(secondBody.workflow_signals[0]?.promotion_state, "stable");
-    assert.match(secondBody.planning_summary.planner_explanation, /workflow guidance:/i);
+    assert.equal(secondBody.workflow_signals[0]?.promotion_state, "candidate");
+    assert.equal(secondBody.workflow_signals[0]?.promotion_ready, true);
+    assert.match(secondBody.planning_summary.planner_explanation, /promotion-ready workflow candidates:/i);
 
     const introspectAfterSecondWrite = await app.inject({
       method: "POST",
@@ -471,12 +488,12 @@ test("memory/write projects execution-state-backed writes into workflow candidat
     });
     assert.equal(introspectAfterSecondWrite.statusCode, 200);
     const introspectBody = ExecutionMemoryIntrospectionResponseSchema.parse(introspectAfterSecondWrite.json());
-    assert.equal(introspectBody.recommended_workflows.length, 1);
-    assert.equal(introspectBody.candidate_workflows.length, 0);
-    assert.equal(introspectBody.workflow_signal_summary.stable_workflow_count, 1);
-    assert.equal(introspectBody.workflow_signal_summary.promotion_ready_workflow_count, 0);
+    assert.equal(introspectBody.recommended_workflows.length, 0);
+    assert.equal(introspectBody.candidate_workflows.length, 1);
+    assert.equal(introspectBody.workflow_signal_summary.stable_workflow_count, 0);
+    assert.equal(introspectBody.workflow_signal_summary.promotion_ready_workflow_count, 1);
     assert.equal(introspectBody.inventory.raw_workflow_candidate_count, 2);
-    assert.equal(introspectBody.inventory.suppressed_candidate_workflow_count, 2);
+    assert.equal(introspectBody.inventory.suppressed_candidate_workflow_count, 1);
 
     const fixedSourcePayload = buildExecutionWritePayload({
       eventId: "fixed-source-event",
@@ -513,11 +530,11 @@ test("memory/write projects execution-state-backed writes into workflow candidat
     });
     assert.equal(retryIntrospect.statusCode, 200);
     const retryBody = ExecutionMemoryIntrospectionResponseSchema.parse(retryIntrospect.json());
-    assert.equal(retryBody.recommended_workflows.length, 1);
-    assert.equal(retryBody.candidate_workflows.length, 0);
-    assert.equal(retryBody.workflow_signal_summary.stable_workflow_count, 1);
-    assert.equal(retryBody.workflow_signal_summary.promotion_ready_workflow_count, 0);
-    assert.equal(retryBody.inventory.raw_workflow_candidate_count, 2);
+    assert.equal(retryBody.recommended_workflows.length, 0);
+    assert.equal(retryBody.candidate_workflows.length, 1);
+    assert.equal(retryBody.workflow_signal_summary.stable_workflow_count, 0);
+    assert.equal(retryBody.workflow_signal_summary.promotion_ready_workflow_count, 1);
+    assert.equal(retryBody.inventory.raw_workflow_candidate_count, 3);
     assert.equal(retryBody.inventory.suppressed_candidate_workflow_count, 2);
   } finally {
     await app.close();
@@ -797,9 +814,10 @@ test("memory/write also projects packet-only execution continuity writes into wo
     });
     assert.equal(secondPlanning.statusCode, 200);
     const secondBody = PlanningContextRouteContractSchema.parse(secondPlanning.json());
-    assert.equal(secondBody.planner_packet.sections.recommended_workflows.length, 1);
-    assert.equal(secondBody.planner_packet.sections.candidate_workflows.length, 0);
-    assert.equal(secondBody.workflow_signals[0]?.promotion_state, "stable");
+    assert.equal(secondBody.planner_packet.sections.recommended_workflows.length, 0);
+    assert.equal(secondBody.planner_packet.sections.candidate_workflows.length, 1);
+    assert.equal(secondBody.workflow_signals[0]?.promotion_state, "candidate");
+    assert.equal(secondBody.workflow_signals[0]?.promotion_ready, true);
 
     const introspect = await app.inject({
       method: "POST",
@@ -812,9 +830,10 @@ test("memory/write also projects packet-only execution continuity writes into wo
     });
     assert.equal(introspect.statusCode, 200);
     const introspectBody = ExecutionMemoryIntrospectionResponseSchema.parse(introspect.json());
-    assert.equal(introspectBody.recommended_workflows.length, 1);
-    assert.equal(introspectBody.candidate_workflows.length, 0);
-    assert.match(introspectBody.demo_surface.merged_text, /tools=edit, test/i);
+    assert.equal(introspectBody.recommended_workflows.length, 0);
+    assert.equal(introspectBody.candidate_workflows.length, 1);
+    assert.match(introspectBody.demo_surface.merged_text, /promotion-ready workflows=1/i);
+    assert.match(introspectBody.demo_surface.merged_text, /candidate workflow:/i);
   } finally {
     await app.close();
     await liteWriteStore.close();
@@ -891,9 +910,10 @@ test("memory/write projects lightweight handoff-style continuity through the gen
     });
     assert.equal(secondPlanning.statusCode, 200);
     const secondBody = PlanningContextRouteContractSchema.parse(secondPlanning.json());
-    assert.equal(secondBody.planner_packet.sections.recommended_workflows.length, 1);
-    assert.equal(secondBody.planner_packet.sections.candidate_workflows.length, 0);
-    assert.equal(secondBody.workflow_signals[0]?.promotion_state, "stable");
+    assert.equal(secondBody.planner_packet.sections.recommended_workflows.length, 0);
+    assert.equal(secondBody.planner_packet.sections.candidate_workflows.length, 1);
+    assert.equal(secondBody.workflow_signals[0]?.promotion_state, "candidate");
+    assert.equal(secondBody.workflow_signals[0]?.promotion_ready, true);
   } finally {
     await app.close();
     await liteWriteStore.close();

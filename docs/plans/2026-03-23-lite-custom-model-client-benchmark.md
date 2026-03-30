@@ -6,7 +6,7 @@ Status: implemented
 
 Added `custom_model_client_runtime_loop` to the real benchmark suite.
 
-This scenario now proves that a custom `modelClientFactory` replacement can be injected and honored by live Lite runtime wiring on:
+This scenario now proves that a custom `modelClientFactory` replacement can be injected and honored by live local runtime wiring on:
 
 1. workflow promotion
 2. tools feedback

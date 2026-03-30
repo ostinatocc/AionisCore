@@ -1,6 +1,8 @@
+# Aionis Core Governance Adjudication Modules Spec
+
 ## Goal
 
-Extract operation-specific builtin governance review logic into shared adjudication modules, so builtin clients become thin wrappers and later internal model clients can reuse the same bounded review logic.
+Extract operation-specific builtin governance review logic into shared adjudication modules, so builtin clients become thin assembly layers and later internal model clients can reuse the same bounded review logic.
 
 ## Scope
 

@@ -14,7 +14,7 @@ test("form_pattern semantic review packet exposes only bounded grouped context",
     source_node_ids: ["node_1", "node_2"],
     task_signature: "fix-node-test-failure",
     error_signature: "node-test-export-mismatch",
-    workflow_signature: "inspect-patch-rerun-targeted-test",
+    pattern_signature: "tools-pattern:inspect-patch-rerun-targeted-test",
     input_text: "form stable pattern from repeated successful workflows",
   });
 
@@ -44,7 +44,7 @@ test("form_pattern semantic review packet exposes only bounded grouped context",
   assert.equal(packet.target_level, "L3");
   assert.equal(packet.source_count, 2);
   assert.equal(packet.deterministic_gate.gate_satisfied, true);
-  assert.equal(packet.signatures.workflow_signature, "inspect-patch-rerun-targeted-test");
+  assert.equal(packet.signatures.pattern_signature, "tools-pattern:inspect-patch-rerun-targeted-test");
   assert.equal(packet.source_examples.length, 2);
 });
 
@@ -66,7 +66,7 @@ test("form_pattern semantic review packet marks deterministic gate unsatisfied w
 test("form_pattern semantic review admits a high-confidence bounded recommendation", () => {
   const input = MemoryFormPatternRequest.parse({
     source_node_ids: ["node_1", "node_2"],
-    workflow_signature: "inspect-patch-rerun-targeted-test",
+    pattern_signature: "tools-pattern:inspect-patch-rerun-targeted-test",
     input_text: "form stable pattern from repeated successful workflows",
   });
   const packet = buildFormPatternSemanticReviewPacket({
@@ -93,7 +93,7 @@ test("form_pattern semantic review admits a high-confidence bounded recommendati
 test("form_pattern semantic review rejects low-confidence recommendation and unsatisfied gate", () => {
   const input = MemoryFormPatternRequest.parse({
     source_node_ids: ["node_1", "node_2"],
-    workflow_signature: "inspect-patch-rerun-targeted-test",
+    pattern_signature: "tools-pattern:inspect-patch-rerun-targeted-test",
     input_text: "form stable pattern from repeated successful workflows",
   });
   const packet = buildFormPatternSemanticReviewPacket({

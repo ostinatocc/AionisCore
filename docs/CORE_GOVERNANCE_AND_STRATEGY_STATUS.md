@@ -1,15 +1,15 @@
-# Aionis Lite Governance And Strategy Status
+# Aionis Core Governance And Strategy Status
 
 Last reviewed: 2026-03-23
 
-This document compares the current `Aionis Lite` runtime against:
+This document compares the current `Aionis Core` runtime against:
 
-1. [LITE_MEMORY_GOVERNANCE_MODEL.md](./LITE_MEMORY_GOVERNANCE_MODEL.md)
-2. [LITE_EXECUTION_MEMORY_STRATEGY.md](./LITE_EXECUTION_MEMORY_STRATEGY.md)
+1. [CORE_MEMORY_GOVERNANCE_MODEL.md](./CORE_MEMORY_GOVERNANCE_MODEL.md)
+2. [CORE_CONTINUITY_STRATEGY.md](./CORE_CONTINUITY_STRATEGY.md)
 
 The goal is to record:
 
-1. what is already real in the current Lite runtime
+1. what is already real in the current core runtime
 2. what is only partially implemented
 3. what remains contract-first or roadmap-first
 4. what should be prioritized next
@@ -41,7 +41,7 @@ Current confidence by area:
 
 Current release-readiness judgment:
 
-1. Lite is now strong enough to describe as a real local execution-memory product, not an active thesis
+1. Aionis Core is now strong enough to describe as a real execution-memory kernel with a validated local runtime shell
 2. the core differentiation risk is no longer whether workflow and pattern learning work at all
 3. the remaining risk is concentrated in external-governance production posture, maintenance/lifecycle productization, and how much operator control should become public surface
 
@@ -56,13 +56,13 @@ More precise interpretation:
    - provider factory
    - runtime builder
 4. a real external Anthropic-compatible HTTP backend has now been used in shadow benchmark mode and matched builtin/static governed outcomes across workflow, tools, and replay
-5. Lite still does not expose a full operator control plane, lifecycle platform, or broad hosted-production posture
+5. operator-control, lifecycle, and broader hosted-production surfaces remain secondary to the current core loops
 
 What this means in practice:
 
-1. if Lite is positioned as a local, single-user, execution-memory-first runtime, it is already beyond a fragile `0.x research slice`
-2. if Lite is positioned as a broadly hosted, multi-tenant, human-governed control plane, real gaps still remain
-3. those gaps are now mostly around external model operations, maintenance posture, and public governance boundaries rather than around the core memory loops
+1. if Aionis Core is positioned as an execution-memory-first kernel with a validated local runtime shell, it is already beyond a fragile `0.x research slice`
+2. remaining gaps are concentrated in external model operations, maintenance posture, and public governance boundaries
+3. the core memory loops are no longer the main unknown
 
 ## What Is Already Implemented
 
@@ -72,7 +72,7 @@ Implemented status: `Implemented`
 
 Current runtime reality:
 
-1. Lite is a standalone local SQLite runtime
+1. the local runtime shell is a SQLite-backed execution-memory kernel
 2. replay, playbooks, context assembly, tool-decision memory, sandbox, and automation kernel paths are all present
 3. repository and public framing now match the runtime-core identity
 
@@ -226,7 +226,7 @@ Implemented status: `Implemented`
 Current runtime reality:
 
 1. Lite has shared adjudication modules for `promote_memory` and `form_pattern`
-2. builtin governance model clients are thin wrappers over those adjudication modules
+2. builtin governance model clients are narrow client layers over those adjudication modules
 3. model-client selection is centralized in a shared factory
 4. provider selection is centralized in a shared provider factory
 5. runtime route wiring is centralized in a shared runtime provider builder
@@ -265,8 +265,8 @@ Primary code:
 
 1. `scripts/lite-real-task-benchmark.ts`
 2. `scripts/lite-real-validation.sh`
-3. `docs/LITE_TESTING_STRATEGY.md`
-4. `docs/LITE_REAL_TASK_BENCHMARK_REPORT.md`
+3. `docs/CORE_TESTING_STRATEGY.md`
+4. `docs/LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md`
 
 ### 9. Real External LLM Shadow Alignment
 
@@ -294,8 +294,8 @@ Interpretation:
 Primary evidence:
 
 1. `scripts/lite-real-task-benchmark.ts`
-2. `docs/LITE_REAL_TASK_BENCHMARK_REPORT.md`
-3. `docs/LITE_TESTING_STRATEGY.md`
+2. `docs/LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md`
+3. `docs/CORE_TESTING_STRATEGY.md`
 
 ## What Is Only Partially Implemented
 

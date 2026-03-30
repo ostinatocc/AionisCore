@@ -15,6 +15,10 @@ import type {
   AionisHandoffRecoverRequest,
   AionisHandoffStoreRequest,
   AionisHealthResponse,
+  AionisKickoffRecommendationRequest,
+  AionisKickoffRecommendationResponse,
+  AionisTaskStartRequest,
+  AionisTaskStartResponse,
   AionisMemoryFeedbackRequest,
   AionisMemoryFindRequest,
   AionisMemoryPackExportRequest,
@@ -91,6 +95,30 @@ function createSessionEventsMethod(client: AionisHttpClient) {
   };
 }
 
+function createTaskStartMethod(client: AionisHttpClient) {
+  return async function taskStart(payload: AionisTaskStartRequest): Promise<AionisTaskStartResponse> {
+    const response = await client.post<AionisTaskStartRequest, AionisKickoffRecommendationResponse>({
+      path: "/v1/memory/kickoff/recommendation",
+      payload,
+    });
+    const kickoff = response.kickoff_recommendation;
+    return {
+      ...response,
+      summary_version: "task_start_v1",
+      first_action: kickoff?.selected_tool
+        ? {
+            action_kind: kickoff.file_path ? "file_step" : "tool_step",
+            source_kind: kickoff.source_kind,
+            history_applied: kickoff.history_applied,
+            selected_tool: kickoff.selected_tool,
+            file_path: kickoff.file_path,
+            next_action: kickoff.next_action,
+          }
+        : null,
+    };
+  };
+}
+
 export function createAionisRuntimeClient(options: AionisClientOptions) {
   const http = createAionisRuntimeHttpClient(options);
 
@@ -125,6 +153,11 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
       feedback: createPostMethod<AionisMemoryFeedbackRequest>(http, "/v1/memory/feedback"),
       planningContext: createPostMethod<AionisPlanningContextRequest>(http, "/v1/memory/planning/context"),
       contextAssemble: createPostMethod<AionisContextAssembleRequest>(http, "/v1/memory/context/assemble"),
+      kickoffRecommendation: createPostMethod<AionisKickoffRecommendationRequest, AionisKickoffRecommendationResponse>(
+        http,
+        "/v1/memory/kickoff/recommendation",
+      ),
+      taskStart: createTaskStartMethod(http),
       executionIntrospect: createPostMethod<AionisExecutionIntrospectRequest>(http, "/v1/memory/execution/introspect"),
       sessions: {
         create: createPostMethod<AionisSessionCreateRequest>(http, "/v1/memory/sessions"),

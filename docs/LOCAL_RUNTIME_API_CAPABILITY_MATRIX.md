@@ -1,8 +1,8 @@
-# Aionis API Capability Matrix
+# Aionis Core API Capability Matrix
 
 Last reviewed: 2026-03-20
 
-This document records the current public API surface of the standalone `Aionis` repository.
+This document records the current public API surface of the `Aionis Core` repository.
 
 Named execution-memory mainline:
 
@@ -20,7 +20,7 @@ Definition:
 
 `feedback -> pattern -> recall -> selector reuse`
 
-It is intentionally stricter than the full runtime. When a surface is not part of Aionis, the host should either:
+It is intentionally narrower than the full runtime. When a surface is outside the current core local-runtime shell, the host should either:
 
 1. not register it at all, or
 2. return a structured `501`
@@ -33,22 +33,22 @@ Primary routing sources:
 
 Related packet/provenance reference:
 
-1. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
-2. [docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
-3. [docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
+1. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+2. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
+3. [docs/CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
 
 ## Status Legend
 
 Endpoint status labels used below:
 
 1. `Supported`
-   The route is registered in Lite and intended for normal use.
+   The route is registered in the local runtime shell and intended for normal use.
 2. `Supported (Subset)`
-   The route group exists in Lite, but only a reduced Lite-local subset is available.
+   The route group exists in the local runtime shell, but only a reduced local subset is available.
 3. `Conditional`
-   The route is available only when the relevant Lite config is enabled.
-4. `Unsupported (501)`
-   The route or route group is intentionally unavailable in Lite and returns a structured `501`.
+   The route is available only when the relevant local-runtime config is enabled.
+4. `Unavailable in local shell (501)`
+   The route or route group is outside the local runtime shell and returns a structured `501`.
 
 ## Stable System Surface
 
@@ -245,7 +245,7 @@ These route groups are intentionally owned by the full/server runtime and return
 
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |
-| `ALL` | `/v1/admin/control/*` | Unsupported (501) | Admin/control-plane surface stays outside the standalone Aionis repository. |
+| `ALL` | `/v1/admin/control/*` | Unsupported (501) | Admin/control-plane surface stays outside the current local-runtime shell. |
 | `ALL` | `/v1/memory/archive/rehydrate*` | Unsupported (501) | Archive lifecycle restore is not implemented in Lite. |
 | `ALL` | `/v1/memory/nodes/activate*` | Unsupported (501) | Node lifecycle activation is not implemented in Lite. |
 

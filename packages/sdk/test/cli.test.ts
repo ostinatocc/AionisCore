@@ -50,7 +50,7 @@ test("CLI resolves explicit repo root before cwd detection", () => {
   assert.equal(resolved, repoRoot);
 });
 
-test("CLI builds the sdk_demo launch command for npm-based startup", () => {
+test("CLI builds the default demo launch command for npm-based startup", () => {
   const spec = buildAionisDevLaunchSpec({
     repoRoot,
     port: "3011",

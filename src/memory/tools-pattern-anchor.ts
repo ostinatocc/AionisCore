@@ -342,8 +342,6 @@ function buildPatternAnchor(args: {
         : "candidate_observed";
   const taskSignature = buildTaskSignature({
     taskCue: args.taskCue,
-    selectedTool: args.selectedTool,
-    patternSignature: args.patternSignature,
   });
   const summary = buildPatternSummary({
     taskCue: args.taskCue,
@@ -378,7 +376,7 @@ function buildPatternAnchor(args: {
     task_family: args.taskFamily ?? undefined,
     error_signature: args.errorSignature ?? undefined,
     error_family: args.errorFamily ?? undefined,
-    workflow_signature: args.patternSignature,
+    pattern_signature: args.patternSignature,
     summary,
     tool_set: args.candidates,
     selected_tool: args.selectedTool,
@@ -547,7 +545,7 @@ function buildPatternAnchorSlots(args: {
     ...(args.anchor.task_family ? { task_family: args.anchor.task_family } : {}),
     ...(args.anchor.error_signature ? { error_signature: args.anchor.error_signature } : {}),
     ...(args.anchor.error_family ? { error_family: args.anchor.error_family } : {}),
-    ...(args.anchor.workflow_signature ? { workflow_signature: args.anchor.workflow_signature } : {}),
+    ...(args.anchor.pattern_signature ? { pattern_signature: args.anchor.pattern_signature } : {}),
     anchor_kind: args.anchor.anchor_kind,
     anchor_level: args.anchor.anchor_level,
     ...(args.anchor.pattern_state ? { pattern_state: args.anchor.pattern_state } : {}),

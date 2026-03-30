@@ -1,17 +1,17 @@
-# Aionis Lite Anchor Schema
+# Aionis Core Anchor Schema
 
 Last reviewed: 2026-03-20
 
-This document defines the first concrete `anchor schema` for `Aionis Lite`.
+This document defines the first concrete `anchor schema` for `Aionis Core`.
 
 Related governance reference:
 
-1. [docs/LITE_MEMORY_GOVERNANCE_MODEL.md](/Volumes/ziel/Aionisgo/docs/LITE_MEMORY_GOVERNANCE_MODEL.md)
-2. [docs/LITE_MEMORY_TRIGGER_MATRIX.md](/Volumes/ziel/Aionisgo/docs/LITE_MEMORY_TRIGGER_MATRIX.md)
+1. [docs/CORE_MEMORY_GOVERNANCE_MODEL.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_MEMORY_GOVERNANCE_MODEL.md)
+2. [docs/CORE_MEMORY_TRIGGER_MATRIX.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_MEMORY_TRIGGER_MATRIX.md)
 
 The design goal is simple:
 
-Give Lite a compact execution-memory object that can be stored, recalled, ranked, and later expanded into fuller workflow memory without requiring a new storage subsystem on day one.
+Give Aionis Core a compact execution-memory object that can be stored, recalled, ranked, and later expanded into fuller workflow memory without requiring a new storage subsystem on day one.
 
 ## Purpose
 
@@ -22,12 +22,12 @@ An anchor is the smallest durable memory object that should help a later task an
 3. what outcome did it produce
 4. where is the fuller payload if we need more detail
 
-In Lite, an anchor is not the full trace.
+In Aionis Core, an anchor is not the full trace.
 It is the ranked entry point into the trace.
 
 ## Design Goals
 
-The first Lite anchor schema must:
+The first core anchor schema must:
 
 1. fit the current `memory_nodes` write contract
 2. map onto existing replay, distillation, and tool-decision data
@@ -56,14 +56,14 @@ The preferred storage form is:
 3. plus normal `tier`, `salience`, `importance`, and `confidence` ranking signals
 4. plus standard `derived_from` and `part_of` edges to payload sources
 
-This is the right v1 tradeoff because Lite already supports:
+This is the right v1 tradeoff because Aionis Core already supports:
 
 1. node writes with flexible `slots`
 2. ranking via salience, importance, and confidence
 3. retrieval by node type, tier, and embedding
 4. edges for provenance
 
-Anchor evolution should also follow the Lite governance model:
+Anchor evolution should also follow the core governance model:
 
 1. the runtime owns storage and state mutation
 2. the LLM may propose semantic promotion or compression judgments
@@ -71,7 +71,7 @@ Anchor evolution should also follow the Lite governance model:
 
 ## Why Reuse Existing Node Types
 
-Lite already allows these node types:
+Aionis Core already allows these node types:
 
 1. `event`
 2. `evidence`

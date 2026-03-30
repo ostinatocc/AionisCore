@@ -1,19 +1,13 @@
 # @cognary/aionis
 
-`@cognary/aionis` is the official TypeScript SDK for **Aionis Suite**.
-
-Private repo note:
-
-1. this copy is mirrored into `Aionis-runtime` for integration work
-2. the public publish source remains [Cognary/Aionis](https://github.com/Cognary/Aionis)
-3. do not publish from `Aionis-runtime`
+`@cognary/aionis` is the TypeScript SDK for Aionis Core.
 
 Package page:
 
 1. [npm: `@cognary/aionis`](https://www.npmjs.com/package/@cognary/aionis)
 2. CLI command: `aionis`
 
-It connects to an Aionis runtime and exposes the first stable public SDK surface for:
+It exposes the stable SDK surface for:
 
 1. `memory.write`
 2. `memory.planningContext`
@@ -23,6 +17,8 @@ It connects to an Aionis runtime and exposes the first stable public SDK surface
 6. `memory.tools.feedback`
 7. `memory.replay.repairReview`
 8. `memory.anchors.rehydratePayload`
+9. `memory.taskStart`
+10. `memory.taskStartPlan`
 
 ## Install
 
@@ -36,14 +32,7 @@ Run the CLI without a global install:
 npx @cognary/aionis doctor
 ```
 
-Start the public demo runtime shell from a checked out Aionis repository:
-
-```bash
-npx @cognary/aionis dev --repo /path/to/Aionis
-```
-
-If `3001` is already in use, the CLI now picks a free local port automatically.
-You can also force one:
+Start a local Aionis Core runtime:
 
 ```bash
 npx @cognary/aionis dev --repo /path/to/Aionis --port 3101
@@ -93,8 +82,6 @@ Run a publish dry-run:
 npm run -s sdk:publish:dry-run
 ```
 
-For real npm release work, use the public repo, not this private mirror.
-
 ## CLI
 
 Current thin CLI commands:
@@ -110,15 +97,18 @@ Current thin CLI commands:
 
 Repository examples live under:
 
-1. [examples/sdk/README.md](../../examples/sdk/README.md)
-2. [docs/SDK_QUICKSTART.md](../../docs/SDK_QUICKSTART.md)
+1. [examples/sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/examples/sdk/README.md)
+2. [docs/SDK_QUICKSTART.md](/Volumes/ziel/AionisTest/Aioniscc/docs/SDK_QUICKSTART.md)
 
-Inside this repository they import the locally built `dist` artifact first; after publish they should import `@cognary/aionis`.
+Repository scripts are grouped by role:
+
+1. `npm run core:build`
+2. `npm run lite:start`
+3. `npm run example:sdk:workflow`
+4. `npm run example:integration:host-task-start`
 
 ## Naming
 
-Public branding:
-
-1. product name: `Aionis Suite`
+1. product: `Aionis Core`
 2. npm package: `@cognary/aionis`
-3. PyPI package: `cognary-aionis`
+3. CLI: `aionis`

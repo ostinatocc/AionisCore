@@ -4,7 +4,7 @@ Date: 2026-03-23
 
 ## Goal
 
-Extend the real-task benchmark with one scenario that exercises provider-backed governed learning through real Lite runtime routes.
+Extend the real-task benchmark with one scenario that exercises provider-backed governed learning through real local runtime routes.
 
 ## Why
 

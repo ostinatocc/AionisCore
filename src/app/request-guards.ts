@@ -27,6 +27,8 @@ export type IdentityRequestKind =
   | "activate"
   | "find"
   | "execution_introspect"
+  | "experience_intelligence"
+  | "kickoff_recommendation"
   | "resolve"
   | "rehydrate_payload"
   | "recall"
@@ -312,11 +314,11 @@ export function createRequestGuards({
       if (!obj.owner_agent_id && !obj.owner_team_id) obj.owner_agent_id = env.LITE_LOCAL_ACTOR_ID;
     }
 
-    if (kind === "planning_context" || kind === "context_assemble") {
+    if (kind === "planning_context" || kind === "context_assemble" || kind === "experience_intelligence" || kind === "kickoff_recommendation") {
       if (!obj.consumer_agent_id) obj.consumer_agent_id = env.LITE_LOCAL_ACTOR_ID;
     }
 
-    if (kind === "rules_evaluate" || kind === "tools_select" || kind === "tools_feedback" || kind === "planning_context" || kind === "context_assemble") {
+    if (kind === "rules_evaluate" || kind === "tools_select" || kind === "tools_feedback" || kind === "planning_context" || kind === "context_assemble" || kind === "experience_intelligence" || kind === "kickoff_recommendation") {
       const ctx = obj.context && typeof obj.context === "object" && !Array.isArray(obj.context) ? { ...obj.context } : {};
       const agent = ctx.agent && typeof ctx.agent === "object" && !Array.isArray(ctx.agent) ? { ...ctx.agent } : {};
       if (!agent.id) agent.id = env.LITE_LOCAL_ACTOR_ID;

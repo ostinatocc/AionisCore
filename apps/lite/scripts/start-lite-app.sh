@@ -5,7 +5,7 @@ if [[ "${1:-}" == "--help" ]]; then
   cat <<'EOF'
 Usage: apps/lite/scripts/start-lite-app.sh [--print-env] [node args...]
 
-Starts Aionis Lite through the dedicated Lite app wrapper.
+Starts the Aionis Core local runtime shell.
 
 Flags:
   --print-env   Print the effective Lite startup env as JSON and exit.

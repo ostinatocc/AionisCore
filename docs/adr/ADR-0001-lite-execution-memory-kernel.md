@@ -1,4 +1,4 @@
-# ADR-0001: Position Lite As An Execution Memory Kernel
+# ADR-0001: Position Aionis Core As An Agent Continuity Kernel
 
 Status: Accepted
 
@@ -6,9 +6,9 @@ Date: 2026-03-20
 
 ## Context
 
-The broader Aionis direction emphasizes tool use, execution memory, workflow reuse, and memory evolution through action.
+The broader Aionis direction emphasizes learned kickoff, structured handoff, replay reuse, and execution memory evolution through action.
 
-At the same time, the current `Aionis Lite` repository is already a real local runtime with:
+At the same time, the current `Aionis Core` repository already contains a real local runtime shell with:
 
 1. SQLite-backed local persistence
 2. replay and playbook execution
@@ -16,9 +16,9 @@ At the same time, the current `Aionis Lite` repository is already a real local r
 4. context assembly and recall policy
 5. a local automation kernel
 
-However, the repository is not yet positioned around one narrow product thesis.
+However, the repository is not yet positioned around one narrow core thesis.
 
-Without a clear thesis, Lite risks being described too broadly as:
+Without a clear thesis, the repository risks being described too broadly as:
 
 1. a generic AI memory system
 2. a local agent platform
@@ -28,19 +28,17 @@ Those labels create unnecessary ambiguity and encourage roadmap sprawl.
 
 ## Decision
 
-We will position `Aionis Lite` as a local execution memory kernel for tool-using agents.
+We will position `Aionis Core` as an agent continuity kernel.
 
 The primary product promise is:
 
-1. capture execution evidence
-2. distill it into reusable memory
-3. recall prior execution structure during similar tasks
-4. rehydrate missing detail only when necessary
-5. support replay and workflow reuse
+1. turn prior execution into a better next-task start
+2. preserve unfinished work as structured handoff packets
+3. turn successful runs into replay and playbook reuse
+4. distill execution evidence into reusable memory
+5. rehydrate missing detail only when necessary
 
-We will not use `Tool-Centric AGI` as the primary Lite product label.
-
-That phrase may still describe long-range research direction, but it will not define Lite's near-term product identity.
+That phrase may still describe long-range research direction, but it will not define the current core identity.
 
 ## Rationale
 
@@ -59,22 +57,23 @@ This means the positioning is supported by working product surfaces rather than 
 
 `AGI` language expands expectations faster than the current repository can satisfy.
 
-`Execution memory kernel` is narrower, more defensible, and easier to evaluate.
+`Agent continuity kernel` is narrower, more defensible, and easier to evaluate.
 
 ### 3. This creates better roadmap discipline
 
-If Lite is framed as an execution memory kernel, roadmap choices become easier:
+If Aionis Core is framed as an agent continuity kernel, roadmap choices become easier:
 
-1. prefer replay-linked memory over generic note storage
-2. prefer workflow recall over broad semantic retrieval
-3. prefer partial rehydration over full archival complexity
-4. prefer repeated-task cost reduction over abstract capability claims
+1. prefer learned kickoff over generic suggestion layers
+2. prefer structured handoff over loose session summaries
+3. prefer replay-linked memory over generic note storage
+4. prefer workflow recall over broad semantic retrieval
+5. prefer partial rehydration over full archival complexity
 
 ## Consequences
 
 ### Positive consequences
 
-1. Lite gains a clear product identity.
+1. Aionis Core gains a clear kernel identity.
 2. Existing replay and tool-decision work becomes central rather than incidental.
 3. The memory roadmap can be evaluated with repeated-task metrics.
 4. Architecture choices can focus on execution structure instead of broad knowledge accumulation.
@@ -87,20 +86,22 @@ If Lite is framed as an execution memory kernel, roadmap choices become easier:
 
 ## Scope Guidance
 
-### In scope for Lite
+### In scope for Aionis Core
 
-1. execution trace capture
-2. distilled execution anchors
-3. workflow and replay reuse
-4. partial payload rehydration
-5. repeated-task optimization
-6. basic importance decay and demotion
+1. learned kickoff and task-start guidance
+2. structured handoff packets
+3. execution trace capture
+4. distilled execution anchors
+5. workflow and replay reuse
+6. partial payload rehydration
+7. repeated-task optimization
+8. basic importance decay and demotion
 
-### Out of scope for the current Lite positioning
+### Out of scope for the current core positioning
 
 1. full autonomous multi-agent optimization
 2. automatic tool discovery as a primary v1 feature
-3. a full standalone uncertainty-estimation subsystem
+3. a full uncertainty-estimation subsystem
 4. broad policy learning across all memory objects
 5. complete dynamic lifecycle management across many memory tiers
 
@@ -124,13 +125,14 @@ The deeper hierarchy remains a possible future direction, but not a required v1 
 
 ## Evaluation Implications
 
-Lite should be evaluated primarily on:
+Aionis Core should be evaluated primarily on:
 
-1. memory hit rate on repeated tasks
-2. workflow reuse rate
-3. repeated-task cost reduction
-4. stale-memory interference rate
-5. decision provenance coverage
+1. task-start lift on repeated tasks
+2. handoff recovery completeness
+3. workflow reuse rate
+4. repeated-task cost reduction
+5. stale-memory interference rate
+6. decision provenance coverage
 
 Lite should not be evaluated primarily on:
 

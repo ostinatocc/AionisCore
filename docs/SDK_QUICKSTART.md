@@ -1,27 +1,16 @@
-# Aionis Suite Quickstart
+# Aionis Core SDK Quickstart
 
-This guide is the fastest way to get from a running Aionis Lite runtime to a working `@cognary/aionis` integration.
+This guide is the fastest way to get from a running Aionis Core runtime to a working `@cognary/aionis` integration.
 
-Private repo note:
-
-1. this quickstart is mirrored here so runtime work can stay aligned with the public SDK surface
-2. the authoritative SDK onboarding path remains the public repo
-
-Package page:
-
-1. [npm: `@cognary/aionis`](https://www.npmjs.com/package/@cognary/aionis)
-
-## 1. Start the runtime
-
-From the repository:
+## 1. Start Aionis Core
 
 ```bash
-cd /Volumes/ziel/Aionis-runtime
+cd /Volumes/ziel/AionisTest/Aioniscc
 npm install
-npm run start:lite
+npm run lite:start
 ```
 
-The default local SDK target is:
+Default local SDK target:
 
 1. `http://127.0.0.1:3001`
 
@@ -39,14 +28,7 @@ Optional CLI sanity check:
 npx @cognary/aionis doctor
 ```
 
-Optional runtime launcher if you already have the public repo checked out:
-
-```bash
-npx @cognary/aionis dev --repo /path/to/Aionis
-```
-
-If `3001` is occupied, the CLI will choose a free local port automatically.
-You can also pin one:
+Optional runtime launcher:
 
 ```bash
 npx @cognary/aionis dev --repo /path/to/Aionis --port 3101
@@ -103,38 +85,62 @@ await aionis.memory.tools.feedback({
 });
 ```
 
-## 7. Explore the rest of the v1 surface
+## 7. Start a task from learned kickoff
 
-Current stable SDK v1 methods:
+```ts
+const taskStart = await aionis.memory.taskStartPlan({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  query_text: "repair billing retry timeout in service code",
+  context: {
+    goal: "repair billing retry timeout in service code",
+  },
+  candidates: ["bash", "edit", "test"],
+});
+
+console.log(taskStart.first_action);
+```
+
+`taskStartPlan` checks learned kickoff history first and falls back to `planningContext` when needed.
+
+## 8. Stable SDK surface
+
+Current stable SDK methods:
 
 1. `memory.write`
 2. `memory.planningContext`
 3. `memory.contextAssemble`
-4. `memory.executionIntrospect`
-5. `memory.tools.select`
-6. `memory.tools.feedback`
-7. `memory.replay.repairReview`
-8. `memory.anchors.rehydratePayload`
+4. `memory.kickoffRecommendation`
+5. `memory.taskStart`
+6. `memory.taskStartPlan`
+7. `memory.executionIntrospect`
+8. `memory.tools.select`
+9. `memory.tools.feedback`
+10. `memory.replay.repairReview`
+11. `memory.anchors.rehydratePayload`
 
-## 8. Run repository examples
-
-If you are working from this repository instead of npm:
+## 9. Run repository examples
 
 ```bash
-cd /Volumes/ziel/Aionis-runtime
+cd /Volumes/ziel/AionisTest/Aioniscc
 npm run sdk:build
-npm run start:lite
+npm run lite:start
 ```
 
 Then in another terminal:
 
 ```bash
-npm run sdk:example:workflow
-npm run sdk:example:tools-feedback
-npm run sdk:example:introspect
-npm run sdk:example:context-assemble
+npm run example:sdk:workflow
+npm run example:sdk:tools-feedback
+npm run example:sdk:introspect
+npm run example:sdk:context-assemble
+npm run example:sdk:task-start-plan
+npm run example:integration:host-task-start
+npm run example:integration:task-start-learning-loop
 ```
 
-Repository examples are documented here:
+Repository examples:
 
-1. [examples/sdk/README.md](../examples/sdk/README.md)
+1. [examples/sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/examples/sdk/README.md)
+
+Core capability examples and integration examples are listed separately there.

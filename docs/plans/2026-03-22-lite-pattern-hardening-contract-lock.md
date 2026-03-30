@@ -87,7 +87,7 @@ Update `toPatternSignal(...)` so the same metadata remains visible on `pattern_s
 ### Task 4: Verify and update status docs
 
 **Files:**
-- Modify: `docs/LITE_GOVERNANCE_AND_STRATEGY_STATUS.md`
+- Modify: `docs/CORE_GOVERNANCE_AND_STRATEGY_STATUS.md`
 
 **Step 1: Run focused verification**
 

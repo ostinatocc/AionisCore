@@ -5,6 +5,7 @@ import { applyContextOptimizationProfile } from "../app/context-optimization-pro
 import {
   buildAssemblySummary,
   buildExecutionMemorySummaryBundle,
+  buildKickoffRecommendation,
   buildPlanningSummary,
   summarizeActionRecallPacketSurface,
   summarizeWorkflowSignalSurface,
@@ -17,14 +18,23 @@ import {
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { buildLayeredContextCostSignals } from "../memory/cost-signals.js";
+import { buildExperienceIntelligenceResponse } from "../memory/experience-intelligence.js";
 import { memoryRecallParsed, type RecallAuth } from "../memory/recall.js";
-import { ContextAssembleRequest, MemoryRecallRequest, MemoryRecallTextRequest, PlanningContextRequest } from "../memory/schemas.js";
+import {
+  ContextAssembleRequest,
+  ExperienceIntelligenceRequest,
+  MemoryRecallRequest,
+  MemoryRecallTextRequest,
+  PlanningContextRequest,
+  type ExperienceIntelligenceResponse,
+} from "../memory/schemas.js";
 import {
   resolveExecutionPacketAssembly,
   type ExecutionPacketAssemblyMode,
   type ExecutionPacketV1,
   type ExecutionStateV1,
 } from "../execution/index.js";
+import { buildExecutionMemoryIntrospectionLite } from "../memory/execution-introspection.js";
 import { evaluateRules } from "../memory/rules-evaluate.js";
 import { selectTools } from "../memory/tools-select.js";
 import { estimateTokenCountFromText } from "../memory/context.js";
@@ -938,6 +948,50 @@ export function registerMemoryContextRuntimeRoutes(args: {
       },
     );
   };
+  const maybeBuildContextExperienceIntelligence = async (args: {
+    parsed: ParsedPlanningContext | ParsedContextAssemble;
+    tools: ToolSelectionLike | null;
+  }): Promise<ExperienceIntelligenceResponse | null> => {
+    if (!args.tools) return null;
+    if (!Array.isArray(args.parsed.tool_candidates) || args.parsed.tool_candidates.length === 0) return null;
+    const request = ExperienceIntelligenceRequest.parse({
+      tenant_id: args.parsed.tenant_id,
+      scope: args.parsed.scope,
+      consumer_agent_id: args.parsed.consumer_agent_id,
+      consumer_team_id: args.parsed.consumer_team_id,
+      run_id: args.parsed.run_id,
+      query_text: args.parsed.query_text,
+      context: args.parsed.context ?? {},
+      candidates: args.parsed.tool_candidates,
+      include_shadow: args.parsed.include_shadow,
+      rules_limit: args.parsed.rules_limit,
+      strict: args.parsed.tool_strict,
+      reorder_candidates: true,
+      execution_result_summary: args.parsed.execution_result_summary,
+      execution_artifacts: args.parsed.execution_artifacts,
+      execution_evidence: args.parsed.execution_evidence,
+      execution_state_v1: args.parsed.execution_state_v1,
+      workflow_limit: 8,
+    });
+    const introspection = await buildExecutionMemoryIntrospectionLite(
+      liteWriteStore,
+      {
+        tenant_id: request.tenant_id,
+        scope: request.scope,
+        consumer_agent_id: request.consumer_agent_id,
+        consumer_team_id: request.consumer_team_id,
+        limit: request.workflow_limit,
+      },
+      env.MEMORY_SCOPE,
+      env.MEMORY_TENANT_ID,
+      env.LITE_LOCAL_ACTOR_ID,
+    );
+    return buildExperienceIntelligenceResponse({
+      parsed: request,
+      tools: args.tools,
+      introspection,
+    });
+  };
   const buildRecallRouteDiagnostics = (args: {
     recallParsed: ParsedMemoryRecall;
     recallOut: MemoryRecallOutput;
@@ -1420,6 +1474,10 @@ export function registerMemoryContextRuntimeRoutes(args: {
         signals: classAwareProfile.signals,
       },
     });
+    const experienceIntelligence = await maybeBuildContextExperienceIntelligence({
+      parsed,
+      tools: out.tools,
+    });
     const contextChars = diagnostics.contextChars;
     const contextEstTokens = diagnostics.contextEstTokens;
 
@@ -1501,6 +1559,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
       optimization_profile: planningOptimization.optimization_profile.requested,
       recall_mode: explicitMode.mode,
+      experience_intelligence: experienceIntelligence,
     });
     const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
     await recordContextAssemblyTelemetrySafe({
@@ -1529,6 +1588,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       runtime_tool_hints: Array.isArray(recallOut.runtime_tool_hints) ? recallOut.runtime_tool_hints : [],
       ...buildPlannerPacketResponseSurface(plannerSurface),
       planning_summary: planningSummary,
+      kickoff_recommendation: buildKickoffRecommendation(planningSummary.first_step_recommendation),
       layered_context: layeredContext,
       cost_signals: costSignals,
     });
@@ -1665,6 +1725,10 @@ export function registerMemoryContextRuntimeRoutes(args: {
         signals: classAwareProfile.signals,
       },
     });
+    const experienceIntelligence = await maybeBuildContextExperienceIntelligence({
+      parsed,
+      tools: out.tools,
+    });
     const contextChars = diagnostics.contextChars;
     const contextEstTokens = diagnostics.contextEstTokens;
 
@@ -1696,6 +1760,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       optimization_profile: assembleOptimization.optimization_profile.requested,
       recall_mode: explicitMode.mode,
       include_rules: parsed.include_rules,
+      experience_intelligence: experienceIntelligence,
     });
     const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
     await recordContextAssemblyTelemetrySafe({
@@ -1775,6 +1840,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       runtime_tool_hints: Array.isArray(recallOut.runtime_tool_hints) ? recallOut.runtime_tool_hints : [],
       ...buildPlannerPacketResponseSurface(plannerSurface),
       assembly_summary: assemblySummary,
+      kickoff_recommendation: buildKickoffRecommendation(assemblySummary.first_step_recommendation),
       layered_context: layeredContext,
       cost_signals: costSignals,
     });

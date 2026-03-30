@@ -1,4 +1,4 @@
-# Aionis Suite SDK Examples
+# Aionis Core SDK Examples
 
 These examples are meant to be run from the repository, even though `@cognary/aionis` is now published.
 
@@ -9,15 +9,15 @@ Package page:
 They import the locally built SDK artifact from [packages/sdk/dist](../../packages/sdk/dist), so build the SDK first:
 
 ```bash
-cd /Volumes/ziel/Aionisgo
+cd /Volumes/ziel/AionisTest/Aioniscc
 npm run sdk:build
 ```
 
-Start the Lite runtime in another terminal:
+Start the local Aionis Core runtime shell in another terminal:
 
 ```bash
-cd /Volumes/ziel/Aionisgo
-npm run start:lite:sdk-demo
+cd /Volumes/ziel/AionisTest/Aioniscc
+npm run lite:start
 ```
 
 Defaults:
@@ -27,23 +27,32 @@ Defaults:
 3. `AIONIS_SCOPE=default`
 4. `AIONIS_ACTOR=local-user`
 
-Recommended public-demo runtime:
+Recommended local runtime:
 
-1. `npm run start:lite:sdk-demo`
-2. this profile keeps the route surface closer to the future public demo shell
+1. `npm run lite:start`
+2. this profile keeps the route surface aligned with the default local SDK flow
 
-Examples:
+Core capability examples:
 
-1. `npx tsx examples/sdk/01-workflow-guidance.ts`
+1. `npm run example:sdk:workflow`
    Shows `memory.write` plus `memory.planningContext` promoting repeated continuity into stable workflow guidance.
-2. `npx tsx examples/sdk/02-tools-feedback-pattern.ts`
+2. `npm run example:sdk:tools-feedback`
    Shows `memory.tools.select` plus `memory.tools.feedback` growing a reusable tool-memory pattern from repeated positive runs.
-3. `npx tsx examples/sdk/03-execution-introspect-and-rehydrate.ts`
+3. `npm run example:sdk:introspect`
    Shows `memory.executionIntrospect` plus `memory.anchors.rehydratePayload` on a workflow anchor created by the example itself.
-4. `npx tsx examples/sdk/04-context-assemble-debug.ts`
+4. `npm run example:sdk:context-assemble`
    Shows `memory.contextAssemble` on the explicit debug path with `return_layered_context=true`.
-5. `AIONIS_PLAYBOOK_ID=<pending-playbook-id> npx tsx examples/sdk/05-replay-repair-review.ts`
+5. `AIONIS_PLAYBOOK_ID=<pending-playbook-id> npm run example:sdk:replay-review`
    Shows `memory.replay.repairReview` on an existing pending playbook, including governed learning projection output.
+6. `npm run example:sdk:task-start-plan`
+   Shows `memory.taskStartPlan` before and after learned workflow history, including the shift from generic kickoff to file-level first action.
+
+Integration examples:
+
+1. `npm run example:integration:host-task-start`
+   Shows how a host or planner can convert `memory.taskStartPlan` into a direct startup decision without writing its own recommendation-merging logic.
+2. `npm run example:integration:task-start-learning-loop`
+   Shows the full loop from cold-start planning, to continuity writes, to a learned file-level kickoff that the host can launch directly.
 
 Notes:
 

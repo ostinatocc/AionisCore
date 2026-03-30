@@ -1,6 +1,7 @@
 export type PlanningSummary = {
   summary_version: "planning_summary_v1";
   planner_explanation: string | null;
+  first_step_recommendation: FirstStepRecommendation | null;
   selected_tool: string | null;
   decision_id: string | null;
   rules_considered: number;
@@ -29,6 +30,7 @@ export type PlanningSummary = {
 export type AssemblySummary = {
   summary_version: "assembly_summary_v1";
   planner_explanation: string | null;
+  first_step_recommendation: FirstStepRecommendation | null;
   selected_tool: string | null;
   decision_id: string | null;
   rules_considered: number;
@@ -53,6 +55,30 @@ export type AssemblySummary = {
   pattern_lifecycle_summary: PatternLifecycleSummary;
   pattern_maintenance_summary: PatternMaintenanceSummary;
   primary_savings_levers: string[];
+};
+
+export type FirstStepRecommendation = {
+  source_kind: "experience_intelligence" | "tool_selection";
+  history_applied: boolean;
+  selected_tool: string | null;
+  file_path: string | null;
+  next_action: string | null;
+};
+
+export type KickoffRecommendation = {
+  source_kind: "experience_intelligence" | "tool_selection";
+  history_applied: boolean;
+  selected_tool: string | null;
+  file_path: string | null;
+  next_action: string | null;
+};
+
+type ExperienceRecommendationProjection = {
+  history_applied: boolean;
+  selected_tool: string | null;
+  path_source_kind: "recommended_workflow" | "candidate_workflow" | "none";
+  file_path: string | null;
+  combined_next_action: string | null;
 };
 
 type PatternSignalSummary = {
@@ -345,6 +371,80 @@ function buildPlannerExplanation(args: {
   }
   if (parts.length === 0) return null;
   return parts.join("; ");
+}
+
+function buildFirstStepRecommendation(args: {
+  selectedTool: string | null;
+  experienceSummary: ExperienceRecommendationProjection | null;
+}): FirstStepRecommendation | null {
+  const experience = args.experienceSummary;
+  if (
+    experience
+    && (
+      experience.history_applied
+      || experience.path_source_kind !== "none"
+      || !!experience.file_path
+      || !!experience.combined_next_action
+    )
+  ) {
+    const selectedTool = experience.selected_tool ?? args.selectedTool ?? null;
+    return {
+      source_kind: "experience_intelligence",
+      history_applied: experience.history_applied,
+      selected_tool: selectedTool,
+      file_path: experience.file_path,
+      next_action:
+        experience.combined_next_action
+        ?? (selectedTool && experience.file_path
+          ? `Use ${selectedTool} on ${experience.file_path} as the next step.`
+          : selectedTool
+            ? `Start with ${selectedTool} as the next step.`
+            : null),
+    };
+  }
+  if (!args.selectedTool) return null;
+  return {
+    source_kind: "tool_selection",
+    history_applied: false,
+    selected_tool: args.selectedTool,
+    file_path: null,
+    next_action: `Start with ${args.selectedTool} as the next step.`,
+  };
+}
+
+export function buildKickoffRecommendation(
+  firstStepRecommendation: FirstStepRecommendation | null | undefined,
+): KickoffRecommendation | null {
+  if (!firstStepRecommendation) return null;
+  return {
+    source_kind: firstStepRecommendation.source_kind,
+    history_applied: firstStepRecommendation.history_applied,
+    selected_tool: firstStepRecommendation.selected_tool,
+    file_path: firstStepRecommendation.file_path,
+    next_action: firstStepRecommendation.next_action,
+  };
+}
+
+export function buildKickoffRecommendationFromExperience(args: {
+  historyApplied: boolean;
+  selectedTool: string | null;
+  filePath: string | null;
+  nextAction: string | null;
+}): KickoffRecommendation | null {
+  if (!args.selectedTool && !args.filePath && !args.nextAction) return null;
+  return {
+    source_kind: args.historyApplied ? "experience_intelligence" : "tool_selection",
+    history_applied: args.historyApplied,
+    selected_tool: args.selectedTool,
+    file_path: args.filePath,
+    next_action:
+      args.nextAction
+      ?? (args.selectedTool && args.filePath
+        ? `Use ${args.selectedTool} on ${args.filePath} as the next step.`
+        : args.selectedTool
+          ? `Start with ${args.selectedTool} as the next step.`
+          : null),
+  };
 }
 
 export function summarizePatternSignals(layeredContext: unknown): PatternSignalSummary {
@@ -714,6 +814,7 @@ export function buildPlanningSummary(args: {
   context_compaction_profile: "balanced" | "aggressive";
   optimization_profile: "balanced" | "aggressive" | null;
   recall_mode?: string | null;
+  experience_intelligence?: unknown;
 }): PlanningSummary {
   const rules = args.rules && typeof args.rules === "object" ? (args.rules as Record<string, unknown>) : {};
   const tools = args.tools && typeof args.tools === "object" ? (args.tools as Record<string, unknown>) : {};
@@ -752,23 +853,52 @@ export function buildPlanningSummary(args: {
   const workflowMaintenanceSummary = summaryBundle.workflow_maintenance_summary;
   const patternLifecycleSummary = summaryBundle.pattern_lifecycle_summary;
   const patternMaintenanceSummary = summaryBundle.pattern_maintenance_summary;
+  const experienceRecommendation =
+    args.experience_intelligence && typeof args.experience_intelligence === "object"
+      ? ((args.experience_intelligence as Record<string, unknown>).recommendation as Record<string, unknown> | undefined)
+      : undefined;
+  const experiencePath =
+    experienceRecommendation?.path && typeof experienceRecommendation.path === "object"
+      ? (experienceRecommendation.path as Record<string, unknown>)
+      : null;
+  const experienceSummary: ExperienceRecommendationProjection | null = experienceRecommendation
+    ? {
+        history_applied: experienceRecommendation.history_applied === true,
+        selected_tool: typeof experienceRecommendation.tool === "object" && experienceRecommendation.tool && typeof (experienceRecommendation.tool as any).selected_tool === "string"
+          ? (experienceRecommendation.tool as any).selected_tool
+          : null,
+        path_source_kind:
+          experiencePath?.source_kind === "recommended_workflow" || experiencePath?.source_kind === "candidate_workflow"
+            ? experiencePath.source_kind
+            : "none",
+        file_path: typeof experiencePath?.file_path === "string" ? experiencePath.file_path : null,
+        combined_next_action:
+          typeof experienceRecommendation.combined_next_action === "string"
+            ? experienceRecommendation.combined_next_action
+            : null,
+      }
+    : null;
+  const selectedTool =
+    typeof tools.selection === "object" && tools.selection && typeof (tools.selection as any).selected === "string"
+      ? (tools.selection as any).selected
+      : null;
+  const firstStepRecommendation = buildFirstStepRecommendation({
+    selectedTool,
+    experienceSummary,
+  });
 
   return {
     summary_version: "planning_summary_v1",
+    first_step_recommendation: firstStepRecommendation,
     planner_explanation: buildPlannerExplanation({
-      selectedTool:
-        typeof tools.selection === "object" && tools.selection && typeof (tools.selection as any).selected === "string"
-          ? (tools.selection as any).selected
-          : null,
+      selectedTool,
       decision,
       patternSignalSummary,
       plannerSurface,
       actionPacketSummary,
       workflowLifecycleSummary,
     }),
-    selected_tool: typeof tools.selection === "object" && tools.selection && typeof (tools.selection as any).selected === "string"
-      ? (tools.selection as any).selected
-      : null,
+    selected_tool: selectedTool,
     decision_id: typeof decision.decision_id === "string" ? decision.decision_id : null,
     rules_considered: Number(rules.considered ?? 0),
     rules_matched: Number(rules.matched ?? 0),
@@ -809,6 +939,7 @@ export function buildAssemblySummary(args: {
   optimization_profile: "balanced" | "aggressive" | null;
   recall_mode?: string | null;
   include_rules: boolean;
+  experience_intelligence?: unknown;
 }): AssemblySummary {
   const planning = buildPlanningSummary({
     rules: args.rules,
@@ -820,10 +951,12 @@ export function buildAssemblySummary(args: {
     context_compaction_profile: args.context_compaction_profile,
     optimization_profile: args.optimization_profile,
     recall_mode: args.recall_mode,
+    experience_intelligence: args.experience_intelligence,
   });
   return {
     summary_version: "assembly_summary_v1",
     planner_explanation: planning.planner_explanation,
+    first_step_recommendation: planning.first_step_recommendation,
     selected_tool: planning.selected_tool,
     decision_id: planning.decision_id,
     rules_considered: planning.rules_considered,

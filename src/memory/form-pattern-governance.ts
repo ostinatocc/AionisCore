@@ -17,7 +17,7 @@ export type FormPatternSourceExample = {
   summary?: string | null;
   task_signature?: string | null;
   error_signature?: string | null;
-  workflow_signature?: string | null;
+  pattern_signature?: string | null;
   selected_tool?: string | null;
   outcome_status?: string | null;
   success_score?: number | null;
@@ -36,7 +36,7 @@ function compactExamples(examples: FormPatternSourceExample[]): FormPatternSourc
     ...(normalizeString(example.summary) ? { summary: normalizeString(example.summary) } : {}),
     ...(normalizeString(example.task_signature) ? { task_signature: normalizeString(example.task_signature) } : {}),
     ...(normalizeString(example.error_signature) ? { error_signature: normalizeString(example.error_signature) } : {}),
-    ...(normalizeString(example.workflow_signature) ? { workflow_signature: normalizeString(example.workflow_signature) } : {}),
+    ...(normalizeString(example.pattern_signature) ? { pattern_signature: normalizeString(example.pattern_signature) } : {}),
     ...(normalizeString(example.selected_tool) ? { selected_tool: normalizeString(example.selected_tool) } : {}),
     ...(normalizeString(example.outcome_status) ? { outcome_status: normalizeString(example.outcome_status) } : {}),
     ...(typeof example.success_score === "number" ? { success_score: example.success_score } : {}),
@@ -50,7 +50,7 @@ export function buildFormPatternSemanticReviewPacket(args: {
   const signaturePresent = !!(
     normalizeString(args.input.task_signature)
     || normalizeString(args.input.error_signature)
-    || normalizeString(args.input.workflow_signature)
+    || normalizeString(args.input.pattern_signature)
   );
   const sourceCountSatisfied = args.input.source_node_ids.length >= 2;
 
@@ -67,7 +67,7 @@ export function buildFormPatternSemanticReviewPacket(args: {
     signatures: {
       task_signature: normalizeString(args.input.task_signature),
       error_signature: normalizeString(args.input.error_signature),
-      workflow_signature: normalizeString(args.input.workflow_signature),
+      pattern_signature: normalizeString(args.input.pattern_signature),
     },
     source_examples: compactExamples(args.sourceExamples),
   });

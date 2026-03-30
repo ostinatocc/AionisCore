@@ -103,6 +103,12 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
   const maintenance = asRecord(execution.maintenance ?? anchor.maintenance);
   const rehydration = asRecord(execution.rehydration ?? anchor.rehydration);
   const projectionMeta = deriveWorkflowProjectionMeta(slots);
+  const slotTargetFiles = stringList(slots.target_files, 24);
+  const executionTargetFiles = stringList(execution.target_files, 24);
+  const anchorTargetFiles = stringList(anchor.target_files, 24);
+  const targetFiles = Array.from(new Set([...executionTargetFiles, ...anchorTargetFiles, ...slotTargetFiles]));
+  const filePath = firstString(execution.file_path, anchor.file_path, targetFiles[0] ?? null);
+  const nextAction = firstString(execution.next_action, anchor.next_action);
   const observedCount = Number(workflowPromotion.observed_count ?? Number.NaN);
   const requiredObservations = Number(workflowPromotion.required_observations ?? Number.NaN);
   const promotionReady =
@@ -125,6 +131,7 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     }),
     promotion_origin: firstString(workflowPromotion.promotion_origin),
     promotion_state: firstString(workflowPromotion.promotion_state),
+    task_family: firstString(execution.task_family, anchor.task_family, slots.task_kind),
     observed_count: Number.isFinite(observedCount) ? observedCount : null,
     required_observations: Number.isFinite(requiredObservations) ? requiredObservations : null,
     promotion_ready: promotionReady,
@@ -136,6 +143,10 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     offline_priority: firstString(maintenance.offline_priority),
     last_maintenance_at: firstString(maintenance.last_maintenance_at),
     workflow_signature: firstString(execution.workflow_signature, anchor.workflow_signature),
+    task_signature: firstString(execution.task_signature, anchor.task_signature),
+    file_path: filePath,
+    target_files: targetFiles,
+    next_action: nextAction,
     projection_generated_by: projectionMeta?.generated_by ?? null,
     projection_source_node_id: projectionMeta?.source_node_id ?? null,
     projection_source_client_id: projectionMeta?.source_client_id ?? null,

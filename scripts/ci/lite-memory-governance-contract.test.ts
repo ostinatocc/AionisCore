@@ -194,7 +194,7 @@ test("memory governance operation contracts parse promote compress form_pattern 
     source_node_ids: ["node_1", "node_2"],
     task_signature: "fix-node-test-failure",
     error_signature: "node-test-export-mismatch",
-    workflow_signature: "inspect-patch-rerun-targeted-test",
+    pattern_signature: "tools-pattern:inspect-patch-rerun-targeted-test",
     input_text: "form stable pattern from repeated successful workflows",
     adjudication: {
       operation: "form_pattern",

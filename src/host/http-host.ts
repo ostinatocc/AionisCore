@@ -438,6 +438,7 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
     embedder,
     embeddingSurfacePolicy,
     liteWriteStore,
+    liteRecallAccess,
     writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
     requireStoreFeatureCapability,
     requireMemoryPrincipal,

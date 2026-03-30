@@ -6,7 +6,7 @@ Status: implemented
 
 Added `governance_provider_precedence_runtime_loop` to the real benchmark suite.
 
-The scenario now proves, on live Lite runtime routes, that:
+The scenario now proves, on live local runtime routes, that:
 
 1. explicit workflow governance reviews override provider fallback on `/v1/memory/write`
 2. explicit form-pattern governance reviews override provider fallback on `/v1/memory/tools/feedback`

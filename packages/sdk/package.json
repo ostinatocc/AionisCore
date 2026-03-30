@@ -1,8 +1,7 @@
 {
   "name": "@cognary/aionis",
   "version": "0.1.2",
-  "private": true,
-  "description": "Mirrored Aionis Suite SDK surface for private runtime integration work. Publish from the public Aionis repository only.",
+  "description": "Aionis Core SDK surface for kickoff, memory, replay, and continuity integration.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Reduce duplicated narrow runtime-apply gate logic across governed Lite runtime call sites without
+Reduce duplicated narrow runtime-apply gate logic across governed local runtime call sites without
 changing current state-raise semantics.
 
 ## Scope

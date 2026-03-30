@@ -1,21 +1,21 @@
-# Aionis Lite Execution Memory Strategy
+# Aionis Core Continuity Strategy
 
 Last reviewed: 2026-03-20
 
-This document narrows the broader `Tool-Centric Intelligence` framework into a product and architecture strategy that fits the current `Aionis Lite` repository.
+This document narrows the broader `Tool-Centric Intelligence` framework into a kernel and architecture strategy that fits the current `Aionis Core` repository.
 
 Related governance reference:
 
-1. [docs/LITE_MEMORY_GOVERNANCE_MODEL.md](/Volumes/ziel/Aionisgo/docs/LITE_MEMORY_GOVERNANCE_MODEL.md)
-2. [docs/LITE_MEMORY_TRIGGER_MATRIX.md](/Volumes/ziel/Aionisgo/docs/LITE_MEMORY_TRIGGER_MATRIX.md)
-3. [docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
-4. [docs/LITE_FOUNDATION_MEMORY_V1_IMPLEMENTATION_PLAN.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_V1_IMPLEMENTATION_PLAN.md)
-5. [docs/LITE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md)
-6. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
-7. [docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
-8. [docs/LITE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md)
-9. [docs/LITE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
-10. [docs/LITE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md)
+1. [docs/CORE_MEMORY_GOVERNANCE_MODEL.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_MEMORY_GOVERNANCE_MODEL.md)
+2. [docs/CORE_MEMORY_TRIGGER_MATRIX.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_MEMORY_TRIGGER_MATRIX.md)
+3. [docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
+4. [docs/CORE_FOUNDATION_MEMORY_V1_IMPLEMENTATION_PLAN.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_V1_IMPLEMENTATION_PLAN.md)
+5. [docs/CORE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md)
+6. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+7. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
+8. [docs/CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md)
+9. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
+10. [docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md)
 
 ## Purpose
 
@@ -23,16 +23,15 @@ The goal of this document is not to restate a general AGI theory.
 
 The goal is to define:
 
-1. what `Aionis Lite` should be
-2. what `Aionis Lite` should not try to be yet
-3. which parts of the broader framework map cleanly onto the current Lite runtime
-4. which next steps create the shortest path to a differentiated product
+1. what `Aionis Core` should be
+2. which parts of the broader framework map cleanly onto the current core runtime
+3. which next steps create the shortest path to a differentiated kernel
 
 ## Product Positioning
 
 Recommended external positioning:
 
-`Aionis Lite` is a local execution memory kernel for tool-using agents.
+`Aionis Core` is an agent continuity kernel.
 
 Recommended memory-governance module term:
 
@@ -43,13 +42,13 @@ Recommended supporting phrases:
 1. `Dynamic Execution Memory`
 2. `Memory Lifecycle for Tool-Using AI`
 3. `Anchor-Payload Memory Architecture`
-4. `Replay and workflow reuse for local agent runtimes`
+4. `Replay and workflow reuse for local runtime systems`
 5. `Anchor-Guided Rehydration Loop`
 6. `Execution Policy Learning Loop`
 
 Recommended internal framing:
 
-`Aionis Lite` is the minimal runtime that helps agents remember how work got done, recall the right prior traces, and reuse successful workflows at lower cost.
+`Aionis Core` is the kernel layer that helps agents remember how work got done, recall the right prior traces, and reuse successful workflows at lower cost.
 
 Recommended named loop:
 
@@ -61,13 +60,13 @@ Definition:
 
 Interpretation:
 
-This is the clearest name for the current Lite execution-memory mainline.
+This is the clearest name for the current core continuity mainline.
 It describes the path where a stable execution artifact becomes a workflow anchor, gets recalled later, exposes a runtime hint, and only expands payload when the agent actually needs more detail.
 
 Current runtime rule:
 
-1. `rehydrate_payload` follows the Lite single-user identity model by default
-2. planner/runtime hints may surface `rehydrate_payload(anchor_id=..., mode=...)` without restating actor, because the local actor is inherited on the normal Lite path
+1. `rehydrate_payload` follows the default local actor model by default
+2. planner/runtime hints may surface `rehydrate_payload(anchor_id=..., mode=...)` without restating actor, because the local actor is inherited on the normal local path
 
 Recommended named policy loop:
 
@@ -79,7 +78,7 @@ Definition:
 
 Interpretation:
 
-This is the clearest name for Lite's tool-decision learning mainline.
+This is the clearest name for the tool-decision learning mainline in Aionis Core.
 It describes the path where tool feedback becomes a governed pattern anchor, later gets recalled, and only stable patterns are allowed to influence selector reuse.
 
 Current runtime rule:
@@ -91,9 +90,9 @@ Current runtime rule:
 5. pattern credibility is now surfaced as `candidate`, `trusted`, and `contested`, rather than collapsing all non-trusted patterns into one bucket
 6. planner/runtime and selector summaries now expose compact lifecycle and maintenance summaries, so policy reuse is visible as a governed state machine rather than a raw reuse count
 
-## What Lite Is
+## Core Shape
 
-At the product level, Lite should be treated as a local single-user runtime with four core jobs:
+At the kernel level, Aionis Core should be treated as a continuity-first kernel with four core jobs:
 
 1. capture execution evidence
 2. distill raw traces into reusable memory
@@ -108,17 +107,7 @@ This framing matches the current repository shape:
 4. context assembly and recall policy
 5. local automation kernel
 
-## What Lite Is Not
-
-Lite should not currently be positioned as:
-
-1. a general AGI runtime
-2. a full autonomous orchestration platform
-3. a multi-agent optimization system
-4. a complete dynamic memory research platform
-5. a fully automatic policy-learning system
-
-These may become future directions, but they should not define the present product promise.
+This is the current core scope for the repository and runtime.
 
 ## Translation From The Broader Framework
 
@@ -126,7 +115,7 @@ The broader framework says:
 
 `Recall -> Assess -> Retrieve -> Act -> Distill`
 
-For Lite, the practical product loop should be narrowed to:
+For Aionis Core, the practical kernel loop should be narrowed to:
 
 `Capture -> Distill -> Recall -> Decide -> Rehydrate -> Replay`
 
@@ -141,14 +130,14 @@ Why this narrower loop:
 
 This is the shortest loop that turns the current runtime into a coherent product.
 
-## Core Lite Thesis
+## Core Thesis
 
-The key Lite thesis should be:
+The key Aionis Core thesis should be:
 
 The value of memory for tool-using agents is not storing more text.
 The value is preserving reusable execution structure.
 
-In Lite, that means the memory system should prioritize:
+In Aionis Core, that means the memory system should prioritize:
 
 1. successful action traces over generic notes
 2. decision provenance over opaque outcomes
@@ -157,7 +146,7 @@ In Lite, that means the memory system should prioritize:
 
 ## Memory Governance Principle
 
-Lite memory evolution should not be fixed-rule only and should not be LLM-owned.
+Core memory evolution should not be fixed-rule only and should not be LLM-owned.
 
 Recommended principle:
 
@@ -177,7 +166,7 @@ This principle should be treated as a system rule, not a prompt convention.
 
 ## Current Capability Mapping
 
-The current Lite runtime already covers part of the proposed framework.
+The current local runtime shell already covers part of the proposed framework.
 
 ### 1. Capture
 
@@ -190,7 +179,7 @@ Current fit:
 
 Interpretation:
 
-Lite already captures enough raw evidence to support execution memory. The immediate problem is not missing capture. The immediate problem is making that capture easier to reuse.
+The current shell already captures enough raw evidence to support execution memory. The immediate problem is not missing capture. The immediate problem is making that capture easier to reuse.
 
 ### 2. Distill
 
@@ -202,7 +191,7 @@ Current fit:
 
 Interpretation:
 
-Lite already has the start of an `L0 -> L1` pipeline and now has stable governed promotion shapes for replay workflow anchors and tool-feedback pattern anchors.
+The current shell already has the start of an `L0 -> L1` pipeline and now has stable governed promotion shapes for replay workflow anchors and tool-feedback pattern anchors.
 What remains incomplete is the broader automatic promotion path from arbitrary event streams into reusable workflow or pattern memory without those existing replay and feedback entrypoints.
 
 ### 3. Recall
@@ -216,7 +205,7 @@ Current fit:
 
 Interpretation:
 
-Lite no longer treats action-oriented recall as an add-on.
+The current shell no longer treats action-oriented recall as an add-on.
 The current V1/V2/V3 runtime exposes a stable `planner_packet` on `planning_context` and `context_assemble` as the default full collection owner, alongside canonical `workflow_signals`, `pattern_signals`, compact `planning_summary`, and aligned `execution_kernel`.
 Planner-facing consumers no longer need to infer execution-memory priority from mixed context layers alone.
 
@@ -273,7 +262,7 @@ Recommended short narrative:
 
 Most agent systems can generate plans, but they struggle to reliably remember how work actually got done across repeated tasks.
 
-`Aionis Lite` focuses on execution memory:
+`Aionis Core` focuses on execution memory:
 
 1. record what happened during tool use
 2. compress repeated traces into reusable memory
@@ -281,13 +270,9 @@ Most agent systems can generate plans, but they struggle to reliably remember ho
 4. restore missing context only when it becomes necessary
 5. reduce repeat work through replay and workflow reuse
 
-Recommended sentence to avoid:
+Recommended short claim:
 
-`Aionis Lite is a Tool-Centric AGI framework`
-
-Reason:
-
-That statement is too broad for the current product and dilutes the more concrete differentiation.
+`Aionis Core` preserves reusable execution structure for tool-using agents.
 
 ## Recommended Internal Architecture Model
 
@@ -373,7 +358,7 @@ Why this is the preferred model:
 1. it minimizes default token cost
 2. it keeps the interaction highly agent-native
 3. it avoids building a large fully automatic gating engine too early
-4. it gives Lite a clean tool-using execution pattern instead of opaque retrieval magic
+4. it gives the current shell a clean tool-using execution pattern instead of opaque retrieval magic
 
 Hard-rule automatic rehydration should be limited to cases like:
 
@@ -393,7 +378,7 @@ Vector similarity alone is not sufficient.
 
 Two unrelated workflows may both use similar tools, and that does not make them the same reusable pattern.
 
-Recommended Lite approach:
+Recommended Core approach:
 
 Use multi-signal pattern formation with signatures as the first gate and semantic similarity as a later support signal.
 
@@ -604,14 +589,14 @@ The next concrete work packages should be:
 6. add lazy importance updates plus nightly maintenance passes
 7. add evaluation fixtures around repeated-task recall and reuse
 
-For the staged foundation upgrade sequence that follows from this strategy, see [docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md).
+For the staged foundation upgrade sequence that follows from this strategy, see [docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md).
 
 ## Summary
 
 The broad framework is directionally correct.
 
-But for `Aionis Lite`, the winning move is to compress it into one product claim:
+But for `Aionis Core`, the winning move is to compress it into one kernel claim:
 
-`Aionis Lite` helps tool-using agents remember how work got done and reuse that structure on the next task.
+`Aionis Core` helps tool-using agents remember how work got done and reuse that structure on the next task.
 
 That is differentiated, implementable, and already partially supported by the current repository.

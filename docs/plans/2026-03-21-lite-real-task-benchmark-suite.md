@@ -1,13 +1,13 @@
-# Lite Real-Task Benchmark Suite Implementation Plan
+# Aionis Core Real-Task Benchmark Suite Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add a repeatable Lite benchmark command that validates policy learning, nearby-task generalization, wrong-turn recovery, workflow progression, multi-step repair continuity, and slim planner/context surfaces through real route behavior.
+**Goal:** Add a repeatable Aionis Core benchmark command that validates policy learning, nearby-task generalization, wrong-turn recovery, workflow progression, multi-step repair continuity, and slim planner/context surfaces through real route behavior.
 
-**Architecture:** Build one standalone `tsx` script that boots fresh in-process Lite route fixtures on temporary SQLite databases, runs deterministic scenarios, validates route outputs against the current contract schemas, and emits structured benchmark results in human-readable or JSON form.
+**Architecture:** Build one `tsx` script that boots fresh in-process local-runtime route fixtures on temporary SQLite databases, runs deterministic scenarios, validates route outputs against the current contract schemas, and emits structured benchmark results in human-readable or JSON form.
 The current active slice also emits stable compare fields such as scenario score and pass-criteria summary so future versions can be compared without rereading free-form notes.
 
-**Tech Stack:** TypeScript, Fastify, SQLite-backed Lite stores, existing route registrations, node:assert, tsx.
+**Tech Stack:** TypeScript, Fastify, SQLite-backed local stores, existing route registrations, node:assert, tsx.
 
 ---
 
@@ -52,7 +52,7 @@ Expected:
 
 The command runs and returns placeholder scenario output.
 
-### Task 2: Implement shared Lite benchmark runtime helpers
+### Task 2: Implement shared benchmark runtime helpers
 
 **Files:**
 - Modify: `scripts/lite-real-task-benchmark.ts`
@@ -63,7 +63,7 @@ Add helpers for:
 
 1. creating temp db paths
 2. creating request guards
-3. creating Lite write/recall stores
+3. creating local write/recall stores
 
 **Step 2: Add route-registration helpers**
 
@@ -76,7 +76,7 @@ Inside the benchmark script, add one shared registration path for:
 
 **Step 3: Add direct fixture seeding helpers where needed**
 
-Use current Lite write-store fixtures only for setup that has no dedicated benchmark route yet, such as:
+Use current local write-store fixtures only for setup that has no dedicated benchmark route yet, such as:
 
 1. initial active rule creation
 
@@ -284,9 +284,9 @@ Current benchmark baseline:
 
 **Files:**
 - Modify: `package.json`
-- Modify: `docs/LITE_TESTING_STRATEGY.md`
+- Modify: `docs/CORE_TESTING_STRATEGY.md`
 - Modify: `README.md`
-- Modify: `docs/LITE_GOVERNANCE_AND_STRATEGY_STATUS.md`
+- Modify: `docs/CORE_GOVERNANCE_AND_STRATEGY_STATUS.md`
 
 **Step 1: Add benchmark command**
 

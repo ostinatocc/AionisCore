@@ -1,20 +1,19 @@
 {
   "name": "@cognary/aionis-sdk",
-  "version": "0.1.0-private.0",
-  "private": true,
-  "description": "Private full-runtime SDK for the complete Aionis runtime mainline surface.",
+  "version": "0.1.0",
+  "description": "Full Aionis Core SDK surface for runtime, bridge, handoff, replay, governance, and execution memory integration.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "sideEffects": false,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Cognary/Aionis-runtime.git",
+    "url": "git+https://github.com/Cognary/Aionis.git",
     "directory": "packages/full-sdk"
   },
-  "homepage": "https://github.com/Cognary/Aionis-runtime/tree/main/packages/full-sdk",
+  "homepage": "https://github.com/Cognary/Aionis/tree/main/packages/full-sdk",
   "bugs": {
-    "url": "https://github.com/Cognary/Aionis-runtime/issues"
+    "url": "https://github.com/Cognary/Aionis/issues"
   },
   "exports": {
     ".": {
@@ -26,13 +25,18 @@
     "dist",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
-    "test": "node ../../node_modules/tsx/dist/cli.mjs --test test/*.test.ts"
+    "test": "node ../../node_modules/tsx/dist/cli.mjs --test test/*.test.ts",
+    "pack:dry-run": "npm run build && npm pack --dry-run --json --cache /tmp/aionis-npm-cache",
+    "publish:dry-run": "npm run build && npm publish --dry-run"
   },
   "keywords": [
     "aionis",

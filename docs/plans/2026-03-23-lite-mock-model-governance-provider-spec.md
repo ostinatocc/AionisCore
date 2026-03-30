@@ -8,7 +8,7 @@ Add a minimal internal model-backed governance provider baseline to Lite without
   - `promote_memory`
   - `form_pattern`
 - Add provider adapters that wrap a model client into the existing governance provider shape.
-- Extend the shared Lite runtime provider builder so each live path can select:
+- Extend the shared local runtime provider builder so each live path can select:
   - mock-model-backed provider first
   - static provider fallback second
 - Keep current default behavior unchanged unless new env gates are enabled.

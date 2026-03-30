@@ -1,4 +1,4 @@
-# Lite Workflow Projection Observation Contract Spec
+# Aionis Core Workflow Projection Observation Contract Spec
 
 ## Goal
 
@@ -9,7 +9,7 @@ Lock the generic workflow producer around two core rules:
 
 ## Why
 
-Lite already projects workflow memory from:
+Aionis Core already projects workflow memory from:
 
 - `/v1/memory/write`
 - `/v1/handoff/store`

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Reduce duplicated policy-effect preview branching across governed Lite runtime call sites without
+Reduce duplicated policy-effect preview branching across governed local runtime call sites without
 changing current promotion semantics.
 
 ## Scope

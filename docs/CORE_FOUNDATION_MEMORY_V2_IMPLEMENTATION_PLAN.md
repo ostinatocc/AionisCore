@@ -1,15 +1,19 @@
-# Aionis Lite Foundation Memory V2 Implementation Plan
+# Aionis Core Foundation Memory V2 Implementation Plan
 
 Last reviewed: 2026-03-20
 
-This document turns `V2` of the foundation memory roadmap into an implementation plan.
+Status:
+
+`historical implementation reference`
+
+This document turns `V2` of the foundation memory roadmap into an implementation-plan snapshot.
 
 Primary reference:
 
-1. [docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
-2. [docs/LITE_EXECUTION_MEMORY_STRATEGY.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_STRATEGY.md)
-3. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
-4. [docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
+1. [docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
+2. [docs/CORE_CONTINUITY_STRATEGY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_CONTINUITY_STRATEGY.md)
+3. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+4. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
 
 ## V2 Objective
 
@@ -46,9 +50,9 @@ Remaining work packages:
 
 Current documentation-finalization references:
 
-1. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
-2. [docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
-3. [src/memory/schemas.ts](/Volumes/ziel/Aionisgo/src/memory/schemas.ts)
+1. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+2. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
+3. [src/memory/schemas.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/schemas.ts)
 
 Completion note:
 
@@ -59,22 +63,22 @@ Completion note:
 
 Current implementation references:
 
-1. [src/memory/schemas.ts](/Volumes/ziel/Aionisgo/src/memory/schemas.ts)
-2. [src/memory/write.ts](/Volumes/ziel/Aionisgo/src/memory/write.ts)
-3. [src/memory/write-distillation.ts](/Volumes/ziel/Aionisgo/src/memory/write-distillation.ts)
-4. [src/store/lite-write-store.ts](/Volumes/ziel/Aionisgo/src/store/lite-write-store.ts)
-5. [src/memory/recall.ts](/Volumes/ziel/Aionisgo/src/memory/recall.ts)
-6. [src/store/recall-access.ts](/Volumes/ziel/Aionisgo/src/store/recall-access.ts)
-7. [src/store/lite-recall-store.ts](/Volumes/ziel/Aionisgo/src/store/lite-recall-store.ts)
-8. [src/memory/runtime-tool-hints.ts](/Volumes/ziel/Aionisgo/src/memory/runtime-tool-hints.ts)
-9. [src/memory/context.ts](/Volumes/ziel/Aionisgo/src/memory/context.ts)
-10. [src/memory/context-orchestrator.ts](/Volumes/ziel/Aionisgo/src/memory/context-orchestrator.ts)
-11. [src/routes/memory-context-runtime.ts](/Volumes/ziel/Aionisgo/src/routes/memory-context-runtime.ts)
-12. [scripts/ci/lite-execution-native-write-contract.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-execution-native-write-contract.test.ts)
-13. [scripts/ci/lite-replay-anchor.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-replay-anchor.test.ts)
-14. [scripts/ci/lite-runtime-tool-hints.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-runtime-tool-hints.test.ts)
-15. [scripts/ci/lite-context-build.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-context-build.test.ts)
-16. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-context-runtime-packet-contract.test.ts)
+1. [src/memory/schemas.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/schemas.ts)
+2. [src/memory/write.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/write.ts)
+3. [src/memory/write-distillation.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/write-distillation.ts)
+4. [src/store/lite-write-store.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/lite-write-store.ts)
+5. [src/memory/recall.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/recall.ts)
+6. [src/store/recall-access.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/recall-access.ts)
+7. [src/store/lite-recall-store.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/lite-recall-store.ts)
+8. [src/memory/runtime-tool-hints.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/runtime-tool-hints.ts)
+9. [src/memory/context.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context.ts)
+10. [src/memory/context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
+11. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
+12. [scripts/ci/lite-execution-native-write-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-execution-native-write-contract.test.ts)
+13. [scripts/ci/lite-replay-anchor.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-replay-anchor.test.ts)
+14. [scripts/ci/lite-runtime-tool-hints.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-runtime-tool-hints.test.ts)
+15. [scripts/ci/lite-context-build.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-build.test.ts)
+16. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-runtime-packet-contract.test.ts)
 
 ## Scope
 
@@ -128,9 +132,9 @@ Make execution-native metadata a formal write contract rather than a loose deriv
 
 ### Primary files
 
-1. [src/memory/schemas.ts](/Volumes/ziel/Aionisgo/src/memory/schemas.ts)
-2. [src/memory/write.ts](/Volumes/ziel/Aionisgo/src/memory/write.ts)
-3. [src/memory/write-distillation.ts](/Volumes/ziel/Aionisgo/src/memory/write-distillation.ts)
+1. [src/memory/schemas.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/schemas.ts)
+2. [src/memory/write.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/write.ts)
+3. [src/memory/write-distillation.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/write-distillation.ts)
 
 ### Output expectations
 
@@ -159,7 +163,7 @@ Add a Lite-native query path for execution-native objects.
 
 ### Primary files
 
-1. [src/store/lite-write-store.ts](/Volumes/ziel/Aionisgo/src/store/lite-write-store.ts)
+1. [src/store/lite-write-store.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/lite-write-store.ts)
 
 ### Output expectations
 
@@ -185,10 +189,10 @@ Make recall and runtime hints consume execution-native semantics directly.
 
 ### Primary files
 
-1. [src/memory/recall.ts](/Volumes/ziel/Aionisgo/src/memory/recall.ts)
-2. [src/store/recall-access.ts](/Volumes/ziel/Aionisgo/src/store/recall-access.ts)
-3. [src/store/lite-recall-store.ts](/Volumes/ziel/Aionisgo/src/store/lite-recall-store.ts)
-4. [src/memory/runtime-tool-hints.ts](/Volumes/ziel/Aionisgo/src/memory/runtime-tool-hints.ts)
+1. [src/memory/recall.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/recall.ts)
+2. [src/store/recall-access.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/recall-access.ts)
+3. [src/store/lite-recall-store.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/lite-recall-store.ts)
+4. [src/memory/runtime-tool-hints.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/runtime-tool-hints.ts)
 
 ### Output expectations
 
@@ -212,7 +216,7 @@ Push execution-native semantics into lower-level context structures, not only pl
 
 ### Primary files
 
-1. [src/memory/context.ts](/Volumes/ziel/Aionisgo/src/memory/context.ts)
+1. [src/memory/context.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context.ts)
 
 ### Output expectations
 
@@ -234,8 +238,8 @@ Make execution-native substrate semantics more visible at route level and reduce
 
 ### Primary files
 
-1. [src/routes/memory-context-runtime.ts](/Volumes/ziel/Aionisgo/src/routes/memory-context-runtime.ts)
-2. [src/memory/context-orchestrator.ts](/Volumes/ziel/Aionisgo/src/memory/context-orchestrator.ts)
+1. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
+2. [src/memory/context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
 
 ### Output expectations
 
@@ -265,10 +269,10 @@ Lock execution-native substrate behavior down as contract.
 
 ### Primary files
 
-1. [scripts/ci/lite-execution-native-write-contract.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-execution-native-write-contract.test.ts)
-2. [scripts/ci/lite-replay-anchor.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-replay-anchor.test.ts)
-3. [scripts/ci/lite-runtime-tool-hints.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-runtime-tool-hints.test.ts)
-4. [scripts/ci/lite-context-build.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-context-build.test.ts)
+1. [scripts/ci/lite-execution-native-write-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-execution-native-write-contract.test.ts)
+2. [scripts/ci/lite-replay-anchor.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-replay-anchor.test.ts)
+3. [scripts/ci/lite-runtime-tool-hints.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-runtime-tool-hints.test.ts)
+4. [scripts/ci/lite-context-build.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-build.test.ts)
 
 ## Work Package 7: Documentation And Contract Finalization
 
@@ -284,10 +288,10 @@ Keep Lite's written contract aligned with the substrate actually running in code
 
 ### Primary files
 
-1. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
-2. [docs/LITE_API_CAPABILITY_MATRIX.md](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md)
-3. [docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
-4. [README.md](/Volumes/ziel/Aionisgo/README.md)
+1. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+2. [docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](/Volumes/ziel/AionisTest/Aioniscc/docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md)
+3. [docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
+4. [README.md](/Volumes/ziel/AionisTest/Aioniscc/README.md)
 
 ## Recommended Delivery Order
 

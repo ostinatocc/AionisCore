@@ -1,64 +1,41 @@
-# Aionis Runtime
+# Aionis Core
 
-`Aionis-runtime` is the private runtime mainline for Aionis.
+`Aionis Core` is the kernel for agent continuity.
 
-This repository is the source of truth for:
+## Core Capability Surfaces
 
-1. execution-memory internals
-2. replay and workflow learning internals
-3. governance/model-client internals
-4. benchmark, regression, and operator runtime work
+1. **Task Start**
+   Turn prior execution into a better first action for the next similar task.
+2. **Task Handoff**
+   Store and recover structured execution-ready task packets.
+3. **Task Replay**
+   Record successful execution, compile playbooks, and reuse prior runs.
 
-Public product direction remains:
+## Canonical Core Docs
 
-1. Aionis Runtime
-2. Aionis Suite SDK
-3. adapters and integrations later
+1. [RUNTIME_MAINLINE.md](/Volumes/ziel/AionisTest/Aioniscc/docs/RUNTIME_MAINLINE.md)
+2. [OPEN_CORE_BOUNDARY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/OPEN_CORE_BOUNDARY.md)
+3. [AIONIS_PRODUCT_DEFINITION_V1.md](/Volumes/ziel/AionisTest/Aioniscc/docs/AIONIS_PRODUCT_DEFINITION_V1.md)
+4. [CORE_CONTINUITY_STRATEGY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_CONTINUITY_STRATEGY.md)
+5. [CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
 
-## Repository Split
+## Docs Navigation
 
-1. public SDK/demo repo: [Cognary/Aionis](https://github.com/Cognary/Aionis)
-2. private runtime mainline: [Cognary/Aionis-runtime](https://github.com/Cognary/Aionis-runtime)
+1. [docs/README.md](/Volumes/ziel/AionisTest/Aioniscc/docs/README.md)
+2. [SDK_QUICKSTART.md](/Volumes/ziel/AionisTest/Aioniscc/docs/SDK_QUICKSTART.md)
+3. [FULL_SDK_QUICKSTART.md](/Volumes/ziel/AionisTest/Aioniscc/docs/FULL_SDK_QUICKSTART.md)
+4. [apps/lite/README.md](/Volumes/ziel/AionisTest/Aioniscc/apps/lite/README.md)
 
-The public repo should stay focused on:
+## Repository Areas
 
-1. `@cognary/aionis`
-2. docs and examples
-3. the `sdk_demo` quickstart shell
-
-This repo should stay focused on:
-
-1. the real runtime mainline
-2. moat-bearing runtime implementation
-3. deeper internal validation surfaces
-
-## Core Source Areas
-
-1. [src/app](/Volumes/ziel/Aionis-runtime/src/app)
-2. [src/execution](/Volumes/ziel/Aionis-runtime/src/execution)
-3. [src/memory](/Volumes/ziel/Aionis-runtime/src/memory)
-4. [src/routes](/Volumes/ziel/Aionis-runtime/src/routes)
-5. [src/store](/Volumes/ziel/Aionis-runtime/src/store)
-6. [src/runtime-entry.ts](/Volumes/ziel/Aionis-runtime/src/runtime-entry.ts)
-7. [src/index.ts](/Volumes/ziel/Aionis-runtime/src/index.ts)
-
-## Mainline Rule
-
-New moat-bearing runtime work should land here first.
-
-Mirror changes back to the public repo only when they are required for:
-
-1. the public SDK contract
-2. the public demo shell
-3. public docs/examples/contracts
-
-## Key Docs
-
-1. [REPO_CUTOVER.md](/Volumes/ziel/Aionis-runtime/REPO_CUTOVER.md)
-2. [RUNTIME_MAINLINE.md](/Volumes/ziel/Aionis-runtime/docs/RUNTIME_MAINLINE.md)
-3. [OPEN_CORE_BOUNDARY.md](/Volumes/ziel/Aionis-runtime/docs/OPEN_CORE_BOUNDARY.md)
-4. [LITE_TESTING_STRATEGY.md](/Volumes/ziel/Aionis-runtime/docs/LITE_TESTING_STRATEGY.md)
-5. [LITE_REAL_TASK_BENCHMARK_REPORT.md](/Volumes/ziel/Aionis-runtime/docs/LITE_REAL_TASK_BENCHMARK_REPORT.md)
+1. [src/memory](/Volumes/ziel/AionisTest/Aioniscc/src/memory)
+2. [src/routes](/Volumes/ziel/AionisTest/Aioniscc/src/routes)
+3. [src/execution](/Volumes/ziel/AionisTest/Aioniscc/src/execution)
+4. [src/store](/Volumes/ziel/AionisTest/Aioniscc/src/store)
+5. [packages/runtime-core](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core)
+6. [packages/sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/sdk)
+7. [packages/full-sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk)
+8. [apps/lite](/Volumes/ziel/AionisTest/Aioniscc/apps/lite)
 
 ## Validation
 
@@ -68,14 +45,3 @@ npm run -s build
 npm run -s test:lite
 npm run -s benchmark:lite:real
 ```
-
-Use the public repo for SDK publishing/quickstart work.
-Use this repo for runtime evolution.
-
-The SDK copy inside this private repo is a mirrored integration surface, not the release source of truth.
-
-For the private full-runtime SDK, use:
-
-1. `@cognary/aionis-sdk`
-2. [/Volumes/ziel/Aionis-runtime/docs/FULL_SDK_QUICKSTART.md](/Volumes/ziel/Aionis-runtime/docs/FULL_SDK_QUICKSTART.md)
-3. [/Volumes/ziel/Aionis-runtime/examples/full-sdk/README.md](/Volumes/ziel/Aionis-runtime/examples/full-sdk/README.md)

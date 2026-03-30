@@ -1,14 +1,14 @@
-# Aionis Lite Generic Workflow Producer Spec
+# Aionis Core Generic Workflow Producer Spec
 
 ## Goal
 
-Broaden `Aionis Lite` workflow-memory production beyond replay-centered entry points by allowing ordinary execution-continuity writes to produce governed `workflow_candidate` memory.
+Broaden `Aionis Core` workflow-memory production beyond replay-centered entry points by allowing ordinary execution-continuity writes to produce governed `workflow_candidate` memory.
 
 The immediate target is a conservative Lite-native slice that turns structured execution-continuity writes into governed workflow memory without making the default planner/runtime surface heavier.
 
 ## Problem
 
-Current Lite runtime already has strong workflow memory once the producer path is replay-based:
+Current local runtime already has strong workflow memory once the producer path is replay-based:
 
 1. replay promotion creates stable workflow anchors
 2. replay-learning creates governed workflow candidates

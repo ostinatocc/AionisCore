@@ -1,7 +1,7 @@
 {
-  "name": "@aionis/runtime-core",
+  "name": "@cognary/aionis-runtime-core",
   "version": "0.2.21",
-  "description": "Shared runtime boundary for Aionis Lite and full Aionis",
+  "description": "Shared runtime-core boundary for Aionis Core contracts and ownership metadata.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -24,15 +24,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
-    "pack:dry-run": "npm pack --dry-run --cache /tmp/aionis-npm-cache"
+    "pack:dry-run": "npm run build && npm pack --dry-run --cache /tmp/aionis-npm-cache",
+    "publish:dry-run": "npm run build && npm publish --dry-run"
   },
   "keywords": [
     "aionis",
     "runtime",
-    "lite",
-    "server"
+    "kernel",
+    "continuity"
   ],
   "author": "Aionis Core",
   "license": "Apache-2.0"
 }
-

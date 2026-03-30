@@ -20,7 +20,7 @@ Initial coverage:
 
 This test slice should not:
 
-1. duplicate the Lite runtime route contract suite
+1. duplicate the local runtime route contract suite
 2. spin up full runtime state unless needed
 3. validate benchmark behavior
 

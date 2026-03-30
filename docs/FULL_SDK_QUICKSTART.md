@@ -1,29 +1,36 @@
-# Full-Runtime SDK Quickstart
+# Aionis Core Full SDK Quickstart
 
-`@cognary/aionis-sdk` is the private SDK for the complete Aionis runtime mainline.
+`@cognary/aionis-sdk` is the full SDK surface for Aionis Core.
 
-It is intended for self-use inside the private `Aionis-runtime` repository. The public package remains `@cognary/aionis`.
+It covers:
+
+1. runtime client access
+2. handoff store and recover
+3. replay and playbook operations
+4. automation kernel operations
+5. sandbox runtime operations
+6. bridge integration for host systems
 
 ## 1. Install dependencies
 
 ```bash
-cd /Volumes/ziel/Aionis-runtime
+cd /Volumes/ziel/AionisTest/Aioniscc
 npm install
 ```
 
-## 2. Build the private full-runtime SDK
+## 2. Build the full SDK
 
 ```bash
 npm run full-sdk:build
 ```
 
-## 3. Start the private runtime
+## 3. Start Aionis Core
 
 ```bash
-npm run start:lite
+npm run lite:start
 ```
 
-The default local endpoint is:
+Default local endpoint:
 
 ```text
 http://127.0.0.1:3001
@@ -50,9 +57,9 @@ const replay = await aionis.memory.replay.run.start({
 ## 5. Run bundled examples
 
 ```bash
-npm run full-sdk:example:recall
-npm run full-sdk:example:replay
-npm run full-sdk:example:sessions
-npm run full-sdk:example:automation
-npm run full-sdk:example:sandbox
+npm run example:full-sdk:recall
+npm run example:full-sdk:replay
+npm run example:full-sdk:sessions
+npm run example:full-sdk:automation
+npm run example:full-sdk:sandbox
 ```

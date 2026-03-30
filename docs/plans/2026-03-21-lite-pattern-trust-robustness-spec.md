@@ -1,8 +1,8 @@
-# Aionis Lite Pattern Trust Robustness Spec
+# Aionis Core Pattern Trust Robustness Spec
 
 ## Goal
 
-Define the next-stage robustness model for `Aionis Lite` execution-policy learning so learned pattern trust becomes harder to over-promote, harder to cheaply revalidate after counter-evidence, and easier to reason about across nearby but non-identical task contexts.
+Define the next-stage robustness model for `Aionis Core` execution-policy learning so learned pattern trust becomes harder to over-promote, harder to cheaply revalidate after counter-evidence, and easier to reason about across nearby but non-identical task contexts.
 
 This spec does not change the current runtime immediately.
 It defines:

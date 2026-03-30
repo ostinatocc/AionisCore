@@ -143,7 +143,7 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
     source_node_ids: sourceNodeIds,
     task_signature: nullableString(args.anchor.task_signature),
     error_signature: nullableString(args.anchor.error_signature),
-    workflow_signature: nullableString(args.anchor.workflow_signature),
+    pattern_signature: nullableString(args.anchor.pattern_signature),
     input_text: args.inputText ?? args.anchor.summary ?? "form pattern from tools feedback",
     input_sha256: args.inputSha256,
   });

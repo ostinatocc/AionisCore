@@ -104,13 +104,11 @@ export function extractErrorFamily(context: unknown, errorSignature: string | nu
 
 export function buildTaskSignature(args: {
   taskCue: string | null;
-  selectedTool: string;
-  patternSignature: string;
 }): string {
-  if (!args.taskCue) return `tools_select:${args.selectedTool}:${args.patternSignature.slice(0, 20)}`;
+  if (!args.taskCue) return "tools_select:unspecified-task";
   const tokens = words(args.taskCue.toLowerCase(), 6).join("-");
-  if (!tokens) return `tools_select:${args.selectedTool}:${args.patternSignature.slice(0, 20)}`;
-  return truncate(`tools_select:${tokens}:${args.selectedTool}`, 256);
+  if (!tokens) return "tools_select:unspecified-task";
+  return truncate(`tools_select:${tokens}`, 256);
 }
 
 export type PatternAffinityLevel =
@@ -136,8 +134,6 @@ export function resolvePatternTaskAffinity(args: {
   const currentTaskSignature = taskCue
     ? buildTaskSignature({
         taskCue,
-        selectedTool: args.selectedTool,
-        patternSignature: "runtime-query",
       })
     : null;
   const currentTaskFamily = extractTaskFamily(args.context, taskCue);

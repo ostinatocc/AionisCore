@@ -261,11 +261,11 @@ async function seedContextRuntimeFixture(dbPath: string) {
     anchor_kind: "pattern",
     anchor_level: "L3",
     pattern_state: "stable",
-    task_signature: "tools_select:repair-export:edit",
+    task_signature: "tools_select:repair-export",
     task_class: "tools_select_pattern",
     task_family: "task:repair_export",
     error_family: "error:node-export-mismatch",
-    workflow_signature: "stable-edit-pattern",
+    pattern_signature: "stable-edit-pattern",
     summary: "Stable pattern: prefer edit for export repair after repeated successful runs.",
     tool_set: ["bash", "edit", "test"],
     selected_tool: "edit",
@@ -823,6 +823,15 @@ test("planning_context returns aligned planner packet, action packet summary, an
     const body = PlanningContextRouteContractSchema.parse(response.json());
     assertNoLegacyPlannerMirrors(body as Record<string, unknown>);
     assert.ok(!("layered_context" in (body as Record<string, unknown>)), "default planning_context should not expose layered_context");
+    assert.deepEqual(body.planning_summary.first_step_recommendation, {
+      source_kind: "experience_intelligence",
+      history_applied: true,
+      selected_tool: body.planning_summary.selected_tool,
+      file_path: null,
+      next_action: "Start with edit as the next step.",
+    });
+    assert.ok(!("first_step_recommendation" in body), "default planning_context should not expose the legacy top-level first_step_recommendation mirror");
+    assert.deepEqual(body.kickoff_recommendation, body.planning_summary.first_step_recommendation);
     assertActionPacketSummaryMatchesPacket(body.planning_summary.action_packet_summary, body);
     assertActionPacketSummaryMatchesPacket(body.execution_kernel.action_packet_summary, body);
     assertKernelMatchesRouteSurface(body);
@@ -1008,6 +1017,15 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     const body = ContextAssembleRouteContractSchema.parse(response.json());
     assertNoLegacyPlannerMirrors(body as Record<string, unknown>);
     assert.ok(!("layered_context" in (body as Record<string, unknown>)), "default context_assemble should not expose layered_context");
+    assert.deepEqual(body.assembly_summary.first_step_recommendation, {
+      source_kind: "experience_intelligence",
+      history_applied: true,
+      selected_tool: body.assembly_summary.selected_tool,
+      file_path: null,
+      next_action: "Start with edit as the next step.",
+    });
+    assert.ok(!("first_step_recommendation" in body), "default context_assemble should not expose the legacy top-level first_step_recommendation mirror");
+    assert.deepEqual(body.kickoff_recommendation, body.assembly_summary.first_step_recommendation);
     assertActionPacketSummaryMatchesPacket(body.assembly_summary.action_packet_summary, body);
     assertActionPacketSummaryMatchesPacket(body.execution_kernel.action_packet_summary, body);
     assertKernelMatchesRouteSurface(body);

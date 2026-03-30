@@ -173,9 +173,18 @@ export type AionisExecutionKernelSummary = {
   action_packet_summary: AionisActionPacketSummary;
 } & AionisPassthroughObject;
 
+export type AionisKickoffRecommendation = {
+  source_kind: "experience_intelligence" | "tool_selection";
+  history_applied: boolean;
+  selected_tool: string | null;
+  file_path: string | null;
+  next_action: string | null;
+} & AionisPassthroughObject;
+
 export type AionisPlanningSummary = {
   summary_version: "planning_summary_v1";
   planner_explanation: string | null;
+  first_step_recommendation?: AionisKickoffRecommendation | null;
   workflow_signal_summary: AionisWorkflowSignalSummary;
   action_packet_summary: AionisActionPacketSummary;
   workflow_lifecycle_summary: AionisLifecycleSummary;
@@ -191,6 +200,7 @@ export type AionisPlanningSummary = {
 export type AionisAssemblySummary = {
   summary_version: "assembly_summary_v1";
   planner_explanation: string | null;
+  first_step_recommendation?: AionisKickoffRecommendation | null;
   workflow_signal_summary: AionisWorkflowSignalSummary;
   action_packet_summary: AionisActionPacketSummary;
   workflow_lifecycle_summary: AionisLifecycleSummary;
@@ -257,6 +267,7 @@ export type AionisPlanningContextResponse = {
   workflow_signals: AionisPlannerEntry[];
   execution_kernel: AionisExecutionKernelSummary;
   planning_summary: AionisPlanningSummary;
+  kickoff_recommendation?: AionisKickoffRecommendation | null;
 } & AionisPassthroughObject;
 
 export type AionisContextAssembleRequest = {
@@ -311,6 +322,71 @@ export type AionisContextAssembleResponse = {
   workflow_signals: AionisPlannerEntry[];
   execution_kernel: AionisExecutionKernelSummary;
   assembly_summary: AionisAssemblySummary;
+  kickoff_recommendation?: AionisKickoffRecommendation | null;
+} & AionisPassthroughObject;
+
+export type AionisKickoffRecommendationRequest = {
+  tenant_id?: string;
+  scope?: string;
+  query_text: string;
+  consumer_agent_id?: string;
+  consumer_team_id?: string;
+  context?: unknown;
+  candidates?: string[];
+  workflow_limit?: number;
+} & AionisRequestPayload;
+
+export type AionisKickoffRecommendationResponse = {
+  summary_version: "kickoff_recommendation_v1";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  kickoff_recommendation: AionisKickoffRecommendation | null;
+  rationale: {
+    summary: string;
+  } & AionisPassthroughObject;
+} & AionisPassthroughObject;
+
+export type AionisTaskStartRequest = AionisKickoffRecommendationRequest;
+
+export type AionisTaskStartAction = {
+  action_kind: "file_step" | "tool_step";
+  source_kind: "experience_intelligence" | "tool_selection";
+  history_applied: boolean;
+  selected_tool: string;
+  file_path: string | null;
+  next_action: string | null;
+} & AionisPassthroughObject;
+
+export type AionisTaskStartResponse = Omit<AionisKickoffRecommendationResponse, "summary_version"> & {
+  summary_version: "task_start_v1";
+  first_action: AionisTaskStartAction | null;
+};
+
+export type AionisTaskStartPlanRequest = {
+  tenant_id?: string;
+  scope?: string;
+  query_text: string;
+  consumer_agent_id?: string;
+  consumer_team_id?: string;
+  context: unknown;
+  candidates?: string[];
+  workflow_limit?: number;
+} & AionisRequestPayload;
+
+export type AionisTaskStartPlanResponse = {
+  summary_version: "task_start_plan_v1";
+  resolution_source: "kickoff" | "planning_context";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  kickoff_recommendation: AionisKickoffRecommendation | null;
+  first_action: AionisTaskStartAction | null;
+  planner_explanation: string | null;
+  planner_packet: AionisPlannerPacketTextSurface | null;
+  rationale: {
+    summary: string;
+  } & AionisPassthroughObject;
 } & AionisPassthroughObject;
 
 export type AionisExecutionIntrospectRequest = {

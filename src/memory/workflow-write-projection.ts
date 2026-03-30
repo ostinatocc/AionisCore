@@ -218,6 +218,11 @@ function deriveTaskSignatureFromInputs(state: ExecutionStateV1 | null, packet: E
   return `execution_task:${sha256Hex(stableStringify(payload)).slice(0, 24)}`;
 }
 
+function deriveTaskFamilyFromSource(source: WriteProjectionSourceNode): string | null {
+  const slots = asRecord(source.slots);
+  return firstString(slots?.task_family) ?? firstString(slots?.task_kind);
+}
+
 function deriveCandidateTitle(
   source: WriteProjectionSourceNode,
   state: ExecutionStateV1 | null,
@@ -433,8 +438,12 @@ function buildStableWorkflowAnchor(args: {
   title: string;
   summary: string;
   taskSignature: string;
+  taskFamily: string | null;
   workflowSignature: string;
   toolSet: string[];
+  filePath: string | null;
+  targetFiles: string[];
+  nextAction: string | null;
   observedCount: number;
   supportingNodeIds: string[];
   promotedAt: string;
@@ -444,9 +453,13 @@ function buildStableWorkflowAnchor(args: {
     anchor_level: "L2",
     task_signature: args.taskSignature,
     task_class: "execution_write_projection",
+    ...(args.taskFamily ? { task_family: args.taskFamily } : {}),
     workflow_signature: args.workflowSignature,
     summary: args.summary,
     tool_set: args.toolSet,
+    file_path: args.filePath,
+    target_files: args.targetFiles,
+    next_action: args.nextAction,
     outcome: {
       status: "success",
       result_class: "execution_write_stable",
@@ -564,7 +577,10 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
     const title = deriveCandidateTitle(source, state, packet);
     const summary = buildCandidateSummary(state, packet);
     const taskSignature = deriveTaskSignatureFromInputs(state, packet);
+    const taskFamily = deriveTaskFamilyFromSource(source);
     const targetFiles = collectTargetFilesFromInputs(state, packet);
+    const filePath = firstString(packet?.resume_anchor?.file_path ?? null) ?? targetFiles[0] ?? null;
+    const nextAction = firstString(packet?.next_action ?? null);
     const toolSet = deriveWorkflowToolSet(state, packet);
 
     const executionNative = ExecutionNativeV1Schema.parse({
@@ -573,6 +589,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
       summary_kind: "workflow_candidate",
       compression_layer: "L1",
       task_signature: taskSignature,
+      ...(taskFamily ? { task_family: taskFamily } : {}),
       workflow_signature: workflowSignature,
       anchor_kind: "workflow",
       anchor_level: "L1",
@@ -592,9 +609,39 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         lazy_update_fields: ["usage_count", "last_used_at"],
         last_maintenance_at: now,
       },
+      file_path: filePath,
+      target_files: targetFiles,
+      next_action: nextAction,
     });
 
     const projectedNodeId = stableUuid(`${args.scope}:node:${projectionClientId}`);
+    let governancePreview:
+      | Awaited<ReturnType<typeof buildWorkflowPromotionGovernancePreview>>
+      | null = null;
+    if (observedCount >= requiredObservations) {
+      const workflowPromotionGovernanceReview = asRecord(source.slots?.workflow_promotion_governance_review);
+      const promoteMemoryGovernanceReview = asRecord(workflowPromotionGovernanceReview?.promote_memory);
+      governancePreview = await buildWorkflowPromotionGovernancePreview({
+        candidateNodeIds: Array.from(new Set([projectedNodeId, ...existingCandidates.rows.map((row) => row.id)])),
+        inputText: summary,
+        inputSha256: sha256Hex(summary),
+        candidateExamples: [
+          {
+            node_id: projectedNodeId,
+            title,
+        summary,
+        task_signature: taskSignature,
+        ...(taskFamily ? { task_family: taskFamily } : {}),
+        workflow_signature: workflowSignature,
+            outcome_status: "candidate",
+            success_score: 0.5,
+          },
+        ],
+        reviewResult: (promoteMemoryGovernanceReview?.review_result ?? null) as any,
+        reviewProvider: args.governanceReviewProviders?.promote_memory ?? undefined,
+      });
+    }
+
     nodes.push({
       id: projectedNodeId,
       client_id: projectionClientId,
@@ -620,6 +667,11 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
           source_client_id: source.client_id ?? null,
           generated_at: now,
           workflow_signature: workflowSignature,
+          ...(governancePreview ? {
+            governance_preview: {
+              promote_memory: governancePreview.promote_memory,
+            },
+          } : {}),
         },
       },
     });
@@ -631,29 +683,9 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
       dst_id: source.id,
     });
 
-    if (observedCount >= requiredObservations) {
+    if (observedCount >= requiredObservations && governancePreview?.runtime_apply.promotion_state_override === "stable") {
       const stableClientId = `workflow_projection:stable:${workflowSignature}`;
       const stableNodeId = stableUuid(`${args.scope}:node:${stableClientId}`);
-      const workflowPromotionGovernanceReview = asRecord(source.slots?.workflow_promotion_governance_review);
-      const promoteMemoryGovernanceReview = asRecord(workflowPromotionGovernanceReview?.promote_memory);
-      const governancePreview = await buildWorkflowPromotionGovernancePreview({
-        candidateNodeIds: Array.from(new Set([projectedNodeId, ...existingCandidates.rows.map((row) => row.id)])),
-        inputText: summary,
-        inputSha256: sha256Hex(summary),
-        candidateExamples: [
-          {
-            node_id: projectedNodeId,
-            title,
-            summary,
-            task_signature: taskSignature,
-            workflow_signature: workflowSignature,
-            outcome_status: "candidate",
-            success_score: 0.5,
-          },
-        ],
-        reviewResult: (promoteMemoryGovernanceReview?.review_result ?? null) as any,
-        reviewProvider: args.governanceReviewProviders?.promote_memory ?? undefined,
-      });
       const stableAnchor = buildStableWorkflowAnchor({
         scope: args.scope,
         clientId: stableClientId,
@@ -661,8 +693,12 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         title,
         summary,
         taskSignature,
+        taskFamily,
         workflowSignature,
         toolSet,
+        filePath,
+        targetFiles,
+        nextAction,
         observedCount,
         supportingNodeIds: existingCandidates.rows.map((row) => row.id),
         promotedAt: now,
@@ -689,10 +725,14 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
             summary_kind: "workflow_anchor",
             compression_layer: "L2",
             task_signature: stableAnchor.task_signature,
+            ...(stableAnchor.task_family ? { task_family: stableAnchor.task_family } : {}),
             workflow_signature: stableAnchor.workflow_signature,
             anchor_kind: "workflow",
             anchor_level: "L2",
             tool_set: stableAnchor.tool_set,
+            file_path: stableAnchor.file_path ?? null,
+            target_files: stableAnchor.target_files ?? [],
+            next_action: stableAnchor.next_action ?? null,
             workflow_promotion: stableAnchor.workflow_promotion,
             maintenance: stableAnchor.maintenance,
             rehydration: stableAnchor.rehydration,

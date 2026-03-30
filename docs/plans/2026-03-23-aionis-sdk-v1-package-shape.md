@@ -1,10 +1,10 @@
-# Aionis SDK V1 Package Shape
+# Aionis Core SDK V1 Package Shape
 
 Date: 2026-03-23
 
 ## Goal
 
-Define the first concrete package shape for the public Aionis SDK.
+Define the first concrete package shape for the Aionis Core SDK surface.
 
 This document is intentionally narrower than the broader release-direction design.
 Its goal is to answer:
@@ -18,13 +18,13 @@ Its goal is to answer:
 
 Current package state:
 
-1. [packages/runtime-core](/Volumes/ziel/Aionisgo/packages/runtime-core) already exists
-2. `@aionis/runtime-core` is currently a shared-boundary package, not the public SDK
+1. [packages/runtime-core](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core) already exists
+2. `@cognary/aionis-runtime-core` is currently a shared-boundary package, not the main SDK surface
 3. the repository's strongest stable public behavior still lives at the HTTP route/runtime layer
 
 Interpretation:
 
-1. `@aionis/runtime-core` should remain a low-level shared boundary package
+1. `@cognary/aionis-runtime-core` should remain a low-level shared boundary package
 2. SDK v1 should be a new package layered on top of stable route contracts
 3. SDK v1 should not require a consumer to think in raw route terms
 
@@ -32,21 +32,15 @@ Interpretation:
 
 Recommended package sequence:
 
-1. `@aionis/runtime-core`
-2. `@aionis/sdk`
+1. `@cognary/aionis-runtime-core`
+2. `@cognary/aionis`
 
 Meaning:
 
-1. `@aionis/runtime-core`
+1. `@cognary/aionis-runtime-core`
    shared boundary and low-level contracts
-2. `@aionis/sdk`
-   first-class developer API for normal Aionis usage
-
-Later optional packages:
-
-1. `@aionis/mcp-adapter`
-2. `@aionis/codex-adapter`
-3. `@aionis/examples` or example-specific packages only if distribution pressure makes that worthwhile
+2. `@cognary/aionis`
+   first-class developer API for normal Aionis Core usage
 
 ## Recommended SDK V1 Scope
 
@@ -78,11 +72,11 @@ Do not expose as first-class SDK v1 modules:
 3. every internal governance operation name
 4. unstable maintenance controls
 5. server-only automation orchestration surfaces
-6. MCP/Codex-specific abstractions
+6. integration-specific abstractions that do not belong in the core SDK
 
 Reason:
 
-1. SDK v1 should expose Aionis's strongest public story
+1. SDK v1 should expose Aionis Core's strongest public story
 2. weak or noisy surfaces should stay internal until they are clearly productized
 
 ## Recommended SDK API Shape
@@ -92,7 +86,7 @@ Reason:
 Recommended constructor:
 
 ```ts
-import { createAionisClient } from "@aionis/sdk";
+import { createAionisClient } from "@cognary/aionis";
 
 const aionis = createAionisClient({
   baseUrl: "http://127.0.0.1:8787",
@@ -127,7 +121,7 @@ SDK v1 should avoid:
 
 1. over-abstracting current route semantics
 2. inventing a second mental model detached from the runtime
-3. mixing adapter-specific host concepts into the core client
+3. mixing integration-specific concepts into the core client
 
 ## Recommended Internal Module Layout
 
@@ -162,11 +156,11 @@ packages/sdk/
 2. `transport/http.ts`
    low-level request execution
 3. `modules/*`
-   stable module wrappers around current route families
+   stable module surfaces around current route families
 4. `contracts/*`
    shared reusable request/response ownership types when SDK-local composition is needed
 
-## Recommended README Story For `@aionis/sdk`
+## Recommended README Story For `@cognary/aionis`
 
 The SDK README should lead with:
 
@@ -250,7 +244,7 @@ Should demonstrate:
 
 Goal:
 
-1. show Aionis under a simple agent loop without dragging in MCP or Codex
+1. show Aionis under a simple agent loop without dragging in secondary integration layers
 
 Should demonstrate:
 
@@ -259,18 +253,18 @@ Should demonstrate:
 3. tool feedback
 4. second-run improvement
 
-## Relationship To `@aionis/runtime-core`
+## Relationship To `@cognary/aionis-runtime-core`
 
 Recommended rule:
 
-1. `@aionis/runtime-core` remains low-level and shared-boundary oriented
-2. `@aionis/sdk` becomes the first public developer surface
+1. `@cognary/aionis-runtime-core` remains low-level and shared-boundary oriented
+2. `@cognary/aionis` becomes the first public developer surface
 
 This means:
 
 1. SDK v1 should depend on stable contracts, not on every internal runtime helper
 2. runtime-core should not be forced to become the full SDK by accretion
-3. the public story should say "use `@aionis/sdk`", not "start from runtime-core"
+3. the public story should say "use `@cognary/aionis`", not "start from runtime-core"
 
 ## Packaging Recommendation
 
@@ -279,8 +273,8 @@ Recommended package metadata direction for SDK v1:
 1. public package
 2. ESM-first
 3. typed client surface
-4. no dependency on MCP/Codex host abstractions
-5. examples runnable against a normal local Lite runtime
+4. no dependency on secondary integration abstractions
+5. examples runnable against a normal local runtime shell
 
 ## What Should Happen After SDK V1
 
@@ -288,13 +282,7 @@ After SDK v1 is shaped:
 
 1. rewrite top-level README examples to use SDK terminology
 2. add the first example set
-3. then, and only then, design downstream adapters
-
-Adapter order should be:
-
-1. optional MCP adapter
-2. optional Codex adapter
-3. optional IDE/framework adapters
+3. then, and only then, design downstream integration layers
 
 ## Final Recommendation
 

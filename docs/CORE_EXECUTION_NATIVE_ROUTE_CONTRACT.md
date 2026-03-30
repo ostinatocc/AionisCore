@@ -1,20 +1,20 @@
-# Aionis Lite Execution-Native Route Contract
+# Aionis Core Execution-Native Route Contract
 
 Last reviewed: 2026-03-20
 
-This document defines the stable execution-native route contract for Lite planner/context surfaces.
+This document defines the stable execution-native route contract for Aionis Core planner/context surfaces.
 
 It sits one layer below the higher-level planner-packet narrative and one layer above raw route-handler implementation.
 
 Primary references:
 
-1. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
-2. [docs/LITE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md)
-3. [docs/LITE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
-4. [docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
-5. [src/memory/schemas.ts](/Volumes/ziel/Aionisgo/src/memory/schemas.ts)
-6. [src/routes/memory-context-runtime.ts](/Volumes/ziel/Aionisgo/src/routes/memory-context-runtime.ts)
-7. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-context-runtime-packet-contract.test.ts)
+1. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+2. [docs/CORE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md)
+3. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
+4. [docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
+5. [src/memory/schemas.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/schemas.ts)
+6. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
+7. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-runtime-packet-contract.test.ts)
 
 ## Purpose
 
@@ -340,7 +340,7 @@ This contract is currently verified through:
 
 1. schema parsing via `PlanningContextRouteContractSchema`
 2. schema parsing via `ContextAssembleRouteContractSchema`
-3. route-level CI in [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-context-runtime-packet-contract.test.ts)
+3. route-level CI in [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-runtime-packet-contract.test.ts)
 
 ## Non-Goals
 

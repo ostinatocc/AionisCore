@@ -270,6 +270,7 @@ export type LiteWriteStore = WriteStoreAccess & {
     taskSignature?: string | null;
     errorSignature?: string | null;
     workflowSignature?: string | null;
+    patternSignature?: string | null;
     compressionLayer?: "L0" | "L1" | "L2" | "L3" | "L4" | "L5" | null;
     consumerAgentId?: string | null;
     consumerTeamId?: string | null;
@@ -1063,6 +1064,7 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
         .filter((row) => !args.taskSignature || row.execution_native_v1.task_signature === args.taskSignature)
         .filter((row) => !args.errorSignature || row.execution_native_v1.error_signature === args.errorSignature)
         .filter((row) => !args.workflowSignature || row.execution_native_v1.workflow_signature === args.workflowSignature)
+        .filter((row) => !args.patternSignature || row.execution_native_v1.pattern_signature === args.patternSignature)
         .filter((row) => !args.compressionLayer || row.execution_native_v1.compression_layer === args.compressionLayer);
       const slice = filtered.slice(args.offset, args.offset + args.limit + 1);
       const hasMore = slice.length > args.limit;

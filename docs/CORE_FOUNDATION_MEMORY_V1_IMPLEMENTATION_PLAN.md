@@ -1,14 +1,18 @@
-# Aionis Lite Foundation Memory V1 Implementation Plan
+# Aionis Core Foundation Memory V1 Implementation Plan
 
 Last reviewed: 2026-03-20
 
-This document turns `V1` of the foundation memory roadmap into an implementation plan.
+Status:
+
+`historical implementation reference`
+
+This document turns `V1` of the foundation memory roadmap into an implementation-plan snapshot.
 
 Primary reference:
 
-1. [docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
-2. [docs/LITE_EXECUTION_MEMORY_STRATEGY.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_STRATEGY.md)
-3. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+1. [docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
+2. [docs/CORE_CONTINUITY_STRATEGY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_CONTINUITY_STRATEGY.md)
+3. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
 
 ## V1 Objective
 
@@ -40,16 +44,16 @@ Completed work packages:
 
 Current implementation references:
 
-1. [src/memory/recall.ts](/Volumes/ziel/Aionisgo/src/memory/recall.ts)
-2. [src/memory/context-orchestrator.ts](/Volumes/ziel/Aionisgo/src/memory/context-orchestrator.ts)
-3. [src/routes/memory-context-runtime.ts](/Volumes/ziel/Aionisgo/src/routes/memory-context-runtime.ts)
-4. [src/app/planning-summary.ts](/Volumes/ziel/Aionisgo/src/app/planning-summary.ts)
-5. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/Aionisgo/src/memory/tools-lifecycle-summary.ts)
-6. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-context-runtime-packet-contract.test.ts)
+1. [src/memory/recall.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/recall.ts)
+2. [src/memory/context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
+3. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
+4. [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
+5. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-lifecycle-summary.ts)
+6. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-runtime-packet-contract.test.ts)
 
 Current contract references:
 
-1. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+1. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
 
 Residual follow-up:
 
@@ -109,9 +113,9 @@ Introduce an explicit internal split between action recall and knowledge recall.
 
 ### Primary files
 
-1. [src/memory/recall.ts](/Volumes/ziel/Aionisgo/src/memory/recall.ts)
-2. [src/store/recall-access.ts](/Volumes/ziel/Aionisgo/src/store/recall-access.ts)
-3. [src/store/lite-recall-store.ts](/Volumes/ziel/Aionisgo/src/store/lite-recall-store.ts)
+1. [src/memory/recall.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/recall.ts)
+2. [src/store/recall-access.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/recall-access.ts)
+3. [src/store/lite-recall-store.ts](/Volumes/ziel/AionisTest/Aioniscc/src/store/lite-recall-store.ts)
 
 ### Output expectations
 
@@ -135,9 +139,9 @@ Make planning-oriented routes prefer action-oriented seeds before broad semantic
 
 ### Primary files
 
-1. [src/memory/recall.ts](/Volumes/ziel/Aionisgo/src/memory/recall.ts)
-2. [src/routes/memory-context-runtime.ts](/Volumes/ziel/Aionisgo/src/routes/memory-context-runtime.ts)
-3. [src/memory/runtime-tool-hints.ts](/Volumes/ziel/Aionisgo/src/memory/runtime-tool-hints.ts)
+1. [src/memory/recall.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/recall.ts)
+2. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
+3. [src/memory/runtime-tool-hints.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/runtime-tool-hints.ts)
 
 ### Output expectations
 
@@ -164,9 +168,9 @@ Turn context assembly into a stable planner packet instead of a mixed bag of use
 
 ### Primary files
 
-1. [src/memory/context.ts](/Volumes/ziel/Aionisgo/src/memory/context.ts)
-2. [src/memory/context-orchestrator.ts](/Volumes/ziel/Aionisgo/src/memory/context-orchestrator.ts)
-3. [src/routes/memory-context-runtime.ts](/Volumes/ziel/Aionisgo/src/routes/memory-context-runtime.ts)
+1. [src/memory/context.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context.ts)
+2. [src/memory/context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
+3. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
 
 ### Output expectations
 
@@ -192,9 +196,9 @@ Make the packet explain itself.
 
 ### Primary files
 
-1. [src/app/planning-summary.ts](/Volumes/ziel/Aionisgo/src/app/planning-summary.ts)
-2. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/Aionisgo/src/memory/tools-lifecycle-summary.ts)
-3. [src/routes/memory-context-runtime.ts](/Volumes/ziel/Aionisgo/src/routes/memory-context-runtime.ts)
+1. [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
+2. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-lifecycle-summary.ts)
+3. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
 
 ### Output expectations
 
@@ -220,9 +224,9 @@ Lock the new runtime behavior down as contract, not aspiration.
 
 ### Primary files
 
-1. [scripts/ci/lite-runtime-tool-hints.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-runtime-tool-hints.test.ts)
-2. [scripts/ci/lite-planning-summary.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-planning-summary.test.ts)
-3. new packet-oriented tests under [scripts/ci](/Volumes/ziel/Aionisgo/scripts/ci)
+1. [scripts/ci/lite-runtime-tool-hints.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-runtime-tool-hints.test.ts)
+2. [scripts/ci/lite-planning-summary.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-planning-summary.test.ts)
+3. new packet-oriented tests under [scripts/ci](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci)
 
 ## Recommended Delivery Order
 

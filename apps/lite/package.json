@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.2.21",
   "type": "module",
-  "description": "Lite app launcher for the standalone Aionis Lite repository",
+  "description": "Local runtime shell launcher for Aionis Core",
   "scripts": {
     "build": "node --check src/index.js",
     "start": "bash ./scripts/start-lite-app.sh",

@@ -1,24 +1,24 @@
-# Aionis Lite Architecture And Completion
+# Aionis Core Local Runtime Architecture And Completion
 
 Last reviewed: 2026-03-20
 
-This document describes the current architecture of the standalone `Aionis Lite` repository and records the present completion level of each major capability area.
+This document describes the current local-runtime architecture inside the `Aionis Core` repository and records the present completion level of each major capability area.
 
-For the endpoint-level public surface, see [docs/LITE_API_CAPABILITY_MATRIX.md](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md).
+For the endpoint-level public surface, see [docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](/Volumes/ziel/AionisTest/Aioniscc/docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md).
 
 ## Executive Summary
 
-`Aionis Lite` is now a real standalone local runtime, not a wrapper demo.
+`Aionis Core` now contains a real local runtime shell and a real local execution-memory kernel.
 
 Current reality:
 
-1. It boots through its own Lite wrapper and manifest contracts.
+1. It boots through its own local runtime shell and manifest contracts.
 2. It runs as a single-user local runtime with SQLite-backed persistence.
 3. It includes replay, playbook, sandbox, and a local playbook-driven automation kernel.
-4. It intentionally excludes admin/control, multi-tenant governance, and server orchestration surfaces.
-5. It is product-complete enough to use directly, but the copied `src/` tree still needs more slimming before the codebase reaches its clean final Lite-only shape.
+4. It carries a narrower local-runtime surface than the broader core capability set.
+5. It is complete enough to validate directly, but the copied `src/` tree still needs more slimming before the codebase reaches its clean final local-runtime shape.
 
-As of this review, the Lite source tree contains:
+As of this review, the local runtime source tree contains:
 
 1. `112` code files under `src/`
 2. about `44,360` lines of code under `src/`
@@ -32,18 +32,18 @@ The largest remaining modules are:
 
 ## Repository Shape
 
-The standalone repository is structured around a thin app wrapper, a Lite-only runtime assembly path, and a SQLite-backed local kernel.
+The repository is structured around a thin local runtime shell, a local runtime assembly path, and a SQLite-backed local kernel.
 
 Top-level product seams:
 
 1. `apps/lite/`
-   Owns the product-facing Lite launcher and startup script.
+   Owns the local runtime shell launcher and startup script.
 2. `src/`
    Holds the runtime host, route layer, app assembly, memory kernel, and SQLite stores.
 3. `packages/runtime-core/`
-   Marks the extraction seam between shared core, Lite product surfaces, and server-only surfaces.
+   Marks the extraction seam between shared core capability surfaces and local-runtime surfaces.
 4. `docs/`
-   Holds Lite boundary and operator-facing architecture material.
+   Holds core boundary and operator-facing architecture material.
 
 ## Runtime Bootstrap
 
@@ -57,7 +57,7 @@ The startup chain is:
 Responsibilities:
 
 1. `apps/lite/scripts/start-lite-app.sh`
-   Sets the default Lite runtime environment:
+   Sets the default local runtime environment:
    - `AIONIS_EDITION=lite`
    - `AIONIS_MODE=local`
    - `MEMORY_AUTH_MODE=off`
@@ -66,7 +66,7 @@ Responsibilities:
    - `SANDBOX_ENABLED=true`
    - `SANDBOX_ADMIN_ONLY=false`
 2. `apps/lite/src/index.js`
-   Launches the Lite runtime source entry through `tsx`.
+   Launches the local runtime source entry through `tsx`.
 3. `src/index.ts`
    Is a thin entry that delegates to `startAionisRuntime()`.
 4. `src/runtime-entry.ts`
@@ -316,9 +316,9 @@ Shared core:
 2. `runtime-bootstrap`
 3. `automation-kernel-local`
 
-Lite product:
+Local runtime shell:
 
-1. `lite-wrapper`
+1. `local-runtime-shell`
 
 Server-only:
 
@@ -374,7 +374,7 @@ The percentages below are engineering judgment based on the current code, bounda
 
 | Capability Area | Completion | Notes |
 |---|---:|---|
-| Standalone repo, wrapper, manifest, startup | 95% | Fully independent startup chain exists and is validated. |
+| Local shell, manifest, and startup | 95% | Fully independent startup chain exists and is validated. |
 | Lite-only runtime assembly | 90% | Main runtime wiring is Lite-only; major full/store fallback has been removed. |
 | Local identity and request guards | 95% | Single-user local actor model is stable and consistently wired. |
 | SQLite write/recall/access/packs kernel | 90% | Core local persistence surface is present and used by the product. |
@@ -383,7 +383,7 @@ The percentages below are engineering judgment based on the current code, bounda
 | Local automation kernel | 88% | Definition, run, pause/resume, and playbook-driven execution are real and persistent. |
 | Sandbox | 82% | Real route and persistence path exists; default direct use works; default executor still favors local validation. |
 | Health, error, and response contracts | 92% | Stable envelopes are in place and tested. |
-| Repo baseline, CI, and release skeleton | 88% | Strong enough for standalone repo operation. |
+| Repo baseline, CI, and release skeleton | 88% | Strong enough for stable core-repo operation. |
 | Public/operator docs | 82% | Good enough to operate the product, but still not fully polished. |
 | Source-tree slimming and final purity | 65% | Still the biggest unfinished area. |
 
@@ -391,7 +391,7 @@ The percentages below are engineering judgment based on the current code, bounda
 
 These parts are now product-grade in practical terms:
 
-1. startup and wrapper ownership
+1. startup and shell ownership
 2. local SQLite-backed runtime boot
 3. health and error contracts
 4. write/recall/context core path
@@ -419,7 +419,7 @@ The most visible evidence of this unfinished work is module size concentration:
 
 ## Final Assessment
 
-`Aionis Lite` is now a complete local product line, not an experiment hidden inside the full repository.
+`Aionis Core` now contains a complete local runtime shell and a complete local execution-memory kernel slice.
 
 The current state is best described as:
 

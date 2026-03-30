@@ -258,6 +258,7 @@ function normalizeExecutionNativeSlots(
       task_signature: anchor.task_signature,
       ...(anchor.error_signature ? { error_signature: anchor.error_signature } : {}),
       ...(anchor.workflow_signature ? { workflow_signature: anchor.workflow_signature } : {}),
+      ...(anchor.pattern_signature ? { pattern_signature: anchor.pattern_signature } : {}),
       anchor_kind: anchor.anchor_kind,
       anchor_level: anchor.anchor_level,
       tool_set: anchor.tool_set,

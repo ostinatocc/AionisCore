@@ -1,22 +1,21 @@
-# Aionis Lite Execution-Memory Product Contract v1
+# Aionis Core Execution-Memory Contract v1
 
 Last reviewed: 2026-03-20
 
-This document defines the stable product-facing execution-memory contract for `Aionis Lite`.
+This document defines the stable execution-memory contract for `Aionis Core`.
 
 It sits above:
 
-1. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
-2. [docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
-3. [docs/LITE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md)
-4. [docs/LITE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md)
-5. [docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
-6. [docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
+1. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+2. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
+3. [docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md)
+4. [docs/CORE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md)
+5. [docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
+6. [docs/CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
 
 It exists to make one thing explicit:
 
-`Aionis Lite` is no longer just a generic memory API surface.
-It now exposes a stable execution-memory product surface centered on two loops.
+`Aionis Core` exposes a stable execution-memory contract centered on two loops.
 
 ## Contract Status
 
@@ -26,21 +25,21 @@ Status:
 
 Primary runtime references:
 
-1. [src/routes/memory-context-runtime.ts](/Volumes/ziel/Aionisgo/src/routes/memory-context-runtime.ts)
-2. [src/memory/context-orchestrator.ts](/Volumes/ziel/Aionisgo/src/memory/context-orchestrator.ts)
-3. [src/app/planning-summary.ts](/Volumes/ziel/Aionisgo/src/app/planning-summary.ts)
-4. [src/memory/schemas.ts](/Volumes/ziel/Aionisgo/src/memory/schemas.ts)
-5. [src/memory/tools-select.ts](/Volumes/ziel/Aionisgo/src/memory/tools-select.ts)
-6. [src/memory/replay.ts](/Volumes/ziel/Aionisgo/src/memory/replay.ts)
-7. [src/routes/memory-replay-governed.ts](/Volumes/ziel/Aionisgo/src/routes/memory-replay-governed.ts)
+1. [src/routes/memory-context-runtime.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-context-runtime.ts)
+2. [src/memory/context-orchestrator.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/context-orchestrator.ts)
+3. [src/app/planning-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts)
+4. [src/memory/schemas.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/schemas.ts)
+5. [src/memory/tools-select.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-select.ts)
+6. [src/memory/replay.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/replay.ts)
+7. [src/routes/memory-replay-governed.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-replay-governed.ts)
 
 Primary test references:
 
-1. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-context-runtime-packet-contract.test.ts)
-2. [scripts/ci/lite-planning-summary.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-planning-summary.test.ts)
-3. [scripts/ci/lite-tools-pattern-anchor.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-tools-pattern-anchor.test.ts)
-4. [scripts/ci/lite-tools-select-route-contract.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-tools-select-route-contract.test.ts)
-5. [scripts/ci/lite-replay-governed-learning-projection-route.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-replay-governed-learning-projection-route.test.ts)
+1. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-context-runtime-packet-contract.test.ts)
+2. [scripts/ci/lite-planning-summary.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-planning-summary.test.ts)
+3. [scripts/ci/lite-tools-pattern-anchor.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-tools-pattern-anchor.test.ts)
+4. [scripts/ci/lite-tools-select-route-contract.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-tools-select-route-contract.test.ts)
+5. [scripts/ci/lite-replay-governed-learning-projection-route.test.ts](/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-replay-governed-learning-projection-route.test.ts)
 
 ## Product Thesis
 
@@ -65,7 +64,7 @@ Current product meaning:
 
 1. stable workflow memory is a first-class planner/runtime surface
 2. payload expansion is optional and guided by anchor recall
-3. rehydration follows the normal Lite single-user identity model
+3. rehydration follows the default local actor model
 
 ### 2. Execution Policy Learning Loop
 
@@ -124,8 +123,8 @@ Canonical summary objects:
 
 Primary runtime reference:
 
-1. [src/memory/tools-select.ts](/Volumes/ziel/Aionisgo/src/memory/tools-select.ts)
-2. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/Aionisgo/src/memory/tools-lifecycle-summary.ts)
+1. [src/memory/tools-select.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-select.ts)
+2. [src/memory/tools-lifecycle-summary.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-lifecycle-summary.ts)
 
 Primary route contract:
 
@@ -142,8 +141,8 @@ Canonical selector-facing outputs:
 
 Primary runtime reference:
 
-1. [src/memory/replay.ts](/Volumes/ziel/Aionisgo/src/memory/replay.ts)
-2. [src/routes/memory-replay-governed.ts](/Volumes/ziel/Aionisgo/src/routes/memory-replay-governed.ts)
+1. [src/memory/replay.ts](/Volumes/ziel/AionisTest/Aioniscc/src/memory/replay.ts)
+2. [src/routes/memory-replay-governed.ts](/Volumes/ziel/AionisTest/Aioniscc/src/routes/memory-replay-governed.ts)
 
 Primary route contract:
 

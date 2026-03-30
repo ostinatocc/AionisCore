@@ -4,7 +4,7 @@ Date: 2026-03-23
 
 ## Goal
 
-Add one real benchmark scenario that proves a custom `modelClientFactory` replacement can flow through live Lite runtime paths.
+Add one real benchmark scenario that proves a custom `modelClientFactory` replacement can flow through live local runtime paths.
 
 ## Why
 

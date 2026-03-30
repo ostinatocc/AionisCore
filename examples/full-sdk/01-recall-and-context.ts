@@ -15,7 +15,7 @@ async function main() {
     tenant_id: DEFAULT_TENANT_ID,
     scope,
     actor: "full-sdk-example",
-    input_text: "Documented replay failure analysis and recovery sequence for private runtime triage.",
+    input_text: "Documented replay failure analysis and recovery sequence for Aionis Core triage.",
     nodes: [],
     edges: [],
   });
@@ -34,7 +34,7 @@ async function main() {
     scope,
     query_text: "What should I do next to recover the replay run?",
     context: {
-      goal: "recover a failed replay run in the private runtime mainline",
+      goal: "recover a failed replay run in Aionis Core",
       operator_mode: "debug",
     },
     tool_candidates: ["bash", "edit", "test"],

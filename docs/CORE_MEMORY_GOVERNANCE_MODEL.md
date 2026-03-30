@@ -1,8 +1,8 @@
-# Aionis Lite Memory Governance Model
+# Aionis Core Memory Governance Model
 
 Last reviewed: 2026-03-20
 
-This document defines how memory evolution decisions should be governed in `Aionis Lite`.
+This document defines how memory evolution decisions should be governed in `Aionis Core`.
 
 Preferred short module term:
 
@@ -18,7 +18,7 @@ Definition:
 
 Current runtime semantics:
 
-1. `rehydrate_payload` inherits Lite's default local actor on the normal single-user path
+1. `rehydrate_payload` inherits the default local actor on the normal single-user path
 2. runtime hints may therefore expose direct rehydrate calls without repeating local identity
 
 Named execution-policy loop:
@@ -52,12 +52,11 @@ But the full governance model is slightly stricter than that:
 2. the LLM proposes semantic judgments
 3. the system enforces boundaries, budgets, and write contracts
 
-This means Lite does not treat the LLM as the owner of memory state.
-It treats the LLM as a bounded adjudicator inside a governed memory runtime.
+This means Aionis Core treats the LLM as a bounded adjudicator inside a governed memory runtime.
 
 Practical trigger reference:
 
-1. [docs/LITE_MEMORY_TRIGGER_MATRIX.md](/Volumes/ziel/Aionisgo/docs/LITE_MEMORY_TRIGGER_MATRIX.md)
+1. [docs/CORE_MEMORY_TRIGGER_MATRIX.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_MEMORY_TRIGGER_MATRIX.md)
 
 ## Why This Model Exists
 
@@ -414,4 +413,4 @@ The correct Lite model is:
 2. semantics are LLM-assisted
 3. state transition authority stays with the runtime
 
-That gives Aionis Lite a memory system that can evolve in meaning without becoming operationally ungoverned.
+That gives Aionis Core a memory system that can evolve in meaning without becoming operationally ungoverned.

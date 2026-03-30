@@ -358,9 +358,13 @@ export const MemoryAnchorV1Schema = z.object({
   error_signature: z.string().min(1).max(256).optional(),
   error_family: z.string().min(1).max(128).optional(),
   workflow_signature: z.string().min(1).max(256).optional(),
+  pattern_signature: z.string().min(1).max(256).optional(),
   summary: z.string().min(1).max(400),
   tool_set: z.array(z.string().min(1).max(128)).max(64),
   selected_tool: z.string().min(1).max(128).nullable().optional(),
+  file_path: z.string().min(1).max(2048).nullable().optional(),
+  target_files: z.array(z.string().min(1).max(2048)).max(64).optional(),
+  next_action: z.string().min(1).max(400).nullable().optional(),
   key_steps: MemoryAnchorStringList.optional(),
   outcome: MemoryAnchorOutcomeSchema,
   source: MemoryAnchorSourceSchema,
@@ -396,12 +400,16 @@ export const ExecutionNativeV1Schema = z.object({
   error_signature: z.string().min(1).max(256).optional(),
   error_family: z.string().min(1).max(128).optional(),
   workflow_signature: z.string().min(1).max(256).optional(),
+  pattern_signature: z.string().min(1).max(256).optional(),
   anchor_kind: MemoryAnchorKind.optional(),
   anchor_level: MemoryAnchorLevel.optional(),
   tool_set: z.array(z.string().min(1).max(128)).max(64).optional(),
   pattern_state: MemoryPatternState.optional(),
   credibility_state: MemoryPatternCredibilityState.optional(),
   selected_tool: z.string().min(1).max(128).nullable().optional(),
+  file_path: z.string().min(1).max(2048).nullable().optional(),
+  target_files: z.array(z.string().min(1).max(2048)).max(64).optional(),
+  next_action: z.string().min(1).max(400).nullable().optional(),
   workflow_promotion: MemoryWorkflowPromotionSchema.optional(),
   promotion: MemoryPatternPromotionSchema.optional(),
   trust_hardening: MemoryPatternTrustHardeningSchema.optional(),
@@ -586,7 +594,7 @@ export const MemoryFormPatternRequest = MemoryGovernedMutationBase.extend({
   source_node_ids: MemoryAnchorIdList.min(2).max(100),
   task_signature: z.string().min(1).max(256).optional(),
   error_signature: z.string().min(1).max(256).optional(),
-  workflow_signature: z.string().min(1).max(256).optional(),
+  pattern_signature: z.string().min(1).max(256).optional(),
   target_level: z.literal("L3").default("L3"),
   adjudication: MemoryFormPatternAdjudicationSchema.optional(),
 }).refine((v) => !!v.input_text || !!v.input_sha256, { message: "must set input_text or input_sha256" });
@@ -599,7 +607,7 @@ export const MemoryFormPatternSemanticReviewExampleSchema = z.object({
   summary: z.string().min(1).max(1000).optional(),
   task_signature: z.string().min(1).max(256).nullable().optional(),
   error_signature: z.string().min(1).max(256).nullable().optional(),
-  workflow_signature: z.string().min(1).max(256).nullable().optional(),
+  pattern_signature: z.string().min(1).max(256).nullable().optional(),
   selected_tool: z.string().min(1).max(128).nullable().optional(),
   outcome_status: z.string().min(1).max(64).nullable().optional(),
   success_score: z.number().min(0).max(1).nullable().optional(),
@@ -618,7 +626,7 @@ export const MemoryFormPatternSemanticReviewPacketSchema = z.object({
   signatures: z.object({
     task_signature: z.string().min(1).max(256).nullable().optional(),
     error_signature: z.string().min(1).max(256).nullable().optional(),
-    workflow_signature: z.string().min(1).max(256).nullable().optional(),
+    pattern_signature: z.string().min(1).max(256).nullable().optional(),
   }),
   source_examples: z.array(MemoryFormPatternSemanticReviewExampleSchema).max(6),
 });
@@ -791,6 +799,102 @@ export const ExecutionMemoryIntrospectionRequest = z.object({
 });
 
 export type ExecutionMemoryIntrospectionInput = z.infer<typeof ExecutionMemoryIntrospectionRequest>;
+
+export const ExperienceIntelligenceRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
+  run_id: z.string().min(1).optional(),
+  query_text: z.string().min(1),
+  context: z.any(),
+  candidates: z.array(z.string().min(1)).min(1).max(200),
+  include_shadow: z.boolean().default(false),
+  rules_limit: z.number().int().positive().max(200).default(50),
+  strict: z.boolean().default(true),
+  reorder_candidates: z.boolean().default(true),
+  execution_result_summary: z.record(z.unknown()).optional(),
+  execution_artifacts: z.array(z.record(z.unknown())).optional(),
+  execution_evidence: z.array(z.record(z.unknown())).optional(),
+  execution_state_v1: ExecutionStateV1Schema.optional(),
+  workflow_limit: z.number().int().positive().max(32).default(8),
+});
+
+export type ExperienceIntelligenceInput = z.infer<typeof ExperienceIntelligenceRequest>;
+
+export const KickoffRecommendationRequest = ExperienceIntelligenceRequest;
+
+export type KickoffRecommendationInput = z.infer<typeof KickoffRecommendationRequest>;
+
+export const ExperienceIntelligencePathRecommendationSchema = z.object({
+  source_kind: z.enum(["recommended_workflow", "candidate_workflow", "none"]),
+  anchor_id: z.string().nullable(),
+  workflow_signature: z.string().nullable(),
+  title: z.string().nullable(),
+  summary: z.string().nullable(),
+  file_path: z.string().nullable(),
+  target_files: z.array(z.string()),
+  next_action: z.string().nullable(),
+  confidence: z.number().nullable(),
+  tool_set: z.array(z.string()),
+}).passthrough();
+
+export const ExperienceIntelligenceToolRecommendationSchema = z.object({
+  selected_tool: z.string().nullable(),
+  ordered_tools: z.array(z.string()),
+  preferred_tools: z.array(z.string()),
+  allowed_tools: z.array(z.string()),
+  trusted_pattern_anchor_ids: z.array(z.string()),
+  candidate_pattern_anchor_ids: z.array(z.string()),
+  suppressed_pattern_anchor_ids: z.array(z.string()),
+}).passthrough();
+
+export const ExperienceIntelligenceResponseSchema = z.object({
+  summary_version: z.literal("experience_intelligence_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  query_text: z.string(),
+  recommendation: z.object({
+    history_applied: z.boolean(),
+    tool: ExperienceIntelligenceToolRecommendationSchema,
+    path: ExperienceIntelligencePathRecommendationSchema,
+    combined_next_action: z.string().nullable(),
+  }).passthrough(),
+  rationale: z.object({
+    summary: z.string(),
+  }).passthrough(),
+}).passthrough();
+
+export type ExperienceIntelligenceResponse = z.infer<typeof ExperienceIntelligenceResponseSchema>;
+
+export const KickoffRecommendationResponseSchema = z.object({
+  summary_version: z.literal("kickoff_recommendation_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  query_text: z.string(),
+  kickoff_recommendation: z.lazy(() => KickoffRecommendationSchema).nullable(),
+  rationale: z.object({
+    summary: z.string(),
+  }).passthrough(),
+}).passthrough();
+
+export type KickoffRecommendationResponse = z.infer<typeof KickoffRecommendationResponseSchema>;
+
+export const FirstStepRecommendationSchema = z.object({
+  source_kind: z.enum(["experience_intelligence", "tool_selection"]),
+  history_applied: z.boolean(),
+  selected_tool: z.string().nullable(),
+  file_path: z.string().nullable(),
+  next_action: z.string().nullable(),
+});
+
+export const KickoffRecommendationSchema = z.object({
+  source_kind: z.enum(["experience_intelligence", "tool_selection"]),
+  history_applied: z.boolean(),
+  selected_tool: z.string().nullable(),
+  file_path: z.string().nullable(),
+  next_action: z.string().nullable(),
+});
 
 export const PatternSignalSummarySchema = z.object({
   candidate_pattern_count: z.number().int().min(0),
@@ -985,6 +1089,7 @@ export type ExecutionMemoryIntrospectionResponse = z.infer<typeof ExecutionMemor
 export const PlanningSummaryContractSchema = z.object({
   summary_version: z.literal("planning_summary_v1"),
   planner_explanation: z.string().nullable(),
+  first_step_recommendation: FirstStepRecommendationSchema.nullable().optional(),
   workflow_signal_summary: WorkflowSignalSummarySchema,
   action_packet_summary: ActionPacketSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
@@ -1002,6 +1107,7 @@ export type PlanningSummaryContract = z.infer<typeof PlanningSummaryContractSche
 export const AssemblySummaryContractSchema = z.object({
   summary_version: z.literal("assembly_summary_v1"),
   planner_explanation: z.string().nullable(),
+  first_step_recommendation: FirstStepRecommendationSchema.nullable().optional(),
   workflow_signal_summary: WorkflowSignalSummarySchema,
   action_packet_summary: ActionPacketSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
@@ -1025,12 +1131,14 @@ const PlannerPacketRouteContractBaseSchema = z.object({
 
 export const PlanningContextRouteContractSchema = PlannerPacketRouteContractBaseSchema.extend({
   planning_summary: PlanningSummaryContractSchema,
+  kickoff_recommendation: KickoffRecommendationSchema.nullable().optional(),
 });
 
 export type PlanningContextRouteContract = z.infer<typeof PlanningContextRouteContractSchema>;
 
 export const ContextAssembleRouteContractSchema = PlannerPacketRouteContractBaseSchema.extend({
   assembly_summary: AssemblySummaryContractSchema,
+  kickoff_recommendation: KickoffRecommendationSchema.nullable().optional(),
 });
 
 export type ContextAssembleRouteContract = z.infer<typeof ContextAssembleRouteContractSchema>;
@@ -1449,13 +1557,24 @@ export type HandoffStoreInput = z.infer<typeof HandoffStoreRequest>;
 export const HandoffRecoverRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
-  anchor: z.string().min(1),
+  handoff_id: z.string().min(1).optional(),
+  handoff_uri: z.string().min(1).optional(),
+  anchor: z.string().min(1).optional(),
   repo_root: z.string().min(1).optional(),
   file_path: z.string().min(1).optional(),
   symbol: z.string().min(1).optional(),
   handoff_kind: HandoffKind.default("patch_handoff"),
   memory_lane: z.enum(["private", "shared"]).optional(),
+  include_payload: z.boolean().optional(),
   limit: z.number().int().positive().max(20).default(5),
+}).superRefine((value, ctx) => {
+  if (!value.anchor && !value.handoff_id && !value.handoff_uri) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["anchor"],
+      message: "anchor, handoff_id, or handoff_uri is required",
+    });
+  }
 });
 
 export type HandoffRecoverInput = z.infer<typeof HandoffRecoverRequest>;

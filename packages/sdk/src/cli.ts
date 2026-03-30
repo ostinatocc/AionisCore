@@ -38,7 +38,7 @@ async function main() {
 
 function printHelp() {
   console.log([
-    "Aionis Suite CLI",
+    "Aionis Core CLI",
     "",
     `Package: ${PACKAGE_NAME}@${PACKAGE_VERSION}`,
     "",
@@ -51,8 +51,8 @@ function printHelp() {
     "  aionis dev --repo /path/to/Aionis --dry-run",
     "",
     "Notes:",
-    "  - This CLI is a thin launcher around the public sdk_demo shell.",
-    "  - The runtime still lives in the public Aionis repository.",
+    "  - This CLI is a thin launcher around the local Aionis Core runtime shell.",
+    "  - The runtime lives in the Aionis repository.",
     `  - Package page: ${PACKAGE_PAGE}`,
     `  - Repository: ${REPO_URL}`,
   ].join("\n"));
@@ -77,7 +77,7 @@ function runDoctor(explicitRepoRoot?: string) {
     "",
     "## Recommended next step",
     repoRoot
-      ? `- Run \`aionis dev --repo ${repoRoot}\` to start the public sdk_demo runtime shell.`
+      ? `- Run \`aionis dev --repo ${repoRoot}\` to start the local Aionis Core runtime shell.`
       : "- Clone the public Aionis repo and rerun with `aionis dev --repo /path/to/Aionis`.",
   ].join("\n"));
 }
@@ -89,7 +89,7 @@ function runExample() {
     "1. Install the SDK:",
     `   npm install ${PACKAGE_NAME}`,
     "",
-    "2. Start the public demo runtime:",
+    "2. Start the local Aionis Core runtime:",
     `   npx ${PACKAGE_NAME} dev --repo /path/to/Aionis`,
     "",
     "3. Connect from your app:",

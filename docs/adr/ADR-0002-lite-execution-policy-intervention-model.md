@@ -1,4 +1,4 @@
-# ADR-0002: Add Operator Intervention Overlay For Lite Execution Policy Learning
+# ADR-0002: Add Operator Intervention Overlay For Aionis Core Execution Policy Learning
 
 Status: Proposed
 
@@ -6,7 +6,7 @@ Date: 2026-03-21
 
 ## Context
 
-`Aionis Lite` now has a real execution-policy learning loop:
+`Aionis Core` now has a real execution-policy learning loop:
 
 1. tool decisions are recorded
 2. tool feedback can produce pattern anchors
@@ -14,7 +14,7 @@ Date: 2026-03-21
 4. trusted patterns can influence selector ordering
 5. explicit rule or operator `tool.prefer` remains higher priority than recalled trusted pattern preference
 
-This means Lite already has:
+This means Aionis Core already has:
 
 1. a real learned policy surface
 2. planner-facing trust visibility
@@ -23,9 +23,9 @@ This means Lite already has:
 
 However, the current runtime still lacks a first-class operator intervention surface for learned execution policy.
 
-This ADR records the intended direction, but it is not yet part of the active Lite runtime baseline.
+This ADR records the intended direction, but it is not yet part of the active core runtime baseline.
 
-Specifically, Lite does not yet have:
+Specifically, Aionis Core does not yet have:
 
 1. operator-override storage alongside learned pattern state
 2. operator intervention routes for suppress / unsuppress / policy override / review
@@ -50,7 +50,7 @@ The immediate problem is controlled intervention:
 
 ## Decision
 
-We will add an operator intervention model for Lite execution policy as a separate overlay on top of learned pattern state.
+We will add an operator intervention model for Aionis Core execution policy as a separate overlay on top of learned pattern state.
 
 The intervention model will prioritize:
 
@@ -61,7 +61,7 @@ The intervention model will prioritize:
 
 The intervention model will not treat operator stop-loss actions as direct edits to learned credibility.
 
-Instead, Lite will distinguish:
+Instead, Aionis Core will distinguish:
 
 1. learned state
 2. operator override state

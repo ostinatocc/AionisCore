@@ -1,4 +1,4 @@
-export type RuntimeCoreSurfaceKind = "shared_core" | "lite_product" | "server_only";
+export type RuntimeCoreSurfaceKind = "shared_core" | "local_runtime_shell" | "server_only";
 
 export type RuntimeCoreBoundaryEntry = {
   id: string;
@@ -23,9 +23,9 @@ export const RUNTIME_CORE_BOUNDARY: readonly RuntimeCoreBoundaryEntry[] = [
     rationale: "The local playbook-driven automation kernel should stay aligned across Lite and full runtime semantics.",
   },
   {
-    id: "lite-wrapper",
-    kind: "lite_product",
-    rationale: "Lite-specific startup, docs, and release packaging should live with the standalone Lite product.",
+    id: "local-runtime-shell",
+    kind: "local_runtime_shell",
+    rationale: "Local runtime startup, shell docs, and local release packaging should stay with the Aionis Core local runtime shell.",
   },
   {
     id: "admin-control",
@@ -35,7 +35,7 @@ export const RUNTIME_CORE_BOUNDARY: readonly RuntimeCoreBoundaryEntry[] = [
   {
     id: "automation-orchestration",
     kind: "server_only",
-    rationale: "Reviewer workflows, shadow validation, telemetry, and compensation orchestration stay outside the standalone Lite baseline.",
+    rationale: "Reviewer workflows, shadow validation, telemetry, and compensation orchestration stay outside the local runtime shell baseline.",
   },
 ] as const;
 
@@ -47,14 +47,14 @@ export const RUNTIME_CORE_SERVER_ONLY_SURFACES = RUNTIME_CORE_BOUNDARY
   .filter((entry) => entry.kind === "server_only")
   .map((entry) => entry.id);
 
-export const RUNTIME_CORE_LITE_PRODUCT_SURFACES = RUNTIME_CORE_BOUNDARY
-  .filter((entry) => entry.kind === "lite_product")
+export const RUNTIME_CORE_LOCAL_RUNTIME_SHELL_SURFACES = RUNTIME_CORE_BOUNDARY
+  .filter((entry) => entry.kind === "local_runtime_shell")
   .map((entry) => entry.id);
 
 export function runtimeCoreBoundarySummary() {
   return {
     shared_core: [...RUNTIME_CORE_SHARED_SURFACES],
-    lite_product: [...RUNTIME_CORE_LITE_PRODUCT_SURFACES],
+    local_runtime_shell: [...RUNTIME_CORE_LOCAL_RUNTIME_SHELL_SURFACES],
     server_only: [...RUNTIME_CORE_SERVER_ONLY_SURFACES],
   };
 }

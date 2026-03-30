@@ -1,4 +1,4 @@
-# Aionis Lite Pattern Hardening Contract Lock Spec
+# Aionis Core Pattern Hardening Contract Lock Spec
 
 ## Goal
 

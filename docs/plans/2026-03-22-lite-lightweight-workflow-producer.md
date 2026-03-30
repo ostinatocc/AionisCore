@@ -143,7 +143,7 @@ Core runtime compiles and the Lite suite remains green.
 ### Task 4: Update status docs after code lands
 
 **Files:**
-- Modify: `docs/LITE_GOVERNANCE_AND_STRATEGY_STATUS.md`
+- Modify: `docs/CORE_GOVERNANCE_AND_STRATEGY_STATUS.md`
 
 **Step 1: Record the new producer breadth**
 

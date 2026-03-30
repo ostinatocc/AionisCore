@@ -130,11 +130,11 @@ test("recall ranking prefers stable pattern anchors over counter-evidence-open c
     anchor_level: "L3",
     pattern_state: "stable",
     credibility_state: "trusted",
-    task_signature: "tools_select:repair-export:edit",
+    task_signature: "tools_select:repair-export",
     task_class: "tools_select_pattern",
     task_family: "task:repair_export",
     error_family: "error:node-export-mismatch",
-    workflow_signature: "stable-edit-pattern",
+    pattern_signature: "stable-edit-pattern",
     summary: "Stable pattern: prefer edit for export repair after repeated successful rule-backed tool selections.",
     tool_set: ["bash", "edit", "test"],
     selected_tool: "edit",
@@ -163,9 +163,9 @@ test("recall ranking prefers stable pattern anchors over counter-evidence-open c
     anchor_level: "L3",
     pattern_state: "provisional",
     credibility_state: "contested",
-    task_signature: "tools_select:repair-export:bash",
+    task_signature: "tools_select:repair-export",
     task_class: "tools_select_pattern",
-    workflow_signature: "contested-bash-pattern",
+    pattern_signature: "contested-bash-pattern",
     summary: "Candidate pattern: prefer bash for export repair; counter-evidence observed.",
     tool_set: ["bash", "edit", "test"],
     selected_tool: "bash",
@@ -564,7 +564,7 @@ test("positive tools feedback with multiple matched rule sources exposes form_pa
     assert.equal(parsed.governance_preview?.form_pattern.review_packet.deterministic_gate.gate_satisfied, true);
     assert.equal(
       parsed.governance_preview?.form_pattern.review_packet.signatures.task_signature,
-      "tools_select:repair-export-failure-in-node-tests:edit",
+      "tools_select:repair-export-failure-in-node-tests",
     );
     assert.equal(parsed.governance_preview?.form_pattern.review_packet.signatures.error_signature, "node-export-mismatch");
     assert.equal(parsed.governance_preview?.form_pattern.review_packet.source_examples.length, 2);
@@ -1161,11 +1161,11 @@ test("selectTools keeps explicit tool.prefer ahead of trusted pattern preference
     anchor_level: "L3",
     pattern_state: "stable",
     credibility_state: "trusted",
-    task_signature: "tools_select:repair-export:edit",
+    task_signature: "tools_select:repair-export",
     task_class: "tools_select_pattern",
     task_family: "task:repair_export",
     error_family: "error:node-export-mismatch",
-    workflow_signature: "stable-edit-pattern",
+    pattern_signature: "stable-edit-pattern",
     summary: "Stable pattern: prefer edit for repair_export after repeated successful runs.",
     tool_set: ["bash", "edit", "test"],
     selected_tool: "edit",

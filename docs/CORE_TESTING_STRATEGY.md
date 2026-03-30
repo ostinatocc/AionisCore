@@ -1,15 +1,15 @@
-# Lite Testing Strategy
+# Aionis Core Testing Strategy
 
 Last reviewed: 2026-03-23
 
-This document defines how `Aionis Lite` should be tested in its current product shape.
+This document defines how `Aionis Core` should be tested in its current kernel shape.
 
 The goal is not generic coverage.
 The goal is to protect the execution-memory product contract.
 
 ## Core Principle
 
-Lite should be tested as an `execution-memory-first runtime`, not as a collection of unrelated utility functions.
+Aionis Core should be tested as an `execution-memory-first runtime`, not as a collection of unrelated utility functions.
 
 The highest-risk regressions are:
 
@@ -33,7 +33,7 @@ Current practical status:
 
 ## Test Stack
 
-Lite testing should be treated as a five-layer stack plus one repeatable benchmark command:
+Core testing should be treated as a five-layer stack plus one repeatable benchmark command:
 
 1. `baseline`
 2. `contract`
@@ -51,7 +51,7 @@ Purpose:
 1. protect repository identity
 2. protect source scope
 3. protect startup and packaging assumptions
-4. prevent server-only regressions from leaking back into Lite
+4. prevent server-only regressions from leaking back into the core local runtime
 
 Primary examples:
 
@@ -74,7 +74,7 @@ Purpose:
 2. protect planner packet and execution-kernel contract
 3. protect public behavior of selector and replay-review surfaces
 
-This is the highest-value test layer for Lite.
+This is the highest-value test layer for Aionis Core.
 
 Primary surfaces:
 
