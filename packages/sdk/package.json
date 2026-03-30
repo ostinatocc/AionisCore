@@ -1,6 +1,6 @@
 {
   "name": "@ostinato/aionis-internal-sdk",
-  "version": "0.1.2",
+  "version": "0.1.0",
   "private": true,
   "description": "Internal SDK surface for narrow and legacy Aionis Core integrations.",
   "type": "module",
