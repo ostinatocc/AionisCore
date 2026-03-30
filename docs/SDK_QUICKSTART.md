@@ -88,7 +88,7 @@ await aionis.memory.tools.feedback({
 ## 7. Start a task from learned kickoff
 
 ```ts
-const taskStart = await aionis.memory.taskStartPlan({
+const taskStart = await aionis.memory.taskStart({
   tenant_id: "default",
   scope: "demo-sdk-quickstart",
   query_text: "repair billing retry timeout in service code",
@@ -101,25 +101,32 @@ const taskStart = await aionis.memory.taskStartPlan({
 console.log(taskStart.first_action);
 ```
 
-`taskStartPlan` checks learned kickoff history first and falls back to `planningContext` when needed.
+## 8. Store a structured handoff
 
-## 8. Stable SDK surface
+```ts
+await aionis.handoff.store({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  anchor: "sdk-quickstart-task",
+  summary: "Task paused with a clear next action",
+  handoff_text: "Resume in the billing retry service and rerun timeout checks.",
+  target_files: ["src/billing/retry.ts"],
+  next_action: "Patch retry timeout handling and rerun the retry checks.",
+});
+```
 
-Current stable SDK methods:
+## 9. Complete SDK surface
 
-1. `memory.write`
-2. `memory.planningContext`
-3. `memory.contextAssemble`
-4. `memory.kickoffRecommendation`
-5. `memory.taskStart`
-6. `memory.taskStartPlan`
-7. `memory.executionIntrospect`
-8. `memory.tools.select`
-9. `memory.tools.feedback`
-10. `memory.replay.repairReview`
-11. `memory.anchors.rehydratePayload`
+Current complete SDK surface includes:
 
-## 9. Run repository examples
+1. memory write / recall / planning / introspection
+2. kickoff and task-start surfaces
+3. handoff store and recover
+4. replay run lifecycle and playbooks
+5. sandbox and automation surfaces
+6. host bridge integration
+
+## 10. Run repository examples
 
 ```bash
 cd /Volumes/ziel/AionisTest/Aioniscc
@@ -130,17 +137,16 @@ npm run lite:start
 Then in another terminal:
 
 ```bash
-npm run example:sdk:workflow
-npm run example:sdk:tools-feedback
-npm run example:sdk:introspect
-npm run example:sdk:context-assemble
-npm run example:sdk:task-start-plan
+npm run example:sdk:recall
+npm run example:sdk:replay
+npm run example:sdk:sessions
+npm run example:sdk:automation
+npm run example:sdk:sandbox
 npm run example:integration:host-task-start
 npm run example:integration:task-start-learning-loop
 ```
 
 Repository examples:
 
-1. [examples/sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/examples/sdk/README.md)
-
-Core capability examples and integration examples are listed separately there.
+1. [examples/full-sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/examples/full-sdk/README.md)
+2. [examples/sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/examples/sdk/README.md)

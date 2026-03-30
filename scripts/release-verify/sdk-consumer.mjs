@@ -1,19 +1,47 @@
-import { createAionisClient, AionisSdkHttpError } from "@cognary/aionis";
+import {
+  createAionisClient,
+  createAionisRuntimeClient,
+  createAionisHostBridge,
+  AionisRuntimeSdkHttpError,
+} from "@cognary/aionis";
 
-const client = createAionisClient({
+const client = createAionisRuntimeClient({
   baseUrl: "http://127.0.0.1:3001",
+});
+
+const compatClient = createAionisClient({
+  baseUrl: "http://127.0.0.1:3001",
+});
+
+const bridge = createAionisHostBridge({
+  baseUrl: "http://127.0.0.1:3001",
+  tenantId: "default",
+  scope: "default",
+  actor: "release-baseline",
 });
 
 if (typeof createAionisClient !== "function") {
   throw new Error("createAionisClient export missing");
 }
 
-if (!(AionisSdkHttpError.prototype instanceof Error)) {
-  throw new Error("AionisSdkHttpError does not extend Error");
+if (typeof createAionisRuntimeClient !== "function") {
+  throw new Error("createAionisRuntimeClient export missing");
 }
 
-if (typeof client.memory.write !== "function") {
+if (typeof createAionisHostBridge !== "function") {
+  throw new Error("createAionisHostBridge export missing");
+}
+
+if (!(AionisRuntimeSdkHttpError.prototype instanceof Error)) {
+  throw new Error("AionisRuntimeSdkHttpError does not extend Error");
+}
+
+if (typeof compatClient.memory.write !== "function") {
   throw new Error("memory.write export missing");
+}
+
+if (typeof client.system.health !== "function") {
+  throw new Error("system.health export missing");
 }
 
 if (typeof client.memory.planningContext !== "function") {
@@ -36,12 +64,20 @@ if (typeof client.memory.tools.feedback !== "function") {
   throw new Error("memory.tools.feedback export missing");
 }
 
-if (typeof client.memory.replay.repairReview !== "function") {
-  throw new Error("memory.replay.repairReview export missing");
+if (typeof client.handoff.store !== "function") {
+  throw new Error("handoff.store export missing");
+}
+
+if (typeof client.memory.replay.playbooks.run !== "function") {
+  throw new Error("memory.replay.playbooks.run export missing");
 }
 
 if (typeof client.memory.anchors.rehydratePayload !== "function") {
   throw new Error("memory.anchors.rehydratePayload export missing");
+}
+
+if (typeof bridge.startTask !== "function" || typeof bridge.completeTask !== "function") {
+  throw new Error("host bridge methods missing");
 }
 
 console.log(JSON.stringify({
@@ -49,14 +85,20 @@ console.log(JSON.stringify({
   package_name: "@cognary/aionis",
   exports_checked: [
     "createAionisClient",
-    "AionisSdkHttpError",
+    "createAionisRuntimeClient",
+    "createAionisHostBridge",
+    "AionisRuntimeSdkHttpError",
+    "system.health",
     "memory.write",
     "memory.planningContext",
     "memory.contextAssemble",
     "memory.executionIntrospect",
     "memory.tools.select",
     "memory.tools.feedback",
-    "memory.replay.repairReview",
-    "memory.anchors.rehydratePayload"
+    "handoff.store",
+    "memory.replay.playbooks.run",
+    "memory.anchors.rehydratePayload",
+    "bridge.startTask",
+    "bridge.completeTask"
   ]
 }, null, 2));

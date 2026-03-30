@@ -33,8 +33,8 @@
 3. [src/execution](/Volumes/ziel/AionisTest/Aioniscc/src/execution)
 4. [src/store](/Volumes/ziel/AionisTest/Aioniscc/src/store)
 5. [packages/runtime-core](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core)
-6. [packages/sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/sdk)
-7. [packages/full-sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk)
+6. [packages/full-sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk)
+7. [packages/sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/sdk)
 8. [apps/lite](/Volumes/ziel/AionisTest/Aioniscc/apps/lite)
 
 ## Validation

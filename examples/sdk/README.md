@@ -1,16 +1,12 @@
-# Aionis Core SDK Examples
+# Aionis Core Compat SDK Examples
 
-These examples are meant to be run from the repository, even though `@cognary/aionis` is now published.
+These examples are meant for the internal compatibility SDK surface in [packages/sdk](../../packages/sdk).
 
-Package page:
-
-1. [npm: `@cognary/aionis`](https://www.npmjs.com/package/@cognary/aionis)
-
-They import the locally built SDK artifact from [packages/sdk/dist](../../packages/sdk/dist), so build the SDK first:
+They import the locally built compat artifact from [packages/sdk/dist](../../packages/sdk/dist), so build the compat SDK first:
 
 ```bash
 cd /Volumes/ziel/AionisTest/Aioniscc
-npm run sdk:build
+npm run compat-sdk:build
 ```
 
 Start the local Aionis Core runtime shell in another terminal:
@@ -32,19 +28,19 @@ Recommended local runtime:
 1. `npm run lite:start`
 2. this profile keeps the route surface aligned with the default local SDK flow
 
-Core capability examples:
+Compat capability examples:
 
-1. `npm run example:sdk:workflow`
+1. `npm run example:compat-sdk:workflow`
    Shows `memory.write` plus `memory.planningContext` promoting repeated continuity into stable workflow guidance.
-2. `npm run example:sdk:tools-feedback`
+2. `npm run example:compat-sdk:tools-feedback`
    Shows `memory.tools.select` plus `memory.tools.feedback` growing a reusable tool-memory pattern from repeated positive runs.
-3. `npm run example:sdk:introspect`
+3. `npm run example:compat-sdk:introspect`
    Shows `memory.executionIntrospect` plus `memory.anchors.rehydratePayload` on a workflow anchor created by the example itself.
-4. `npm run example:sdk:context-assemble`
+4. `npm run example:compat-sdk:context-assemble`
    Shows `memory.contextAssemble` on the explicit debug path with `return_layered_context=true`.
-5. `AIONIS_PLAYBOOK_ID=<pending-playbook-id> npm run example:sdk:replay-review`
+5. `AIONIS_PLAYBOOK_ID=<pending-playbook-id> npm run example:compat-sdk:replay-review`
    Shows `memory.replay.repairReview` on an existing pending playbook, including governed learning projection output.
-6. `npm run example:sdk:task-start-plan`
+6. `npm run example:compat-sdk:task-start-plan`
    Shows `memory.taskStartPlan` before and after learned workflow history, including the shift from generic kickoff to file-level first action.
 
 Integration examples:
@@ -58,4 +54,4 @@ Notes:
 
 1. The replay example is the only one that is not fully self-seeding. It assumes you already have a pending replay playbook id.
 2. The examples intentionally stay on the route-level SDK surface. They do not reach into runtime internals or Lite stores directly.
-3. Once `@cognary/aionis` is published, the example imports should move from local `dist` paths to `@cognary/aionis`.
+3. This compat layer stays repository-local and should not be treated as the main Aionis Core package.

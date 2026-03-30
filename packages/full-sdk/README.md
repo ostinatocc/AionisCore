@@ -1,11 +1,11 @@
-# @cognary/aionis-sdk
+# @cognary/aionis
 
-Full SDK surface for Aionis Core.
+Complete Aionis Core SDK.
 
 ## Install
 
 ```bash
-npm install @cognary/aionis-sdk
+npm install @cognary/aionis
 ```
 
 ## Coverage
@@ -21,9 +21,9 @@ npm install @cognary/aionis-sdk
 ## Usage
 
 ```ts
-import { createAionisRuntimeClient } from "@cognary/aionis-sdk";
+import { createAionisClient } from "@cognary/aionis";
 
-const aionis = createAionisRuntimeClient({
+const aionis = createAionisClient({
   baseUrl: "http://127.0.0.1:3001",
 });
 
@@ -40,25 +40,25 @@ const recall = await aionis.memory.recallText({
 ```bash
 cd /Volumes/ziel/AionisTest/Aioniscc
 npm install
-npm run full-sdk:build
+npm run sdk:build
 npm run lite:start
 ```
 
 Then run one of the bundled examples:
 
 ```bash
-npm run example:full-sdk:recall
-npm run example:full-sdk:replay
-npm run example:full-sdk:sessions
-npm run example:full-sdk:automation
-npm run example:full-sdk:sandbox
+npm run example:sdk:recall
+npm run example:sdk:replay
+npm run example:sdk:sessions
+npm run example:sdk:automation
+npm run example:sdk:sandbox
 ```
 
 ## Release checks
 
 ```bash
-npm run full-sdk:test
-npm run full-sdk:pack:dry-run
-npm run full-sdk:publish:dry-run
-npm run full-sdk:release:check
+npm run sdk:test
+npm run sdk:pack:dry-run
+npm run sdk:publish:dry-run
+npm run sdk:release:check
 ```

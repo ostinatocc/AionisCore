@@ -1,12 +1,13 @@
 {
-  "name": "@cognary/aionis",
+  "name": "@cognary/aionis-compat-sdk",
   "version": "0.1.2",
-  "description": "Aionis Core SDK surface for kickoff, memory, replay, and continuity integration.",
+  "private": true,
+  "description": "Internal compatibility SDK surface for legacy narrow Aionis Core integrations.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "aionis": "dist/cli.js"
+    "aionis-compat": "dist/cli.js"
   },
   "sideEffects": false,
   "repository": {
@@ -28,9 +29,6 @@
     "dist",
     "README.md"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "engines": {
     "node": ">=18.0.0"
   },
@@ -43,7 +41,7 @@
   },
   "keywords": [
     "aionis",
-    "sdk",
+    "compat-sdk",
     "memory",
     "agent",
     "workflow"

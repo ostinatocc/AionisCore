@@ -43,8 +43,8 @@ Use these documents when integrating with the published SDK surfaces.
 1. [SDK_QUICKSTART.md](/Volumes/ziel/AionisTest/Aioniscc/docs/SDK_QUICKSTART.md)
 2. [FULL_SDK_QUICKSTART.md](/Volumes/ziel/AionisTest/Aioniscc/docs/FULL_SDK_QUICKSTART.md)
 3. [SDK_PUBLISHING.md](/Volumes/ziel/AionisTest/Aioniscc/docs/SDK_PUBLISHING.md)
-4. [packages/sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/packages/sdk/README.md)
-5. [packages/full-sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk/README.md)
+4. [packages/full-sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk/README.md)
+5. [packages/runtime-core/README.md](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core/README.md)
 
 ## 5. Archive
 

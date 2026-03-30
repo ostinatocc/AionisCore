@@ -1,6 +1,6 @@
-# Aionis Core Full SDK Quickstart
+# Aionis Core Runtime Client Quickstart
 
-`@cognary/aionis-sdk` is the full SDK surface for Aionis Core.
+`@cognary/aionis` exposes the full runtime client surface for Aionis Core.
 
 It covers:
 
@@ -18,10 +18,10 @@ cd /Volumes/ziel/AionisTest/Aioniscc
 npm install
 ```
 
-## 2. Build the full SDK
+## 2. Build the SDK
 
 ```bash
-npm run full-sdk:build
+npm run sdk:build
 ```
 
 ## 3. Start Aionis Core
@@ -39,7 +39,7 @@ http://127.0.0.1:3001
 ## 4. Use the SDK
 
 ```ts
-import { createAionisRuntimeClient } from "@cognary/aionis-sdk";
+import { createAionisRuntimeClient } from "@cognary/aionis";
 
 const aionis = createAionisRuntimeClient({
   baseUrl: "http://127.0.0.1:3001",
@@ -57,9 +57,9 @@ const replay = await aionis.memory.replay.run.start({
 ## 5. Run bundled examples
 
 ```bash
-npm run example:full-sdk:recall
-npm run example:full-sdk:replay
-npm run example:full-sdk:sessions
-npm run example:full-sdk:automation
-npm run example:full-sdk:sandbox
+npm run example:sdk:recall
+npm run example:sdk:replay
+npm run example:sdk:sessions
+npm run example:sdk:automation
+npm run example:sdk:sandbox
 ```

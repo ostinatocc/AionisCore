@@ -1,13 +1,8 @@
-# @cognary/aionis
+# @cognary/aionis-compat-sdk
 
-`@cognary/aionis` is the TypeScript SDK for Aionis Core.
+`@cognary/aionis-compat-sdk` is the internal compatibility SDK for legacy narrow-surface integrations.
 
-Package page:
-
-1. [npm: `@cognary/aionis`](https://www.npmjs.com/package/@cognary/aionis)
-2. CLI command: `aionis`
-
-It exposes the stable SDK surface for:
+It exposes the older narrow SDK surface for:
 
 1. `memory.write`
 2. `memory.planningContext`
@@ -20,28 +15,10 @@ It exposes the stable SDK surface for:
 9. `memory.taskStart`
 10. `memory.taskStartPlan`
 
-## Install
-
-```bash
-npm install @cognary/aionis
-```
-
-Run the CLI without a global install:
-
-```bash
-npx @cognary/aionis doctor
-```
-
-Start a local Aionis Core runtime:
-
-```bash
-npx @cognary/aionis dev --repo /path/to/Aionis --port 3101
-```
-
-## Quickstart
+## Local Development
 
 ```ts
-import { createAionisClient } from "@cognary/aionis";
+import { createAionisClient } from "@cognary/aionis-compat-sdk";
 
 const client = createAionisClient({
   baseUrl: "http://127.0.0.1:3001",
@@ -61,37 +38,14 @@ console.log(result);
 Build the package:
 
 ```bash
-npm --prefix packages/sdk run build
+npm run compat-sdk:build
 ```
 
 Run package tests:
 
 ```bash
-npm --prefix packages/sdk run test
+npm run compat-sdk:test
 ```
-
-Run the release baseline:
-
-```bash
-npm run -s sdk:release:check
-```
-
-Run a publish dry-run:
-
-```bash
-npm run -s sdk:publish:dry-run
-```
-
-## CLI
-
-Current thin CLI commands:
-
-1. `aionis doctor`
-2. `aionis example`
-3. `aionis dev --repo /path/to/Aionis`
-4. `aionis dev --repo /path/to/Aionis --port 3101`
-5. `aionis dev --repo /path/to/Aionis --local-process`
-6. `aionis dev --repo /path/to/Aionis --dry-run`
 
 ## Examples
 
@@ -102,13 +56,13 @@ Repository examples live under:
 
 Repository scripts are grouped by role:
 
-1. `npm run core:build`
+1. `npm run compat-sdk:build`
 2. `npm run lite:start`
-3. `npm run example:sdk:workflow`
+3. `npm run example:compat-sdk:workflow`
 4. `npm run example:integration:host-task-start`
 
 ## Naming
 
 1. product: `Aionis Core`
-2. npm package: `@cognary/aionis`
-3. CLI: `aionis`
+2. main npm package: `@cognary/aionis`
+3. internal compat package: `@cognary/aionis-compat-sdk`
