@@ -1,4 +1,4 @@
-# Aionis Core Runtime Client Quickstart
+# Aionis Core Runtime Client Reference
 
 `@ostinato/aionis` exposes the full runtime client surface for Aionis Core.
 

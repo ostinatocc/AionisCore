@@ -1,4 +1,4 @@
-# Aionis Core SDK Quickstart
+# Aionis Core Quickstart
 
 This guide is the fastest way to get from a running Aionis Core runtime to a working `@ostinato/aionis` integration.
 
@@ -126,7 +126,7 @@ Current complete SDK surface includes:
 5. sandbox and automation surfaces
 6. host bridge integration
 
-## 10. Run repository examples
+## 10. Run bundled SDK examples
 
 ```bash
 cd /Volumes/ziel/AionisTest/Aioniscc

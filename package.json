@@ -1,5 +1,5 @@
 {
-  "name": "aionis",
+  "name": "aionis-core-workspace",
   "private": true,
   "version": "0.1.0",
   "license": "Apache-2.0",
@@ -7,11 +7,11 @@
   "description": "Aionis Core kernel for learned kickoff, structured handoff, replay, governance, and execution memory.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Cognary/Aionis.git"
+    "url": "https://github.com/ostinatocc/AionisCore.git"
   },
-  "homepage": "https://github.com/Cognary/Aionis",
+  "homepage": "https://github.com/ostinatocc/AionisCore",
   "bugs": {
-    "url": "https://github.com/Cognary/Aionis/issues"
+    "url": "https://github.com/ostinatocc/AionisCore/issues"
   },
   "engines": {
     "node": ">=22.0.0"

@@ -1,6 +1,9 @@
 # Aionis Core Docs
 
-This directory is organized into four reading layers.
+This directory is organized for two external audiences:
+
+1. developers integrating `Aionis Core`
+2. contributors working on the local runtime shell and the core repository
 
 ## 1. Canonical Core Docs
 
@@ -26,7 +29,16 @@ Use these documents when you need stable reference material for the current kern
 8. [CORE_GOVERNANCE_AND_STRATEGY_STATUS.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_GOVERNANCE_AND_STRATEGY_STATUS.md)
 9. [CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
 
-## 3. Local Runtime Shell Docs
+## 3. SDK Consumer Docs
+
+Use these documents when integrating with the published SDK surfaces.
+
+1. [SDK_QUICKSTART.md](/Volumes/ziel/AionisTest/Aioniscc/docs/SDK_QUICKSTART.md)
+2. [packages/full-sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk/README.md)
+3. [packages/runtime-core/README.md](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core/README.md)
+4. [SDK_PUBLISHING.md](/Volumes/ziel/AionisTest/Aioniscc/docs/SDK_PUBLISHING.md)
+
+## 4. Local Runtime Shell Docs
 
 Use these documents when working on the local runtime shell in [apps/lite](/Volumes/ziel/AionisTest/Aioniscc/apps/lite).
 
@@ -35,16 +47,6 @@ Use these documents when working on the local runtime shell in [apps/lite](/Volu
 3. [LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](/Volumes/ziel/AionisTest/Aioniscc/docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md)
 4. [LOCAL_RUNTIME_SOURCE_BOUNDARY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/LOCAL_RUNTIME_SOURCE_BOUNDARY.md)
 5. [LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md](/Volumes/ziel/AionisTest/Aioniscc/docs/LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md)
-
-## 4. SDK Consumer Docs
-
-Use these documents when integrating with the published SDK surfaces.
-
-1. [SDK_QUICKSTART.md](/Volumes/ziel/AionisTest/Aioniscc/docs/SDK_QUICKSTART.md)
-2. [FULL_SDK_QUICKSTART.md](/Volumes/ziel/AionisTest/Aioniscc/docs/FULL_SDK_QUICKSTART.md)
-3. [SDK_PUBLISHING.md](/Volumes/ziel/AionisTest/Aioniscc/docs/SDK_PUBLISHING.md)
-4. [packages/full-sdk/README.md](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk/README.md)
-5. [packages/runtime-core/README.md](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core/README.md)
 
 ## 5. Archive
 

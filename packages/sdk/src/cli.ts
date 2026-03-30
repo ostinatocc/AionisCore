@@ -15,7 +15,7 @@ const packageJson = require("../package.json") as { name?: string; version?: str
 const PACKAGE_NAME = packageJson.name ?? "@ostinato/aionis";
 const PACKAGE_VERSION = packageJson.version ?? "0.1.0";
 const PACKAGE_PAGE = "https://www.npmjs.com/package/@ostinato/aionis";
-const REPO_URL = "https://github.com/Cognary/Aionis";
+const REPO_URL = "https://github.com/ostinatocc/AionisCore";
 
 async function main() {
   const parsed = parseAionisCliArgs(process.argv.slice(2));

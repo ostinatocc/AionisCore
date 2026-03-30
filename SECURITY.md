@@ -1,6 +1,6 @@
 # Security Policy
 
-If you discover a security issue in Aionis Lite, do not open a public issue first.
+If you discover a security issue in Aionis Core, do not open a public issue first.
 
 Report it privately to the maintainers with:
 

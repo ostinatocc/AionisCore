@@ -8,12 +8,12 @@
   "sideEffects": false,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Cognary/Aionis.git",
+    "url": "git+https://github.com/ostinatocc/AionisCore.git",
     "directory": "packages/full-sdk"
   },
-  "homepage": "https://github.com/Cognary/Aionis/tree/main/packages/full-sdk",
+  "homepage": "https://github.com/ostinatocc/AionisCore/tree/main/packages/full-sdk",
   "bugs": {
-    "url": "https://github.com/Cognary/Aionis/issues"
+    "url": "https://github.com/ostinatocc/AionisCore/issues"
   },
   "exports": {
     ".": {

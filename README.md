@@ -2,7 +2,7 @@
 
 `Aionis Core` is the kernel for agent continuity.
 
-## Core Capability Surfaces
+It gives agent systems three durable capability surfaces:
 
 1. **Task Start**
    Turn prior execution into a better first action for the next similar task.
@@ -11,27 +11,53 @@
 3. **Task Replay**
    Record successful execution, compile playbooks, and reuse prior runs.
 
-## Canonical Core Docs
+## Install
 
-1. [RUNTIME_MAINLINE.md](/Volumes/ziel/AionisTest/Aioniscc/docs/RUNTIME_MAINLINE.md)
-2. [OPEN_CORE_BOUNDARY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/OPEN_CORE_BOUNDARY.md)
-3. [AIONIS_PRODUCT_DEFINITION_V1.md](/Volumes/ziel/AionisTest/Aioniscc/docs/AIONIS_PRODUCT_DEFINITION_V1.md)
-4. [CORE_CONTINUITY_STRATEGY.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_CONTINUITY_STRATEGY.md)
-5. [CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
+```bash
+npm install @ostinato/aionis
+```
 
-## Docs Navigation
+Low-level runtime boundary package:
 
-1. [docs/README.md](/Volumes/ziel/AionisTest/Aioniscc/docs/README.md)
-2. [SDK_QUICKSTART.md](/Volumes/ziel/AionisTest/Aioniscc/docs/SDK_QUICKSTART.md)
-3. [FULL_SDK_QUICKSTART.md](/Volumes/ziel/AionisTest/Aioniscc/docs/FULL_SDK_QUICKSTART.md)
-4. [apps/lite/README.md](/Volumes/ziel/AionisTest/Aioniscc/apps/lite/README.md)
+```bash
+npm install @ostinato/aionis-rtc
+```
 
-## Published Packages
+## Quick Start
+
+```ts
+import { createAionisClient } from "@ostinato/aionis";
+
+const aionis = createAionisClient({
+  baseUrl: "http://127.0.0.1:3001",
+});
+
+const taskStart = await aionis.memory.taskStart({
+  tenant_id: "default",
+  scope: "default",
+  query_text: "repair the export route serialization bug",
+  context: {
+    goal: "repair the export route serialization bug",
+  },
+  candidates: ["read", "edit", "test"],
+});
+
+console.log(taskStart.first_action);
+```
+
+## Public Packages
 
 1. [packages/full-sdk](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk) -> `@ostinato/aionis`
 2. [packages/runtime-core](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core) -> `@ostinato/aionis-rtc`
 
-## Repository Areas
+## Start Here
+
+1. [SDK Quickstart](/Volumes/ziel/AionisTest/Aioniscc/docs/SDK_QUICKSTART.md)
+2. [SDK README](/Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk/README.md)
+3. [Docs Overview](/Volumes/ziel/AionisTest/Aioniscc/docs/README.md)
+4. [Bundled SDK Examples](/Volumes/ziel/AionisTest/Aioniscc/examples/full-sdk/README.md)
+
+## Core Areas
 
 1. [src/memory](/Volumes/ziel/AionisTest/Aioniscc/src/memory)
 2. [src/routes](/Volumes/ziel/AionisTest/Aioniscc/src/routes)
@@ -46,6 +72,6 @@
 ```bash
 npm install
 npm run -s build
-npm run -s test:lite
-npm run -s benchmark:lite:real
+npm run -s lite:test
+npm run -s lite:benchmark:real
 ```

@@ -1,6 +1,6 @@
 # Contributing
 
-## Runtime Baseline
+## Baseline
 
 Use Node `22.x`.
 
@@ -10,18 +10,20 @@ Recommended setup:
 nvm use
 npm ci
 npm run build
-npm run test:lite
-npm run smoke:lite
+npm run lite:test
+npm run lite:smoke
 ```
 
 ## Scope
 
-This repository is for Aionis Core and its local runtime shell:
+This repository contains the Aionis Core kernel and its local runtime shell.
 
-1. single-user local operation
-2. SQLite-backed memory, replay, and playbook flows
-3. local automation kernel
-4. local runtime shell and operator docs
+Core responsibilities:
+
+1. task start, handoff, and replay kernel surfaces
+2. shared memory, governance, and runtime contracts
+3. SDK and runtime boundary packages
+4. contributor-facing local runtime shell
 
 Keep changes aligned with that scope. Multi-tenant control-plane and server-only governance surfaces do not belong here.
 
@@ -30,8 +32,8 @@ Keep changes aligned with that scope. Multi-tenant control-plane and server-only
 Before opening a PR:
 
 1. run `npm run build`
-2. run `npm run test:lite`
-3. run `npm run smoke:lite` for runtime-affecting changes
+2. run `npm run lite:test`
+3. run `npm run lite:smoke` for runtime-affecting changes
 4. update docs when API, health, or operator behavior changes
 
 ## Contract Changes

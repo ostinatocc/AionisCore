@@ -19,15 +19,15 @@ test("release baseline keeps Aionis repository identity and governance files", (
   const liteManifest = readJson(path.join(ROOT, "apps", "lite", "runtime-manifest.json"));
   const litePkg = readJson(path.join(ROOT, "apps", "lite", "package.json"));
 
-  assert.equal(pkg.name, "aionis");
-  assert.equal(pkg.repository.url, "https://github.com/Cognary/Aionis.git");
-  assert.equal(pkg.homepage, "https://github.com/Cognary/Aionis");
-  assert.equal(pkg.bugs.url, "https://github.com/Cognary/Aionis/issues");
+  assert.equal(pkg.name, "aionis-core-workspace");
+  assert.equal(pkg.repository.url, "https://github.com/ostinatocc/AionisCore.git");
+  assert.equal(pkg.homepage, "https://github.com/ostinatocc/AionisCore");
+  assert.equal(pkg.bugs.url, "https://github.com/ostinatocc/AionisCore/issues");
   assert.equal(pkg.engines.node, ">=22.0.0");
   assert.equal(litePkg.engines.node, ">=22.0.0");
 
-  assert.equal(manifest.release.github_repo, "Cognary/Aionis");
-  assert.equal(liteManifest.release.github_repo, "Cognary/Aionis");
+  assert.equal(manifest.release.github_repo, "ostinatocc/AionisCore");
+  assert.equal(liteManifest.release.github_repo, "ostinatocc/AionisCore");
 
   for (const rel of [
     ".nvmrc",

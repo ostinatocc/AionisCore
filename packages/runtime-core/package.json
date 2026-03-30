@@ -15,6 +15,15 @@
     "dist",
     "README.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ostinatocc/AionisCore.git",
+    "directory": "packages/runtime-core"
+  },
+  "homepage": "https://github.com/ostinatocc/AionisCore/tree/main/packages/runtime-core",
+  "bugs": {
+    "url": "https://github.com/ostinatocc/AionisCore/issues"
+  },
   "publishConfig": {
     "access": "public"
   },
