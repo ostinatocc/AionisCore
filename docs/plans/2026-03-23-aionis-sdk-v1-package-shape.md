@@ -19,12 +19,12 @@ Its goal is to answer:
 Current package state:
 
 1. [packages/runtime-core](/Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core) already exists
-2. `@cognary/aionis-runtime-core` is currently a shared-boundary package, not the main SDK surface
+2. `@cognary/aionis-rtc` is currently a shared-boundary package, not the main SDK surface
 3. the repository's strongest stable public behavior still lives at the HTTP route/runtime layer
 
 Interpretation:
 
-1. `@cognary/aionis-runtime-core` should remain a low-level shared boundary package
+1. `@cognary/aionis-rtc` should remain a low-level shared boundary package
 2. SDK v1 should be a new package layered on top of stable route contracts
 3. SDK v1 should not require a consumer to think in raw route terms
 
@@ -32,12 +32,12 @@ Interpretation:
 
 Recommended package sequence:
 
-1. `@cognary/aionis-runtime-core`
+1. `@cognary/aionis-rtc`
 2. `@cognary/aionis`
 
 Meaning:
 
-1. `@cognary/aionis-runtime-core`
+1. `@cognary/aionis-rtc`
    shared boundary and low-level contracts
 2. `@cognary/aionis`
    first-class developer API for normal Aionis Core usage
@@ -253,11 +253,11 @@ Should demonstrate:
 3. tool feedback
 4. second-run improvement
 
-## Relationship To `@cognary/aionis-runtime-core`
+## Relationship To `@cognary/aionis-rtc`
 
 Recommended rule:
 
-1. `@cognary/aionis-runtime-core` remains low-level and shared-boundary oriented
+1. `@cognary/aionis-rtc` remains low-level and shared-boundary oriented
 2. `@cognary/aionis` becomes the first public developer surface
 
 This means:

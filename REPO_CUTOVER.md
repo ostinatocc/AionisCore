@@ -9,7 +9,7 @@ Current repository posture:
 3. current package names are:
    - `@cognary/aionis`
    - `@cognary/aionis-sdk`
-   - `@cognary/aionis-runtime-core`
+   - `@cognary/aionis-rtc`
 
 For current repository structure and release posture, use:
 

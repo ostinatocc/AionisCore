@@ -1,5 +1,5 @@
 {
-  "name": "@cognary/aionis-runtime-core",
+  "name": "@cognary/aionis-rtc",
   "version": "0.2.21",
   "description": "Shared runtime-core boundary for Aionis Core contracts and ownership metadata.",
   "type": "module",
