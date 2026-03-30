@@ -27,9 +27,9 @@ This plan treats those as hardening inputs, not as final production semantics.
 ### Work Package 1: Formalize The Hardened Trust Inputs
 
 **Files:**
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/src/memory/schemas.ts`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-pattern-anchor.ts`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-feedback.ts`
+- Modify: `src/memory/schemas.ts`
+- Modify: `src/memory/tools-pattern-anchor.ts`
+- Modify: `src/memory/tools-feedback.ts`
 
 Add explicit structured fields for trust hardening inputs, rather than leaving them implicit in branch logic.
 
@@ -55,9 +55,9 @@ Do not yet change selector behavior here. This package only makes the hardening 
 ### Work Package 2: Raise The Promotion Gate Conservatively
 
 **Files:**
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-pattern-anchor.ts`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-feedback.ts`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-tools-pattern-anchor.test.ts`
+- Modify: `src/memory/tools-pattern-anchor.ts`
+- Modify: `src/memory/tools-feedback.ts`
+- Modify: `scripts/ci/lite-tools-pattern-anchor.test.ts`
 
 Replace the current minimal promotion rule:
 
@@ -83,9 +83,9 @@ Expected runtime change:
 ### Work Package 3: Add A Stronger Contested Revalidation Floor
 
 **Files:**
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-pattern-anchor.ts`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-feedback.ts`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-tools-pattern-anchor.test.ts`
+- Modify: `src/memory/tools-pattern-anchor.ts`
+- Modify: `src/memory/tools-feedback.ts`
+- Modify: `scripts/ci/lite-tools-pattern-anchor.test.ts`
 
 Current runtime behavior allows:
 
@@ -114,10 +114,10 @@ Expected runtime change:
 ### Work Package 4: Add Task-Affinity Weighting To Selector Reuse
 
 **Files:**
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-select.ts`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/src/memory/tools-lifecycle-summary.ts`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/src/app/planning-summary.ts`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/src/memory/execution-introspection.ts`
+- Modify: `src/memory/tools-select.ts`
+- Modify: `src/memory/tools-lifecycle-summary.ts`
+- Modify: `src/app/planning-summary.ts`
+- Modify: `src/memory/execution-introspection.ts`
 
 Keep similarity-driven recall, but stop treating all trusted recalled patterns as equally strong.
 
@@ -141,9 +141,9 @@ This package should directly reduce the currently measured `cross_task_bleed_obs
 ### Work Package 5: Expand Benchmark Coverage For Trust Hardening
 
 **Files:**
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/scripts/lite-real-task-benchmark.ts`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/docs/plans/2026-03-21-lite-real-task-benchmark-suite-spec.md`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_TESTING_STRATEGY.md`
+- Modify: `scripts/lite-real-task-benchmark.ts`
+- Modify: `docs/plans/2026-03-21-lite-real-task-benchmark-suite-spec.md`
+- Modify: `docs/CORE_TESTING_STRATEGY.md`
 
 Extend the benchmark suite from “mechanism exists” to “hardening behavior holds.”
 
@@ -163,10 +163,10 @@ Success criteria:
 ### Work Package 6: Rollout, Explainability, And Contract Locking
 
 **Files:**
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-tools-select-route-contract.test.ts`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/scripts/ci/lite-execution-introspection-route.test.ts`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_GOVERNANCE_AND_STRATEGY_STATUS.md`
-- Modify: `/Volumes/ziel/AionisTest/Aioniscc/docs/CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md`
+- Modify: `scripts/ci/lite-tools-select-route-contract.test.ts`
+- Modify: `scripts/ci/lite-execution-introspection-route.test.ts`
+- Modify: `docs/CORE_GOVERNANCE_AND_STRATEGY_STATUS.md`
+- Modify: `docs/CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md`
 
 Before treating the hardened model as the new runtime baseline:
 

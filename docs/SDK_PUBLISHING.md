@@ -61,14 +61,14 @@ Artifacts are written outside the repository, for example:
 
 When publish credentials are ready:
 
-cd /Volumes/ziel/AionisTest/Aioniscc/packages/full-sdk
+cd /path/to/AionisCore/packages/full-sdk
 npm publish --access public
 ```
 
 ### `@ostinato/aionis-rtc`
 
 ```bash
-cd /Volumes/ziel/AionisTest/Aioniscc/packages/runtime-core
+cd /path/to/AionisCore/packages/runtime-core
 npm publish --access public
 ```
 

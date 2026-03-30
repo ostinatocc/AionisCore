@@ -38,7 +38,7 @@ const recall = await aionis.memory.recallText({
 ## Local workflow
 
 ```bash
-cd /Volumes/ziel/AionisTest/Aioniscc
+cd /path/to/AionisCore
 npm install
 npm run sdk:build
 npm run lite:start

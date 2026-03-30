@@ -4,7 +4,7 @@ Last reviewed: 2026-03-27
 
 This document is a capability audit for Aionis Core based on direct inspection of:
 
-1. [Aionis Core](/Volumes/ziel/AionisTest/Aioniscc)
+1. [Aionis Core](../README.md)
 2. its runtime assembly, route surface, memory kernel, and validation stack
 
 It is a factual inventory of what Aionis Core already has, what is only partially productized, and what is still not activated through the current kernel activation path.

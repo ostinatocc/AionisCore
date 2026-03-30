@@ -7,7 +7,7 @@ These examples use the main Aionis Core SDK package:
 Build the SDK first:
 
 ```bash
-cd /Volumes/ziel/AionisTest/Aioniscc
+cd /path/to/AionisCore
 npm install
 npm run sdk:build
 ```
@@ -15,7 +15,7 @@ npm run sdk:build
 Start the local Aionis Core runtime shell:
 
 ```bash
-cd /Volumes/ziel/AionisTest/Aioniscc
+cd /path/to/AionisCore
 npm run lite:start
 ```
 

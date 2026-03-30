@@ -5,7 +5,7 @@ This guide is the fastest way to get from a running Aionis Core runtime to a wor
 ## 1. Start Aionis Core
 
 ```bash
-cd /Volumes/ziel/AionisTest/Aioniscc
+cd /path/to/AionisCore
 npm install
 npm run lite:start
 ```
@@ -129,7 +129,7 @@ Current complete SDK surface includes:
 ## 10. Run bundled SDK examples
 
 ```bash
-cd /Volumes/ziel/AionisTest/Aioniscc
+cd /path/to/AionisCore
 npm run sdk:build
 npm run lite:start
 ```

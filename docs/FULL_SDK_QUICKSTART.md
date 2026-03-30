@@ -14,7 +14,7 @@ It covers:
 ## 1. Install dependencies
 
 ```bash
-cd /Volumes/ziel/AionisTest/Aioniscc
+cd /path/to/AionisCore
 npm install
 ```
 

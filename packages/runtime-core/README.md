@@ -22,7 +22,7 @@ Later phases can move additional bootstrapping and runtime implementation here o
 ## Local workflow
 
 ```bash
-cd /Volumes/ziel/AionisTest/Aioniscc
+cd /path/to/AionisCore
 npm install
 npm run runtime-core:build
 ```
