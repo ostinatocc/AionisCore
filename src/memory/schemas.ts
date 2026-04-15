@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { ControlProfileV1Schema, ExecutionPacketV1Schema, ExecutionStateV1Schema } from "../execution/types.js";
+import {
+  ControlProfileV1Schema,
+  ExecutionArtifactRoutingRecordV1Schema,
+  ExecutionDelegationPacketRecordV1Schema,
+  ExecutionDelegationReturnRecordV1Schema,
+  ExecutionPacketV1Schema,
+  ExecutionStateV1Schema,
+} from "../execution/types.js";
 import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
 
 export const UUID = z.string().uuid();
@@ -912,6 +919,21 @@ export const ExperienceIntelligenceToolRecommendationSchema = z.object({
   suppressed_pattern_anchor_ids: z.array(z.string()),
 }).passthrough();
 
+export const DelegationLearningSummarySchema = z.object({
+  task_family: z.string().nullable(),
+  matched_records: z.number().int().min(0),
+  truncated: z.boolean(),
+  route_role_counts: z.record(z.number().int().min(0)),
+  record_outcome_counts: z.record(z.number().int().min(0)),
+  recommendation_count: z.number().int().min(0),
+}).passthrough();
+
+export const DelegationLearningProjectionSchema = z.object({
+  summary_version: z.literal("delegation_learning_projection_v1"),
+  learning_summary: DelegationLearningSummarySchema,
+  learning_recommendations: z.array(z.lazy(() => DelegationRecordsLearningRecommendationSchema)),
+}).passthrough();
+
 export const ExperienceIntelligenceResponseSchema = z.object({
   summary_version: z.literal("experience_intelligence_v1"),
   tenant_id: z.string(),
@@ -923,6 +945,8 @@ export const ExperienceIntelligenceResponseSchema = z.object({
     path: ExperienceIntelligencePathRecommendationSchema,
     combined_next_action: z.string().nullable(),
   }).passthrough(),
+  learning_summary: DelegationLearningSummarySchema,
+  learning_recommendations: z.array(z.lazy(() => DelegationRecordsLearningRecommendationSchema)),
   rationale: z.object({
     summary: z.string(),
   }).passthrough(),
@@ -1097,6 +1121,219 @@ export const ExecutionKernelPacketSummarySchema = z.object({
 
 export type ExecutionKernelPacketSummary = z.infer<typeof ExecutionKernelPacketSummarySchema>;
 
+export const ExecutionPacketAssemblySummarySchema = z.object({
+  packet_source_mode: z.string().nullable(),
+  state_first_assembly: z.boolean().nullable(),
+  execution_packet_v1_present: z.boolean().nullable(),
+  execution_state_v1_present: z.boolean().nullable(),
+});
+
+export type ExecutionPacketAssemblySummary = z.infer<typeof ExecutionPacketAssemblySummarySchema>;
+
+export const ExecutionStrategySummarySchema = z.object({
+  summary_version: z.literal("execution_strategy_summary_v1"),
+  trust_signal: z.string(),
+  strategy_profile: z.string(),
+  validation_style: z.string(),
+  task_family: z.string().nullable(),
+  family_scope: z.string(),
+  family_candidate_count: z.number().int().min(0),
+  selected_working_set: z.array(z.string()),
+  selected_validation_paths: z.array(z.string()),
+  selected_pattern_summaries: z.array(z.string()),
+  preferred_artifact_refs: z.array(z.string()),
+  explanation: z.string(),
+}).passthrough();
+
+export type ExecutionStrategySummary = z.infer<typeof ExecutionStrategySummarySchema>;
+
+export const ExecutionCollaborationSummarySchema = z.object({
+  summary_version: z.literal("execution_collaboration_summary_v1"),
+  packet_present: z.boolean(),
+  coordination_mode: z.string(),
+  current_stage: z.string().nullable(),
+  active_role: z.string().nullable(),
+  next_action: z.string().nullable(),
+  target_file_count: z.number().int().min(0),
+  pending_validation_count: z.number().int().min(0),
+  unresolved_blocker_count: z.number().int().min(0),
+  review_contract_present: z.boolean(),
+  review_standard: z.string().nullable(),
+  acceptance_check_count: z.number().int().min(0),
+  rollback_required: z.boolean(),
+  resume_anchor_present: z.boolean(),
+  resume_anchor_file_path: z.string().nullable(),
+  resume_anchor_symbol: z.string().nullable(),
+  artifact_ref_count: z.number().int().min(0),
+  evidence_ref_count: z.number().int().min(0),
+  side_output_artifact_count: z.number().int().min(0),
+  side_output_evidence_count: z.number().int().min(0),
+  artifact_refs: z.array(z.string()),
+  evidence_refs: z.array(z.string()),
+}).passthrough();
+
+export type ExecutionCollaborationSummary = z.infer<typeof ExecutionCollaborationSummarySchema>;
+
+export const ExecutionContinuitySnapshotSummarySchema = z.object({
+  summary_version: z.literal("execution_continuity_snapshot_v1"),
+  snapshot_mode: z.enum(["memory_only", "packet_backed"]),
+  coordination_mode: z.string(),
+  trust_signal: z.string(),
+  strategy_profile: z.string(),
+  validation_style: z.string(),
+  task_family: z.string().nullable(),
+  family_scope: z.string(),
+  selected_tool: z.string().nullable(),
+  current_stage: z.string().nullable(),
+  active_role: z.string().nullable(),
+  next_action: z.string().nullable(),
+  working_set: z.array(z.string()),
+  validation_paths: z.array(z.string()),
+  selected_pattern_summaries: z.array(z.string()),
+  preferred_artifact_refs: z.array(z.string()),
+  preferred_evidence_refs: z.array(z.string()),
+  reviewer_ready: z.boolean(),
+  resume_anchor_file_path: z.string().nullable(),
+  selected_memory_layers: z.array(z.string()),
+  recommended_action: z.string(),
+}).passthrough();
+
+export type ExecutionContinuitySnapshotSummary = z.infer<typeof ExecutionContinuitySnapshotSummarySchema>;
+
+export const ExecutionForgettingSummarySchema = z.object({
+  summary_version: z.literal("execution_forgetting_summary_v1"),
+  substrate_mode: z.enum(["stable", "suppression_present", "forgetting_active"]),
+  forgotten_items: z.number().int().min(0),
+  forgotten_by_reason: z.record(z.number().int().min(0)),
+  primary_forgetting_reason: z.string().nullable(),
+  suppressed_pattern_count: z.number().int().min(0),
+  suppressed_pattern_anchor_ids: z.array(z.string()),
+  suppressed_pattern_sources: z.array(z.string()),
+  selected_memory_layers: z.array(z.string()),
+  primary_savings_levers: z.array(z.string()),
+  stale_signal_count: z.number().int().min(0),
+  recommended_action: z.string(),
+}).passthrough();
+
+export type ExecutionForgettingSummary = z.infer<typeof ExecutionForgettingSummarySchema>;
+
+export const ExecutionCollaborationRoutingSummarySchema = z.object({
+  summary_version: z.literal("execution_collaboration_routing_v1"),
+  route_mode: z.enum(["memory_only", "packet_backed"]),
+  coordination_mode: z.string(),
+  route_intent: z.string(),
+  task_brief: z.string().nullable(),
+  current_stage: z.string().nullable(),
+  active_role: z.string().nullable(),
+  selected_tool: z.string().nullable(),
+  task_family: z.string().nullable(),
+  family_scope: z.string(),
+  next_action: z.string().nullable(),
+  target_files: z.array(z.string()),
+  validation_paths: z.array(z.string()),
+  unresolved_blockers: z.array(z.string()),
+  hard_constraints: z.array(z.string()),
+  review_standard: z.string().nullable(),
+  required_outputs: z.array(z.string()),
+  acceptance_checks: z.array(z.string()),
+  preferred_artifact_refs: z.array(z.string()),
+  preferred_evidence_refs: z.array(z.string()),
+  routing_drivers: z.array(z.string()),
+}).passthrough();
+
+export type ExecutionCollaborationRoutingSummary = z.infer<typeof ExecutionCollaborationRoutingSummarySchema>;
+
+export const ExecutionDelegationRecordsSummarySchema = z.object({
+  summary_version: z.literal("execution_delegation_records_v1"),
+  record_mode: z.enum(["memory_only", "packet_backed"]),
+  route_role: z.string(),
+  packet_count: z.number().int().min(0),
+  return_count: z.number().int().min(0),
+  artifact_routing_count: z.number().int().min(0),
+  missing_record_types: z.array(z.string()),
+  delegation_packets: z.array(ExecutionDelegationPacketRecordV1Schema),
+  delegation_returns: z.array(ExecutionDelegationReturnRecordV1Schema),
+  artifact_routing_records: z.array(ExecutionArtifactRoutingRecordV1Schema),
+}).passthrough();
+
+export type ExecutionDelegationRecordsSummary = z.infer<typeof ExecutionDelegationRecordsSummarySchema>;
+
+export const ExecutionRoutingSignalSummarySchema = z.object({
+  summary_version: z.literal("execution_routing_summary_v1"),
+  selected_tool: z.string().nullable(),
+  task_family: z.string().nullable(),
+  family_scope: z.string(),
+  stable_workflow_anchor_ids: z.array(z.string()),
+  candidate_workflow_anchor_ids: z.array(z.string()),
+  rehydration_anchor_ids: z.array(z.string()),
+  workflow_source_kinds: z.array(z.string()),
+  same_family_rehydration_anchor_ids: z.array(z.string()),
+  other_family_rehydration_anchor_ids: z.array(z.string()),
+  unknown_family_rehydration_anchor_ids: z.array(z.string()),
+}).passthrough();
+
+export type ExecutionRoutingSignalSummary = z.infer<typeof ExecutionRoutingSignalSummarySchema>;
+
+export const ExecutionMaintenanceSummarySchema = z.object({
+  summary_version: z.literal("execution_maintenance_summary_v1"),
+  forgotten_items: z.number().int().min(0),
+  forgotten_by_reason: z.record(z.number().int().min(0)),
+  suppressed_pattern_count: z.number().int().min(0),
+  stable_workflow_count: z.number().int().min(0),
+  promotion_ready_workflow_count: z.number().int().min(0),
+  selected_memory_layers: z.array(z.string()),
+  primary_savings_levers: z.array(z.string()),
+  recommended_action: z.string(),
+}).passthrough();
+
+export type ExecutionMaintenanceSummary = z.infer<typeof ExecutionMaintenanceSummarySchema>;
+
+export const ExecutionInstrumentationSummarySchema = z.object({
+  summary_version: z.literal("execution_instrumentation_summary_v1"),
+  task_family: z.string().nullable(),
+  family_scope: z.string(),
+  family_hit: z.boolean(),
+  family_reason: z.string(),
+  selected_pattern_hit_count: z.number().int().min(0),
+  selected_pattern_miss_count: z.number().int().min(0),
+  rehydration_candidate_count: z.number().int().min(0),
+  known_family_rehydration_count: z.number().int().min(0),
+  same_family_rehydration_count: z.number().int().min(0),
+  other_family_rehydration_count: z.number().int().min(0),
+  unknown_family_rehydration_count: z.number().int().min(0),
+  rehydration_family_hit_rate: z.number().min(0).max(1),
+  same_family_rehydration_anchor_ids: z.array(z.string()),
+  other_family_rehydration_anchor_ids: z.array(z.string()),
+}).passthrough();
+
+export type ExecutionInstrumentationSummary = z.infer<typeof ExecutionInstrumentationSummarySchema>;
+
+export const ExecutionSummaryV1Schema = z.object({
+  summary_version: z.literal("execution_summary_v1"),
+  planner_packet: PlannerPacketTextSurfaceSchema.nullable(),
+  pattern_signals: z.array(PlannerPacketEntrySchema),
+  workflow_signals: z.array(PlannerPacketEntrySchema),
+  packet_assembly: ExecutionPacketAssemblySummarySchema,
+  strategy_summary: ExecutionStrategySummarySchema,
+  collaboration_summary: ExecutionCollaborationSummarySchema,
+  continuity_snapshot_summary: ExecutionContinuitySnapshotSummarySchema,
+  routing_signal_summary: ExecutionRoutingSignalSummarySchema,
+  maintenance_summary: ExecutionMaintenanceSummarySchema,
+  forgetting_summary: ExecutionForgettingSummarySchema,
+  collaboration_routing_summary: ExecutionCollaborationRoutingSummarySchema,
+  delegation_records_summary: ExecutionDelegationRecordsSummarySchema,
+  instrumentation_summary: ExecutionInstrumentationSummarySchema,
+  pattern_signal_summary: PatternSignalSummarySchema,
+  workflow_signal_summary: WorkflowSignalSummarySchema,
+  workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
+  workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  pattern_lifecycle_summary: PatternLifecycleSummarySchema,
+  pattern_maintenance_summary: PatternMaintenanceSummarySchema,
+  action_packet_summary: ActionPacketSummarySchema,
+}).passthrough();
+
+export type ExecutionSummaryV1 = z.infer<typeof ExecutionSummaryV1Schema>;
+
 export const ExecutionMemoryIntrospectionResponseSchema = z.object({
   summary_version: z.literal("execution_memory_introspection_v1"),
   tenant_id: z.string(),
@@ -1130,6 +1367,7 @@ export const ExecutionMemoryIntrospectionResponseSchema = z.object({
     })),
   }),
   demo_surface: ExecutionMemoryDemoSurfaceSchema,
+  execution_summary: ExecutionSummaryV1Schema,
   recommended_workflows: z.array(PlannerPacketEntrySchema),
   candidate_workflows: z.array(PlannerPacketEntrySchema),
   candidate_patterns: z.array(PlannerPacketEntrySchema),
@@ -1191,6 +1429,8 @@ export const EvolutionReviewPackSummarySchema = z.object({
   trusted_pattern: z.record(z.unknown()).nullable(),
   contested_pattern: z.record(z.unknown()).nullable(),
   review_contract: EvolutionReviewContractSchema,
+  learning_summary: DelegationLearningSummarySchema,
+  learning_recommendations: z.array(z.lazy(() => DelegationRecordsLearningRecommendationSchema)),
 }).passthrough();
 
 export const EvolutionReviewPackResponseSchema = z.object({
@@ -1240,16 +1480,24 @@ export const AssemblySummaryContractSchema = z.object({
 
 export type AssemblySummaryContract = z.infer<typeof AssemblySummaryContractSchema>;
 
+export const ContextOperatorProjectionSchema = z.object({
+  delegation_learning: DelegationLearningProjectionSchema.optional(),
+}).passthrough();
+
+export type ContextOperatorProjection = z.infer<typeof ContextOperatorProjectionSchema>;
+
 const PlannerPacketRouteContractBaseSchema = z.object({
   planner_packet: PlannerPacketTextSurfaceSchema,
   pattern_signals: z.array(PlannerPacketEntrySchema),
   workflow_signals: z.array(PlannerPacketEntrySchema),
   execution_kernel: ExecutionKernelPacketSummarySchema,
+  execution_summary: ExecutionSummaryV1Schema,
 }).passthrough();
 
 export const PlanningContextRouteContractSchema = PlannerPacketRouteContractBaseSchema.extend({
   planning_summary: PlanningSummaryContractSchema,
   kickoff_recommendation: KickoffRecommendationSchema.nullable().optional(),
+  operator_projection: ContextOperatorProjectionSchema.optional(),
 });
 
 export type PlanningContextRouteContract = z.infer<typeof PlanningContextRouteContractSchema>;
@@ -1257,6 +1505,7 @@ export type PlanningContextRouteContract = z.infer<typeof PlanningContextRouteCo
 export const ContextAssembleRouteContractSchema = PlannerPacketRouteContractBaseSchema.extend({
   assembly_summary: AssemblySummaryContractSchema,
   kickoff_recommendation: KickoffRecommendationSchema.nullable().optional(),
+  operator_projection: ContextOperatorProjectionSchema.optional(),
 });
 
 export type ContextAssembleRouteContract = z.infer<typeof ContextAssembleRouteContractSchema>;
@@ -1696,6 +1945,283 @@ export const HandoffRecoverRequest = z.object({
 });
 
 export type HandoffRecoverInput = z.infer<typeof HandoffRecoverRequest>;
+
+export const DelegationRecordsWriteRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  memory_lane: z.enum(["private", "shared"]).default("shared"),
+  producer_agent_id: z.string().min(1).optional(),
+  owner_agent_id: z.string().min(1).optional(),
+  owner_team_id: z.string().min(1).optional(),
+  record_id: z.string().min(1).max(128).optional(),
+  run_id: z.string().min(1).max(256).optional(),
+  handoff_anchor: z.string().min(1).max(512).optional(),
+  handoff_uri: z.string().min(1).max(2048).optional(),
+  route_role: z.string().min(1).max(128).optional(),
+  task_family: z.string().min(1).max(256).optional(),
+  title: z.string().min(1).max(512).optional(),
+  summary: z.string().min(1).max(4000).optional(),
+  input_text: z.string().min(1).optional(),
+  tags: z.array(z.string().min(1).max(128)).max(50).optional(),
+  delegation_records_v1: ExecutionDelegationRecordsSummarySchema,
+  execution_result_summary: z.record(z.unknown()).optional(),
+  execution_artifacts: z.array(z.record(z.unknown())).optional(),
+  execution_evidence: z.array(z.record(z.unknown())).optional(),
+  execution_state_v1: ExecutionStateV1Schema.optional(),
+  execution_packet_v1: ExecutionPacketV1Schema.optional(),
+});
+
+export type DelegationRecordsWriteInput = z.infer<typeof DelegationRecordsWriteRequest>;
+
+export const DelegationRecordsWriteResponseSchema = z.object({
+  summary_version: z.literal("delegation_records_write_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  commit_id: z.string(),
+  commit_uri: z.string().nullable(),
+  record_event: z.object({
+    node_id: z.string(),
+    uri: z.string(),
+    client_id: z.string(),
+    record_id: z.string(),
+    memory_lane: z.enum(["private", "shared"]),
+    run_id: z.string().nullable(),
+    handoff_anchor: z.string().nullable(),
+    route_role: z.string(),
+    task_family: z.string().nullable(),
+    family_scope: z.string(),
+    record_mode: z.enum(["memory_only", "packet_backed"]),
+  }).nullable(),
+  delegation_records_v1: ExecutionDelegationRecordsSummarySchema,
+  execution_result_summary: z.record(z.unknown()).nullable(),
+  execution_artifacts: z.array(z.record(z.unknown())),
+  execution_evidence: z.array(z.record(z.unknown())),
+  execution_state_v1: ExecutionStateV1Schema.nullable(),
+  execution_packet_v1: ExecutionPacketV1Schema.nullable(),
+});
+
+export type DelegationRecordsWriteResponse = z.infer<typeof DelegationRecordsWriteResponseSchema>;
+
+export const DelegationRecordsFindRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  record_id: z.string().min(1).max(128).optional(),
+  run_id: z.string().min(1).max(256).optional(),
+  handoff_anchor: z.string().min(1).max(512).optional(),
+  handoff_uri: z.string().min(1).max(2048).optional(),
+  route_role: z.string().min(1).max(128).optional(),
+  task_family: z.string().min(1).max(256).optional(),
+  family_scope: z.string().min(1).max(512).optional(),
+  record_mode: z.enum(["memory_only", "packet_backed"]).optional(),
+  memory_lane: z.enum(["private", "shared"]).optional(),
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
+  include_payload: z.boolean().default(false),
+  limit: z.number().int().positive().max(100).default(20),
+  offset: z.number().int().min(0).max(200000).default(0),
+});
+
+export type DelegationRecordsFindInput = z.infer<typeof DelegationRecordsFindRequest>;
+
+export const DelegationRecordSideOutputSummarySchema = z.object({
+  result_present: z.boolean(),
+  artifact_count: z.number().int().min(0),
+  evidence_count: z.number().int().min(0),
+  execution_state_v1_present: z.boolean(),
+  execution_packet_v1_present: z.boolean(),
+});
+
+export const DelegationRecordFindEntrySchema = z.object({
+  uri: z.string(),
+  node_id: z.string(),
+  client_id: z.string().nullable(),
+  record_id: z.string().nullable(),
+  title: z.string().nullable(),
+  text_summary: z.string().nullable(),
+  memory_lane: z.enum(["private", "shared"]),
+  producer_agent_id: z.string().nullable(),
+  owner_agent_id: z.string().nullable(),
+  owner_team_id: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  commit_id: z.string().nullable(),
+  run_id: z.string().nullable(),
+  handoff_anchor: z.string().nullable(),
+  handoff_uri: z.string().nullable(),
+  route_role: z.string(),
+  task_family: z.string().nullable(),
+  family_scope: z.string(),
+  record_mode: z.enum(["memory_only", "packet_backed"]),
+  tags: z.array(z.string()),
+  delegation_records_v1: ExecutionDelegationRecordsSummarySchema,
+  execution_side_outputs: DelegationRecordSideOutputSummarySchema,
+  execution_result_summary: z.record(z.unknown()).nullable().optional(),
+  execution_artifacts: z.array(z.record(z.unknown())).optional(),
+  execution_evidence: z.array(z.record(z.unknown())).optional(),
+  execution_state_v1: z.record(z.unknown()).nullable().optional(),
+  execution_packet_v1: z.record(z.unknown()).nullable().optional(),
+}).passthrough();
+
+export type DelegationRecordFindEntry = z.infer<typeof DelegationRecordFindEntrySchema>;
+
+export const DelegationRecordsFindSummarySchema = z.object({
+  summary_version: z.literal("delegation_records_find_summary_v1"),
+  returned_records: z.number().int().min(0),
+  has_more: z.boolean(),
+  invalid_records: z.number().int().min(0),
+  filters_applied: z.array(z.string()),
+  record_mode_counts: z.record(z.number().int().min(0)),
+  memory_lane_counts: z.record(z.number().int().min(0)),
+  route_role_counts: z.record(z.number().int().min(0)),
+  task_family_counts: z.record(z.number().int().min(0)),
+  missing_record_type_counts: z.record(z.number().int().min(0)),
+  return_status_counts: z.record(z.number().int().min(0)),
+  artifact_source_counts: z.record(z.number().int().min(0)),
+  packet_count: z.number().int().min(0),
+  return_count: z.number().int().min(0),
+  artifact_routing_count: z.number().int().min(0),
+  run_id_count: z.number().int().min(0),
+  handoff_anchor_count: z.number().int().min(0),
+});
+
+export type DelegationRecordsFindSummary = z.infer<typeof DelegationRecordsFindSummarySchema>;
+
+export const DelegationRecordsFindResponseSchema = z.object({
+  summary_version: z.literal("delegation_records_find_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  records: z.array(DelegationRecordFindEntrySchema),
+  summary: DelegationRecordsFindSummarySchema,
+});
+
+export type DelegationRecordsFindResponse = z.infer<typeof DelegationRecordsFindResponseSchema>;
+
+export const DelegationRecordsAggregateRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  record_id: z.string().min(1).max(128).optional(),
+  run_id: z.string().min(1).max(256).optional(),
+  handoff_anchor: z.string().min(1).max(512).optional(),
+  handoff_uri: z.string().min(1).max(2048).optional(),
+  route_role: z.string().min(1).max(128).optional(),
+  task_family: z.string().min(1).max(256).optional(),
+  family_scope: z.string().min(1).max(512).optional(),
+  record_mode: z.enum(["memory_only", "packet_backed"]).optional(),
+  memory_lane: z.enum(["private", "shared"]).optional(),
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
+  limit: z.number().int().positive().max(200).default(100),
+});
+
+export type DelegationRecordsAggregateInput = z.infer<typeof DelegationRecordsAggregateRequest>;
+
+const DelegationRecordsAggregateBucketSchema = z.object({
+  key: z.string(),
+  record_count: z.number().int().min(0),
+  packet_count: z.number().int().min(0),
+  return_count: z.number().int().min(0),
+  artifact_routing_count: z.number().int().min(0),
+  record_mode_counts: z.record(z.number().int().min(0)),
+  task_family_counts: z.record(z.number().int().min(0)).optional(),
+  route_role_counts: z.record(z.number().int().min(0)).optional(),
+  return_status_counts: z.record(z.number().int().min(0)),
+  artifact_source_counts: z.record(z.number().int().min(0)),
+}).passthrough();
+
+export const DelegationRecordsAggregateRefStatSchema = z.object({
+  ref: z.string(),
+  ref_kind: z.enum(["artifact", "evidence"]),
+  count: z.number().int().min(0),
+  source_counts: z.record(z.number().int().min(0)),
+}).passthrough();
+
+export const DelegationRecordsAggregateStringStatSchema = z.object({
+  value: z.string(),
+  count: z.number().int().min(0),
+}).passthrough();
+
+export const DelegationRecordsReusablePatternSchema = z.object({
+  route_role: z.string(),
+  task_family: z.string(),
+  record_count: z.number().int().min(0),
+  record_mode_counts: z.record(z.number().int().min(0)),
+  record_outcome_counts: z.record(z.number().int().min(0)),
+  sample_mission: z.string().nullable(),
+  sample_acceptance_checks: z.array(z.string()),
+  sample_working_set_files: z.array(z.string()),
+  sample_artifact_refs: z.array(z.string()),
+}).passthrough();
+
+export const DelegationRecordsLearningRecommendationSchema = z.object({
+  recommendation_kind: z.enum([
+    "capture_missing_returns",
+    "review_blocked_pattern",
+    "increase_artifact_capture",
+    "promote_reusable_pattern",
+  ]),
+  priority: z.enum(["high", "medium", "low"]),
+  route_role: z.string().nullable(),
+  task_family: z.string().nullable(),
+  recommended_action: z.string(),
+  rationale: z.string(),
+  sample_mission: z.string().nullable(),
+  sample_acceptance_checks: z.array(z.string()),
+  sample_working_set_files: z.array(z.string()),
+  sample_artifact_refs: z.array(z.string()),
+}).passthrough();
+
+export type DelegationRecordsLearningRecommendation = z.infer<typeof DelegationRecordsLearningRecommendationSchema>;
+
+export const DelegationRecordsAggregateSummarySchema = z.object({
+  summary_version: z.literal("delegation_records_aggregate_summary_v1"),
+  matched_records: z.number().int().min(0),
+  truncated: z.boolean(),
+  invalid_records: z.number().int().min(0),
+  filters_applied: z.array(z.string()),
+  record_mode_counts: z.record(z.number().int().min(0)),
+  memory_lane_counts: z.record(z.number().int().min(0)),
+  route_role_counts: z.record(z.number().int().min(0)),
+  task_family_counts: z.record(z.number().int().min(0)),
+  missing_record_type_counts: z.record(z.number().int().min(0)),
+  return_status_counts: z.record(z.number().int().min(0)),
+  normalized_return_status_counts: z.record(z.number().int().min(0)),
+  record_outcome_counts: z.record(z.number().int().min(0)),
+  artifact_source_counts: z.record(z.number().int().min(0)),
+  packet_count: z.number().int().min(0),
+  return_count: z.number().int().min(0),
+  artifact_routing_count: z.number().int().min(0),
+  run_id_count: z.number().int().min(0),
+  handoff_anchor_count: z.number().int().min(0),
+  records_with_returns: z.number().int().min(0),
+  records_with_missing_types: z.number().int().min(0),
+  records_with_payload_result: z.number().int().min(0),
+  records_with_payload_artifacts: z.number().int().min(0),
+  records_with_payload_evidence: z.number().int().min(0),
+  records_with_payload_state: z.number().int().min(0),
+  records_with_payload_packet: z.number().int().min(0),
+  completion_rate: z.number().min(0).max(1),
+  blocked_rate: z.number().min(0).max(1),
+  missing_return_rate: z.number().min(0).max(1),
+  route_role_buckets: z.array(DelegationRecordsAggregateBucketSchema),
+  task_family_buckets: z.array(DelegationRecordsAggregateBucketSchema),
+  top_reusable_patterns: z.array(DelegationRecordsReusablePatternSchema),
+  learning_recommendations: z.array(DelegationRecordsLearningRecommendationSchema),
+  top_artifact_refs: z.array(DelegationRecordsAggregateRefStatSchema),
+  top_acceptance_checks: z.array(DelegationRecordsAggregateStringStatSchema),
+  top_working_set_files: z.array(DelegationRecordsAggregateStringStatSchema),
+});
+
+export type DelegationRecordsAggregateSummary = z.infer<typeof DelegationRecordsAggregateSummarySchema>;
+
+export const DelegationRecordsAggregateResponseSchema = z.object({
+  summary_version: z.literal("delegation_records_aggregate_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  summary: DelegationRecordsAggregateSummarySchema,
+});
+
+export type DelegationRecordsAggregateResponse = z.infer<typeof DelegationRecordsAggregateResponseSchema>;
 
 export const ContinuityReviewPackRequest = HandoffRecoverRequest;
 

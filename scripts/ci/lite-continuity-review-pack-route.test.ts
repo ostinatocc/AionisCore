@@ -107,7 +107,7 @@ test("memory continuity review-pack route wraps recovered handoff into reviewer-
       payload: {
         tenant_id: "default",
         scope: "default",
-        memory_lane: "private",
+        memory_lane: "shared",
         anchor: "resume:src/routes/export.ts",
         file_path: "src/routes/export.ts",
         repo_root: "/repo",
@@ -121,9 +121,49 @@ test("memory continuity review-pack route wraps recovered handoff into reviewer-
         must_remove: ["legacy export fallback"],
         must_keep: ["existing success path"],
         acceptance_checks: ["npm run -s test:lite -- export"],
+        execution_result_summary: {
+          status: "passed",
+          summary: "Export patch applied and targeted tests passed",
+        },
+        execution_artifacts: [{ ref: "artifact://export/patch" }],
+        execution_evidence: [{ ref: "evidence://export/test" }],
       },
     });
     assert.equal(storeResp.statusCode, 200, storeResp.body);
+    const stored = storeResp.json();
+    assert.equal(stored.delegation_records_v1.summary_version, "execution_delegation_records_v1");
+    assert.equal(stored.delegation_records_v1.record_mode, "memory_only");
+    assert.equal(stored.delegation_records_v1.packet_count, 1);
+    assert.equal(stored.delegation_records_v1.return_count, 1);
+    assert.deepEqual(stored.delegation_records_v1.missing_record_types, []);
+    assert.equal(stored.delegation_records_v1.delegation_returns[0]?.status, "passed");
+    assert.equal(
+      stored.delegation_records_v1.delegation_returns[0]?.summary,
+      "Export patch applied and targeted tests passed",
+    );
+    assert.ok(
+      stored.delegation_records_v1.artifact_routing_records.some(
+        (record: Record<string, unknown>) => record.ref === "artifact://export/patch",
+      ),
+    );
+    assert.ok(
+      stored.delegation_records_v1.artifact_routing_records.some(
+        (record: Record<string, unknown>) => record.ref === "evidence://export/test",
+      ),
+    );
+
+    const recoverResp = await app.inject({
+      method: "POST",
+      url: "/v1/handoff/recover",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        handoff_uri: stored.handoff?.uri,
+      },
+    });
+    assert.equal(recoverResp.statusCode, 200, recoverResp.body);
+    const recovered = recoverResp.json();
+    assert.deepEqual(recovered.delegation_records_v1, stored.delegation_records_v1);
 
     const reviewResp = await app.inject({
       method: "POST",

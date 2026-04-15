@@ -1,18 +1,26 @@
 import { randomUUID } from "node:crypto";
 
 import type {
+  AionisContextOperatorProjection,
+  AionisDelegationLearningProjection,
   AionisHandoffRecoverRequest,
   AionisHandoffStoreRequest,
   AionisKickoffRecommendationRequest,
+  AionisPlanningContextRequest,
+  AionisPlanningContextResponse,
   AionisReplayPlaybookCompileFromRunRequest,
   AionisReplayPlaybookRunRequest,
   AionisReplayRunEndRequest,
   AionisReplayRunStartRequest,
   AionisReplayStepAfterRequest,
   AionisReplayStepBeforeRequest,
+  AionisSessionCreateRequest,
+  AionisSessionEventsQuery,
+  AionisSessionEventWriteRequest,
   AionisTaskStartResponse,
 } from "./contracts.js";
 import { createAionisRuntimeClient, type AionisRuntimeClient } from "./client.js";
+import { resolveContextOperatorProjection } from "./projections.js";
 import type { AionisClientOptions } from "./types.js";
 
 const DEFAULT_TOOL_CANDIDATES = ["read", "glob", "grep", "bash", "edit", "write", "ls"];
@@ -36,6 +44,134 @@ export type AionisHostBridgeTaskStartResponse = {
   task_id: string;
   first_action: AionisHostBridgeFirstAction | null;
   task_start: AionisTaskStartResponse;
+};
+
+export type AionisHostBridgeInspectTaskContextRequest = AionisHostBridgeTask & Pick<
+  AionisPlanningContextRequest,
+  | "run_id"
+  | "include_shadow"
+  | "rules_limit"
+  | "tool_strict"
+  | "context_layers"
+  | "static_context_blocks"
+  | "static_injection"
+  | "memory_layer_preference"
+  | "execution_result_summary"
+  | "execution_artifacts"
+  | "execution_evidence"
+  | "execution_state_v1"
+  | "execution_packet_v1"
+>;
+
+export type AionisHostBridgeTaskContextResponse = {
+  summary_version: "host_bridge_task_context_v1";
+  task_id: string;
+  planning_context: AionisPlanningContextResponse;
+  operator_projection: AionisContextOperatorProjection | null;
+  delegation_learning: AionisDelegationLearningProjection | null;
+};
+
+export type AionisHostBridgeTaskStartPlanRequest = AionisHostBridgeInspectTaskContextRequest;
+
+export type AionisHostBridgeStartupDecision = {
+  summary_version: "host_bridge_startup_decision_v1";
+  startup_mode: "learned_kickoff" | "planner_fallback" | "manual_triage";
+  tool: string | null;
+  file_path: string | null;
+  instruction: string | null;
+  planner_explanation: string | null;
+  task_family: string | null;
+  matched_records: number;
+  recommendation_count: number;
+};
+
+export type AionisHostBridgeTaskStartPlanResponse = {
+  summary_version: "host_bridge_task_start_plan_v1";
+  task_id: string;
+  decision: AionisHostBridgeStartupDecision;
+  first_action: AionisHostBridgeFirstAction | null;
+  task_start: AionisTaskStartResponse;
+  task_context: AionisHostBridgeTaskContextResponse;
+};
+
+export type AionisHostBridgeOpenTaskSessionRequest = AionisHostBridgeTask & Pick<
+  AionisSessionCreateRequest,
+  "session_id" | "title" | "summary" | "metadata"
+>;
+
+export type AionisHostBridgeTaskSessionRecordEventRequest = Omit<
+  AionisSessionEventWriteRequest,
+  "tenant_id" | "scope" | "actor" | "session_id"
+>;
+
+export type AionisHostBridgeTaskSessionEventsQuery = Omit<
+  AionisSessionEventsQuery,
+  "tenant_id" | "scope" | "session_id"
+>;
+
+export type AionisHostBridgeTaskSessionInspectRequest = Omit<
+  AionisHostBridgeInspectTaskContextRequest,
+  "task_id" | "text" | "tenant_id" | "scope" | "actor"
+> & {
+  text?: string;
+};
+
+export type AionisHostBridgeTaskSessionPauseRequest = Omit<
+  AionisHostBridgePauseRequest,
+  "task_id" | "text" | "tenant_id" | "scope" | "actor"
+> & {
+  text?: string;
+};
+
+export type AionisHostBridgeTaskSessionCompleteRequest = Omit<
+  AionisHostBridgeCompleteRequest,
+  "task_id" | "text" | "tenant_id" | "scope" | "actor"
+> & {
+  text?: string;
+};
+
+export type AionisHostBridgeTaskSessionStatus = "active" | "paused" | "resumed" | "completed";
+
+export type AionisHostBridgeTaskSessionTransition = {
+  summary_version: "host_bridge_task_session_transition_v1";
+  transition_kind: "session_opened" | "event_recorded" | "startup_planned" | "paused" | "resumed" | "completed";
+  status: AionisHostBridgeTaskSessionStatus;
+  at: string;
+  detail: string | null;
+};
+
+export type AionisHostBridgeTaskSessionState = {
+  summary_version: "host_bridge_task_session_state_v1";
+  task_id: string;
+  session_id: string;
+  status: AionisHostBridgeTaskSessionStatus;
+  transition_count: number;
+  last_transition: AionisHostBridgeTaskSessionTransition | null;
+  transitions: AionisHostBridgeTaskSessionTransition[];
+  last_startup_mode: AionisHostBridgeStartupDecision["startup_mode"] | null;
+  last_handoff_anchor: string | null;
+  last_event_text: string | null;
+};
+
+export type AionisHostBridgeTaskSession = {
+  summary_version: "host_bridge_task_session_v1";
+  task_id: string;
+  task_text: string;
+  session_id: string;
+  session: Awaited<ReturnType<AionisRuntimeClient["memory"]["sessions"]["create"]>>;
+  state: AionisHostBridgeTaskSessionState;
+  snapshotState(): AionisHostBridgeTaskSessionState;
+  recordEvent(
+    input: AionisHostBridgeTaskSessionRecordEventRequest,
+  ): Promise<Awaited<ReturnType<AionisRuntimeClient["memory"]["sessions"]["writeEvent"]>>>;
+  listEvents(
+    input?: AionisHostBridgeTaskSessionEventsQuery,
+  ): Promise<Awaited<ReturnType<AionisRuntimeClient["memory"]["sessions"]["events"]>>>;
+  inspectTaskContext(input?: AionisHostBridgeTaskSessionInspectRequest): Promise<AionisHostBridgeTaskContextResponse>;
+  planTaskStart(input?: AionisHostBridgeTaskSessionInspectRequest): Promise<AionisHostBridgeTaskStartPlanResponse>;
+  pauseTask(input: AionisHostBridgeTaskSessionPauseRequest): Promise<AionisHostBridgePauseResponse>;
+  resumeTask(input?: Omit<AionisHostBridgeResumeRequest, "task_id" | "tenant_id" | "scope" | "actor">): Promise<AionisHostBridgeResumeResponse>;
+  completeTask(input: AionisHostBridgeTaskSessionCompleteRequest): Promise<AionisHostBridgeCompleteResponse>;
 };
 
 export type AionisHostBridgePauseRequest = AionisHostBridgeTask & {
@@ -135,6 +271,9 @@ export type AionisHostBridgeCompleteResponse = {
 
 export type AionisHostBridge = {
   startTask(input: AionisHostBridgeTask): Promise<AionisHostBridgeTaskStartResponse>;
+  inspectTaskContext(input: AionisHostBridgeInspectTaskContextRequest): Promise<AionisHostBridgeTaskContextResponse>;
+  planTaskStart(input: AionisHostBridgeTaskStartPlanRequest): Promise<AionisHostBridgeTaskStartPlanResponse>;
+  openTaskSession(input: AionisHostBridgeOpenTaskSessionRequest): Promise<AionisHostBridgeTaskSession>;
   pauseTask(input: AionisHostBridgePauseRequest): Promise<AionisHostBridgePauseResponse>;
   resumeTask(input: AionisHostBridgeResumeRequest): Promise<AionisHostBridgeResumeResponse>;
   completeTask(input: AionisHostBridgeCompleteRequest): Promise<AionisHostBridgeCompleteResponse>;
@@ -157,6 +296,171 @@ function buildHostBridgeExecutionIdentity(taskId: string) {
   return {
     state_id: `handoff-anchor:${normalizedTaskId}`,
     scope: `aionis://handoff/${normalizedTaskId}`,
+  };
+}
+
+function buildHostBridgeInspectContext(taskText: string, context: Record<string, unknown> | undefined) {
+  const mergedContext: Record<string, unknown> = {
+    goal: taskText,
+    ...(context ?? {}),
+  };
+  if (!Object.prototype.hasOwnProperty.call(mergedContext, "operator_mode")) {
+    mergedContext.operator_mode = "debug";
+  }
+  return mergedContext;
+}
+
+function resolveSessionIdFromResponse(
+  response: Awaited<ReturnType<AionisRuntimeClient["memory"]["sessions"]["create"]>>,
+  fallbackSessionId: string | undefined,
+): string | null {
+  if (typeof (response as Record<string, unknown>).session_id === "string") {
+    return (response as Record<string, unknown>).session_id as string;
+  }
+  const nestedSession =
+    (response as Record<string, unknown>).session
+    && typeof (response as Record<string, unknown>).session === "object"
+    && !Array.isArray((response as Record<string, unknown>).session)
+      ? ((response as Record<string, unknown>).session as Record<string, unknown>)
+      : null;
+  if (typeof nestedSession?.session_id === "string") return nestedSession.session_id;
+  return typeof fallbackSessionId === "string" && fallbackSessionId.trim().length > 0 ? fallbackSessionId : null;
+}
+
+function cloneTaskSessionState(state: AionisHostBridgeTaskSessionState): AionisHostBridgeTaskSessionState {
+  return {
+    ...state,
+    last_transition: state.last_transition ? { ...state.last_transition } : null,
+    transitions: state.transitions.map((entry) => ({ ...entry })),
+  };
+}
+
+function buildTaskSessionTransition(args: {
+  transition_kind: AionisHostBridgeTaskSessionTransition["transition_kind"];
+  status: AionisHostBridgeTaskSessionStatus;
+  detail?: string | null;
+}): AionisHostBridgeTaskSessionTransition {
+  return {
+    summary_version: "host_bridge_task_session_transition_v1",
+    transition_kind: args.transition_kind,
+    status: args.status,
+    at: new Date().toISOString(),
+    detail: args.detail ?? null,
+  };
+}
+
+function buildInitialTaskSessionState(taskId: string, sessionId: string): AionisHostBridgeTaskSessionState {
+  const transition = buildTaskSessionTransition({
+    transition_kind: "session_opened",
+    status: "active",
+    detail: "host task session opened",
+  });
+  return {
+    summary_version: "host_bridge_task_session_state_v1",
+    task_id: taskId,
+    session_id: sessionId,
+    status: "active",
+    transition_count: 1,
+    last_transition: transition,
+    transitions: [transition],
+    last_startup_mode: null,
+    last_handoff_anchor: null,
+    last_event_text: null,
+  };
+}
+
+function advanceTaskSessionState(args: {
+  state: AionisHostBridgeTaskSessionState;
+  transition_kind: AionisHostBridgeTaskSessionTransition["transition_kind"];
+  status: AionisHostBridgeTaskSessionStatus;
+  detail?: string | null;
+  startup_mode?: AionisHostBridgeStartupDecision["startup_mode"] | null;
+  handoff_anchor?: string | null;
+  event_text?: string | null;
+}): AionisHostBridgeTaskSessionState {
+  const transition = buildTaskSessionTransition({
+    transition_kind: args.transition_kind,
+    status: args.status,
+    detail: args.detail,
+  });
+  return {
+    ...args.state,
+    status: args.status,
+    transition_count: args.state.transition_count + 1,
+    last_transition: transition,
+    transitions: [...args.state.transitions, transition],
+    last_startup_mode: args.startup_mode ?? args.state.last_startup_mode,
+    last_handoff_anchor: args.handoff_anchor ?? args.state.last_handoff_anchor,
+    last_event_text: args.event_text ?? args.state.last_event_text,
+  };
+}
+
+function assertTaskSessionActionAllowed(args: {
+  state: AionisHostBridgeTaskSessionState;
+  action: "record_event" | "plan_start" | "pause" | "resume" | "complete";
+}) {
+  const status = args.state.status;
+  if (args.action === "resume" && status !== "paused") {
+    throw new Error(`host bridge task session cannot resume from status ${status}`);
+  }
+  if (args.action === "pause" && status !== "active" && status !== "resumed") {
+    throw new Error(`host bridge task session cannot pause from status ${status}`);
+  }
+  if ((args.action === "record_event" || args.action === "plan_start") && status === "completed") {
+    throw new Error(`host bridge task session cannot ${args.action} after completion`);
+  }
+  if (args.action === "complete" && status === "completed") {
+    throw new Error("host bridge task session is already completed");
+  }
+}
+
+function getPlannerExplanation(planningContext: AionisPlanningContextResponse): string | null {
+  const planningSummary =
+    planningContext.planning_summary && typeof planningContext.planning_summary === "object" && !Array.isArray(planningContext.planning_summary)
+      ? (planningContext.planning_summary as Record<string, unknown>)
+      : null;
+  return typeof planningSummary?.planner_explanation === "string" ? planningSummary.planner_explanation : null;
+}
+
+function getTaskStartRationaleSummary(taskStart: AionisTaskStartResponse): string | null {
+  const rationale =
+    taskStart.rationale && typeof taskStart.rationale === "object" && !Array.isArray(taskStart.rationale)
+      ? (taskStart.rationale as Record<string, unknown>)
+      : null;
+  return typeof rationale?.summary === "string" ? rationale.summary : null;
+}
+
+function buildHostBridgeStartupDecision(args: {
+  taskStart: AionisHostBridgeTaskStartResponse;
+  taskContext: AionisHostBridgeTaskContextResponse;
+}): AionisHostBridgeStartupDecision {
+  const firstAction = args.taskStart.first_action;
+  const learningSummary = args.taskContext.delegation_learning?.learning_summary;
+  const plannerExplanation = getPlannerExplanation(args.taskContext.planning_context) ?? getTaskStartRationaleSummary(args.taskStart.task_start);
+  if (firstAction) {
+    return {
+      summary_version: "host_bridge_startup_decision_v1",
+      startup_mode: firstAction.history_applied ? "learned_kickoff" : "planner_fallback",
+      tool: firstAction.selected_tool,
+      file_path: firstAction.file_path,
+      instruction: firstAction.next_action,
+      planner_explanation: plannerExplanation,
+      task_family: learningSummary?.task_family ?? null,
+      matched_records: learningSummary?.matched_records ?? 0,
+      recommendation_count: learningSummary?.recommendation_count ?? 0,
+    };
+  }
+
+  return {
+    summary_version: "host_bridge_startup_decision_v1",
+    startup_mode: "manual_triage",
+    tool: null,
+    file_path: null,
+    instruction: null,
+    planner_explanation: plannerExplanation,
+    task_family: learningSummary?.task_family ?? null,
+    matched_records: learningSummary?.matched_records ?? 0,
+    recommendation_count: learningSummary?.recommendation_count ?? 0,
   };
 }
 
@@ -251,7 +555,7 @@ export function createAionisHostBridge(
 ): AionisHostBridge {
   const client = createAionisRuntimeClient(options);
 
-  return {
+  const bridge: AionisHostBridge = {
     async startTask(input) {
       const payload: AionisKickoffRecommendationRequest = withDefaults(defaults, {
         tenant_id: input.tenant_id,
@@ -272,6 +576,230 @@ export function createAionisHostBridge(
         first_action: taskStart.first_action,
         task_start: taskStart,
       };
+    },
+
+    async inspectTaskContext(input) {
+      const payload: AionisPlanningContextRequest = withDefaults(defaults, {
+        tenant_id: input.tenant_id,
+        scope: input.scope,
+        actor: input.actor,
+        query_text: input.text,
+        run_id: input.run_id,
+        context: buildHostBridgeInspectContext(input.text, input.context),
+        tool_candidates: input.candidates ?? DEFAULT_TOOL_CANDIDATES,
+        tool_strict: input.tool_strict ?? true,
+        include_shadow: input.include_shadow ?? false,
+        rules_limit: input.rules_limit ?? 50,
+        return_layered_context: true,
+        context_layers: input.context_layers,
+        static_context_blocks: input.static_context_blocks,
+        static_injection: input.static_injection,
+        memory_layer_preference: input.memory_layer_preference,
+        execution_result_summary: input.execution_result_summary,
+        execution_artifacts: input.execution_artifacts,
+        execution_evidence: input.execution_evidence,
+        execution_state_v1: input.execution_state_v1,
+        execution_packet_v1: input.execution_packet_v1,
+      });
+      const planning_context = await client.memory.planningContext(payload);
+      const operator_projection = resolveContextOperatorProjection(planning_context);
+      return {
+        summary_version: "host_bridge_task_context_v1",
+        task_id: input.task_id,
+        planning_context,
+        operator_projection,
+        delegation_learning: operator_projection?.delegation_learning ?? null,
+      };
+    },
+
+    async planTaskStart(input) {
+      const [task_context, task_start] = await Promise.all([
+        bridge.inspectTaskContext(input),
+        bridge.startTask(input),
+      ]);
+      return {
+        summary_version: "host_bridge_task_start_plan_v1",
+        task_id: input.task_id,
+        decision: buildHostBridgeStartupDecision({
+          taskStart: task_start,
+          taskContext: task_context,
+        }),
+        first_action: task_start.first_action,
+        task_start: task_start.task_start,
+        task_context,
+      };
+    },
+
+    async openTaskSession(input) {
+      const session = await client.memory.sessions.create(withDefaults(defaults, {
+        tenant_id: input.tenant_id,
+        scope: input.scope,
+        actor: input.actor,
+        session_id: input.session_id,
+        title: input.title ?? input.text,
+        summary: input.summary ?? input.text,
+        metadata: input.metadata,
+      }));
+      const session_id = resolveSessionIdFromResponse(session, input.session_id);
+      if (!session_id) {
+        throw new Error("host bridge task session create did not return session_id");
+      }
+      let sessionState = buildInitialTaskSessionState(input.task_id, session_id);
+      const sessionBridge: AionisHostBridgeTaskSession = {
+        summary_version: "host_bridge_task_session_v1",
+        task_id: input.task_id,
+        task_text: input.text,
+        session_id,
+        session,
+        state: cloneTaskSessionState(sessionState),
+        snapshotState() {
+          return cloneTaskSessionState(sessionState);
+        },
+        async recordEvent(eventInput) {
+          assertTaskSessionActionAllowed({
+            state: sessionState,
+            action: "record_event",
+          });
+          const eventText = typeof eventInput.event_text === "string"
+            ? eventInput.event_text
+            : typeof eventInput.input_text === "string"
+              ? eventInput.input_text
+              : null;
+          const event = await client.memory.sessions.writeEvent(withDefaults(defaults, {
+            tenant_id: input.tenant_id,
+            scope: input.scope,
+            actor: input.actor,
+            session_id,
+            ...eventInput,
+          }));
+          sessionState = advanceTaskSessionState({
+            state: sessionState,
+            transition_kind: "event_recorded",
+            status: sessionState.status,
+            detail: eventText,
+            event_text: eventText,
+          });
+          sessionBridge.state = cloneTaskSessionState(sessionState);
+          return event;
+        },
+        async listEvents(eventsQuery) {
+          return await client.memory.sessions.events({
+            tenant_id: input.tenant_id ?? defaults.tenant_id,
+            scope: input.scope ?? defaults.scope,
+            session_id,
+            ...eventsQuery,
+          });
+        },
+        async inspectTaskContext(inspectInput = {}) {
+          return await bridge.inspectTaskContext({
+            ...inspectInput,
+            task_id: input.task_id,
+            tenant_id: input.tenant_id,
+            scope: input.scope,
+            actor: input.actor,
+            text: inspectInput.text ?? input.text,
+          });
+        },
+        async planTaskStart(planInput = {}) {
+          assertTaskSessionActionAllowed({
+            state: sessionState,
+            action: "plan_start",
+          });
+          const plan = await bridge.planTaskStart({
+            ...planInput,
+            task_id: input.task_id,
+            tenant_id: input.tenant_id,
+            scope: input.scope,
+            actor: input.actor,
+            text: planInput.text ?? input.text,
+          });
+          sessionState = advanceTaskSessionState({
+            state: sessionState,
+            transition_kind: "startup_planned",
+            status: sessionState.status,
+            detail: plan.decision.startup_mode,
+            startup_mode: plan.decision.startup_mode,
+          });
+          sessionBridge.state = cloneTaskSessionState(sessionState);
+          return plan;
+        },
+        async pauseTask(pauseInput) {
+          assertTaskSessionActionAllowed({
+            state: sessionState,
+            action: "pause",
+          });
+          const pause = await bridge.pauseTask({
+            ...pauseInput,
+            task_id: input.task_id,
+            tenant_id: input.tenant_id,
+            scope: input.scope,
+            actor: input.actor,
+            text: pauseInput.text ?? input.text,
+          });
+          const handoff =
+            pause.handoff && typeof pause.handoff === "object" && !Array.isArray(pause.handoff)
+              ? (pause.handoff as Record<string, unknown>)
+              : null;
+          sessionState = advanceTaskSessionState({
+            state: sessionState,
+            transition_kind: "paused",
+            status: "paused",
+            detail: typeof pauseInput.summary === "string" ? pauseInput.summary : null,
+            handoff_anchor: typeof handoff?.anchor === "string" ? handoff.anchor : input.task_id,
+          });
+          sessionBridge.state = cloneTaskSessionState(sessionState);
+          return pause;
+        },
+        async resumeTask(resumeInput = {}) {
+          assertTaskSessionActionAllowed({
+            state: sessionState,
+            action: "resume",
+          });
+          const resume = await bridge.resumeTask({
+            ...resumeInput,
+            task_id: input.task_id,
+            tenant_id: input.tenant_id,
+            scope: input.scope,
+            actor: input.actor,
+          });
+          const handoff =
+            resume.handoff && typeof resume.handoff === "object" && !Array.isArray(resume.handoff)
+              ? (resume.handoff as Record<string, unknown>)
+              : null;
+          sessionState = advanceTaskSessionState({
+            state: sessionState,
+            transition_kind: "resumed",
+            status: "resumed",
+            detail: "task resumed from handoff",
+            handoff_anchor: typeof handoff?.anchor === "string" ? handoff.anchor : input.task_id,
+          });
+          sessionBridge.state = cloneTaskSessionState(sessionState);
+          return resume;
+        },
+        async completeTask(completeInput) {
+          assertTaskSessionActionAllowed({
+            state: sessionState,
+            action: "complete",
+          });
+          const complete = await bridge.completeTask({
+            ...completeInput,
+            task_id: input.task_id,
+            tenant_id: input.tenant_id,
+            scope: input.scope,
+            actor: input.actor,
+            text: completeInput.text ?? input.text,
+          });
+          sessionState = advanceTaskSessionState({
+            state: sessionState,
+            transition_kind: "completed",
+            status: "completed",
+            detail: completeInput.summary ?? completeInput.text ?? input.text,
+          });
+          sessionBridge.state = cloneTaskSessionState(sessionState);
+          return complete;
+        },
+      };
+      return sessionBridge;
     },
 
     async pauseTask(input) {
@@ -443,4 +971,6 @@ export function createAionisHostBridge(
       };
     },
   };
+
+  return bridge;
 }

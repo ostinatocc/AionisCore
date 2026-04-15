@@ -1,4 +1,5 @@
 import { buildExecutionMemoryIntrospectionLite } from "./execution-introspection.js";
+import { buildDelegationLearningSliceLite } from "./delegation-learning.js";
 import { buildExperienceIntelligenceLite } from "./experience-intelligence.js";
 import { recoverHandoff } from "./handoff.js";
 import {
@@ -165,6 +166,22 @@ export async function buildEvolutionReviewPackLite(args: {
   const targetFiles = Array.isArray(experience.recommendation?.path?.target_files)
     ? experience.recommendation.path.target_files.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
     : [];
+  const delegationLearning = await buildDelegationLearningSliceLite({
+    liteWriteStore: args.liteWriteStore,
+    body: args.body,
+    tenantId: experience.tenant_id,
+    scope: experience.scope,
+    defaultScope: args.defaultScope,
+    defaultTenantId: args.defaultTenantId,
+    defaultActorId: args.defaultActorId ?? null,
+    taskFamilies: [
+      trustedPattern?.task_family,
+      contestedPattern?.task_family,
+      promotionReadyWorkflow?.task_family,
+      stableWorkflow?.task_family,
+    ],
+    limitCandidates: [asRecord(args.body).limit],
+  });
 
   const evolutionInspect = {
     summary_version: "evolution_inspect_v1",
@@ -218,6 +235,15 @@ export async function buildEvolutionReviewPackLite(args: {
           ? experience.recommendation.tool.suppressed_pattern_anchor_ids
           : [],
       },
+      learning_summary: {
+        task_family: delegationLearning.task_family,
+        matched_records: delegationLearning.matched_records,
+        truncated: delegationLearning.truncated,
+        route_role_counts: delegationLearning.route_role_counts,
+        record_outcome_counts: delegationLearning.record_outcome_counts,
+        recommendation_count: delegationLearning.recommendation_count,
+      },
+      learning_recommendations: delegationLearning.learning_recommendations,
     },
   });
 }

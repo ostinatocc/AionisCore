@@ -3,8 +3,10 @@ import { assertEmbeddingSurfaceForbidden } from "../embeddings/surface-policy.js
 import { memoryFind, memoryFindLite } from "./find.js";
 import { memoryResolve, memoryResolveLite } from "./resolve.js";
 import {
+  ExecutionDelegationRecordsSummarySchema,
   HandoffRecoverRequest,
   HandoffStoreRequest,
+  type ExecutionDelegationRecordsSummary,
   type HandoffRecoverInput,
   type MemoryFindInput,
   type MemoryResolveInput,
@@ -73,6 +75,7 @@ type RecoveredExecutionProjection = {
 };
 
 type HandoffStoreExecutionTransitions = ExecutionStateTransitionV1[];
+type DelegationRecordSourceMode = "memory_only" | "packet_backed";
 
 export function buildHandoffExecutionStateIdentity(anchor: string): { state_id: string; scope: string } {
   const normalizedAnchor = String(anchor ?? "").trim();
@@ -107,6 +110,42 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
   if (!value) return undefined;
   const out = value.trim();
   return out.length > 0 ? out : undefined;
+}
+
+function uniqueStrings(values: Array<string | null | undefined>, limit = 12): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const normalized = typeof value === "string" ? value.trim() : "";
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function safeRecordArray(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object" && !Array.isArray(entry)))
+    : [];
+}
+
+function extractExecutionRefs(entries: Array<Record<string, unknown>>, limit = 8): string[] {
+  const refs: string[] = [];
+  for (const entry of entries) {
+    for (const key of ["ref", "uri", "id", "path", "file_path", "artifact_ref", "evidence_ref"] as const) {
+      const value = entry[key];
+      if (typeof value === "string" && value.trim().length > 0) {
+        refs.push(value.trim());
+      }
+    }
+  }
+  return uniqueStrings(refs, limit);
+}
+
+function deriveDelegationSourceMode(raw: Record<string, unknown>): DelegationRecordSourceMode {
+  return raw.execution_packet_v1 || raw.execution_state_v1 ? "packet_backed" : "memory_only";
 }
 
 function buildStoredPromptSafeHandoff(input: {
@@ -198,6 +237,169 @@ function readInlineExecutionProjection(raw: Record<string, unknown>, executionRe
   }
 }
 
+function deriveDelegationMission(executionReady: ExecutionReadyHandoff, projection: RecoveredExecutionProjection): string {
+  const brief = projection.execution_state_v1.task_brief?.trim() ?? executionReady.summary?.trim() ?? "";
+  const nextAction = executionReady.next_action.trim();
+  if (brief && nextAction) return `${brief} Next action: ${nextAction}`;
+  if (brief) return brief;
+  if (nextAction) return nextAction;
+  return `Advance the ${projection.execution_packet_v1.active_role || projection.execution_state_v1.active_role} handoff route.`;
+}
+
+function deriveDelegationOutputContract(executionReady: ExecutionReadyHandoff, projection: RecoveredExecutionProjection): string {
+  const reviewerContract = projection.execution_state_v1.reviewer_contract;
+  if (reviewerContract?.standard) {
+    return `Satisfy ${reviewerContract.standard} and return the required outputs with exact validation status.`;
+  }
+  if (projection.execution_state_v1.current_stage === "resume") {
+    return "Return resumed working set, current blockers, and the next validation step.";
+  }
+  if (projection.execution_state_v1.current_stage === "review") {
+    return "Return review findings, exact checks run, and any blocking risks before acceptance.";
+  }
+  return "Return progress, touched files, and the next narrow validation step.";
+}
+
+function deriveDelegationStatus(resultSummary: Record<string, unknown> | null | undefined): string {
+  for (const key of ["status", "outcome", "result", "verdict"] as const) {
+    const value = resultSummary?.[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return "reported";
+}
+
+function deriveDelegationReturnSummary(
+  resultSummary: Record<string, unknown> | null | undefined,
+  executionReady: ExecutionReadyHandoff,
+): string {
+  for (const key of ["summary", "result_summary", "message", "outcome_summary", "status_detail", "note"] as const) {
+    const value = resultSummary?.[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return executionReady.summary?.trim() || executionReady.handoff_text;
+}
+
+function buildStoredDelegationRecords(args: {
+  raw: Record<string, unknown>;
+  executionReady: ExecutionReadyHandoff;
+  executionProjection: RecoveredExecutionProjection;
+  executionResultSummary?: Record<string, unknown> | null;
+  executionArtifacts?: Array<Record<string, unknown>>;
+  executionEvidence?: Array<Record<string, unknown>>;
+}): ExecutionDelegationRecordsSummary {
+  const sourceMode = deriveDelegationSourceMode(args.raw);
+  const routeRole =
+    args.executionProjection.execution_packet_v1.active_role ||
+    args.executionProjection.execution_state_v1.active_role ||
+    "resume";
+  const familyScope =
+    normalizeOptionalString(args.executionProjection.execution_state_v1.scope) ??
+    buildHandoffExecutionStateIdentity(args.executionReady.anchor).scope;
+  const workingSet = uniqueStrings([
+    ...args.executionReady.target_files,
+    ...args.executionProjection.execution_state_v1.modified_files,
+    ...args.executionProjection.execution_state_v1.owned_files,
+  ], 8);
+  const acceptanceChecks = uniqueStrings([
+    ...args.executionReady.acceptance_checks,
+    ...args.executionProjection.execution_state_v1.pending_validations,
+  ], 8);
+  const packetArtifactRefs = uniqueStrings([
+    ...args.executionProjection.execution_packet_v1.artifact_refs,
+    ...extractExecutionRefs(args.executionArtifacts ?? []),
+  ], 8);
+  const packetEvidenceRefs = uniqueStrings([
+    ...args.executionProjection.execution_packet_v1.evidence_refs,
+    ...extractExecutionRefs(args.executionEvidence ?? []),
+  ], 8);
+  const delegationPackets = [
+    {
+      version: 1 as const,
+      role: routeRole,
+      mission: deriveDelegationMission(args.executionReady, args.executionProjection),
+      working_set: workingSet,
+      acceptance_checks: acceptanceChecks,
+      output_contract: deriveDelegationOutputContract(args.executionReady, args.executionProjection),
+      preferred_artifact_refs: packetArtifactRefs,
+      inherited_evidence: packetEvidenceRefs,
+      routing_reason: sourceMode === "packet_backed" ? "stored execution packet for the current handoff" : "stored handoff memory route",
+      task_family: args.executionReady.handoff_kind,
+      family_scope: familyScope,
+      source_mode: sourceMode,
+    },
+  ];
+  const delegationReturns = args.executionResultSummary
+    ? [
+        {
+          version: 1 as const,
+          role: routeRole,
+          status: deriveDelegationStatus(args.executionResultSummary),
+          summary: deriveDelegationReturnSummary(args.executionResultSummary, args.executionReady),
+          evidence: packetEvidenceRefs,
+          working_set: workingSet,
+          acceptance_checks: acceptanceChecks,
+          source_mode: sourceMode,
+        },
+      ]
+    : [];
+  const artifactRoutingRecords = [
+    ...packetArtifactRefs.map((ref) => ({
+      version: 1 as const,
+      ref,
+      ref_kind: "artifact" as const,
+      route_role: routeRole,
+      route_intent: args.executionProjection.execution_state_v1.current_stage,
+      route_mode: sourceMode,
+      task_family: args.executionReady.handoff_kind,
+      family_scope: familyScope,
+      routing_reason: "artifact routed from stored handoff state",
+      source: "execution_packet" as const,
+    })),
+    ...packetEvidenceRefs.map((ref) => ({
+      version: 1 as const,
+      ref,
+      ref_kind: "evidence" as const,
+      route_role: routeRole,
+      route_intent: args.executionProjection.execution_state_v1.current_stage,
+      route_mode: sourceMode,
+      task_family: args.executionReady.handoff_kind,
+      family_scope: familyScope,
+      routing_reason: "evidence routed from stored handoff state",
+      source: "execution_packet" as const,
+    })),
+  ];
+  return ExecutionDelegationRecordsSummarySchema.parse({
+    summary_version: "execution_delegation_records_v1",
+    record_mode: sourceMode,
+    route_role: routeRole,
+    packet_count: delegationPackets.length,
+    return_count: delegationReturns.length,
+    artifact_routing_count: artifactRoutingRecords.length,
+    missing_record_types: delegationReturns.length > 0 ? [] : ["delegation_returns"],
+    delegation_packets: delegationPackets,
+    delegation_returns: delegationReturns,
+    artifact_routing_records: artifactRoutingRecords,
+  });
+}
+
+function readStoredDelegationRecords(
+  slots: Record<string, unknown>,
+  fallback: () => ExecutionDelegationRecordsSummary,
+): ExecutionDelegationRecordsSummary {
+  try {
+    if ("delegation_records_v1" in slots) {
+      return ExecutionDelegationRecordsSummarySchema.parse(slots.delegation_records_v1);
+    }
+  } catch {
+    // Fall through to derived legacy compatibility path.
+  }
+  return fallback();
+}
+
 export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
   const parsed = HandoffStoreRequest.parse(input);
   const raw = input && typeof input === "object" && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
@@ -247,6 +449,16 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
   const executionTransitions = Array.isArray(raw.execution_transitions_v1)
     ? raw.execution_transitions_v1.map((transition) => ExecutionStateTransitionV1Schema.parse(transition))
     : buildHandoffStoreExecutionTransitions(effectiveExecutionProjection.execution_state_v1);
+  const executionArtifacts = safeRecordArray(parsed.execution_artifacts);
+  const executionEvidence = safeRecordArray(parsed.execution_evidence);
+  const delegationRecords = buildStoredDelegationRecords({
+    raw,
+    executionReady,
+    executionProjection: effectiveExecutionProjection,
+    executionResultSummary: parsed.execution_result_summary ?? null,
+    executionArtifacts,
+    executionEvidence,
+  });
   const handoffText = [
     `anchor=${parsed.anchor}`,
     parsed.file_path ? `file=${parsed.file_path}` : null,
@@ -298,12 +510,13 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
           must_remove: parsed.must_remove ?? [],
           must_keep: parsed.must_keep ?? [],
           execution_result_summary: parsed.execution_result_summary ?? null,
-          execution_artifacts: parsed.execution_artifacts ?? [],
-          execution_evidence: parsed.execution_evidence ?? [],
+          execution_artifacts: executionArtifacts,
+          execution_evidence: executionEvidence,
           execution_state_v1: effectiveExecutionProjection.execution_state_v1,
           execution_packet_v1: effectiveExecutionProjection.execution_packet_v1,
           control_profile_v1: effectiveExecutionProjection.control_profile_v1,
           execution_transitions_v1: executionTransitions,
+          delegation_records_v1: delegationRecords,
         },
       },
     ],
@@ -523,6 +736,34 @@ function normalizeRecoveredHandoff(
     readExecutionProjectionFromStateStore(executionStateStore, promptSafe.anchor, executionReady, node) ??
     readStoredExecutionProjection(node) ??
     buildExecutionProjectionFromRecoveredHandoff(node, promptSafe, executionReady);
+  const executionArtifacts =
+    slots && "execution_artifacts" in slots ? safeRecordArray(slots.execution_artifacts) : undefined;
+  const executionEvidence =
+    slots && "execution_evidence" in slots ? safeRecordArray(slots.execution_evidence) : undefined;
+  const executionResultSummary =
+    slots && "execution_result_summary" in slots && slots.execution_result_summary && typeof slots.execution_result_summary === "object"
+      ? (slots.execution_result_summary as Record<string, unknown>)
+      : null;
+  const delegationRecords =
+    slots && typeof slots === "object"
+      ? readStoredDelegationRecords(slots, () =>
+          buildStoredDelegationRecords({
+            raw: slots,
+            executionReady,
+            executionProjection,
+            executionResultSummary,
+            executionArtifacts,
+            executionEvidence,
+          }),
+        )
+      : buildStoredDelegationRecords({
+          raw: {},
+          executionReady,
+          executionProjection,
+          executionResultSummary,
+          executionArtifacts,
+          executionEvidence,
+        });
   return {
     handoff_kind: promptSafe.handoff_kind,
     anchor: promptSafe.anchor,
@@ -552,12 +793,10 @@ function normalizeRecoveredHandoff(
     },
     prompt_safe_handoff: promptSafe,
     execution_ready_handoff: executionReady,
-    execution_result_summary:
-      slots && "execution_result_summary" in slots ? (slots.execution_result_summary as Record<string, unknown> | null) : undefined,
-    execution_artifacts:
-      slots && "execution_artifacts" in slots ? (slots.execution_artifacts as Array<Record<string, unknown>>) : undefined,
-    execution_evidence:
-      slots && "execution_evidence" in slots ? (slots.execution_evidence as Array<Record<string, unknown>>) : undefined,
+    execution_result_summary: executionResultSummary,
+    execution_artifacts: executionArtifacts,
+    execution_evidence: executionEvidence,
+    delegation_records_v1: delegationRecords,
     ...executionProjection,
   };
 }

@@ -66,6 +66,52 @@ export const ExecutionPacketV1Schema = z.object({
 });
 export type ExecutionPacketV1 = z.infer<typeof ExecutionPacketV1Schema>;
 
+const DerivedSourceMode = z.enum(["memory_only", "packet_backed"]);
+const RecordSource = z.enum(["strategy_summary", "execution_packet", "collaboration_summary"]);
+const RefKind = z.enum(["artifact", "evidence"]);
+
+export const ExecutionDelegationPacketRecordV1Schema = z.object({
+  version: z.literal(1),
+  role: z.string().trim().min(1),
+  mission: z.string().trim().min(1),
+  working_set: StringList,
+  acceptance_checks: StringList,
+  output_contract: z.string().trim().min(1),
+  preferred_artifact_refs: StringList,
+  inherited_evidence: StringList,
+  routing_reason: z.string().trim().min(1),
+  task_family: z.string().trim().min(1).nullable().default(null),
+  family_scope: z.string().trim().min(1),
+  source_mode: DerivedSourceMode,
+});
+export type ExecutionDelegationPacketRecordV1 = z.infer<typeof ExecutionDelegationPacketRecordV1Schema>;
+
+export const ExecutionDelegationReturnRecordV1Schema = z.object({
+  version: z.literal(1),
+  role: z.string().trim().min(1),
+  status: z.string().trim().min(1),
+  summary: z.string().trim().min(1),
+  evidence: StringList,
+  working_set: StringList,
+  acceptance_checks: StringList,
+  source_mode: DerivedSourceMode,
+});
+export type ExecutionDelegationReturnRecordV1 = z.infer<typeof ExecutionDelegationReturnRecordV1Schema>;
+
+export const ExecutionArtifactRoutingRecordV1Schema = z.object({
+  version: z.literal(1),
+  ref: z.string().trim().min(1),
+  ref_kind: RefKind,
+  route_role: z.string().trim().min(1),
+  route_intent: z.string().trim().min(1),
+  route_mode: DerivedSourceMode,
+  task_family: z.string().trim().min(1).nullable().default(null),
+  family_scope: z.string().trim().min(1),
+  routing_reason: z.string().trim().min(1),
+  source: RecordSource,
+});
+export type ExecutionArtifactRoutingRecordV1 = z.infer<typeof ExecutionArtifactRoutingRecordV1Schema>;
+
 export const ControlProfileName = z.enum(["triage", "patch", "review", "resume"]);
 export type ControlProfileName = z.infer<typeof ControlProfileName>;
 

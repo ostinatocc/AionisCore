@@ -1,4 +1,5 @@
 import { buildExecutionMemoryIntrospectionLite } from "./execution-introspection.js";
+import { buildDelegationLearningSliceLite } from "./delegation-learning.js";
 import {
   ExperienceIntelligenceRequest,
   ExperienceIntelligenceResponseSchema,
@@ -243,6 +244,15 @@ export function buildExperienceIntelligenceResponse(args: {
   parsed: ExperienceIntelligenceInput;
   tools: ToolsSelectRouteContract;
   introspection: ExecutionMemoryIntrospectionResponse;
+  delegationLearning?: {
+    task_family: string | null;
+    matched_records: number;
+    truncated: boolean;
+    route_role_counts: Record<string, number>;
+    record_outcome_counts: Record<string, number>;
+    recommendation_count: number;
+    learning_recommendations: Array<Record<string, unknown>>;
+  };
 }): ExperienceIntelligenceResponse {
   const path = choosePathRecommendation({
     queryText: args.parsed.query_text,
@@ -279,6 +289,15 @@ export function buildExperienceIntelligenceResponse(args: {
       ? `Use ${args.tools.selection.selected} on ${path.file_path} as the next learned step.`
       : null,
   );
+  const delegationLearning = args.delegationLearning ?? {
+    task_family: null,
+    matched_records: 0,
+    truncated: false,
+    route_role_counts: {},
+    record_outcome_counts: {},
+    recommendation_count: 0,
+    learning_recommendations: [],
+  };
 
   return ExperienceIntelligenceResponseSchema.parse({
     summary_version: "experience_intelligence_v1",
@@ -310,6 +329,15 @@ export function buildExperienceIntelligenceResponse(args: {
       },
       combined_next_action: combinedNextAction,
     },
+    learning_summary: {
+      task_family: delegationLearning.task_family,
+      matched_records: delegationLearning.matched_records,
+      truncated: delegationLearning.truncated,
+      route_role_counts: delegationLearning.route_role_counts,
+      record_outcome_counts: delegationLearning.record_outcome_counts,
+      recommendation_count: delegationLearning.recommendation_count,
+    },
+    learning_recommendations: delegationLearning.learning_recommendations,
     rationale: {
       summary: [toolReason, pathReason, learningReason].filter(Boolean).join(" | "),
     },
@@ -365,10 +393,33 @@ export async function buildExperienceIntelligenceLite(args: {
       embedder: args.embedder,
     },
   );
+  const recommendedWorkflows = Array.isArray(introspection.recommended_workflows) ? introspection.recommended_workflows : [];
+  const candidateWorkflows = Array.isArray(introspection.candidate_workflows) ? introspection.candidate_workflows : [];
+  const trustedPatterns = Array.isArray(introspection.trusted_patterns) ? introspection.trusted_patterns : [];
+  const contestedPatterns = Array.isArray(introspection.contested_patterns) ? introspection.contested_patterns : [];
+  const context = asRecord(parsed.context);
+  const delegationLearning = await buildDelegationLearningSliceLite({
+    liteWriteStore: args.liteWriteStore,
+    body: parsed,
+    tenantId: parsed.tenant_id ?? args.defaultTenantId,
+    scope: parsed.scope ?? args.defaultScope,
+    defaultScope: args.defaultScope,
+    defaultTenantId: args.defaultTenantId,
+    defaultActorId: args.defaultActorId,
+    taskFamilies: [
+      ...recommendedWorkflows.map((entry) => asRecord(entry)?.task_family),
+      ...candidateWorkflows.map((entry) => asRecord(entry)?.task_family),
+      ...trustedPatterns.map((entry) => asRecord(entry)?.task_family),
+      ...contestedPatterns.map((entry) => asRecord(entry)?.task_family),
+      context?.task_kind,
+    ],
+    limitCandidates: [parsed.workflow_limit],
+  });
   return buildExperienceIntelligenceResponse({
     parsed,
     tools,
     introspection,
+    delegationLearning,
   });
 }
 

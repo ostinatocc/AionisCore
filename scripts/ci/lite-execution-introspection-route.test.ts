@@ -9,6 +9,7 @@ import { createRequestGuards } from "../../src/app/request-guards.ts";
 import { registerHostErrorHandler } from "../../src/host/http-host.ts";
 import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
 import {
+  DelegationRecordsWriteResponseSchema,
   ExecutionMemoryIntrospectionResponseSchema,
   MemoryAnchorV1Schema,
 } from "../../src/memory/schemas.ts";
@@ -702,6 +703,166 @@ test("execution introspection route exposes demo-friendly workflow and pattern s
     assert.equal(body.workflow_signal_summary.stable_workflow_count, 1);
     assert.equal(body.workflow_signal_summary.promotion_ready_workflow_count, 1);
     assert.equal(body.workflow_signal_summary.observing_workflow_count, 0);
+    assert.equal(body.execution_summary.summary_version, "execution_summary_v1");
+    assert.equal(body.execution_summary.planner_packet, null);
+    assert.deepEqual(body.execution_summary.pattern_signals, body.pattern_signals);
+    assert.deepEqual(body.execution_summary.workflow_signals, body.workflow_signals);
+    assert.equal(body.execution_summary.packet_assembly.packet_source_mode, null);
+    assert.equal(body.execution_summary.packet_assembly.state_first_assembly, null);
+    assert.equal(body.execution_summary.packet_assembly.execution_packet_v1_present, null);
+    assert.equal(body.execution_summary.packet_assembly.execution_state_v1_present, null);
+    assert.equal(body.execution_summary.strategy_summary.summary_version, "execution_strategy_summary_v1");
+    assert.equal(body.execution_summary.strategy_summary.trust_signal, body.execution_summary.routing_signal_summary.family_scope);
+    assert.equal(body.execution_summary.strategy_summary.task_family, body.execution_summary.routing_signal_summary.task_family);
+    assert.equal(body.execution_summary.strategy_summary.family_scope, body.execution_summary.routing_signal_summary.family_scope);
+    assert.equal(body.execution_summary.strategy_summary.strategy_profile, "rehydration_first");
+    assert.equal(body.execution_summary.strategy_summary.validation_style, "validate_before_expansion");
+    assert.ok(body.execution_summary.strategy_summary.family_candidate_count >= 1);
+    assert.ok(body.execution_summary.strategy_summary.selected_working_set.includes("workflow:Fix export failure"));
+    assert.ok(body.execution_summary.strategy_summary.selected_pattern_summaries.some((line) => line.includes("Prefer edit")));
+    assert.ok(body.execution_summary.strategy_summary.preferred_artifact_refs.length > 0);
+    assert.match(body.execution_summary.strategy_summary.explanation, /Selected because/);
+    assert.equal(body.execution_summary.collaboration_summary.summary_version, "execution_collaboration_summary_v1");
+    assert.equal(body.execution_summary.collaboration_summary.packet_present, false);
+    assert.equal(body.execution_summary.collaboration_summary.coordination_mode, "memory_only");
+    assert.equal(body.execution_summary.collaboration_summary.review_contract_present, false);
+    assert.equal(body.execution_summary.collaboration_summary.resume_anchor_present, false);
+    assert.equal(body.execution_summary.collaboration_summary.artifact_ref_count, 0);
+    assert.equal(body.execution_summary.collaboration_summary.evidence_ref_count, 0);
+    assert.equal(body.execution_summary.continuity_snapshot_summary.summary_version, "execution_continuity_snapshot_v1");
+    assert.equal(body.execution_summary.continuity_snapshot_summary.snapshot_mode, "memory_only");
+    assert.equal(body.execution_summary.continuity_snapshot_summary.coordination_mode, "memory_only");
+    assert.equal(body.execution_summary.continuity_snapshot_summary.trust_signal, body.execution_summary.strategy_summary.trust_signal);
+    assert.equal(body.execution_summary.continuity_snapshot_summary.strategy_profile, "rehydration_first");
+    assert.equal(body.execution_summary.continuity_snapshot_summary.validation_style, "validate_before_expansion");
+    assert.equal(body.execution_summary.continuity_snapshot_summary.selected_tool, body.execution_summary.routing_signal_summary.selected_tool);
+    assert.deepEqual(
+      body.execution_summary.continuity_snapshot_summary.selected_pattern_summaries,
+      body.execution_summary.strategy_summary.selected_pattern_summaries,
+    );
+    assert.ok(body.execution_summary.continuity_snapshot_summary.preferred_artifact_refs.length > 0);
+    assert.equal(body.execution_summary.routing_signal_summary.summary_version, "execution_routing_summary_v1");
+    assert.deepEqual(body.execution_summary.routing_signal_summary.stable_workflow_anchor_ids, body.action_packet_summary.workflow_anchor_ids);
+    assert.deepEqual(body.execution_summary.routing_signal_summary.candidate_workflow_anchor_ids, body.action_packet_summary.candidate_workflow_anchor_ids);
+    assert.deepEqual(body.execution_summary.routing_signal_summary.rehydration_anchor_ids, body.action_packet_summary.rehydration_anchor_ids);
+    assert.equal(body.execution_summary.maintenance_summary.summary_version, "execution_maintenance_summary_v1");
+    assert.equal(body.execution_summary.maintenance_summary.stable_workflow_count, body.workflow_signal_summary.stable_workflow_count);
+    assert.equal(
+      body.execution_summary.maintenance_summary.promotion_ready_workflow_count,
+      body.workflow_signal_summary.promotion_ready_workflow_count,
+    );
+    const suppressedPatternAnchorIds = body.trusted_patterns
+      .filter((entry) => entry.suppressed === true && typeof entry.anchor_id === "string")
+      .map((entry) => entry.anchor_id);
+    assert.equal(body.execution_summary.forgetting_summary.summary_version, "execution_forgetting_summary_v1");
+    assert.equal(body.execution_summary.forgetting_summary.substrate_mode, "suppression_present");
+    assert.equal(body.execution_summary.forgetting_summary.forgotten_items, 0);
+    assert.deepEqual(body.execution_summary.forgetting_summary.forgotten_by_reason, {});
+    assert.equal(body.execution_summary.forgetting_summary.primary_forgetting_reason, null);
+    assert.equal(body.execution_summary.forgetting_summary.suppressed_pattern_count, 1);
+    assert.deepEqual(
+      body.execution_summary.forgetting_summary.suppressed_pattern_anchor_ids,
+      suppressedPatternAnchorIds,
+    );
+    assert.deepEqual(body.execution_summary.forgetting_summary.suppressed_pattern_sources, ["trusted_patterns"]);
+    assert.deepEqual(body.execution_summary.forgetting_summary.selected_memory_layers, []);
+    assert.deepEqual(body.execution_summary.forgetting_summary.primary_savings_levers, []);
+    assert.equal(body.execution_summary.forgetting_summary.stale_signal_count, 1);
+    assert.equal(
+      body.execution_summary.forgetting_summary.recommended_action,
+      body.execution_summary.maintenance_summary.recommended_action,
+    );
+    assert.equal(
+      body.execution_summary.collaboration_routing_summary.summary_version,
+      "execution_collaboration_routing_v1",
+    );
+    assert.equal(body.execution_summary.collaboration_routing_summary.route_mode, "memory_only");
+    assert.equal(body.execution_summary.collaboration_routing_summary.coordination_mode, "memory_only");
+    assert.equal(body.execution_summary.collaboration_routing_summary.route_intent, "memory_guided");
+    assert.equal(body.execution_summary.collaboration_routing_summary.task_brief, null);
+    assert.equal(body.execution_summary.collaboration_routing_summary.current_stage, null);
+    assert.equal(body.execution_summary.collaboration_routing_summary.active_role, null);
+    assert.equal(
+      body.execution_summary.collaboration_routing_summary.selected_tool,
+      body.execution_summary.routing_signal_summary.selected_tool,
+    );
+    assert.equal(
+      body.execution_summary.collaboration_routing_summary.task_family,
+      body.execution_summary.routing_signal_summary.task_family,
+    );
+    assert.equal(
+      body.execution_summary.collaboration_routing_summary.family_scope,
+      body.execution_summary.routing_signal_summary.family_scope,
+    );
+    assert.deepEqual(body.execution_summary.collaboration_routing_summary.target_files, []);
+    assert.deepEqual(
+      body.execution_summary.collaboration_routing_summary.validation_paths,
+      body.execution_summary.strategy_summary.selected_validation_paths,
+    );
+    assert.deepEqual(body.execution_summary.collaboration_routing_summary.unresolved_blockers, []);
+    assert.deepEqual(body.execution_summary.collaboration_routing_summary.hard_constraints, []);
+    assert.equal(body.execution_summary.collaboration_routing_summary.review_standard, null);
+    assert.deepEqual(body.execution_summary.collaboration_routing_summary.required_outputs, []);
+    assert.deepEqual(body.execution_summary.collaboration_routing_summary.acceptance_checks, []);
+    assert.deepEqual(
+      body.execution_summary.collaboration_routing_summary.preferred_artifact_refs,
+      body.execution_summary.continuity_snapshot_summary.preferred_artifact_refs,
+    );
+    assert.deepEqual(
+      body.execution_summary.collaboration_routing_summary.preferred_evidence_refs,
+      body.execution_summary.continuity_snapshot_summary.preferred_evidence_refs,
+    );
+    for (const driver of [
+      `family_scope:${body.execution_summary.routing_signal_summary.family_scope}`,
+      "artifact_preference",
+      "stable_workflow_available",
+      "rehydration_candidate_available",
+    ]) {
+      assert.ok(body.execution_summary.collaboration_routing_summary.routing_drivers.includes(driver));
+    }
+    assert.equal(
+      body.execution_summary.delegation_records_summary.summary_version,
+      "execution_delegation_records_v1",
+    );
+    assert.equal(body.execution_summary.delegation_records_summary.record_mode, "memory_only");
+    assert.equal(body.execution_summary.delegation_records_summary.route_role, "orchestrator");
+    assert.equal(body.execution_summary.delegation_records_summary.packet_count, 1);
+    assert.equal(body.execution_summary.delegation_records_summary.return_count, 0);
+    assert.ok(body.execution_summary.delegation_records_summary.missing_record_types.includes("delegation_returns"));
+    const packetRecord = body.execution_summary.delegation_records_summary.delegation_packets[0];
+    assert.equal(packetRecord.role, "orchestrator");
+    assert.ok(packetRecord.mission.length > 0);
+    assert.deepEqual(packetRecord.preferred_artifact_refs, body.execution_summary.collaboration_routing_summary.preferred_artifact_refs);
+    assert.deepEqual(packetRecord.inherited_evidence, []);
+    assert.equal(packetRecord.task_family, body.execution_summary.collaboration_routing_summary.task_family);
+    assert.equal(packetRecord.family_scope, body.execution_summary.collaboration_routing_summary.family_scope);
+    assert.equal(packetRecord.source_mode, "memory_only");
+    assert.equal(
+      body.execution_summary.delegation_records_summary.artifact_routing_count,
+      body.execution_summary.collaboration_routing_summary.preferred_artifact_refs.length,
+    );
+    assert.ok(
+      body.execution_summary.delegation_records_summary.artifact_routing_records.every(
+        (record) =>
+          record.ref_kind === "artifact"
+          && record.route_role === "orchestrator"
+          && record.route_intent === "memory_guided"
+          && record.route_mode === "memory_only"
+          && record.source === "strategy_summary",
+      ),
+    );
+    assert.equal(body.execution_summary.instrumentation_summary.summary_version, "execution_instrumentation_summary_v1");
+    assert.equal(
+      body.execution_summary.instrumentation_summary.rehydration_candidate_count,
+      body.action_packet_summary.rehydration_candidate_count,
+    );
+    assert.deepEqual(body.execution_summary.action_packet_summary, body.action_packet_summary);
+    assert.deepEqual(body.execution_summary.pattern_signal_summary, body.pattern_signal_summary);
+    assert.deepEqual(body.execution_summary.workflow_signal_summary, body.workflow_signal_summary);
+    assert.deepEqual(body.execution_summary.workflow_lifecycle_summary, body.workflow_lifecycle_summary);
+    assert.deepEqual(body.execution_summary.workflow_maintenance_summary, body.workflow_maintenance_summary);
+    assert.deepEqual(body.execution_summary.pattern_lifecycle_summary, body.pattern_lifecycle_summary);
+    assert.deepEqual(body.execution_summary.pattern_maintenance_summary, body.pattern_maintenance_summary);
     assert.equal(body.pattern_signal_summary.trusted_pattern_count, 1);
     assert.equal(body.pattern_signal_summary.contested_pattern_count, 1);
     assert.equal(body.pattern_signal_summary.candidate_pattern_count, 0);
@@ -735,6 +896,147 @@ test("execution introspection route exposes demo-friendly workflow and pattern s
     assert.ok(body.demo_surface.sections.maintenance.some((line) => line.includes("workflow maintenance:")));
     assert.ok(body.demo_surface.sections.maintenance.some((line) => line.includes("pattern maintenance:")));
     assert.match(body.demo_surface.merged_text, /# Execution Memory Demo/);
+  } finally {
+    await app.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("execution introspection prefers recent persisted delegation records over derived defaults", async () => {
+  const dbPath = tmpDbPath("execution-introspect-delegation-records");
+  const app = Fastify();
+  const { liteWriteStore } = await seedExecutionIntrospectionFixture(dbPath);
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryAccessRoutes({
+      app,
+      env: {
+        AIONIS_EDITION: "lite",
+        APP_ENV: "test",
+        MEMORY_SCOPE: "default",
+        MEMORY_TENANT_ID: "default",
+        LITE_LOCAL_ACTOR_ID: "local-user",
+        MAX_TEXT_LEN: 10_000,
+        PII_REDACTION: false,
+        ALLOW_CROSS_SCOPE_EDGES: false,
+        MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+        MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+      } as any,
+      embedder: null,
+      liteWriteStore,
+      writeAccessShadowMirrorV2: false,
+      requireStoreFeatureCapability: () => {},
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const writeResponse = await app.inject({
+      method: "POST",
+      url: "/v1/memory/delegation/records",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        actor: "review-worker",
+        route_role: "review",
+        delegation_records_v1: {
+          summary_version: "execution_delegation_records_v1",
+          record_mode: "packet_backed",
+          route_role: "review",
+          packet_count: 1,
+          return_count: 1,
+          artifact_routing_count: 2,
+          missing_record_types: [],
+          delegation_packets: [
+            {
+              version: 1,
+              role: "review",
+              mission: "Review the export fix and verify the final test run.",
+              working_set: ["src/routes/export.ts"],
+              acceptance_checks: ["npm run -s test:lite -- export"],
+              output_contract: "Return the review disposition with attached evidence.",
+              preferred_artifact_refs: ["artifact://patch/export.diff"],
+              inherited_evidence: ["evidence://tests/export.log"],
+              routing_reason: "Recent persisted review packet for execution introspection.",
+              task_family: "task:repair_export",
+              family_scope: "default",
+              source_mode: "packet_backed",
+            },
+          ],
+          delegation_returns: [
+            {
+              version: 1,
+              role: "review",
+              status: "completed",
+              summary: "Review completed with export validations passing.",
+              evidence: ["evidence://tests/export.log"],
+              working_set: ["src/routes/export.ts"],
+              acceptance_checks: ["npm run -s test:lite -- export"],
+              source_mode: "packet_backed",
+            },
+          ],
+          artifact_routing_records: [
+            {
+              version: 1,
+              ref: "artifact://patch/export.diff",
+              ref_kind: "artifact",
+              route_role: "review",
+              route_intent: "review",
+              route_mode: "packet_backed",
+              task_family: "task:repair_export",
+              family_scope: "default",
+              routing_reason: "Recent patch artifact for reviewer context.",
+              source: "execution_packet",
+            },
+            {
+              version: 1,
+              ref: "evidence://tests/export.log",
+              ref_kind: "evidence",
+              route_role: "review",
+              route_intent: "review",
+              route_mode: "packet_backed",
+              task_family: "task:repair_export",
+              family_scope: "default",
+              routing_reason: "Recent test evidence for reviewer context.",
+              source: "execution_packet",
+            },
+          ],
+        },
+      },
+    });
+    assert.equal(writeResponse.statusCode, 200);
+    const writeBody = DelegationRecordsWriteResponseSchema.parse(writeResponse.json());
+    assert.equal(writeBody.delegation_records_v1.return_count, 1);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/execution/introspect",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        limit: 8,
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = ExecutionMemoryIntrospectionResponseSchema.parse(response.json());
+    assert.equal(body.execution_summary.delegation_records_summary.record_mode, "packet_backed");
+    assert.equal(body.execution_summary.delegation_records_summary.route_role, "review");
+    assert.equal(body.execution_summary.delegation_records_summary.packet_count, 1);
+    assert.equal(body.execution_summary.delegation_records_summary.return_count, 1);
+    assert.deepEqual(body.execution_summary.delegation_records_summary.missing_record_types, []);
+    assert.equal(
+      body.execution_summary.delegation_records_summary.delegation_returns[0]?.summary,
+      "Review completed with export validations passing.",
+    );
+    assert.deepEqual(
+      body.execution_summary.delegation_records_summary.artifact_routing_records.map((record) => record.ref),
+      ["artifact://patch/export.diff", "evidence://tests/export.log"],
+    );
   } finally {
     await app.close();
     await liteWriteStore.close();
@@ -788,6 +1090,12 @@ test("execution introspection demo workflow lines keep source and tools for exec
     const body = ExecutionMemoryIntrospectionResponseSchema.parse(response.json());
     assert.equal(body.recommended_workflows.length, 1);
     assert.equal(body.inventory.continuity_auto_promoted_workflow_count, 1);
+    assert.equal(body.execution_summary.summary_version, "execution_summary_v1");
+    assert.equal(body.execution_summary.strategy_summary.summary_version, "execution_strategy_summary_v1");
+    assert.equal(body.execution_summary.collaboration_summary.summary_version, "execution_collaboration_summary_v1");
+    assert.equal(body.execution_summary.continuity_snapshot_summary.summary_version, "execution_continuity_snapshot_v1");
+    assert.equal(body.execution_summary.routing_signal_summary.summary_version, "execution_routing_summary_v1");
+    assert.deepEqual(body.execution_summary.action_packet_summary, body.action_packet_summary);
     assert.ok(body.demo_surface.sections.workflows.some((line) => line.includes("source=playbook")));
     assert.ok(body.demo_surface.sections.workflows.some((line) => line.includes("tools=edit, test")));
     assert.ok(body.demo_surface.sections.workflows.some((line) => line.includes("projection=execution_write_projection_v1")));

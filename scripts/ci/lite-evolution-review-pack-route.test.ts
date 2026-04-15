@@ -292,6 +292,129 @@ test("memory evolution review-pack route exposes stable workflow and reviewer-fr
     registerApp({ app, liteWriteStore, liteRecallStore });
     await seedEvolutionFixture(dbPath);
 
+    for (const payload of [
+      {
+        tenant_id: "default",
+        scope: "default",
+        run_id: "run:evolution-repair-001",
+        route_role: "patch",
+        task_family: "task:repair_export",
+        delegation_records_v1: {
+          summary_version: "execution_delegation_records_v1",
+          record_mode: "packet_backed",
+          route_role: "patch",
+          packet_count: 1,
+          return_count: 1,
+          artifact_routing_count: 2,
+          missing_record_types: [],
+          delegation_packets: [{
+            version: 1,
+            role: "patch",
+            mission: "Apply the export repair patch and rerun node tests.",
+            working_set: ["src/routes/export.ts"],
+            acceptance_checks: ["npm run -s test:lite -- export"],
+            output_contract: "Return patch result and final node test status.",
+            preferred_artifact_refs: ["artifact://repair-export/patch"],
+            inherited_evidence: ["evidence://repair-export/failure"],
+            routing_reason: "repair patch route",
+            task_family: "task:repair_export",
+            family_scope: "aionis://runtime/repair-export",
+            source_mode: "packet_backed",
+          }],
+          delegation_returns: [{
+            version: 1,
+            role: "patch",
+            status: "passed",
+            summary: "Patch applied and export tests passed.",
+            evidence: ["evidence://repair-export/test"],
+            working_set: ["src/routes/export.ts"],
+            acceptance_checks: ["npm run -s test:lite -- export"],
+            source_mode: "packet_backed",
+          }],
+          artifact_routing_records: [{
+            version: 1,
+            ref: "artifact://repair-export/patch",
+            ref_kind: "artifact",
+            route_role: "patch",
+            route_intent: "patch",
+            route_mode: "packet_backed",
+            task_family: "task:repair_export",
+            family_scope: "aionis://runtime/repair-export",
+            routing_reason: "patch artifact route",
+            source: "execution_packet",
+          }, {
+            version: 1,
+            ref: "evidence://repair-export/test",
+            ref_kind: "evidence",
+            route_role: "patch",
+            route_intent: "patch",
+            route_mode: "packet_backed",
+            task_family: "task:repair_export",
+            family_scope: "aionis://runtime/repair-export",
+            routing_reason: "patch evidence route",
+            source: "execution_packet",
+          }],
+        },
+        execution_result_summary: {
+          status: "passed",
+          summary: "Patch applied and export tests passed.",
+        },
+        execution_artifacts: [{ ref: "artifact://repair-export/patch" }],
+        execution_evidence: [{ ref: "evidence://repair-export/test" }],
+      },
+      {
+        tenant_id: "default",
+        scope: "default",
+        memory_lane: "private",
+        run_id: "run:evolution-repair-002",
+        route_role: "patch",
+        task_family: "task:repair_export",
+        delegation_records_v1: {
+          summary_version: "execution_delegation_records_v1",
+          record_mode: "memory_only",
+          route_role: "patch",
+          packet_count: 1,
+          return_count: 0,
+          artifact_routing_count: 1,
+          missing_record_types: ["delegation_returns"],
+          delegation_packets: [{
+            version: 1,
+            role: "patch",
+            mission: "Apply the export fallback patch before retrying tests.",
+            working_set: ["src/routes/export.ts"],
+            acceptance_checks: ["npm run -s test:lite -- export"],
+            output_contract: "Return applied patch metadata.",
+            preferred_artifact_refs: ["artifact://repair-export/fallback-patch"],
+            inherited_evidence: [],
+            routing_reason: "fallback memory patch route",
+            task_family: "task:repair_export",
+            family_scope: "aionis://runtime/repair-export",
+            source_mode: "memory_only",
+          }],
+          delegation_returns: [],
+          artifact_routing_records: [{
+            version: 1,
+            ref: "artifact://repair-export/fallback-patch",
+            ref_kind: "artifact",
+            route_role: "patch",
+            route_intent: "memory_guided",
+            route_mode: "memory_only",
+            task_family: "task:repair_export",
+            family_scope: "aionis://runtime/repair-export",
+            routing_reason: "memory-guided patch route",
+            source: "strategy_summary",
+          }],
+        },
+      },
+    ]) {
+      const writeResponse = await app.inject({
+        method: "POST",
+        url: "/v1/memory/delegation/records",
+        payload,
+      });
+      assert.equal(writeResponse.statusCode, 200, writeResponse.body);
+    }
+
     const response = await app.inject({
       method: "POST",
       url: "/v1/memory/evolution/review-pack",
@@ -312,6 +435,31 @@ test("memory evolution review-pack route exposes stable workflow and reviewer-fr
     assert.equal(parsed.evolution_review_pack.review_contract.file_path, "src/routes/export.ts");
     assert.ok(parsed.evolution_review_pack.stable_workflow);
     assert.ok(parsed.evolution_review_pack.review_contract.trusted_pattern_anchor_ids.length >= 1);
+    assert.deepEqual(parsed.evolution_review_pack.learning_summary, {
+      task_family: "task:repair_export",
+      matched_records: 2,
+      truncated: false,
+      route_role_counts: {
+        patch: 2,
+      },
+      record_outcome_counts: {
+        completed: 1,
+        missing_return: 1,
+      },
+      recommendation_count: 3,
+    });
+    assert.deepEqual(
+      parsed.evolution_review_pack.learning_recommendations.map((entry) => entry.recommendation_kind),
+      ["capture_missing_returns", "increase_artifact_capture", "promote_reusable_pattern"],
+    );
+    assert.equal(
+      parsed.evolution_review_pack.learning_recommendations[0]?.recommended_action,
+      "Capture delegation returns consistently for patch / task:repair_export.",
+    );
+    assert.equal(
+      parsed.evolution_review_pack.learning_recommendations[2]?.sample_mission,
+      "Apply the export repair patch and rerun node tests.",
+    );
   } finally {
     await app.close();
   }

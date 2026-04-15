@@ -5,6 +5,7 @@ import { applyContextOptimizationProfile } from "../app/context-optimization-pro
 import {
   buildAssemblySummary,
   buildExecutionMemorySummaryBundle,
+  buildExecutionSummarySurface,
   buildKickoffRecommendation,
   buildPlanningSummary,
   summarizeActionRecallPacketSurface,
@@ -18,6 +19,11 @@ import {
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { buildLayeredContextCostSignals } from "../memory/cost-signals.js";
+import {
+  buildDelegationRecordLookup,
+  findDelegationRecordNodeRowsLite,
+} from "../memory/delegation-records-surface.js";
+import { buildDelegationLearningSliceLite } from "../memory/delegation-learning.js";
 import { buildExperienceIntelligenceResponse } from "../memory/experience-intelligence.js";
 import { memoryRecallParsed, type RecallAuth } from "../memory/recall.js";
 import {
@@ -41,7 +47,7 @@ import { estimateTokenCountFromText } from "../memory/context.js";
 import { assembleLayeredContext, extractPlannerPacketSurface } from "../memory/context-orchestrator.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
-import type { LiteWriteStore } from "../store/lite-write-store.js";
+import type { LiteFindNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
 import { HttpError } from "../util/http.js";
 import { normalizeText } from "../util/normalize.js";
 import { redactPII } from "../util/redaction.js";
@@ -146,7 +152,8 @@ type ContextAssembleRouteOutput = {
 };
 type ContextRuntimeLiteStoreLike =
   NonNullable<NonNullable<Parameters<typeof evaluateRules>[4]>["liteWriteStore"]>
-  & NonNullable<NonNullable<Parameters<typeof selectTools>[4]>["liteWriteStore"]>;
+  & NonNullable<NonNullable<Parameters<typeof selectTools>[4]>["liteWriteStore"]>
+  & Pick<LiteWriteStore, "findNodes">;
 type MemoryRecallRuntimeOptions = NonNullable<Parameters<typeof memoryRecallParsed>[7]>;
 type RecallEmbedResult = Awaited<
   ReturnType<
@@ -391,11 +398,62 @@ function buildExecutionKernelResponse(
   };
 }
 
-function buildPlannerPacketResponseSurface(plannerSurface: ReturnType<typeof extractPlannerPacketSurface>) {
+async function loadPersistedDelegationRecordsForContext(args: {
+  liteWriteStore: ContextRuntimeLiteStoreLike;
+  scope: string;
+  runId?: string | null;
+  executionPacket?: ExecutionPacketV1 | null;
+  executionState?: ExecutionStateV1 | null;
+  consumerAgentId?: string | null;
+  consumerTeamId?: string | null;
+}): Promise<LiteFindNodeRow[]> {
+  const lookup = buildDelegationRecordLookup({
+    run_id: args.runId,
+    execution_packet: args.executionPacket,
+    execution_state: args.executionState,
+  });
+  return findDelegationRecordNodeRowsLite({
+    liteWriteStore: args.liteWriteStore,
+    scope: args.scope,
+    consumerAgentId: args.consumerAgentId ?? null,
+    consumerTeamId: args.consumerTeamId ?? null,
+    lookup,
+    limit: 4,
+  });
+}
+
+function buildPlannerPacketResponseSurface(
+  plannerSurface: ReturnType<typeof extractPlannerPacketSurface>,
+  packetAssembly?: {
+    packet_source_mode: string | null;
+    state_first_assembly: boolean | null;
+    execution_packet_v1_present: boolean | null;
+    execution_state_v1_present: boolean | null;
+  },
+  extras?: {
+    tools?: unknown;
+    cost_signals?: unknown;
+    execution_packet?: unknown;
+    execution_artifacts?: unknown;
+    execution_evidence?: unknown;
+    delegation_records?: unknown;
+  },
+) {
   return {
     planner_packet: plannerSurface.planner_packet,
     pattern_signals: plannerSurface.pattern_signals,
     workflow_signals: plannerSurface.workflow_signals,
+    execution_summary: buildExecutionSummarySurface({
+      planner_packet: plannerSurface.planner_packet,
+      surface: plannerSurface,
+      packet_assembly: packetAssembly ?? null,
+      tools: extras?.tools,
+      cost_signals: extras?.cost_signals,
+      execution_packet: extras?.execution_packet,
+      execution_artifacts: extras?.execution_artifacts,
+      execution_evidence: extras?.execution_evidence,
+      delegation_records: extras?.delegation_records,
+    }),
   };
 }
 
@@ -986,11 +1044,64 @@ export function registerMemoryContextRuntimeRoutes(args: {
       env.MEMORY_TENANT_ID,
       env.LITE_LOCAL_ACTOR_ID,
     );
+    const recommendedWorkflows = Array.isArray(introspection.recommended_workflows) ? introspection.recommended_workflows : [];
+    const candidateWorkflows = Array.isArray(introspection.candidate_workflows) ? introspection.candidate_workflows : [];
+    const trustedPatterns = Array.isArray(introspection.trusted_patterns) ? introspection.trusted_patterns : [];
+    const contestedPatterns = Array.isArray(introspection.contested_patterns) ? introspection.contested_patterns : [];
+    const context =
+      args.parsed.context && typeof args.parsed.context === "object" && !Array.isArray(args.parsed.context)
+        ? (args.parsed.context as Record<string, unknown>)
+        : {};
+    const delegationLearning = await buildDelegationLearningSliceLite({
+      liteWriteStore,
+      body: request,
+      tenantId: request.tenant_id ?? env.MEMORY_TENANT_ID,
+      scope: request.scope ?? env.MEMORY_SCOPE,
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+      defaultActorId: env.LITE_LOCAL_ACTOR_ID,
+      taskFamilies: [
+        ...recommendedWorkflows.map((entry) => (entry && typeof entry === "object" && !Array.isArray(entry) ? (entry as Record<string, unknown>).task_family : null)),
+        ...candidateWorkflows.map((entry) => (entry && typeof entry === "object" && !Array.isArray(entry) ? (entry as Record<string, unknown>).task_family : null)),
+        ...trustedPatterns.map((entry) => (entry && typeof entry === "object" && !Array.isArray(entry) ? (entry as Record<string, unknown>).task_family : null)),
+        ...contestedPatterns.map((entry) => (entry && typeof entry === "object" && !Array.isArray(entry) ? (entry as Record<string, unknown>).task_family : null)),
+        context.task_kind,
+      ],
+      limitCandidates: [request.workflow_limit],
+    });
     return buildExperienceIntelligenceResponse({
       parsed: request,
       tools: args.tools,
       introspection,
+      delegationLearning,
     });
+  };
+  const projectDelegationLearningToLayeredContext = (args: {
+    layeredContext: unknown;
+    experienceIntelligence: ExperienceIntelligenceResponse | null;
+  }) => {
+    if (!args.layeredContext || typeof args.layeredContext !== "object" || Array.isArray(args.layeredContext)) return;
+    if (!args.experienceIntelligence) return;
+    const layered = args.layeredContext as Record<string, unknown>;
+    layered.delegation_learning = {
+      summary_version: "delegation_learning_projection_v1",
+      learning_summary: args.experienceIntelligence.learning_summary,
+      learning_recommendations: args.experienceIntelligence.learning_recommendations,
+    };
+  };
+  const buildContextOperatorProjection = (args: {
+    layeredContext: unknown;
+    experienceIntelligence: ExperienceIntelligenceResponse | null;
+  }) => {
+    if (!args.layeredContext || typeof args.layeredContext !== "object" || Array.isArray(args.layeredContext)) return undefined;
+    if (!args.experienceIntelligence) return undefined;
+    return {
+      delegation_learning: {
+        summary_version: "delegation_learning_projection_v1",
+        learning_summary: args.experienceIntelligence.learning_summary,
+        learning_recommendations: args.experienceIntelligence.learning_recommendations,
+      },
+    };
   };
   const buildRecallRouteDiagnostics = (args: {
     recallParsed: ParsedMemoryRecall;
@@ -1548,7 +1659,24 @@ export function registerMemoryContextRuntimeRoutes(args: {
       contextEstTokens,
       optimizationProfile: planningOptimization.optimization_profile,
     });
+    projectDelegationLearningToLayeredContext({
+      layeredContext,
+      experienceIntelligence,
+    });
+    const operatorProjection = buildContextOperatorProjection({
+      layeredContext,
+      experienceIntelligence,
+    });
     const plannerSurface = extractPlannerPacketSurface({ layeredContext, recall: recallOut });
+    const persistedDelegationRecords = await loadPersistedDelegationRecordsForContext({
+      liteWriteStore,
+      scope: recallOut.scope,
+      runId: parsed.run_id ?? null,
+      executionPacket: executionKernel.packet,
+      executionState: parsed.execution_state_v1 ?? null,
+      consumerAgentId: parsed.consumer_agent_id ?? env.LITE_LOCAL_ACTOR_ID,
+      consumerTeamId: parsed.consumer_team_id ?? null,
+    });
     const planningSummary = buildPlanningSummary({
       rules: out.rules,
       tools: out.tools,
@@ -1586,9 +1714,22 @@ export function registerMemoryContextRuntimeRoutes(args: {
       rules: out.rules,
       tools: out.tools ?? undefined,
       runtime_tool_hints: Array.isArray(recallOut.runtime_tool_hints) ? recallOut.runtime_tool_hints : [],
-      ...buildPlannerPacketResponseSurface(plannerSurface),
+      ...buildPlannerPacketResponseSurface(plannerSurface, {
+        packet_source_mode: executionKernel.source_mode,
+        state_first_assembly: executionKernel.source_mode === "state_first",
+        execution_packet_v1_present: !!parsed.execution_packet_v1,
+        execution_state_v1_present: !!parsed.execution_state_v1,
+      }, {
+        tools: out.tools,
+        cost_signals: costSignals,
+        execution_packet: executionKernel.packet,
+        execution_artifacts: parsed.execution_artifacts,
+        execution_evidence: parsed.execution_evidence,
+        delegation_records: persistedDelegationRecords,
+      }),
       planning_summary: planningSummary,
       kickoff_recommendation: buildKickoffRecommendation(planningSummary.first_step_recommendation),
+      operator_projection: operatorProjection,
       layered_context: layeredContext,
       cost_signals: costSignals,
     });
@@ -1748,7 +1889,24 @@ export function registerMemoryContextRuntimeRoutes(args: {
       contextEstTokens,
       optimizationProfile: assembleOptimization.optimization_profile,
     });
+    projectDelegationLearningToLayeredContext({
+      layeredContext,
+      experienceIntelligence,
+    });
+    const operatorProjection = buildContextOperatorProjection({
+      layeredContext,
+      experienceIntelligence,
+    });
     const plannerSurface = extractPlannerPacketSurface({ layeredContext, recall: recallOut });
+    const persistedDelegationRecords = await loadPersistedDelegationRecordsForContext({
+      liteWriteStore,
+      scope: recallOut.scope,
+      runId: parsed.run_id ?? null,
+      executionPacket: executionKernel.packet,
+      executionState: parsed.execution_state_v1 ?? null,
+      consumerAgentId: parsed.consumer_agent_id ?? env.LITE_LOCAL_ACTOR_ID,
+      consumerTeamId: parsed.consumer_team_id ?? null,
+    });
     const assemblySummary = buildAssemblySummary({
       rules: out.rules,
       tools: out.tools,
@@ -1838,9 +1996,22 @@ export function registerMemoryContextRuntimeRoutes(args: {
       rules: out.rules ?? undefined,
       tools: out.tools ?? undefined,
       runtime_tool_hints: Array.isArray(recallOut.runtime_tool_hints) ? recallOut.runtime_tool_hints : [],
-      ...buildPlannerPacketResponseSurface(plannerSurface),
+      ...buildPlannerPacketResponseSurface(plannerSurface, {
+        packet_source_mode: executionKernel.source_mode,
+        state_first_assembly: executionKernel.source_mode === "state_first",
+        execution_packet_v1_present: !!parsed.execution_packet_v1,
+        execution_state_v1_present: !!parsed.execution_state_v1,
+      }, {
+        tools: out.tools,
+        cost_signals: costSignals,
+        execution_packet: executionKernel.packet,
+        execution_artifacts: parsed.execution_artifacts,
+        execution_evidence: parsed.execution_evidence,
+        delegation_records: persistedDelegationRecords,
+      }),
       assembly_summary: assemblySummary,
       kickoff_recommendation: buildKickoffRecommendation(assemblySummary.first_step_recommendation),
+      operator_projection: operatorProjection,
       layered_context: layeredContext,
       cost_signals: costSignals,
     });

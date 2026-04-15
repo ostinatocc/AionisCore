@@ -8,9 +8,11 @@ import Fastify from "fastify";
 import { FakeEmbeddingProvider } from "../../src/embeddings/fake.ts";
 import { createRequestGuards } from "../../src/app/request-guards.ts";
 import { registerHostErrorHandler } from "../../src/host/http-host.ts";
+import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
 import { registerMemoryContextRuntimeRoutes } from "../../src/routes/memory-context-runtime.ts";
 import {
   ContextAssembleRouteContractSchema,
+  DelegationRecordsWriteResponseSchema,
   MemoryAnchorV1Schema,
   PlanningContextRouteContractSchema,
 } from "../../src/memory/schemas.ts";
@@ -84,6 +86,19 @@ function assertActionPacketSummaryMatchesPacket(summary: {
 function assertExecutionKernelBundle(body: {
   layered_context: Record<string, unknown>;
   execution_kernel: {
+    packet_source_mode: string;
+    state_first_assembly: boolean;
+    execution_packet_v1_present: boolean;
+    execution_state_v1_present: boolean;
+    action_packet_summary: unknown;
+    pattern_signal_summary: unknown;
+    workflow_signal_summary: unknown;
+    workflow_lifecycle_summary: unknown;
+    workflow_maintenance_summary: unknown;
+    pattern_lifecycle_summary: unknown;
+    pattern_maintenance_summary: unknown;
+  };
+  execution_summary: {
     action_packet_summary: unknown;
     pattern_signal_summary: unknown;
     workflow_signal_summary: unknown;
@@ -113,12 +128,24 @@ function assertExecutionKernelBundle(body: {
   assert.deepEqual(body.execution_kernel.workflow_maintenance_summary, expected.workflow_maintenance_summary);
   assert.deepEqual(body.execution_kernel.pattern_lifecycle_summary, expected.pattern_lifecycle_summary);
   assert.deepEqual(body.execution_kernel.pattern_maintenance_summary, expected.pattern_maintenance_summary);
+  assert.deepEqual(body.execution_summary.action_packet_summary, expected.action_packet_summary);
+  assert.deepEqual(body.execution_summary.pattern_signal_summary, expected.pattern_signal_summary);
+  assert.deepEqual(body.execution_summary.workflow_signal_summary, expected.workflow_signal_summary);
+  assert.deepEqual(body.execution_summary.workflow_lifecycle_summary, expected.workflow_lifecycle_summary);
+  assert.deepEqual(body.execution_summary.workflow_maintenance_summary, expected.workflow_maintenance_summary);
+  assert.deepEqual(body.execution_summary.pattern_lifecycle_summary, expected.pattern_lifecycle_summary);
+  assert.deepEqual(body.execution_summary.pattern_maintenance_summary, expected.pattern_maintenance_summary);
 }
 
 function assertKernelMatchesRouteSurface(body: {
+  planner_packet: unknown;
   pattern_signals: unknown[];
   workflow_signals: unknown[];
   execution_kernel: {
+    packet_source_mode: string;
+    state_first_assembly: boolean;
+    execution_packet_v1_present: boolean;
+    execution_state_v1_present: boolean;
     action_packet_summary: unknown;
     pattern_signal_summary: unknown;
     workflow_signal_summary: unknown;
@@ -126,6 +153,192 @@ function assertKernelMatchesRouteSurface(body: {
     workflow_maintenance_summary: unknown;
     pattern_lifecycle_summary: unknown;
     pattern_maintenance_summary: unknown;
+  };
+  execution_summary: {
+    planner_packet: unknown;
+    pattern_signals: unknown[];
+    workflow_signals: unknown[];
+    packet_assembly: {
+      packet_source_mode: string | null;
+      state_first_assembly: boolean | null;
+      execution_packet_v1_present: boolean | null;
+      execution_state_v1_present: boolean | null;
+    };
+    strategy_summary: {
+      summary_version: string;
+      trust_signal: string;
+      strategy_profile: string;
+      validation_style: string;
+      task_family: string | null;
+      family_scope: string;
+      family_candidate_count: number;
+      selected_working_set: string[];
+      selected_validation_paths: string[];
+      selected_pattern_summaries: string[];
+      preferred_artifact_refs: string[];
+      explanation: string;
+    };
+    collaboration_summary: {
+      summary_version: string;
+      packet_present: boolean;
+      coordination_mode: string;
+      current_stage: string | null;
+      active_role: string | null;
+      next_action: string | null;
+      target_file_count: number;
+      pending_validation_count: number;
+      unresolved_blocker_count: number;
+      review_contract_present: boolean;
+      review_standard: string | null;
+      acceptance_check_count: number;
+      rollback_required: boolean;
+      resume_anchor_present: boolean;
+      resume_anchor_file_path: string | null;
+      resume_anchor_symbol: string | null;
+      artifact_ref_count: number;
+      evidence_ref_count: number;
+      side_output_artifact_count: number;
+      side_output_evidence_count: number;
+      artifact_refs: string[];
+      evidence_refs: string[];
+    };
+    continuity_snapshot_summary: {
+      summary_version: string;
+      snapshot_mode: string;
+      coordination_mode: string;
+      trust_signal: string;
+      strategy_profile: string;
+      validation_style: string;
+      task_family: string | null;
+      family_scope: string;
+      selected_tool: string | null;
+      current_stage: string | null;
+      active_role: string | null;
+      next_action: string | null;
+      working_set: string[];
+      validation_paths: string[];
+      selected_pattern_summaries: string[];
+      preferred_artifact_refs: string[];
+      preferred_evidence_refs: string[];
+      reviewer_ready: boolean;
+      resume_anchor_file_path: string | null;
+      selected_memory_layers: string[];
+      recommended_action: string;
+    };
+    forgetting_summary: {
+      summary_version: string;
+      substrate_mode: string;
+      forgotten_items: number;
+      forgotten_by_reason: Record<string, number>;
+      primary_forgetting_reason: string | null;
+      suppressed_pattern_count: number;
+      suppressed_pattern_anchor_ids: string[];
+      suppressed_pattern_sources: string[];
+      selected_memory_layers: string[];
+      primary_savings_levers: string[];
+      stale_signal_count: number;
+      recommended_action: string;
+    };
+    collaboration_routing_summary: {
+      summary_version: string;
+      route_mode: string;
+      coordination_mode: string;
+      route_intent: string;
+      task_brief: string | null;
+      current_stage: string | null;
+      active_role: string | null;
+      selected_tool: string | null;
+      task_family: string | null;
+      family_scope: string;
+      next_action: string | null;
+      target_files: string[];
+      validation_paths: string[];
+      unresolved_blockers: string[];
+      hard_constraints: string[];
+      review_standard: string | null;
+      required_outputs: string[];
+      acceptance_checks: string[];
+      preferred_artifact_refs: string[];
+      preferred_evidence_refs: string[];
+      routing_drivers: string[];
+    };
+    delegation_records_summary: {
+      summary_version: string;
+      record_mode: string;
+      route_role: string;
+      packet_count: number;
+      return_count: number;
+      artifact_routing_count: number;
+      missing_record_types: string[];
+      delegation_packets: Array<{
+        version: number;
+        role: string;
+        mission: string;
+        working_set: string[];
+        acceptance_checks: string[];
+        output_contract: string;
+        preferred_artifact_refs: string[];
+        inherited_evidence: string[];
+        routing_reason: string;
+        task_family: string | null;
+        family_scope: string;
+        source_mode: string;
+      }>;
+      delegation_returns: Array<{
+        version: number;
+        role: string;
+        status: string;
+        summary: string;
+        evidence: string[];
+        working_set: string[];
+        acceptance_checks: string[];
+        source_mode: string;
+      }>;
+      artifact_routing_records: Array<{
+        version: number;
+        ref: string;
+        ref_kind: string;
+        route_role: string;
+        route_intent: string;
+        route_mode: string;
+        task_family: string | null;
+        family_scope: string;
+        routing_reason: string;
+        source: string;
+      }>;
+    };
+    action_packet_summary: unknown;
+    pattern_signal_summary: unknown;
+    workflow_signal_summary: unknown;
+    workflow_lifecycle_summary: unknown;
+    workflow_maintenance_summary: unknown;
+    pattern_lifecycle_summary: unknown;
+    pattern_maintenance_summary: unknown;
+    routing_signal_summary: {
+      stable_workflow_anchor_ids: string[];
+      candidate_workflow_anchor_ids: string[];
+      rehydration_anchor_ids: string[];
+      selected_tool: string | null;
+    };
+    maintenance_summary: {
+      forgotten_items: number;
+      suppressed_pattern_count: number;
+      selected_memory_layers: string[];
+      primary_savings_levers: string[];
+      recommended_action: string;
+    };
+    instrumentation_summary: {
+      rehydration_candidate_count: number;
+    };
+  };
+  cost_signals?: {
+    forgotten_items: number;
+    selected_memory_layers: string[];
+  };
+  tools?: {
+    selection?: {
+      selected?: string | null;
+    };
   };
   planning_summary?: {
     action_packet_summary: unknown;
@@ -154,6 +367,292 @@ function assertKernelMatchesRouteSurface(body: {
 }) {
   const routeSummary = body.planning_summary ?? body.assembly_summary;
   assert.ok(routeSummary, "route summary should exist");
+  assert.deepEqual(body.execution_summary.planner_packet, body.planner_packet);
+  assert.deepEqual(body.execution_summary.pattern_signals, body.pattern_signals);
+  assert.deepEqual(body.execution_summary.workflow_signals, body.workflow_signals);
+  assert.equal(body.execution_summary.packet_assembly.packet_source_mode, body.execution_kernel.packet_source_mode);
+  assert.equal(body.execution_summary.packet_assembly.state_first_assembly, body.execution_kernel.state_first_assembly);
+  assert.equal(
+    body.execution_summary.packet_assembly.execution_packet_v1_present,
+    body.execution_kernel.execution_packet_v1_present,
+  );
+  assert.equal(
+    body.execution_summary.packet_assembly.execution_state_v1_present,
+    body.execution_kernel.execution_state_v1_present,
+  );
+  assert.deepEqual(
+    body.execution_summary.routing_signal_summary.stable_workflow_anchor_ids,
+    (body.execution_kernel.action_packet_summary as any).workflow_anchor_ids,
+  );
+  assert.deepEqual(
+    body.execution_summary.routing_signal_summary.candidate_workflow_anchor_ids,
+    (body.execution_kernel.action_packet_summary as any).candidate_workflow_anchor_ids,
+  );
+  assert.deepEqual(
+    body.execution_summary.routing_signal_summary.rehydration_anchor_ids,
+    (body.execution_kernel.action_packet_summary as any).rehydration_anchor_ids,
+  );
+  assert.equal(
+    body.execution_summary.routing_signal_summary.selected_tool,
+    body.tools?.selection?.selected ?? null,
+  );
+  assert.equal(body.execution_summary.strategy_summary.summary_version, "execution_strategy_summary_v1");
+  assert.equal(
+    body.execution_summary.strategy_summary.trust_signal,
+    body.execution_summary.routing_signal_summary.family_scope,
+  );
+  assert.equal(
+    body.execution_summary.strategy_summary.task_family,
+    body.execution_summary.routing_signal_summary.task_family,
+  );
+  assert.equal(
+    body.execution_summary.strategy_summary.family_scope,
+    body.execution_summary.routing_signal_summary.family_scope,
+  );
+  assert.ok(body.execution_summary.strategy_summary.family_candidate_count >= 0);
+  assert.equal(body.execution_summary.strategy_summary.strategy_profile, "rehydration_first");
+  assert.equal(body.execution_summary.strategy_summary.validation_style, "candidate_promotion_validation");
+  assert.ok(body.execution_summary.strategy_summary.selected_working_set.includes("tool:edit"));
+  for (const layer of body.cost_signals?.selected_memory_layers ?? []) {
+    assert.ok(
+      body.execution_summary.strategy_summary.selected_working_set.includes(`memory:${layer}`),
+      `strategy summary should surface selected memory layer ${layer}`,
+    );
+  }
+  assert.ok(body.execution_summary.strategy_summary.selected_validation_paths.length > 0);
+  assert.ok(body.execution_summary.strategy_summary.preferred_artifact_refs.length > 0);
+  assert.ok(body.execution_summary.strategy_summary.explanation.length > 0);
+  assert.equal(body.execution_summary.collaboration_summary.summary_version, "execution_collaboration_summary_v1");
+  assert.equal(body.execution_summary.collaboration_summary.packet_present, false);
+  assert.equal(body.execution_summary.collaboration_summary.coordination_mode, "memory_only");
+  assert.equal(body.execution_summary.collaboration_summary.current_stage, null);
+  assert.equal(body.execution_summary.collaboration_summary.active_role, null);
+  assert.equal(body.execution_summary.collaboration_summary.review_contract_present, false);
+  assert.equal(body.execution_summary.collaboration_summary.resume_anchor_present, false);
+  assert.equal(body.execution_summary.collaboration_summary.artifact_ref_count, 0);
+  assert.equal(body.execution_summary.collaboration_summary.evidence_ref_count, 0);
+  assert.equal(body.execution_summary.collaboration_summary.side_output_artifact_count, 0);
+  assert.equal(body.execution_summary.collaboration_summary.side_output_evidence_count, 0);
+  assert.equal(body.execution_summary.continuity_snapshot_summary.summary_version, "execution_continuity_snapshot_v1");
+  assert.equal(body.execution_summary.continuity_snapshot_summary.snapshot_mode, "memory_only");
+  assert.equal(
+    body.execution_summary.continuity_snapshot_summary.coordination_mode,
+    body.execution_summary.collaboration_summary.coordination_mode,
+  );
+  assert.equal(
+    body.execution_summary.continuity_snapshot_summary.trust_signal,
+    body.execution_summary.strategy_summary.trust_signal,
+  );
+  assert.equal(
+    body.execution_summary.continuity_snapshot_summary.strategy_profile,
+    body.execution_summary.strategy_summary.strategy_profile,
+  );
+  assert.equal(
+    body.execution_summary.continuity_snapshot_summary.validation_style,
+    body.execution_summary.strategy_summary.validation_style,
+  );
+  assert.equal(
+    body.execution_summary.continuity_snapshot_summary.task_family,
+    body.execution_summary.strategy_summary.task_family,
+  );
+  assert.equal(
+    body.execution_summary.continuity_snapshot_summary.family_scope,
+    body.execution_summary.strategy_summary.family_scope,
+  );
+  assert.equal(
+    body.execution_summary.continuity_snapshot_summary.selected_tool,
+    body.execution_summary.routing_signal_summary.selected_tool,
+  );
+  assert.equal(body.execution_summary.continuity_snapshot_summary.current_stage, null);
+  assert.equal(body.execution_summary.continuity_snapshot_summary.active_role, null);
+  assert.equal(
+    body.execution_summary.continuity_snapshot_summary.reviewer_ready,
+    body.execution_summary.collaboration_summary.review_contract_present,
+  );
+  assert.equal(body.execution_summary.continuity_snapshot_summary.resume_anchor_file_path, null);
+  assert.deepEqual(
+    body.execution_summary.continuity_snapshot_summary.selected_memory_layers,
+    body.execution_summary.maintenance_summary.selected_memory_layers,
+  );
+  assert.equal(
+    body.execution_summary.continuity_snapshot_summary.recommended_action,
+    body.execution_summary.maintenance_summary.recommended_action,
+  );
+  assert.deepEqual(
+    body.execution_summary.continuity_snapshot_summary.selected_pattern_summaries,
+    body.execution_summary.strategy_summary.selected_pattern_summaries,
+  );
+  assert.deepEqual(
+    body.execution_summary.continuity_snapshot_summary.validation_paths,
+    body.execution_summary.strategy_summary.selected_validation_paths,
+  );
+  assert.ok(body.execution_summary.continuity_snapshot_summary.preferred_artifact_refs.length > 0);
+  assert.equal(
+    body.execution_summary.maintenance_summary.forgotten_items,
+    body.cost_signals?.forgotten_items ?? 0,
+  );
+  assert.deepEqual(
+    body.execution_summary.maintenance_summary.selected_memory_layers,
+    body.cost_signals?.selected_memory_layers ?? [],
+  );
+  assert.equal(body.execution_summary.forgetting_summary.summary_version, "execution_forgetting_summary_v1");
+  assert.equal(
+    body.execution_summary.forgetting_summary.forgotten_items,
+    body.execution_summary.maintenance_summary.forgotten_items,
+  );
+  assert.equal(
+    body.execution_summary.forgetting_summary.suppressed_pattern_count,
+    body.execution_summary.maintenance_summary.suppressed_pattern_count,
+  );
+  assert.deepEqual(
+    body.execution_summary.forgetting_summary.selected_memory_layers,
+    body.execution_summary.maintenance_summary.selected_memory_layers,
+  );
+  assert.deepEqual(
+    body.execution_summary.forgetting_summary.primary_savings_levers,
+    body.execution_summary.maintenance_summary.primary_savings_levers,
+  );
+  assert.equal(
+    body.execution_summary.forgetting_summary.recommended_action,
+    body.execution_summary.maintenance_summary.recommended_action,
+  );
+  assert.equal(
+    body.execution_summary.forgetting_summary.stale_signal_count,
+    body.execution_summary.forgetting_summary.forgotten_items
+      + body.execution_summary.forgetting_summary.suppressed_pattern_count,
+  );
+  assert.equal(
+    body.execution_summary.forgetting_summary.substrate_mode,
+    body.execution_summary.forgetting_summary.forgotten_items > 0
+      ? "forgetting_active"
+      : body.execution_summary.forgetting_summary.suppressed_pattern_count > 0
+        ? "suppression_present"
+        : "stable",
+  );
+  const forgettingReasons = Object.entries(body.execution_summary.forgetting_summary.forgotten_by_reason)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  assert.equal(
+    body.execution_summary.forgetting_summary.primary_forgetting_reason,
+    forgettingReasons[0]?.[0] ?? null,
+  );
+  assert.equal(
+    body.execution_summary.collaboration_routing_summary.summary_version,
+    "execution_collaboration_routing_v1",
+  );
+  assert.equal(
+    body.execution_summary.collaboration_routing_summary.route_mode,
+    body.execution_summary.collaboration_summary.packet_present ? "packet_backed" : "memory_only",
+  );
+  assert.equal(
+    body.execution_summary.collaboration_routing_summary.coordination_mode,
+    body.execution_summary.collaboration_summary.coordination_mode,
+  );
+  assert.equal(
+    body.execution_summary.collaboration_routing_summary.current_stage,
+    body.execution_summary.collaboration_summary.current_stage,
+  );
+  assert.equal(
+    body.execution_summary.collaboration_routing_summary.active_role,
+    body.execution_summary.collaboration_summary.active_role,
+  );
+  assert.equal(
+    body.execution_summary.collaboration_routing_summary.selected_tool,
+    body.execution_summary.routing_signal_summary.selected_tool,
+  );
+  assert.equal(
+    body.execution_summary.collaboration_routing_summary.task_family,
+    body.execution_summary.routing_signal_summary.task_family,
+  );
+  assert.equal(
+    body.execution_summary.collaboration_routing_summary.family_scope,
+    body.execution_summary.routing_signal_summary.family_scope,
+  );
+  assert.deepEqual(
+    body.execution_summary.collaboration_routing_summary.preferred_artifact_refs,
+    body.execution_summary.continuity_snapshot_summary.preferred_artifact_refs,
+  );
+  assert.deepEqual(
+    body.execution_summary.collaboration_routing_summary.preferred_evidence_refs,
+    body.execution_summary.continuity_snapshot_summary.preferred_evidence_refs,
+  );
+  assert.ok(
+    body.execution_summary.collaboration_routing_summary.validation_paths.length
+      >= body.execution_summary.strategy_summary.selected_validation_paths.length,
+  );
+  assert.ok(
+    body.execution_summary.collaboration_routing_summary.routing_drivers.includes(
+      `family_scope:${body.execution_summary.routing_signal_summary.family_scope}`,
+    ),
+  );
+  if (body.execution_summary.routing_signal_summary.selected_tool) {
+    assert.ok(
+      body.execution_summary.collaboration_routing_summary.routing_drivers.includes(
+        `selected_tool:${body.execution_summary.routing_signal_summary.selected_tool}`,
+      ),
+    );
+  }
+  assert.equal(
+    body.execution_summary.delegation_records_summary.summary_version,
+    "execution_delegation_records_v1",
+  );
+  assert.equal(
+    body.execution_summary.delegation_records_summary.record_mode,
+    body.execution_summary.collaboration_routing_summary.route_mode,
+  );
+  assert.equal(body.execution_summary.delegation_records_summary.packet_count, 1);
+  assert.equal(
+    body.execution_summary.delegation_records_summary.packet_count,
+    body.execution_summary.delegation_records_summary.delegation_packets.length,
+  );
+  assert.equal(body.execution_summary.delegation_records_summary.return_count, 0);
+  assert.deepEqual(body.execution_summary.delegation_records_summary.delegation_returns, []);
+  assert.ok(body.execution_summary.delegation_records_summary.missing_record_types.includes("delegation_returns"));
+  assert.equal(
+    body.execution_summary.delegation_records_summary.route_role,
+    body.execution_summary.collaboration_summary.active_role ?? "orchestrator",
+  );
+  const packetRecord = body.execution_summary.delegation_records_summary.delegation_packets[0];
+  assert.ok(packetRecord);
+  assert.equal(packetRecord.version, 1);
+  assert.equal(packetRecord.role, body.execution_summary.delegation_records_summary.route_role);
+  assert.equal(packetRecord.source_mode, body.execution_summary.delegation_records_summary.record_mode);
+  assert.deepEqual(
+    packetRecord.preferred_artifact_refs,
+    body.execution_summary.collaboration_routing_summary.preferred_artifact_refs,
+  );
+  assert.deepEqual(
+    packetRecord.inherited_evidence,
+    body.execution_summary.collaboration_routing_summary.preferred_evidence_refs,
+  );
+  assert.equal(packetRecord.task_family, body.execution_summary.collaboration_routing_summary.task_family);
+  assert.equal(packetRecord.family_scope, body.execution_summary.collaboration_routing_summary.family_scope);
+  assert.equal(
+    body.execution_summary.delegation_records_summary.artifact_routing_count,
+    body.execution_summary.delegation_records_summary.artifact_routing_records.length,
+  );
+  assert.equal(
+    body.execution_summary.delegation_records_summary.artifact_routing_count,
+    body.execution_summary.collaboration_routing_summary.preferred_artifact_refs.length
+      + body.execution_summary.collaboration_routing_summary.preferred_evidence_refs.length,
+  );
+  for (const record of body.execution_summary.delegation_records_summary.artifact_routing_records) {
+    assert.equal(record.version, 1);
+    assert.equal(record.route_role, body.execution_summary.delegation_records_summary.route_role);
+    assert.equal(record.route_intent, body.execution_summary.collaboration_routing_summary.route_intent);
+    assert.equal(record.route_mode, body.execution_summary.delegation_records_summary.record_mode);
+    assert.equal(record.task_family, body.execution_summary.collaboration_routing_summary.task_family);
+    assert.equal(record.family_scope, body.execution_summary.collaboration_routing_summary.family_scope);
+  }
+  assert.equal(
+    body.execution_summary.instrumentation_summary.rehydration_candidate_count,
+    (body.execution_kernel.action_packet_summary as any).rehydration_candidate_count,
+  );
+  assert.deepEqual(body.execution_summary.action_packet_summary, body.execution_kernel.action_packet_summary);
+  assert.deepEqual(body.execution_summary.workflow_signal_summary, body.execution_kernel.workflow_signal_summary);
+  assert.deepEqual(body.execution_summary.workflow_lifecycle_summary, body.execution_kernel.workflow_lifecycle_summary);
+  assert.deepEqual(body.execution_summary.workflow_maintenance_summary, body.execution_kernel.workflow_maintenance_summary);
+  assert.deepEqual(body.execution_summary.pattern_lifecycle_summary, body.execution_kernel.pattern_lifecycle_summary);
+  assert.deepEqual(body.execution_summary.pattern_maintenance_summary, body.execution_kernel.pattern_maintenance_summary);
   assert.deepEqual(body.execution_kernel.action_packet_summary, routeSummary.action_packet_summary);
   assert.deepEqual(body.execution_kernel.workflow_signal_summary, routeSummary.workflow_signal_summary);
   assert.deepEqual(body.execution_kernel.workflow_lifecycle_summary, routeSummary.workflow_lifecycle_summary);
@@ -169,6 +668,63 @@ function assertKernelMatchesRouteSurface(body: {
     trusted_pattern_tools: routeSummary.trusted_pattern_tools,
     contested_pattern_tools: routeSummary.contested_pattern_tools,
   });
+  assert.deepEqual(body.execution_summary.pattern_signal_summary, body.execution_kernel.pattern_signal_summary);
+}
+
+function assertDelegationLearningProjection(body: Record<string, unknown>, expected: {
+  task_family: string | null;
+  matched_records: number;
+  truncated: boolean;
+  route_role_counts: Record<string, number>;
+  record_outcome_counts: Record<string, number>;
+  recommendation_count: number;
+  recommendation_kinds: string[];
+}) {
+  const layered = body.layered_context as Record<string, unknown>;
+  const projection = layered.delegation_learning as Record<string, unknown>;
+  assert.equal(projection.summary_version, "delegation_learning_projection_v1");
+  assert.deepEqual(projection.learning_summary, {
+    task_family: expected.task_family,
+    matched_records: expected.matched_records,
+    truncated: expected.truncated,
+    route_role_counts: expected.route_role_counts,
+    record_outcome_counts: expected.record_outcome_counts,
+    recommendation_count: expected.recommendation_count,
+  });
+  assert.deepEqual(
+    Array.isArray(projection.learning_recommendations)
+      ? projection.learning_recommendations.map((entry) => (entry as Record<string, unknown>).recommendation_kind)
+      : [],
+    expected.recommendation_kinds,
+  );
+}
+
+function assertOperatorDelegationLearningProjection(body: Record<string, unknown>, expected: {
+  task_family: string | null;
+  matched_records: number;
+  truncated: boolean;
+  route_role_counts: Record<string, number>;
+  record_outcome_counts: Record<string, number>;
+  recommendation_count: number;
+  recommendation_kinds: string[];
+}) {
+  const operatorProjection = body.operator_projection as Record<string, unknown>;
+  const projection = operatorProjection.delegation_learning as Record<string, unknown>;
+  assert.equal(projection.summary_version, "delegation_learning_projection_v1");
+  assert.deepEqual(projection.learning_summary, {
+    task_family: expected.task_family,
+    matched_records: expected.matched_records,
+    truncated: expected.truncated,
+    route_role_counts: expected.route_role_counts,
+    record_outcome_counts: expected.record_outcome_counts,
+    recommendation_count: expected.recommendation_count,
+  });
+  assert.deepEqual(
+    Array.isArray(projection.learning_recommendations)
+      ? projection.learning_recommendations.map((entry) => (entry as Record<string, unknown>).recommendation_kind)
+      : [],
+    expected.recommendation_kinds,
+  );
 }
 
 function tmpDbPath(name: string): string {
@@ -706,6 +1262,32 @@ function registerContextRuntimeApp(args: {
 }) {
   const guards = buildRequestGuards();
   registerHostErrorHandler(args.app);
+  registerMemoryAccessRoutes({
+    app: args.app,
+    env: {
+      AIONIS_EDITION: "lite",
+      APP_ENV: "test",
+      MEMORY_SCOPE: "default",
+      MEMORY_TENANT_ID: "default",
+      LITE_LOCAL_ACTOR_ID: "local-user",
+      MAX_TEXT_LEN: 10_000,
+      PII_REDACTION: false,
+      ALLOW_CROSS_SCOPE_EDGES: false,
+      MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+      MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+    } as any,
+    embedder: null,
+    liteWriteStore: args.liteWriteStore,
+    liteRecallAccess: args.liteRecallStore.createRecallAccess(),
+    writeAccessShadowMirrorV2: false,
+    requireStoreFeatureCapability: () => {},
+    requireMemoryPrincipal: guards.requireMemoryPrincipal,
+    withIdentityFromRequest: guards.withIdentityFromRequest,
+    enforceRateLimit: guards.enforceRateLimit,
+    enforceTenantQuota: guards.enforceTenantQuota,
+    tenantFromBody: guards.tenantFromBody,
+    acquireInflightSlot: guards.acquireInflightSlot,
+  });
   registerMemoryContextRuntimeRoutes({
     app: args.app,
     env: {
@@ -823,6 +1405,7 @@ test("planning_context returns aligned planner packet, action packet summary, an
     const body = PlanningContextRouteContractSchema.parse(response.json());
     assertNoLegacyPlannerMirrors(body as Record<string, unknown>);
     assert.ok(!("layered_context" in (body as Record<string, unknown>)), "default planning_context should not expose layered_context");
+    assert.ok(!("operator_projection" in (body as Record<string, unknown>)), "default planning_context should not expose operator_projection");
     assert.deepEqual(body.planning_summary.first_step_recommendation, {
       source_kind: "experience_intelligence",
       history_applied: true,
@@ -905,6 +1488,574 @@ test("planning_context returns aligned planner packet, action packet summary, an
     assert.match(body.planning_summary.planner_explanation, /rehydration available: Fix export failure/);
     assert.match(body.planning_summary.planner_explanation, new RegExp(`supporting knowledge appended: ${body.planner_packet.sections.supporting_knowledge.length}`));
     assert.equal(body.tools.selection_summary.provenance_explanation, "selected tool: edit; candidate patterns visible but not yet trusted: edit");
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("planning_context prefers persisted delegation records matched by run_id", async () => {
+  const dbPath = tmpDbPath("planning-context-persisted-delegation-records");
+  const app = Fastify();
+  const { liteWriteStore, liteRecallStore } = await seedContextRuntimeFixture(dbPath);
+  const runId = randomUUID();
+  try {
+    registerContextRuntimeApp({ app, liteWriteStore, liteRecallStore });
+    const writeResponse = await app.inject({
+      method: "POST",
+      url: "/v1/memory/delegation/records",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        actor: "review-worker",
+        run_id: runId,
+        route_role: "review",
+        task_family: "task:repair_export",
+        delegation_records_v1: {
+          summary_version: "execution_delegation_records_v1",
+          record_mode: "packet_backed",
+          route_role: "review",
+          packet_count: 1,
+          return_count: 1,
+          artifact_routing_count: 2,
+          missing_record_types: [],
+          delegation_packets: [
+            {
+              version: 1,
+              role: "review",
+              mission: "Review the export patch, confirm the API stays stable, and rerun export tests.",
+              working_set: ["src/routes/export.ts", "src/lib/export.ts"],
+              acceptance_checks: ["npm run -s test:lite -- export", "npm run -s lint"],
+              output_contract: "Return review status with exact acceptance check outcomes.",
+              preferred_artifact_refs: ["artifact://patch/export.diff"],
+              inherited_evidence: ["evidence://tests/export.log"],
+              routing_reason: "Persisted from the review handoff for the same run.",
+              task_family: "task:repair_export",
+              family_scope: "default",
+              source_mode: "packet_backed",
+            },
+          ],
+          delegation_returns: [
+            {
+              version: 1,
+              role: "review",
+              status: "completed",
+              summary: "Reviewer confirmed the export patch and validation results.",
+              evidence: ["evidence://tests/export.log"],
+              working_set: ["src/routes/export.ts", "src/lib/export.ts"],
+              acceptance_checks: ["npm run -s test:lite -- export", "npm run -s lint"],
+              source_mode: "packet_backed",
+            },
+          ],
+          artifact_routing_records: [
+            {
+              version: 1,
+              ref: "artifact://patch/export.diff",
+              ref_kind: "artifact",
+              route_role: "review",
+              route_intent: "review",
+              route_mode: "packet_backed",
+              task_family: "task:repair_export",
+              family_scope: "default",
+              routing_reason: "Carry the patch diff into the review step.",
+              source: "execution_packet",
+            },
+            {
+              version: 1,
+              ref: "evidence://tests/export.log",
+              ref_kind: "evidence",
+              route_role: "review",
+              route_intent: "review",
+              route_mode: "packet_backed",
+              task_family: "task:repair_export",
+              family_scope: "default",
+              routing_reason: "Carry the validation evidence into the review step.",
+              source: "execution_packet",
+            },
+          ],
+        },
+      },
+    });
+    assert.equal(writeResponse.statusCode, 200);
+    const writeBody = DelegationRecordsWriteResponseSchema.parse(writeResponse.json());
+    assert.equal(writeBody.record_event?.run_id, runId);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        run_id: runId,
+        query_text: "repair export failure in node tests",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        tool_candidates: ["bash", "edit", "test"],
+        include_shadow: false,
+        rules_limit: 20,
+      },
+    });
+    assert.equal(response.statusCode, 200);
+    const body = PlanningContextRouteContractSchema.parse(response.json());
+    assert.equal(body.execution_summary.delegation_records_summary.record_mode, "packet_backed");
+    assert.equal(body.execution_summary.delegation_records_summary.route_role, "review");
+    assert.equal(body.execution_summary.delegation_records_summary.packet_count, 1);
+    assert.equal(body.execution_summary.delegation_records_summary.return_count, 1);
+    assert.deepEqual(body.execution_summary.delegation_records_summary.missing_record_types, []);
+    assert.equal(
+      body.execution_summary.delegation_records_summary.delegation_returns[0]?.summary,
+      "Reviewer confirmed the export patch and validation results.",
+    );
+    assert.deepEqual(
+      body.execution_summary.delegation_records_summary.delegation_packets[0]?.preferred_artifact_refs,
+      ["artifact://patch/export.diff"],
+    );
+    assert.deepEqual(
+      body.execution_summary.delegation_records_summary.artifact_routing_records.map((record) => record.ref),
+      ["artifact://patch/export.diff", "evidence://tests/export.log"],
+    );
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("planning_context debug layered_context projects delegation learning without widening the default surface", async () => {
+  const dbPath = tmpDbPath("planning-context-delegation-learning-debug");
+  const app = Fastify();
+  const { liteWriteStore, liteRecallStore } = await seedContextRuntimeFixture(dbPath);
+  try {
+    registerContextRuntimeApp({ app, liteWriteStore, liteRecallStore });
+
+    for (const payload of [
+      {
+        tenant_id: "default",
+        scope: "default",
+        run_id: "run:context-export-001",
+        route_role: "patch",
+        task_family: "task:repair_export",
+        delegation_records_v1: {
+          summary_version: "execution_delegation_records_v1",
+          record_mode: "packet_backed",
+          route_role: "patch",
+          packet_count: 1,
+          return_count: 1,
+          artifact_routing_count: 2,
+          missing_record_types: [],
+          delegation_packets: [{
+            version: 1,
+            role: "patch",
+            mission: "Apply the export repair patch and rerun node tests.",
+            working_set: ["src/routes/export.ts"],
+            acceptance_checks: ["npm run -s test:lite -- export"],
+            output_contract: "Return patch result and final node test status.",
+            preferred_artifact_refs: ["artifact://repair-export/patch"],
+            inherited_evidence: ["evidence://repair-export/failure"],
+            routing_reason: "repair patch route",
+            task_family: "task:repair_export",
+            family_scope: "aionis://runtime/repair-export",
+            source_mode: "packet_backed",
+          }],
+          delegation_returns: [{
+            version: 1,
+            role: "patch",
+            status: "passed",
+            summary: "Patch applied and export tests passed.",
+            evidence: ["evidence://repair-export/test"],
+            working_set: ["src/routes/export.ts"],
+            acceptance_checks: ["npm run -s test:lite -- export"],
+            source_mode: "packet_backed",
+          }],
+          artifact_routing_records: [{
+            version: 1,
+            ref: "artifact://repair-export/patch",
+            ref_kind: "artifact",
+            route_role: "patch",
+            route_intent: "patch",
+            route_mode: "packet_backed",
+            task_family: "task:repair_export",
+            family_scope: "aionis://runtime/repair-export",
+            routing_reason: "patch artifact route",
+            source: "execution_packet",
+          }, {
+            version: 1,
+            ref: "evidence://repair-export/test",
+            ref_kind: "evidence",
+            route_role: "patch",
+            route_intent: "patch",
+            route_mode: "packet_backed",
+            task_family: "task:repair_export",
+            family_scope: "aionis://runtime/repair-export",
+            routing_reason: "patch evidence route",
+            source: "execution_packet",
+          }],
+        },
+        execution_result_summary: {
+          status: "passed",
+          summary: "Patch applied and export tests passed.",
+        },
+        execution_artifacts: [{ ref: "artifact://repair-export/patch" }],
+        execution_evidence: [{ ref: "evidence://repair-export/test" }],
+      },
+      {
+        tenant_id: "default",
+        scope: "default",
+        memory_lane: "private",
+        run_id: "run:context-export-002",
+        route_role: "patch",
+        task_family: "task:repair_export",
+        delegation_records_v1: {
+          summary_version: "execution_delegation_records_v1",
+          record_mode: "memory_only",
+          route_role: "patch",
+          packet_count: 1,
+          return_count: 0,
+          artifact_routing_count: 1,
+          missing_record_types: ["delegation_returns"],
+          delegation_packets: [{
+            version: 1,
+            role: "patch",
+            mission: "Apply the export fallback patch before retrying tests.",
+            working_set: ["src/routes/export.ts"],
+            acceptance_checks: ["npm run -s test:lite -- export"],
+            output_contract: "Return applied patch metadata.",
+            preferred_artifact_refs: ["artifact://repair-export/fallback-patch"],
+            inherited_evidence: [],
+            routing_reason: "fallback memory patch route",
+            task_family: "task:repair_export",
+            family_scope: "aionis://runtime/repair-export",
+            source_mode: "memory_only",
+          }],
+          delegation_returns: [],
+          artifact_routing_records: [{
+            version: 1,
+            ref: "artifact://repair-export/fallback-patch",
+            ref_kind: "artifact",
+            route_role: "patch",
+            route_intent: "memory_guided",
+            route_mode: "memory_only",
+            task_family: "task:repair_export",
+            family_scope: "aionis://runtime/repair-export",
+            routing_reason: "memory-guided patch route",
+            source: "strategy_summary",
+          }],
+        },
+      },
+    ]) {
+      const writeResponse = await app.inject({
+        method: "POST",
+        url: "/v1/memory/delegation/records",
+        payload,
+      });
+      assert.equal(writeResponse.statusCode, 200, writeResponse.body);
+    }
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "repair export failure in node tests",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        tool_candidates: ["bash", "edit", "test"],
+        include_shadow: false,
+        rules_limit: 20,
+        return_layered_context: true,
+      },
+    });
+    assert.equal(response.statusCode, 200);
+    const body = PlanningContextRouteContractSchema.parse(response.json()) as Record<string, unknown>;
+    assert.ok("layered_context" in body);
+    assert.ok("operator_projection" in body);
+    assert.ok(!("first_step_recommendation" in body), "debug planning_context should still avoid the legacy top-level first_step_recommendation mirror");
+    assertDelegationLearningProjection(body, {
+      task_family: "task:repair_export",
+      matched_records: 2,
+      truncated: false,
+      route_role_counts: {
+        patch: 2,
+      },
+      record_outcome_counts: {
+        completed: 1,
+        missing_return: 1,
+      },
+      recommendation_count: 3,
+      recommendation_kinds: ["capture_missing_returns", "increase_artifact_capture", "promote_reusable_pattern"],
+    });
+    assertOperatorDelegationLearningProjection(body, {
+      task_family: "task:repair_export",
+      matched_records: 2,
+      truncated: false,
+      route_role_counts: {
+        patch: 2,
+      },
+      record_outcome_counts: {
+        completed: 1,
+        missing_return: 1,
+      },
+      recommendation_count: 3,
+      recommendation_kinds: ["capture_missing_returns", "increase_artifact_capture", "promote_reusable_pattern"],
+    });
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("planning_context surfaces collaboration summary from execution packet and side outputs", async () => {
+  const dbPath = tmpDbPath("planning-context-collaboration");
+  const app = Fastify();
+  const { liteWriteStore, liteRecallStore } = await seedContextRuntimeFixture(dbPath);
+  try {
+    registerContextRuntimeApp({ app, liteWriteStore, liteRecallStore });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "repair export failure in node tests",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        tool_candidates: ["bash", "edit", "test"],
+        execution_artifacts: [
+          {
+            ref: "artifact://patch/export.diff",
+            kind: "patch",
+            label: "export diff",
+          },
+        ],
+        execution_evidence: [
+          {
+            uri: "evidence://tests/export.log",
+            kind: "test_log",
+            label: "export test log",
+          },
+        ],
+        execution_packet_v1: {
+          version: 1,
+          state_id: "packet-review-1",
+          current_stage: "review",
+          active_role: "review",
+          task_brief: "Review export repair and rerun tests",
+          target_files: ["src/routes/export.ts", "src/lib/export.ts"],
+          next_action: "Review the export patch and rerun export tests",
+          hard_constraints: ["keep public export API stable"],
+          accepted_facts: ["accepted_hypothesis:export path mismatch"],
+          rejected_paths: ["reject broad refactor"],
+          pending_validations: ["npm run -s test:lite -- export"],
+          unresolved_blockers: ["needs reviewer sign-off"],
+          rollback_notes: ["revert export helper if tests regress"],
+          review_contract: {
+            standard: "review_contract_v1",
+            required_outputs: ["patch", "tests"],
+            acceptance_checks: ["npm run -s test:lite -- export", "npm run -s lint"],
+            rollback_required: true,
+          },
+          resume_anchor: {
+            anchor: "resume:src/routes/export.ts",
+            file_path: "src/routes/export.ts",
+            symbol: null,
+            repo_root: "/Volumes/ziel/AionisRuntime",
+          },
+          artifact_refs: ["artifact://patch/export.diff", "artifact://notes/export-review.md"],
+          evidence_refs: ["evidence://tests/export.log"],
+        },
+        include_shadow: false,
+        rules_limit: 20,
+      },
+    });
+    assert.equal(response.statusCode, 200);
+    const body = PlanningContextRouteContractSchema.parse(response.json());
+    assert.equal(body.execution_summary.collaboration_summary.summary_version, "execution_collaboration_summary_v1");
+    assert.equal(body.execution_summary.collaboration_summary.packet_present, true);
+    assert.equal(body.execution_summary.collaboration_summary.coordination_mode, "reviewer_ready");
+    assert.equal(body.execution_summary.collaboration_summary.current_stage, "review");
+    assert.equal(body.execution_summary.collaboration_summary.active_role, "review");
+    assert.equal(
+      body.execution_summary.collaboration_summary.next_action,
+      "Review the export patch and rerun export tests",
+    );
+    assert.equal(body.execution_summary.collaboration_summary.target_file_count, 2);
+    assert.equal(body.execution_summary.collaboration_summary.pending_validation_count, 1);
+    assert.equal(body.execution_summary.collaboration_summary.unresolved_blocker_count, 1);
+    assert.equal(body.execution_summary.collaboration_summary.review_contract_present, true);
+    assert.equal(body.execution_summary.collaboration_summary.review_standard, "review_contract_v1");
+    assert.equal(body.execution_summary.collaboration_summary.acceptance_check_count, 2);
+    assert.equal(body.execution_summary.collaboration_summary.rollback_required, true);
+    assert.equal(body.execution_summary.collaboration_summary.resume_anchor_present, true);
+    assert.equal(body.execution_summary.collaboration_summary.resume_anchor_file_path, "src/routes/export.ts");
+    assert.equal(body.execution_summary.collaboration_summary.artifact_ref_count, 2);
+    assert.equal(body.execution_summary.collaboration_summary.evidence_ref_count, 1);
+    assert.equal(body.execution_summary.collaboration_summary.side_output_artifact_count, 1);
+    assert.equal(body.execution_summary.collaboration_summary.side_output_evidence_count, 1);
+    assert.deepEqual(body.execution_summary.collaboration_summary.artifact_refs, [
+      "artifact://patch/export.diff",
+      "artifact://notes/export-review.md",
+    ]);
+    assert.deepEqual(body.execution_summary.collaboration_summary.evidence_refs, [
+      "evidence://tests/export.log",
+    ]);
+    assert.equal(
+      body.execution_summary.collaboration_routing_summary.summary_version,
+      "execution_collaboration_routing_v1",
+    );
+    assert.equal(body.execution_summary.collaboration_routing_summary.route_mode, "packet_backed");
+    assert.equal(body.execution_summary.collaboration_routing_summary.coordination_mode, "reviewer_ready");
+    assert.equal(body.execution_summary.collaboration_routing_summary.route_intent, "review");
+    assert.equal(
+      body.execution_summary.collaboration_routing_summary.task_brief,
+      "Review export repair and rerun tests",
+    );
+    assert.equal(body.execution_summary.collaboration_routing_summary.current_stage, "review");
+    assert.equal(body.execution_summary.collaboration_routing_summary.active_role, "review");
+    assert.equal(body.execution_summary.collaboration_routing_summary.selected_tool, "edit");
+    assert.equal(
+      body.execution_summary.collaboration_routing_summary.task_family,
+      body.execution_summary.routing_signal_summary.task_family,
+    );
+    assert.equal(
+      body.execution_summary.collaboration_routing_summary.family_scope,
+      body.execution_summary.routing_signal_summary.family_scope,
+    );
+    assert.equal(
+      body.execution_summary.collaboration_routing_summary.next_action,
+      "Review the export patch and rerun export tests",
+    );
+    assert.deepEqual(body.execution_summary.collaboration_routing_summary.target_files, [
+      "src/routes/export.ts",
+      "src/lib/export.ts",
+    ]);
+    assert.ok(
+      body.execution_summary.collaboration_routing_summary.validation_paths.includes("npm run -s test:lite -- export"),
+    );
+    assert.ok(body.execution_summary.collaboration_routing_summary.validation_paths.length >= 2);
+    assert.deepEqual(body.execution_summary.collaboration_routing_summary.unresolved_blockers, [
+      "needs reviewer sign-off",
+    ]);
+    assert.deepEqual(body.execution_summary.collaboration_routing_summary.hard_constraints, [
+      "keep public export API stable",
+    ]);
+    assert.equal(body.execution_summary.collaboration_routing_summary.review_standard, "review_contract_v1");
+    assert.deepEqual(body.execution_summary.collaboration_routing_summary.required_outputs, [
+      "patch",
+      "tests",
+    ]);
+    assert.deepEqual(body.execution_summary.collaboration_routing_summary.acceptance_checks, [
+      "npm run -s test:lite -- export",
+      "npm run -s lint",
+    ]);
+    assert.ok(
+      body.execution_summary.collaboration_routing_summary.preferred_artifact_refs.includes("artifact://patch/export.diff"),
+    );
+    assert.deepEqual(body.execution_summary.collaboration_routing_summary.preferred_evidence_refs, [
+      "evidence://tests/export.log",
+    ]);
+    for (const driver of [
+      "review_contract",
+      "rollback_required",
+      "resume_anchor",
+      "target_files",
+      "validation_paths",
+      "unresolved_blockers",
+      "hard_constraints",
+      "artifact_preference",
+      "evidence_preference",
+      "selected_tool:edit",
+      `family_scope:${body.execution_summary.routing_signal_summary.family_scope}`,
+    ]) {
+      assert.ok(body.execution_summary.collaboration_routing_summary.routing_drivers.includes(driver));
+    }
+    if (body.execution_summary.routing_signal_summary.task_family) {
+      assert.ok(
+        body.execution_summary.collaboration_routing_summary.routing_drivers.includes(
+          `task_family:${body.execution_summary.routing_signal_summary.task_family}`,
+        ),
+      );
+    }
+    assert.equal(
+      body.execution_summary.delegation_records_summary.summary_version,
+      "execution_delegation_records_v1",
+    );
+    assert.equal(body.execution_summary.delegation_records_summary.record_mode, "packet_backed");
+    assert.equal(body.execution_summary.delegation_records_summary.route_role, "review");
+    assert.equal(body.execution_summary.delegation_records_summary.packet_count, 1);
+    assert.equal(body.execution_summary.delegation_records_summary.return_count, 0);
+    assert.ok(body.execution_summary.delegation_records_summary.missing_record_types.includes("delegation_returns"));
+    const packetRecord = body.execution_summary.delegation_records_summary.delegation_packets[0];
+    assert.equal(packetRecord.role, "review");
+    assert.match(packetRecord.mission, /Review export repair and rerun tests/);
+    assert.match(packetRecord.mission, /Review the export patch and rerun export tests/);
+    assert.ok(packetRecord.working_set.includes("src/routes/export.ts"));
+    assert.ok(packetRecord.working_set.includes("src/lib/export.ts"));
+    assert.ok(packetRecord.acceptance_checks.includes("npm run -s test:lite -- export"));
+    assert.ok(packetRecord.acceptance_checks.includes("npm run -s lint"));
+    assert.ok(packetRecord.acceptance_checks.length >= 2);
+    assert.equal(
+      packetRecord.output_contract,
+      "Satisfy review_contract_v1 and return the required outputs with exact validation status.",
+    );
+    assert.ok(packetRecord.preferred_artifact_refs.includes("artifact://patch/export.diff"));
+    assert.deepEqual(packetRecord.inherited_evidence, ["evidence://tests/export.log"]);
+    assert.equal(packetRecord.task_family, body.execution_summary.routing_signal_summary.task_family);
+    assert.equal(packetRecord.family_scope, body.execution_summary.routing_signal_summary.family_scope);
+    assert.match(packetRecord.routing_reason, /review_contract/);
+    assert.equal(packetRecord.source_mode, "packet_backed");
+    const packetArtifactRecord = body.execution_summary.delegation_records_summary.artifact_routing_records.find(
+      (record) => record.ref === "artifact://patch/export.diff",
+    );
+    assert.ok(packetArtifactRecord);
+    assert.equal(packetArtifactRecord?.ref_kind, "artifact");
+    assert.equal(packetArtifactRecord?.route_role, "review");
+    assert.equal(packetArtifactRecord?.route_intent, "review");
+    assert.equal(packetArtifactRecord?.route_mode, "packet_backed");
+    assert.equal(packetArtifactRecord?.source, "execution_packet");
+    const packetEvidenceRecord = body.execution_summary.delegation_records_summary.artifact_routing_records.find(
+      (record) => record.ref === "evidence://tests/export.log",
+    );
+    assert.ok(packetEvidenceRecord);
+    assert.equal(packetEvidenceRecord?.ref_kind, "evidence");
+    assert.equal(packetEvidenceRecord?.source, "execution_packet");
+    assert.equal(body.execution_summary.continuity_snapshot_summary.summary_version, "execution_continuity_snapshot_v1");
+    assert.equal(body.execution_summary.continuity_snapshot_summary.snapshot_mode, "packet_backed");
+    assert.equal(body.execution_summary.continuity_snapshot_summary.coordination_mode, "reviewer_ready");
+    assert.equal(body.execution_summary.continuity_snapshot_summary.current_stage, "review");
+    assert.equal(body.execution_summary.continuity_snapshot_summary.active_role, "review");
+    assert.equal(
+      body.execution_summary.continuity_snapshot_summary.next_action,
+      "Review the export patch and rerun export tests",
+    );
+    assert.equal(body.execution_summary.continuity_snapshot_summary.reviewer_ready, true);
+    assert.equal(body.execution_summary.continuity_snapshot_summary.resume_anchor_file_path, "src/routes/export.ts");
+    assert.ok(
+      body.execution_summary.continuity_snapshot_summary.working_set.includes("resume:src/routes/export.ts"),
+    );
+    assert.ok(
+      body.execution_summary.continuity_snapshot_summary.preferred_artifact_refs.includes("artifact://patch/export.diff"),
+    );
+    assert.deepEqual(body.execution_summary.continuity_snapshot_summary.preferred_evidence_refs, [
+      "evidence://tests/export.log",
+    ]);
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -1017,6 +2168,7 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     const body = ContextAssembleRouteContractSchema.parse(response.json());
     assertNoLegacyPlannerMirrors(body as Record<string, unknown>);
     assert.ok(!("layered_context" in (body as Record<string, unknown>)), "default context_assemble should not expose layered_context");
+    assert.ok(!("operator_projection" in (body as Record<string, unknown>)), "default context_assemble should not expose operator_projection");
     assert.deepEqual(body.assembly_summary.first_step_recommendation, {
       source_kind: "experience_intelligence",
       history_applied: true,
@@ -1124,8 +2276,27 @@ test("context_assemble can still return layered_context when explicitly requeste
     assert.equal(response.statusCode, 200);
     const body = ContextAssembleRouteContractSchema.parse(response.json()) as Record<string, unknown>;
     assert.ok("layered_context" in body, "debug/operator context_assemble should expose layered_context when requested");
+    assert.ok("operator_projection" in body, "debug/operator context_assemble should expose operator_projection when requested");
     assert.equal(body.workflow_signals.length, (body.layered_context as Record<string, unknown>).workflow_signals.length);
     assert.equal(body.pattern_signals.length, (body.layered_context as Record<string, unknown>).pattern_signals.length);
+    assertDelegationLearningProjection(body, {
+      task_family: "task:repair_export",
+      matched_records: 0,
+      truncated: false,
+      route_role_counts: {},
+      record_outcome_counts: {},
+      recommendation_count: 0,
+      recommendation_kinds: [],
+    });
+    assertOperatorDelegationLearningProjection(body, {
+      task_family: "task:repair_export",
+      matched_records: 0,
+      truncated: false,
+      route_role_counts: {},
+      record_outcome_counts: {},
+      recommendation_count: 0,
+      recommendation_kinds: [],
+    });
     assertExecutionKernelBundle(body as {
       layered_context: Record<string, unknown>;
       execution_kernel: {

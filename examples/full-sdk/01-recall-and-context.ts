@@ -1,4 +1,14 @@
-import { isMain, createExampleClient, createScope, DEFAULT_TENANT_ID, printHeading, printJson, printStep, runExample } from "./shared.js";
+import {
+  isMain,
+  createExampleClient,
+  createScope,
+  DEFAULT_TENANT_ID,
+  printHeading,
+  printJson,
+  printStep,
+  resolveDelegationLearningProjection,
+  runExample,
+} from "./shared.js";
 
 async function main() {
   const aionis = createExampleClient();
@@ -38,8 +48,14 @@ async function main() {
       operator_mode: "debug",
     },
     tool_candidates: ["bash", "edit", "test"],
+    return_layered_context: true,
   });
-  printJson("planning_context", planning);
+  const delegationLearning = resolveDelegationLearningProjection(planning);
+  printJson("planning_context", {
+    kickoff_recommendation: planning.kickoff_recommendation,
+    operator_projection: planning.operator_projection ?? null,
+    delegation_learning_summary: delegationLearning?.learning_summary ?? null,
+  });
 }
 
 if (isMain(import.meta.url)) {

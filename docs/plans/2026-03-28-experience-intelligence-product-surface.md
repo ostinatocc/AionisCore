@@ -83,6 +83,12 @@ The dedicated route:
 
 remains the deeper recommendation surface.
 
+Delegation-learning detail should follow the same rule:
+
+- keep it on the dedicated `experience_intelligence` surface
+- if planning/context routes need to expose it for operator debugging, place it under `layered_context`
+- do not mirror it into the default `planning_summary` / `assembly_summary` product surface
+
 But it should eventually be slimmed so the formal product response focuses on:
 
 - `history_applied`

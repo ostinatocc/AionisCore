@@ -10,11 +10,13 @@ import {
   buildKickoffRecommendationResponseFromExperience,
 } from "../memory/experience-intelligence.js";
 import { buildExecutionMemoryIntrospectionLite } from "../memory/execution-introspection.js";
+import { aggregateDelegationRecordsLite, findDelegationRecordsLite } from "../memory/delegation-records-find.js";
 import { buildContinuityReviewPackLite, buildEvolutionReviewPackLite } from "../memory/reviewer-packs.js";
 import { exportMemoryPack, importMemoryPack } from "../memory/packs.js";
 import { rehydrateAnchorPayloadLite } from "../memory/rehydrate-anchor.js";
 import { memoryResolveLite } from "../memory/resolve.js";
 import { createSession, listSessions, listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
+import { writeDelegationRecords } from "../memory/delegation-records.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
@@ -28,6 +30,9 @@ type MemoryAccessRequestKind =
   | "execution_introspect"
   | "evolution_review_pack"
   | "experience_intelligence"
+  | "delegation_records_write"
+  | "delegation_records_find"
+  | "delegation_records_aggregate"
   | "kickoff_recommendation";
 type MemoryAccessInflightKind = "write" | "recall";
 
@@ -233,6 +238,43 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     requiredCapability: "packs_import",
     bodyFactory: (request) => request.body ?? {},
     execute: (body) => importMemoryPack({} as pg.PoolClient, body, writeDefaults),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/delegation/records",
+    requestKind: "delegation_records_write",
+    inflightKind: "write",
+    execute: (body) =>
+      writeDelegationRecords({} as pg.PoolClient, body, writeDefaults),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/delegation/records/find",
+    requestKind: "delegation_records_find",
+    inflightKind: "recall",
+    execute: (body) =>
+      findDelegationRecordsLite(
+        liteWriteStore,
+        body,
+        env.MEMORY_SCOPE,
+        env.MEMORY_TENANT_ID,
+      ),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/delegation/records/aggregate",
+    requestKind: "delegation_records_aggregate",
+    inflightKind: "recall",
+    execute: (body) =>
+      aggregateDelegationRecordsLite(
+        liteWriteStore,
+        body,
+        env.MEMORY_SCOPE,
+        env.MEMORY_TENANT_ID,
+      ),
   });
 
   registerMemoryAccessRoute({

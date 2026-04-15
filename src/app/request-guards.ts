@@ -30,6 +30,9 @@ export type IdentityRequestKind =
   | "execution_introspect"
   | "evolution_review_pack"
   | "experience_intelligence"
+  | "delegation_records_write"
+  | "delegation_records_find"
+  | "delegation_records_aggregate"
   | "kickoff_recommendation"
   | "resolve"
   | "rehydrate_payload"
@@ -318,6 +321,13 @@ export function createRequestGuards({
       if (!obj.owner_agent_id && !obj.owner_team_id) obj.owner_agent_id = env.LITE_LOCAL_ACTOR_ID;
     }
 
+    if (kind === "delegation_records_write") {
+      if (!obj.actor) obj.actor = env.LITE_LOCAL_ACTOR_ID;
+      if (!obj.memory_lane) obj.memory_lane = "shared";
+      if (!obj.producer_agent_id) obj.producer_agent_id = env.LITE_LOCAL_ACTOR_ID;
+      if (!obj.owner_agent_id && !obj.owner_team_id) obj.owner_agent_id = env.LITE_LOCAL_ACTOR_ID;
+    }
+
     if (
       kind === "planning_context"
       || kind === "context_assemble"
@@ -325,6 +335,8 @@ export function createRequestGuards({
       || kind === "kickoff_recommendation"
       || kind === "evolution_review_pack"
       || kind === "continuity_review_pack"
+      || kind === "delegation_records_find"
+      || kind === "delegation_records_aggregate"
     ) {
       if (!obj.consumer_agent_id) obj.consumer_agent_id = env.LITE_LOCAL_ACTOR_ID;
     }

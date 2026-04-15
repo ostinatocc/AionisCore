@@ -1,10 +1,12 @@
 import {
   buildExecutionMemorySummaryBundle,
+  buildExecutionSummarySurface,
   summarizePatternSignalSurface,
   summarizeWorkflowMaintenanceSurface,
   summarizeWorkflowSignalSurface,
   summarizePatternMaintenanceSurface,
 } from "../app/planning-summary.js";
+import { listRecentDelegationRecordNodeRowsLite } from "./delegation-records-surface.js";
 import {
   ExecutionMemoryIntrospectionRequest,
   type ExecutionMemoryIntrospectionResponse,
@@ -330,7 +332,7 @@ export async function buildExecutionMemoryIntrospectionLite(
   const consumerTeamId = parsed.consumer_team_id ?? null;
   const limit = parsed.limit;
 
-  const [workflowAnchors, workflowCandidates, patternAnchors, recentSourceEvents] = await Promise.all([
+  const [workflowAnchors, workflowCandidates, patternAnchors, recentSourceEvents, delegationRecordRows] = await Promise.all([
     liteWriteStore.findExecutionNativeNodes({
       scope,
       executionKind: "workflow_anchor",
@@ -362,6 +364,13 @@ export async function buildExecutionMemoryIntrospectionLite(
       consumerTeamId,
       limit: Math.max(limit * 4, 24),
       offset: 0,
+    }),
+    listRecentDelegationRecordNodeRowsLite({
+      liteWriteStore,
+      scope,
+      consumerAgentId,
+      consumerTeamId,
+      limit: Math.max(limit, 4),
     }),
   ]);
 
@@ -508,6 +517,14 @@ export async function buildExecutionMemoryIntrospectionLite(
       samples: continuityProjectionSamples.slice(0, Math.max(Math.min(limit, 8), 4)),
     },
     demo_surface: demoSurface,
+    execution_summary: buildExecutionSummarySurface({
+      planner_packet: null,
+      surface,
+      packet_assembly: null,
+      tools: null,
+      cost_signals: null,
+      delegation_records: delegationRecordRows,
+    }),
     recommended_workflows: recommendedWorkflows,
     candidate_workflows: candidateWorkflows,
     candidate_patterns: candidatePatterns,

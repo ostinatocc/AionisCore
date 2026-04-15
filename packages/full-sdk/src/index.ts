@@ -1,6 +1,8 @@
 export { createAionisClient, createAionisRuntimeClient } from "./client.js";
 export type { AionisRuntimeClient } from "./client.js";
 export { createAionisHostBridge } from "./host-bridge.js";
+export { resolveContextOperatorProjection, resolveDelegationLearningProjection } from "./projections.js";
+export type { AionisContextOperatorProjection, AionisDelegationLearningProjection } from "./contracts.js";
 export type * from "./host-bridge.js";
 export { AionisRuntimeSdkHttpError } from "./error.js";
 export type * from "./contracts.js";

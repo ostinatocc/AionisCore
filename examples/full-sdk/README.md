@@ -27,6 +27,7 @@ npm run example:sdk:replay
 npm run example:sdk:sessions
 npm run example:sdk:automation
 npm run example:sdk:sandbox
+npm run example:sdk:host-bridge
 ```
 
 Examples:
@@ -41,3 +42,5 @@ Examples:
   validates, creates, lists, and runs a self-contained automation graph
 - `05-sandbox-runtime.ts`
   creates a sandbox session, executes a sync command, and inspects run outputs
+- `06-host-bridge-context.ts`
+  seeds delegation records, opens a stateful task session adapter, then uses `inspectTaskContext()`, `planTaskStart()`, pause/resume, and complete while printing explicit session state snapshots

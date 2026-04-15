@@ -184,11 +184,20 @@ export type AionisKickoffRecommendation = {
 export type AionisKickoffRecommendationRequest = {
   tenant_id?: string;
   scope?: string;
+  run_id?: string;
   query_text: string;
   consumer_agent_id?: string;
   consumer_team_id?: string;
   context?: unknown;
   candidates?: string[];
+  include_shadow?: boolean;
+  rules_limit?: number;
+  strict?: boolean;
+  reorder_candidates?: boolean;
+  execution_result_summary?: Record<string, unknown>;
+  execution_artifacts?: Array<Record<string, unknown>>;
+  execution_evidence?: Array<Record<string, unknown>>;
+  execution_state_v1?: Record<string, unknown>;
   workflow_limit?: number;
 } & AionisRequestPayload;
 
@@ -203,7 +212,65 @@ export type AionisKickoffRecommendationResponse = {
   } & AionisPassthroughObject;
 } & AionisRuntimeResponse;
 
+export type AionisDelegationLearningSummary = {
+  task_family: string | null;
+  matched_records: number;
+  truncated: boolean;
+  route_role_counts: Record<string, number>;
+  record_outcome_counts: Record<string, number>;
+  recommendation_count: number;
+} & AionisPassthroughObject;
+
+export type AionisDelegationLearningProjection = {
+  summary_version: "delegation_learning_projection_v1";
+  learning_summary: AionisDelegationLearningSummary;
+  learning_recommendations: AionisDelegationRecordsLearningRecommendation[];
+} & AionisPassthroughObject;
+
+export type AionisContextOperatorProjection = {
+  delegation_learning?: AionisDelegationLearningProjection;
+} & AionisPassthroughObject;
+
+export type AionisExperienceIntelligenceResponse = {
+  summary_version: "experience_intelligence_v1";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  recommendation: {
+    history_applied: boolean;
+    tool: {
+      selected_tool: string | null;
+      ordered_tools: string[];
+      preferred_tools: string[];
+      allowed_tools: string[];
+      trusted_pattern_anchor_ids: string[];
+      candidate_pattern_anchor_ids: string[];
+      suppressed_pattern_anchor_ids: string[];
+    } & AionisPassthroughObject;
+    path: {
+      source_kind: "recommended_workflow" | "candidate_workflow" | "none";
+      anchor_id: string | null;
+      workflow_signature: string | null;
+      title: string | null;
+      summary: string | null;
+      file_path: string | null;
+      target_files: string[];
+      next_action: string | null;
+      confidence: number | null;
+      tool_set: string[];
+    } & AionisPassthroughObject;
+    combined_next_action: string | null;
+  } & AionisPassthroughObject;
+  learning_summary: AionisDelegationLearningSummary;
+  learning_recommendations: AionisDelegationRecordsLearningRecommendation[];
+  rationale: {
+    summary: string;
+  } & AionisPassthroughObject;
+} & AionisRuntimeResponse;
+
 export type AionisTaskStartRequest = AionisKickoffRecommendationRequest;
+
+export type AionisExperienceIntelligenceRequest = AionisKickoffRecommendationRequest;
 
 export type AionisTaskStartAction = {
   action_kind: "file_step" | "tool_step";
@@ -227,6 +294,301 @@ export type AionisExecutionIntrospectRequest = {
   session_id?: string;
   limit?: number;
 } & AionisRequestPayload;
+
+export type AionisExecutionPacketAssemblySummary = {
+  packet_source_mode: string | null;
+  state_first_assembly: boolean | null;
+  execution_packet_v1_present: boolean | null;
+  execution_state_v1_present: boolean | null;
+} & AionisPassthroughObject;
+
+export type AionisExecutionStrategySummary = {
+  summary_version: "execution_strategy_summary_v1";
+  trust_signal: string;
+  strategy_profile: string;
+  validation_style: string;
+  task_family: string | null;
+  family_scope: string;
+  family_candidate_count: number;
+  selected_working_set: string[];
+  selected_validation_paths: string[];
+  selected_pattern_summaries: string[];
+  preferred_artifact_refs: string[];
+  explanation: string;
+} & AionisPassthroughObject;
+
+export type AionisExecutionCollaborationSummary = {
+  summary_version: "execution_collaboration_summary_v1";
+  packet_present: boolean;
+  coordination_mode: string;
+  current_stage: string | null;
+  active_role: string | null;
+  next_action: string | null;
+  target_file_count: number;
+  pending_validation_count: number;
+  unresolved_blocker_count: number;
+  review_contract_present: boolean;
+  review_standard: string | null;
+  acceptance_check_count: number;
+  rollback_required: boolean;
+  resume_anchor_present: boolean;
+  resume_anchor_file_path: string | null;
+  resume_anchor_symbol: string | null;
+  artifact_ref_count: number;
+  evidence_ref_count: number;
+  side_output_artifact_count: number;
+  side_output_evidence_count: number;
+  artifact_refs: string[];
+  evidence_refs: string[];
+} & AionisPassthroughObject;
+
+export type AionisExecutionContinuitySnapshotSummary = {
+  summary_version: "execution_continuity_snapshot_v1";
+  snapshot_mode: "memory_only" | "packet_backed";
+  coordination_mode: string;
+  trust_signal: string;
+  strategy_profile: string;
+  validation_style: string;
+  task_family: string | null;
+  family_scope: string;
+  selected_tool: string | null;
+  current_stage: string | null;
+  active_role: string | null;
+  next_action: string | null;
+  working_set: string[];
+  validation_paths: string[];
+  selected_pattern_summaries: string[];
+  preferred_artifact_refs: string[];
+  preferred_evidence_refs: string[];
+  reviewer_ready: boolean;
+  resume_anchor_file_path: string | null;
+  selected_memory_layers: string[];
+  recommended_action: string;
+} & AionisPassthroughObject;
+
+export type AionisExecutionForgettingSummary = {
+  summary_version: "execution_forgetting_summary_v1";
+  substrate_mode: "stable" | "suppression_present" | "forgetting_active";
+  forgotten_items: number;
+  forgotten_by_reason: Record<string, number>;
+  primary_forgetting_reason: string | null;
+  suppressed_pattern_count: number;
+  suppressed_pattern_anchor_ids: string[];
+  suppressed_pattern_sources: string[];
+  selected_memory_layers: string[];
+  primary_savings_levers: string[];
+  stale_signal_count: number;
+  recommended_action: string;
+} & AionisPassthroughObject;
+
+export type AionisExecutionCollaborationRoutingSummary = {
+  summary_version: "execution_collaboration_routing_v1";
+  route_mode: "memory_only" | "packet_backed";
+  coordination_mode: string;
+  route_intent: string;
+  task_brief: string | null;
+  current_stage: string | null;
+  active_role: string | null;
+  selected_tool: string | null;
+  task_family: string | null;
+  family_scope: string;
+  next_action: string | null;
+  target_files: string[];
+  validation_paths: string[];
+  unresolved_blockers: string[];
+  hard_constraints: string[];
+  review_standard: string | null;
+  required_outputs: string[];
+  acceptance_checks: string[];
+  preferred_artifact_refs: string[];
+  preferred_evidence_refs: string[];
+  routing_drivers: string[];
+} & AionisPassthroughObject;
+
+export type AionisExecutionDelegationPacketRecord = {
+  version: 1;
+  role: string;
+  mission: string;
+  working_set: string[];
+  acceptance_checks: string[];
+  output_contract: string;
+  preferred_artifact_refs: string[];
+  inherited_evidence: string[];
+  routing_reason: string;
+  task_family: string | null;
+  family_scope: string;
+  source_mode: "memory_only" | "packet_backed";
+} & AionisPassthroughObject;
+
+export type AionisExecutionDelegationReturnRecord = {
+  version: 1;
+  role: string;
+  status: string;
+  summary: string;
+  evidence: string[];
+  working_set: string[];
+  acceptance_checks: string[];
+  source_mode: "memory_only" | "packet_backed";
+} & AionisPassthroughObject;
+
+export type AionisExecutionArtifactRoutingRecord = {
+  version: 1;
+  ref: string;
+  ref_kind: "artifact" | "evidence";
+  route_role: string;
+  route_intent: string;
+  route_mode: "memory_only" | "packet_backed";
+  task_family: string | null;
+  family_scope: string;
+  routing_reason: string;
+  source: "strategy_summary" | "execution_packet" | "collaboration_summary";
+} & AionisPassthroughObject;
+
+export type AionisExecutionDelegationRecordsSummary = {
+  summary_version: "execution_delegation_records_v1";
+  record_mode: "memory_only" | "packet_backed";
+  route_role: string;
+  packet_count: number;
+  return_count: number;
+  artifact_routing_count: number;
+  missing_record_types: string[];
+  delegation_packets: AionisExecutionDelegationPacketRecord[];
+  delegation_returns: AionisExecutionDelegationReturnRecord[];
+  artifact_routing_records: AionisExecutionArtifactRoutingRecord[];
+} & AionisPassthroughObject;
+
+export type AionisExecutionRoutingSignalSummary = {
+  summary_version: "execution_routing_summary_v1";
+  selected_tool: string | null;
+  task_family: string | null;
+  family_scope: string;
+  stable_workflow_anchor_ids: string[];
+  candidate_workflow_anchor_ids: string[];
+  rehydration_anchor_ids: string[];
+  workflow_source_kinds: string[];
+  same_family_rehydration_anchor_ids: string[];
+  other_family_rehydration_anchor_ids: string[];
+  unknown_family_rehydration_anchor_ids: string[];
+} & AionisPassthroughObject;
+
+export type AionisExecutionMaintenanceSummary = {
+  summary_version: "execution_maintenance_summary_v1";
+  forgotten_items: number;
+  forgotten_by_reason: Record<string, number>;
+  suppressed_pattern_count: number;
+  stable_workflow_count: number;
+  promotion_ready_workflow_count: number;
+  selected_memory_layers: string[];
+  primary_savings_levers: string[];
+  recommended_action: string;
+} & AionisPassthroughObject;
+
+export type AionisExecutionInstrumentationSummary = {
+  summary_version: "execution_instrumentation_summary_v1";
+  task_family: string | null;
+  family_scope: string;
+  family_hit: boolean;
+  family_reason: string;
+  selected_pattern_hit_count: number;
+  selected_pattern_miss_count: number;
+  rehydration_candidate_count: number;
+  known_family_rehydration_count: number;
+  same_family_rehydration_count: number;
+  other_family_rehydration_count: number;
+  unknown_family_rehydration_count: number;
+  rehydration_family_hit_rate: number;
+  same_family_rehydration_anchor_ids: string[];
+  other_family_rehydration_anchor_ids: string[];
+} & AionisPassthroughObject;
+
+export type AionisExecutionSummary = {
+  summary_version: "execution_summary_v1";
+  planner_packet: AionisPassthroughObject | null;
+  pattern_signals: AionisPassthroughObject[];
+  workflow_signals: AionisPassthroughObject[];
+  packet_assembly: AionisExecutionPacketAssemblySummary;
+  strategy_summary: AionisExecutionStrategySummary;
+  collaboration_summary: AionisExecutionCollaborationSummary;
+  continuity_snapshot_summary: AionisExecutionContinuitySnapshotSummary;
+  routing_signal_summary: AionisExecutionRoutingSignalSummary;
+  maintenance_summary: AionisExecutionMaintenanceSummary;
+  forgetting_summary: AionisExecutionForgettingSummary;
+  collaboration_routing_summary: AionisExecutionCollaborationRoutingSummary;
+  delegation_records_summary: AionisExecutionDelegationRecordsSummary;
+  instrumentation_summary: AionisExecutionInstrumentationSummary;
+  action_packet_summary: AionisPassthroughObject;
+  pattern_signal_summary: AionisPassthroughObject;
+  workflow_signal_summary: AionisPassthroughObject;
+  workflow_lifecycle_summary: AionisPassthroughObject;
+  workflow_maintenance_summary: AionisPassthroughObject;
+  pattern_lifecycle_summary: AionisPassthroughObject;
+  pattern_maintenance_summary: AionisPassthroughObject;
+} & AionisRuntimeResponse;
+
+export type AionisExecutionIntrospectResponse = {
+  summary_version: "execution_memory_introspection_v1";
+  tenant_id: string;
+  scope: string;
+  inventory: AionisPassthroughObject;
+  continuity_projection_report: AionisPassthroughObject;
+  demo_surface: AionisPassthroughObject;
+  execution_summary: AionisExecutionSummary;
+  recommended_workflows: AionisPassthroughObject[];
+  candidate_workflows: AionisPassthroughObject[];
+  candidate_patterns: AionisPassthroughObject[];
+  trusted_patterns: AionisPassthroughObject[];
+  contested_patterns: AionisPassthroughObject[];
+  rehydration_candidates: AionisPassthroughObject[];
+  pattern_signals: AionisPassthroughObject[];
+  workflow_signals: AionisPassthroughObject[];
+  action_packet_summary: AionisPassthroughObject;
+  pattern_signal_summary: AionisPassthroughObject;
+  workflow_signal_summary: AionisPassthroughObject;
+  workflow_lifecycle_summary: AionisPassthroughObject;
+  workflow_maintenance_summary: AionisPassthroughObject;
+  pattern_lifecycle_summary: AionisPassthroughObject;
+  pattern_maintenance_summary: AionisPassthroughObject;
+} & AionisRuntimeResponse;
+
+export type AionisPlanningContextResponse = {
+  tenant_id: string;
+  scope: string;
+  execution_kernel: AionisPassthroughObject;
+  execution_summary: AionisExecutionSummary;
+  query: AionisPassthroughObject;
+  recall: AionisPassthroughObject;
+  rules?: AionisPassthroughObject;
+  tools?: AionisPassthroughObject;
+  runtime_tool_hints: AionisPassthroughObject[];
+  planner_packet: AionisPassthroughObject;
+  pattern_signals: AionisPassthroughObject[];
+  workflow_signals: AionisPassthroughObject[];
+  planning_summary: AionisPassthroughObject;
+  kickoff_recommendation?: AionisKickoffRecommendation | null;
+  operator_projection?: AionisContextOperatorProjection;
+  layered_context: AionisPassthroughObject;
+  cost_signals: AionisPassthroughObject;
+} & AionisRuntimeResponse;
+
+export type AionisContextAssembleResponse = {
+  tenant_id: string;
+  scope: string;
+  execution_kernel: AionisPassthroughObject;
+  execution_summary: AionisExecutionSummary;
+  query: AionisPassthroughObject;
+  recall: AionisPassthroughObject;
+  rules?: AionisPassthroughObject;
+  tools?: AionisPassthroughObject;
+  runtime_tool_hints: AionisPassthroughObject[];
+  planner_packet: AionisPassthroughObject;
+  pattern_signals: AionisPassthroughObject[];
+  workflow_signals: AionisPassthroughObject[];
+  assembly_summary: AionisPassthroughObject;
+  kickoff_recommendation?: AionisKickoffRecommendation | null;
+  operator_projection?: AionisContextOperatorProjection;
+  layered_context: AionisPassthroughObject;
+  cost_signals: AionisPassthroughObject;
+} & AionisRuntimeResponse;
 
 export type AionisMemoryFindRequest = {
   tenant_id?: string;
@@ -417,6 +779,262 @@ export type AionisNodesActivateRequest = {
   node_ids: string[];
 } & AionisRequestPayload;
 
+export type AionisDelegationRecordsWriteRequest = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  memory_lane?: "private" | "shared";
+  producer_agent_id?: string;
+  owner_agent_id?: string;
+  owner_team_id?: string;
+  record_id?: string;
+  run_id?: string;
+  handoff_anchor?: string;
+  handoff_uri?: string;
+  route_role?: string;
+  task_family?: string;
+  title?: string;
+  summary?: string;
+  input_text?: string;
+  tags?: string[];
+  delegation_records_v1: AionisExecutionDelegationRecordsSummary;
+  execution_result_summary?: Record<string, unknown>;
+  execution_artifacts?: Array<Record<string, unknown>>;
+  execution_evidence?: Array<Record<string, unknown>>;
+  execution_state_v1?: Record<string, unknown>;
+  execution_packet_v1?: Record<string, unknown>;
+} & AionisRequestPayload;
+
+export type AionisDelegationRecordsWriteResponse = {
+  summary_version: "delegation_records_write_v1";
+  tenant_id: string;
+  scope: string;
+  commit_id: string;
+  commit_uri: string | null;
+  record_event: {
+    node_id: string;
+    uri: string;
+    client_id: string;
+    record_id: string;
+    memory_lane: "private" | "shared";
+    run_id: string | null;
+    handoff_anchor: string | null;
+    route_role: string;
+    task_family: string | null;
+    family_scope: string;
+    record_mode: "memory_only" | "packet_backed";
+  } | null;
+  delegation_records_v1: AionisExecutionDelegationRecordsSummary;
+  execution_result_summary: Record<string, unknown> | null;
+  execution_artifacts: Array<Record<string, unknown>>;
+  execution_evidence: Array<Record<string, unknown>>;
+  execution_state_v1: Record<string, unknown> | null;
+  execution_packet_v1: Record<string, unknown> | null;
+} & AionisRuntimeResponse;
+
+export type AionisDelegationRecordsFindRequest = {
+  tenant_id?: string;
+  scope?: string;
+  record_id?: string;
+  run_id?: string;
+  handoff_anchor?: string;
+  handoff_uri?: string;
+  route_role?: string;
+  task_family?: string;
+  family_scope?: string;
+  record_mode?: "memory_only" | "packet_backed";
+  memory_lane?: "private" | "shared";
+  consumer_agent_id?: string;
+  consumer_team_id?: string;
+  include_payload?: boolean;
+  limit?: number;
+  offset?: number;
+} & AionisRequestPayload;
+
+export type AionisDelegationRecordSideOutputSummary = {
+  result_present: boolean;
+  artifact_count: number;
+  evidence_count: number;
+  execution_state_v1_present: boolean;
+  execution_packet_v1_present: boolean;
+} & Record<string, string | number | boolean | null | undefined>;
+
+export type AionisDelegationRecordFindEntry = {
+  uri: string;
+  node_id: string;
+  client_id: string | null;
+  record_id: string | null;
+  title: string | null;
+  text_summary: string | null;
+  memory_lane: "private" | "shared";
+  producer_agent_id: string | null;
+  owner_agent_id: string | null;
+  owner_team_id: string | null;
+  created_at: string;
+  updated_at: string;
+  commit_id: string | null;
+  run_id: string | null;
+  handoff_anchor: string | null;
+  handoff_uri: string | null;
+  route_role: string;
+  task_family: string | null;
+  family_scope: string;
+  record_mode: "memory_only" | "packet_backed";
+  tags: string[];
+  delegation_records_v1: AionisExecutionDelegationRecordsSummary;
+  execution_side_outputs: AionisDelegationRecordSideOutputSummary;
+  execution_result_summary?: Record<string, unknown> | null;
+  execution_artifacts?: Array<Record<string, unknown>>;
+  execution_evidence?: Array<Record<string, unknown>>;
+  execution_state_v1?: Record<string, unknown> | null;
+  execution_packet_v1?: Record<string, unknown> | null;
+} & AionisRuntimeResponse;
+
+export type AionisDelegationRecordsFindSummary = {
+  summary_version: "delegation_records_find_summary_v1";
+  returned_records: number;
+  has_more: boolean;
+  invalid_records: number;
+  filters_applied: string[];
+  record_mode_counts: Record<string, number>;
+  memory_lane_counts: Record<string, number>;
+  route_role_counts: Record<string, number>;
+  task_family_counts: Record<string, number>;
+  missing_record_type_counts: Record<string, number>;
+  return_status_counts: Record<string, number>;
+  artifact_source_counts: Record<string, number>;
+  packet_count: number;
+  return_count: number;
+  artifact_routing_count: number;
+  run_id_count: number;
+  handoff_anchor_count: number;
+} & AionisRuntimeResponse;
+
+export type AionisDelegationRecordsFindResponse = {
+  summary_version: "delegation_records_find_v1";
+  tenant_id: string;
+  scope: string;
+  records: AionisDelegationRecordFindEntry[];
+  summary: AionisDelegationRecordsFindSummary;
+} & AionisRuntimeResponse;
+
+export type AionisDelegationRecordsAggregateRequest = {
+  tenant_id?: string;
+  scope?: string;
+  record_id?: string;
+  run_id?: string;
+  handoff_anchor?: string;
+  handoff_uri?: string;
+  route_role?: string;
+  task_family?: string;
+  family_scope?: string;
+  record_mode?: "memory_only" | "packet_backed";
+  memory_lane?: "private" | "shared";
+  consumer_agent_id?: string;
+  consumer_team_id?: string;
+  limit?: number;
+} & AionisRequestPayload;
+
+export type AionisDelegationRecordsAggregateBucket = {
+  key: string;
+  record_count: number;
+  packet_count: number;
+  return_count: number;
+  artifact_routing_count: number;
+  record_mode_counts: Record<string, number>;
+  task_family_counts?: Record<string, number>;
+  route_role_counts?: Record<string, number>;
+  return_status_counts: Record<string, number>;
+  artifact_source_counts: Record<string, number>;
+} & AionisRuntimeResponse;
+
+export type AionisDelegationRecordsAggregateRefStat = {
+  ref: string;
+  ref_kind: "artifact" | "evidence";
+  count: number;
+  source_counts: Record<string, number>;
+} & AionisRuntimeResponse;
+
+export type AionisDelegationRecordsAggregateStringStat = {
+  value: string;
+  count: number;
+} & AionisRuntimeResponse;
+
+export type AionisDelegationRecordsReusablePattern = {
+  route_role: string;
+  task_family: string;
+  record_count: number;
+  record_mode_counts: Record<string, number>;
+  record_outcome_counts: Record<string, number>;
+  sample_mission: string | null;
+  sample_acceptance_checks: string[];
+  sample_working_set_files: string[];
+  sample_artifact_refs: string[];
+} & AionisRuntimeResponse;
+
+export type AionisDelegationRecordsLearningRecommendation = {
+  recommendation_kind:
+    | "capture_missing_returns"
+    | "review_blocked_pattern"
+    | "increase_artifact_capture"
+    | "promote_reusable_pattern";
+  priority: "high" | "medium" | "low";
+  route_role: string | null;
+  task_family: string | null;
+  recommended_action: string;
+  rationale: string;
+  sample_mission: string | null;
+  sample_acceptance_checks: string[];
+  sample_working_set_files: string[];
+  sample_artifact_refs: string[];
+} & AionisRuntimeResponse;
+
+export type AionisDelegationRecordsAggregateSummary = {
+  summary_version: "delegation_records_aggregate_summary_v1";
+  matched_records: number;
+  truncated: boolean;
+  invalid_records: number;
+  filters_applied: string[];
+  record_mode_counts: Record<string, number>;
+  memory_lane_counts: Record<string, number>;
+  route_role_counts: Record<string, number>;
+  task_family_counts: Record<string, number>;
+  missing_record_type_counts: Record<string, number>;
+  return_status_counts: Record<string, number>;
+  normalized_return_status_counts: Record<string, number>;
+  record_outcome_counts: Record<string, number>;
+  artifact_source_counts: Record<string, number>;
+  packet_count: number;
+  return_count: number;
+  artifact_routing_count: number;
+  run_id_count: number;
+  handoff_anchor_count: number;
+  records_with_returns: number;
+  records_with_missing_types: number;
+  records_with_payload_result: number;
+  records_with_payload_artifacts: number;
+  records_with_payload_evidence: number;
+  records_with_payload_state: number;
+  records_with_payload_packet: number;
+  completion_rate: number;
+  blocked_rate: number;
+  missing_return_rate: number;
+  route_role_buckets: AionisDelegationRecordsAggregateBucket[];
+  task_family_buckets: AionisDelegationRecordsAggregateBucket[];
+  top_reusable_patterns: AionisDelegationRecordsReusablePattern[];
+  learning_recommendations: AionisDelegationRecordsLearningRecommendation[];
+  top_artifact_refs: AionisDelegationRecordsAggregateRefStat[];
+  top_acceptance_checks: AionisDelegationRecordsAggregateStringStat[];
+  top_working_set_files: AionisDelegationRecordsAggregateStringStat[];
+} & AionisRuntimeResponse;
+
+export type AionisDelegationRecordsAggregateResponse = {
+  summary_version: "delegation_records_aggregate_v1";
+  tenant_id: string;
+  scope: string;
+  summary: AionisDelegationRecordsAggregateSummary;
+} & AionisRuntimeResponse;
+
 export type AionisHandoffStoreRequest = {
   tenant_id?: string;
   scope?: string;
@@ -459,6 +1077,130 @@ export type AionisHandoffRecoverRequest = {
   symbol?: string;
   include_payload?: boolean;
 } & AionisRequestPayload;
+
+export type AionisContinuityReviewPackRequest = AionisHandoffRecoverRequest;
+
+export type AionisContinuityFocusItem = {
+  source_kind: string;
+  continuity_kind: string;
+  continuity_phase: string;
+  occurred_at: string | null;
+  title: string | null;
+  text_summary: string | null;
+  anchor?: string | null;
+  handoff_kind?: string | null;
+  file_path?: string | null;
+  repo_root?: string | null;
+  symbol?: string | null;
+  next_action?: string | null;
+} & AionisPassthroughObject;
+
+export type AionisContinuityInspectSummary = {
+  inspect_version: "continuity_inspect_v1";
+  latest_handoff: AionisContinuityFocusItem | null;
+  latest_resume: AionisContinuityFocusItem | null;
+  latest_terminal_run: AionisContinuityFocusItem | null;
+} & AionisPassthroughObject;
+
+export type AionisContinuityReviewContract = {
+  target_files: string[];
+  next_action: string | null;
+  acceptance_checks: string[];
+  must_change: string[];
+  must_remove: string[];
+  must_keep: string[];
+  rollback_required: boolean;
+} & AionisPassthroughObject;
+
+export type AionisContinuityReviewPackSummary = {
+  pack_version: "continuity_review_pack_v1";
+  latest_handoff: AionisContinuityFocusItem | null;
+  latest_resume: AionisContinuityFocusItem | null;
+  latest_terminal_run: AionisContinuityFocusItem | null;
+  recovered_handoff: AionisPassthroughObject | null;
+  review_contract: AionisContinuityReviewContract | null;
+} & AionisPassthroughObject;
+
+export type AionisContinuityReviewPackResponse = {
+  tenant_id: string;
+  scope: string;
+  sources: AionisPassthroughObject[];
+  items: AionisPassthroughObject[];
+  page: {
+    limit: number;
+    offset: number;
+    returned: number;
+    has_more: boolean;
+  };
+  counters?: {
+    total_items?: number;
+    returned_items?: number;
+    source_count?: number;
+  } & AionisPassthroughObject;
+  continuity_inspect: AionisContinuityInspectSummary;
+  continuity_review_pack: AionisContinuityReviewPackSummary;
+} & AionisRuntimeResponse;
+
+export type AionisEvolutionReviewPackRequest = AionisKickoffRecommendationRequest & {
+  limit?: number;
+};
+
+export type AionisEvolutionInspectSummary = {
+  summary_version: "evolution_inspect_summary_v1";
+  history_applied: boolean;
+  selected_tool: string | null;
+  recommended_file_path: string | null;
+  recommended_next_action: string | null;
+  stable_workflow_count: number;
+  promotion_ready_workflow_count: number;
+  trusted_pattern_count: number;
+  contested_pattern_count: number;
+  suppressed_pattern_count: number;
+} & AionisPassthroughObject;
+
+export type AionisEvolutionInspectResponse = {
+  summary_version: "evolution_inspect_v1";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  experience_intelligence: AionisPassthroughObject;
+  execution_introspection: AionisExecutionIntrospectResponse;
+  evolution_summary: AionisEvolutionInspectSummary;
+} & AionisPassthroughObject;
+
+export type AionisEvolutionReviewContract = {
+  selected_tool: string | null;
+  file_path: string | null;
+  target_files: string[];
+  next_action: string | null;
+  stable_workflow_anchor_id: string | null;
+  promotion_ready_anchor_ids: string[];
+  trusted_pattern_anchor_ids: string[];
+  contested_pattern_anchor_ids: string[];
+  suppressed_pattern_anchor_ids: string[];
+} & AionisPassthroughObject;
+
+export type AionisEvolutionDelegationLearningSummary = AionisDelegationLearningSummary;
+
+export type AionisEvolutionReviewPackSummary = {
+  pack_version: "evolution_review_pack_v1";
+  stable_workflow: AionisPassthroughObject | null;
+  promotion_ready_workflow: AionisPassthroughObject | null;
+  trusted_pattern: AionisPassthroughObject | null;
+  contested_pattern: AionisPassthroughObject | null;
+  review_contract: AionisEvolutionReviewContract;
+  learning_summary: AionisEvolutionDelegationLearningSummary;
+  learning_recommendations: AionisDelegationRecordsLearningRecommendation[];
+} & AionisPassthroughObject;
+
+export type AionisEvolutionReviewPackResponse = {
+  summary_version: "evolution_review_pack_v1";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  evolution_inspect: AionisEvolutionInspectResponse;
+  evolution_review_pack: AionisEvolutionReviewPackSummary;
+} & AionisRuntimeResponse;
 
 export type AionisReplayRunStartRequest = {
   tenant_id?: string;

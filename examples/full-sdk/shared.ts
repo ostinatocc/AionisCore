@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
-import { createAionisRuntimeClient, AionisRuntimeSdkHttpError } from "../../packages/full-sdk/dist/index.js";
+import {
+  createAionisHostBridge,
+  createAionisRuntimeClient,
+  AionisRuntimeSdkHttpError,
+  resolveDelegationLearningProjection,
+} from "../../packages/full-sdk/dist/index.js";
 
 export const DEFAULT_BASE_URL = process.env.AIONIS_BASE_URL ?? "http://127.0.0.1:3001";
 export const DEFAULT_TENANT_ID = process.env.AIONIS_TENANT_ID ?? "default";
@@ -11,6 +16,14 @@ export function createExampleClient() {
     baseUrl: DEFAULT_BASE_URL,
   });
 }
+
+export function createExampleHostBridge() {
+  return createAionisHostBridge({
+    baseUrl: DEFAULT_BASE_URL,
+  });
+}
+
+export { resolveDelegationLearningProjection };
 
 export function isMain(moduleUrl: string): boolean {
   const entry = process.argv[1];
