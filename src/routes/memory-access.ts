@@ -10,6 +10,7 @@ import {
   buildKickoffRecommendationResponseFromExperience,
 } from "../memory/experience-intelligence.js";
 import { buildExecutionMemoryIntrospectionLite } from "../memory/execution-introspection.js";
+import { buildContinuityReviewPackLite, buildEvolutionReviewPackLite } from "../memory/reviewer-packs.js";
 import { exportMemoryPack, importMemoryPack } from "../memory/packs.js";
 import { rehydrateAnchorPayloadLite } from "../memory/rehydrate-anchor.js";
 import { memoryResolveLite } from "../memory/resolve.js";
@@ -23,7 +24,9 @@ type MemoryAccessRequestKind =
   | "find"
   | "resolve"
   | "rehydrate_payload"
+  | "continuity_review_pack"
   | "execution_introspect"
+  | "evolution_review_pack"
   | "experience_intelligence"
   | "kickoff_recommendation";
 type MemoryAccessInflightKind = "write" | "recall";
@@ -242,6 +245,21 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
 
   registerMemoryAccessRoute({
     method: "post",
+    path: "/v1/memory/continuity/review-pack",
+    requestKind: "continuity_review_pack",
+    inflightKind: "recall",
+    execute: (body) =>
+      buildContinuityReviewPackLite({
+        liteWriteStore,
+        body,
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        consumerAgentId: env.LITE_LOCAL_ACTOR_ID,
+      }),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
     path: "/v1/memory/execution/introspect",
     requestKind: "execution_introspect",
     inflightKind: "recall",
@@ -253,6 +271,23 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
         env.MEMORY_TENANT_ID,
         env.LITE_LOCAL_ACTOR_ID,
       ),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/evolution/review-pack",
+    requestKind: "evolution_review_pack",
+    inflightKind: "recall",
+    execute: (body) =>
+      buildEvolutionReviewPackLite({
+        liteWriteStore,
+        liteRecallAccess,
+        embedder,
+        body,
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        defaultActorId: env.LITE_LOCAL_ACTOR_ID,
+      }),
   });
 
   registerMemoryAccessRoute({

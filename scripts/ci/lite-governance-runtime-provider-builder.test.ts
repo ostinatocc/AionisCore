@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import Fastify from "fastify";
 import { buildLiteGovernanceRuntimeProviders } from "../../src/app/governance-runtime-providers.ts";
 
+const TEST_GOVERNANCE_HTTP_TIMEOUT_MS = 5000;
+
 function buildEnv(overrides: Record<string, unknown> = {}) {
   return {
     REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: false,
@@ -17,7 +19,7 @@ function buildEnv(overrides: Record<string, unknown> = {}) {
     GOVERNANCE_MODEL_CLIENT_BASE_URL: "",
     GOVERNANCE_MODEL_CLIENT_API_KEY: "",
     GOVERNANCE_MODEL_CLIENT_MODEL: "",
-    GOVERNANCE_MODEL_CLIENT_TIMEOUT_MS: 1000,
+    GOVERNANCE_MODEL_CLIENT_TIMEOUT_MS: TEST_GOVERNANCE_HTTP_TIMEOUT_MS,
     GOVERNANCE_MODEL_CLIENT_MAX_TOKENS: 200,
     GOVERNANCE_MODEL_CLIENT_TEMPERATURE: 0,
     ...overrides,

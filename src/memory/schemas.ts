@@ -826,6 +826,69 @@ export const KickoffRecommendationRequest = ExperienceIntelligenceRequest;
 
 export type KickoffRecommendationInput = z.infer<typeof KickoffRecommendationRequest>;
 
+export const ContinuityFocusItemSchema = z.object({
+  source_kind: z.string(),
+  continuity_kind: z.string(),
+  continuity_phase: z.string(),
+  occurred_at: z.string().nullable(),
+  title: z.string().nullable(),
+  text_summary: z.string().nullable(),
+  anchor: z.string().nullable().optional(),
+  handoff_kind: z.string().nullable().optional(),
+  file_path: z.string().nullable().optional(),
+  repo_root: z.string().nullable().optional(),
+  symbol: z.string().nullable().optional(),
+  next_action: z.string().nullable().optional(),
+}).passthrough();
+
+export const ContinuityInspectSummarySchema = z.object({
+  inspect_version: z.literal("continuity_inspect_v1"),
+  latest_handoff: ContinuityFocusItemSchema.nullable(),
+  latest_resume: ContinuityFocusItemSchema.nullable(),
+  latest_terminal_run: ContinuityFocusItemSchema.nullable(),
+}).passthrough();
+
+export const ContinuityReviewContractSchema = z.object({
+  target_files: z.array(z.string()),
+  next_action: z.string().nullable(),
+  acceptance_checks: z.array(z.string()),
+  must_change: z.array(z.string()),
+  must_remove: z.array(z.string()),
+  must_keep: z.array(z.string()),
+  rollback_required: z.boolean(),
+}).passthrough();
+
+export const ContinuityReviewPackSummarySchema = z.object({
+  pack_version: z.literal("continuity_review_pack_v1"),
+  latest_handoff: ContinuityFocusItemSchema.nullable(),
+  latest_resume: ContinuityFocusItemSchema.nullable(),
+  latest_terminal_run: ContinuityFocusItemSchema.nullable(),
+  recovered_handoff: z.record(z.unknown()).nullable(),
+  review_contract: ContinuityReviewContractSchema.nullable(),
+}).passthrough();
+
+export const ContinuityReviewPackResponseSchema = z.object({
+  tenant_id: z.string(),
+  scope: z.string(),
+  sources: z.array(z.record(z.unknown())),
+  items: z.array(z.record(z.unknown())),
+  page: z.object({
+    limit: z.number().int().nonnegative(),
+    offset: z.number().int().nonnegative(),
+    returned: z.number().int().nonnegative(),
+    has_more: z.boolean(),
+  }),
+  counters: z.object({
+    total_items: z.number().int().nonnegative().optional(),
+    returned_items: z.number().int().nonnegative().optional(),
+    source_count: z.number().int().nonnegative().optional(),
+  }).passthrough().optional(),
+  continuity_inspect: ContinuityInspectSummarySchema,
+  continuity_review_pack: ContinuityReviewPackSummarySchema,
+}).passthrough();
+
+export type ContinuityReviewPackResponse = z.infer<typeof ContinuityReviewPackResponseSchema>;
+
 export const ExperienceIntelligencePathRecommendationSchema = z.object({
   source_kind: z.enum(["recommended_workflow", "candidate_workflow", "none"]),
   anchor_id: z.string().nullable(),
@@ -1085,6 +1148,61 @@ export const ExecutionMemoryIntrospectionResponseSchema = z.object({
 });
 
 export type ExecutionMemoryIntrospectionResponse = z.infer<typeof ExecutionMemoryIntrospectionResponseSchema>;
+
+export const EvolutionInspectSummarySchema = z.object({
+  summary_version: z.literal("evolution_inspect_summary_v1"),
+  history_applied: z.boolean(),
+  selected_tool: z.string().nullable(),
+  recommended_file_path: z.string().nullable(),
+  recommended_next_action: z.string().nullable(),
+  stable_workflow_count: z.number().int().min(0),
+  promotion_ready_workflow_count: z.number().int().min(0),
+  trusted_pattern_count: z.number().int().min(0),
+  contested_pattern_count: z.number().int().min(0),
+  suppressed_pattern_count: z.number().int().min(0),
+}).passthrough();
+
+export const EvolutionInspectResponseSchema = z.object({
+  summary_version: z.literal("evolution_inspect_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  query_text: z.string(),
+  experience_intelligence: ExperienceIntelligenceResponseSchema,
+  execution_introspection: ExecutionMemoryIntrospectionResponseSchema,
+  evolution_summary: EvolutionInspectSummarySchema,
+}).passthrough();
+
+export const EvolutionReviewContractSchema = z.object({
+  selected_tool: z.string().nullable(),
+  file_path: z.string().nullable(),
+  target_files: z.array(z.string()),
+  next_action: z.string().nullable(),
+  stable_workflow_anchor_id: z.string().nullable(),
+  promotion_ready_anchor_ids: z.array(z.string()),
+  trusted_pattern_anchor_ids: z.array(z.string()),
+  contested_pattern_anchor_ids: z.array(z.string()),
+  suppressed_pattern_anchor_ids: z.array(z.string()),
+}).passthrough();
+
+export const EvolutionReviewPackSummarySchema = z.object({
+  pack_version: z.literal("evolution_review_pack_v1"),
+  stable_workflow: z.record(z.unknown()).nullable(),
+  promotion_ready_workflow: z.record(z.unknown()).nullable(),
+  trusted_pattern: z.record(z.unknown()).nullable(),
+  contested_pattern: z.record(z.unknown()).nullable(),
+  review_contract: EvolutionReviewContractSchema,
+}).passthrough();
+
+export const EvolutionReviewPackResponseSchema = z.object({
+  summary_version: z.literal("evolution_review_pack_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  query_text: z.string(),
+  evolution_inspect: EvolutionInspectResponseSchema,
+  evolution_review_pack: EvolutionReviewPackSummarySchema,
+}).passthrough();
+
+export type EvolutionReviewPackResponse = z.infer<typeof EvolutionReviewPackResponseSchema>;
 
 export const PlanningSummaryContractSchema = z.object({
   summary_version: z.literal("planning_summary_v1"),
@@ -1578,6 +1696,10 @@ export const HandoffRecoverRequest = z.object({
 });
 
 export type HandoffRecoverInput = z.infer<typeof HandoffRecoverRequest>;
+
+export const ContinuityReviewPackRequest = HandoffRecoverRequest;
+
+export type ContinuityReviewPackInput = z.infer<typeof ContinuityReviewPackRequest>;
 
 export const MemorySessionCreateRequest = z.object({
   tenant_id: z.string().min(1).optional(),

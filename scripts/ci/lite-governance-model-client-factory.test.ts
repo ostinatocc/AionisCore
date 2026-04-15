@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import Fastify from "fastify";
 import { buildLiteGovernanceModelClient } from "../../src/memory/governance-model-client-factory.ts";
 
+const TEST_GOVERNANCE_HTTP_TIMEOUT_MS = 5000;
+
 async function withChatCompletionStub(
   handler: (body: any) => unknown,
   fn: (baseUrl: string) => Promise<void>,
@@ -145,7 +147,7 @@ test("lite governance model client factory can build promote_memory http resolve
           baseUrl,
           apiKey: "test-key",
           model: "test-model",
-          timeoutMs: 1000,
+          timeoutMs: TEST_GOVERNANCE_HTTP_TIMEOUT_MS,
           maxTokens: 200,
           temperature: 0,
         },

@@ -1,0 +1,151 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import Fastify from "fastify";
+import { createRequestGuards } from "../../src/app/request-guards.ts";
+import { registerHostErrorHandler } from "../../src/host/http-host.ts";
+import { registerHandoffRoutes } from "../../src/routes/handoff.ts";
+import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
+import { ContinuityReviewPackResponseSchema } from "../../src/memory/schemas.ts";
+import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
+import { createLiteWriteStore } from "../../src/store/lite-write-store.ts";
+import { InflightGate } from "../../src/util/inflight_gate.ts";
+
+function tmpDbPath(name: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-lite-continuity-review-pack-"));
+  return path.join(dir, `${name}.sqlite`);
+}
+
+function buildEnv() {
+  return {
+    AIONIS_EDITION: "lite",
+    MEMORY_AUTH_MODE: "off",
+    TENANT_QUOTA_ENABLED: false,
+    LITE_LOCAL_ACTOR_ID: "local-user",
+    MEMORY_TENANT_ID: "default",
+    MEMORY_SCOPE: "default",
+    APP_ENV: "test",
+    ADMIN_TOKEN: "",
+    TRUST_PROXY: false,
+    TRUSTED_PROXY_CIDRS: [],
+    RATE_LIMIT_ENABLED: false,
+    RATE_LIMIT_BYPASS_LOOPBACK: false,
+    WRITE_RATE_LIMIT_MAX_WAIT_MS: 0,
+    RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS: 0,
+    MAX_TEXT_LEN: 10000,
+    PII_REDACTION: false,
+    ALLOW_CROSS_SCOPE_EDGES: false,
+    MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+    MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+  } as any;
+}
+
+function registerApp(args: {
+  app: ReturnType<typeof Fastify>;
+  liteWriteStore: ReturnType<typeof createLiteWriteStore>;
+  liteRecallStore: ReturnType<typeof createLiteRecallStore>;
+}) {
+  const env = buildEnv();
+  const guards = createRequestGuards({
+    env,
+    embedder: null,
+    recallLimiter: null,
+    debugEmbedLimiter: null,
+    writeLimiter: null,
+    sandboxWriteLimiter: null,
+    sandboxReadLimiter: null,
+    recallTextEmbedLimiter: null,
+    recallInflightGate: new InflightGate({ maxInflight: 8, maxQueue: 8, queueTimeoutMs: 100 }),
+    writeInflightGate: new InflightGate({ maxInflight: 8, maxQueue: 8, queueTimeoutMs: 100 }),
+  });
+
+  registerHostErrorHandler(args.app);
+  registerHandoffRoutes({
+    app: args.app,
+    env,
+    embedder: null,
+    embeddedRuntime: null,
+    liteWriteStore: args.liteWriteStore,
+    requireMemoryPrincipal: guards.requireMemoryPrincipal,
+    withIdentityFromRequest: guards.withIdentityFromRequest as any,
+    enforceRateLimit: guards.enforceRateLimit,
+    enforceTenantQuota: guards.enforceTenantQuota,
+    tenantFromBody: guards.tenantFromBody,
+    acquireInflightSlot: guards.acquireInflightSlot,
+    executionStateStore: null,
+  });
+  registerMemoryAccessRoutes({
+    app: args.app,
+    env,
+    embedder: null,
+    liteWriteStore: args.liteWriteStore,
+    liteRecallAccess: args.liteRecallStore.createRecallAccess(),
+    writeAccessShadowMirrorV2: false,
+    requireStoreFeatureCapability: () => {},
+    requireMemoryPrincipal: guards.requireMemoryPrincipal,
+    withIdentityFromRequest: guards.withIdentityFromRequest,
+    enforceRateLimit: guards.enforceRateLimit,
+    enforceTenantQuota: guards.enforceTenantQuota,
+    tenantFromBody: guards.tenantFromBody,
+    acquireInflightSlot: guards.acquireInflightSlot,
+  });
+}
+
+test("memory continuity review-pack route wraps recovered handoff into reviewer-friendly contract", async () => {
+  const dbPath = tmpDbPath("continuity-review-pack");
+  const app = Fastify();
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  try {
+    registerApp({ app, liteWriteStore, liteRecallStore });
+
+    const storeResp = await app.inject({
+      method: "POST",
+      url: "/v1/handoff/store",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        memory_lane: "private",
+        anchor: "resume:src/routes/export.ts",
+        file_path: "src/routes/export.ts",
+        repo_root: "/repo",
+        handoff_kind: "patch_handoff",
+        title: "Fix export route",
+        summary: "Repair export failure and keep tests green",
+        handoff_text: "Fix export route and rerun targeted tests",
+        target_files: ["src/routes/export.ts"],
+        next_action: "Patch src/routes/export.ts and rerun export tests",
+        must_change: ["src/routes/export.ts"],
+        must_remove: ["legacy export fallback"],
+        must_keep: ["existing success path"],
+        acceptance_checks: ["npm run -s test:lite -- export"],
+      },
+    });
+    assert.equal(storeResp.statusCode, 200, storeResp.body);
+
+    const reviewResp = await app.inject({
+      method: "POST",
+      url: "/v1/memory/continuity/review-pack",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        anchor: "resume:src/routes/export.ts",
+        file_path: "src/routes/export.ts",
+        repo_root: "/repo",
+        handoff_kind: "patch_handoff",
+      },
+    });
+    assert.equal(reviewResp.statusCode, 200, reviewResp.body);
+    const parsed = ContinuityReviewPackResponseSchema.parse(JSON.parse(reviewResp.body));
+    assert.equal(parsed.continuity_review_pack.pack_version, "continuity_review_pack_v1");
+    assert.equal(parsed.continuity_review_pack.review_contract?.rollback_required, true);
+    assert.deepEqual(parsed.continuity_review_pack.review_contract?.must_remove, ["legacy export fallback"]);
+    assert.deepEqual(parsed.continuity_review_pack.review_contract?.must_keep, ["existing success path"]);
+    assert.deepEqual(parsed.continuity_review_pack.review_contract?.acceptance_checks, ["npm run -s test:lite -- export"]);
+    assert.equal(parsed.continuity_review_pack.latest_handoff?.anchor, "resume:src/routes/export.ts");
+  } finally {
+    await app.close();
+  }
+});

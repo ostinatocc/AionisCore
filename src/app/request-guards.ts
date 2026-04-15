@@ -26,7 +26,9 @@ export type IdentityRequestKind =
   | "rehydrate"
   | "activate"
   | "find"
+  | "continuity_review_pack"
   | "execution_introspect"
+  | "evolution_review_pack"
   | "experience_intelligence"
   | "kickoff_recommendation"
   | "resolve"
@@ -114,6 +116,8 @@ function isReplayReadIdentityKind(kind: IdentityRequestKind): boolean {
     || kind === "replay_playbook_run"
     || kind === "replay_playbook_dispatch"
     || kind === "execution_introspect"
+    || kind === "continuity_review_pack"
+    || kind === "evolution_review_pack"
   );
 }
 
@@ -314,7 +318,14 @@ export function createRequestGuards({
       if (!obj.owner_agent_id && !obj.owner_team_id) obj.owner_agent_id = env.LITE_LOCAL_ACTOR_ID;
     }
 
-    if (kind === "planning_context" || kind === "context_assemble" || kind === "experience_intelligence" || kind === "kickoff_recommendation") {
+    if (
+      kind === "planning_context"
+      || kind === "context_assemble"
+      || kind === "experience_intelligence"
+      || kind === "kickoff_recommendation"
+      || kind === "evolution_review_pack"
+      || kind === "continuity_review_pack"
+    ) {
       if (!obj.consumer_agent_id) obj.consumer_agent_id = env.LITE_LOCAL_ACTOR_ID;
     }
 

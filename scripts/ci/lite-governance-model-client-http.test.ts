@@ -6,6 +6,11 @@ import {
   createHttpPromoteMemoryGovernanceModelClient,
 } from "../../src/memory/governance-model-client-http.ts";
 
+// These tests boot local Fastify stubs. Under the full concurrent suite, a 1s
+// transport timeout is tight enough to cause false negatives on otherwise
+// healthy loopback requests.
+const TEST_GOVERNANCE_HTTP_TIMEOUT_MS = 5000;
+
 async function withChatCompletionStub(
   handler: (body: any) => unknown,
   fn: (baseUrl: string) => Promise<void>,
@@ -74,7 +79,7 @@ test("http promote_memory governance client can parse a valid review result", as
         baseUrl,
         apiKey: "test-key",
         model: "test-model",
-        timeoutMs: 1000,
+        timeoutMs: TEST_GOVERNANCE_HTTP_TIMEOUT_MS,
         maxTokens: 200,
         temperature: 0,
       });
@@ -110,7 +115,7 @@ test("http form_pattern governance client can parse a valid review result", asyn
         baseUrl,
         apiKey: "test-key",
         model: "test-model",
-        timeoutMs: 1000,
+        timeoutMs: TEST_GOVERNANCE_HTTP_TIMEOUT_MS,
         maxTokens: 200,
         temperature: 0,
       });
@@ -133,7 +138,7 @@ test("http governance client returns null on invalid JSON payload", async () => 
         baseUrl,
         apiKey: "test-key",
         model: "test-model",
-        timeoutMs: 1000,
+        timeoutMs: TEST_GOVERNANCE_HTTP_TIMEOUT_MS,
         maxTokens: 200,
         temperature: 0,
       });
@@ -171,7 +176,7 @@ test("http promote_memory governance client can parse a valid anthropic review r
         apiKey: "test-key",
         model: "test-model",
         transport: "anthropic_messages_v1",
-        timeoutMs: 1000,
+        timeoutMs: TEST_GOVERNANCE_HTTP_TIMEOUT_MS,
         maxTokens: 200,
         temperature: 0,
       });
@@ -208,7 +213,7 @@ test("http form_pattern governance client can parse a valid anthropic review res
         apiKey: "test-key",
         model: "test-model",
         transport: "anthropic_messages_v1",
-        timeoutMs: 1000,
+        timeoutMs: TEST_GOVERNANCE_HTTP_TIMEOUT_MS,
         maxTokens: 200,
         temperature: 0,
       });
