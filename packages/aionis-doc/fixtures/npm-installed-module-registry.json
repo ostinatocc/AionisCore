@@ -1,0 +1,17 @@
+{
+  "version": "aionis_doc_npm_module_registry_v1",
+  "modules": [
+    {
+      "module": "research.claims.v1",
+      "package": "@aionis/doc-module-research-claims"
+    },
+    {
+      "module": "copy.summary.v1",
+      "package": "@aionis/doc-module-copy-summary"
+    },
+    {
+      "module": "json.transform.v1",
+      "package": "@aionis/doc-module-json-transform"
+    }
+  ]
+}

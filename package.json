@@ -18,11 +18,16 @@
   },
   "scripts": {
     "core:build:runtime-host": "test -f src/runtime-entry.ts",
+    "core:build:aionis-doc": "npm --prefix packages/aionis-doc run build",
     "core:build:runtime-core": "npm --prefix packages/runtime-core run build",
     "core:build:sdk": "npm --prefix packages/full-sdk run build",
     "core:test:sdk": "npm --prefix packages/full-sdk run test",
     "core:build:internal-sdk": "npm --prefix packages/sdk run build",
     "core:test:internal-sdk": "npm --prefix packages/sdk run test",
+    "aionis-doc:build": "npm run -s core:build:aionis-doc",
+    "aionis-doc:pack:dry-run": "npm --prefix packages/aionis-doc run pack:dry-run",
+    "aionis-doc:publish:dry-run": "npm --prefix packages/aionis-doc run publish:dry-run",
+    "aionis-doc:release:check": "bash scripts/package-release-baseline.sh --package-dir packages/aionis-doc --verify-template scripts/release-verify/aionis-doc-consumer.mjs",
     "sdk:build": "npm run -s core:build:sdk",
     "sdk:test": "npm run -s core:test:sdk",
     "sdk:pack:dry-run": "npm --prefix packages/full-sdk run pack:dry-run",
@@ -34,7 +39,7 @@
     "runtime-core:pack:dry-run": "npm --prefix packages/runtime-core run pack:dry-run",
     "runtime-core:publish:dry-run": "npm --prefix packages/runtime-core run publish:dry-run",
     "runtime-core:release:check": "bash scripts/package-release-baseline.sh --package-dir packages/runtime-core --verify-template scripts/release-verify/runtime-core-consumer.mjs",
-    "packages:release:check": "npm run -s sdk:release:check && npm run -s runtime-core:release:check",
+    "packages:release:check": "npm run -s aionis-doc:release:check && npm run -s sdk:release:check && npm run -s runtime-core:release:check",
     "lite:build": "npm --prefix apps/lite run build",
     "lite:start": "npm --prefix apps/lite run start --",
     "lite:start:local-process": "npm --prefix apps/lite run start:local-process --",
@@ -65,7 +70,7 @@
     "example:integration:host-task-start": "npx tsx examples/sdk/07-host-task-start-flow.ts",
     "example:integration:task-start-learning-loop": "npx tsx examples/sdk/08-task-start-learning-loop.ts",
     "build": "npm run -s core:build",
-    "core:build": "npm run -s core:build:runtime-host && npm run -s core:build:runtime-core && npm run -s core:build:sdk && npm run -s core:build:internal-sdk"
+    "core:build": "npm run -s core:build:runtime-host && npm run -s core:build:aionis-doc && npm run -s core:build:runtime-core && npm run -s core:build:sdk && npm run -s core:build:internal-sdk"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

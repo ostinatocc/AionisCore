@@ -23,6 +23,12 @@ Low-level runtime boundary package:
 npm install @ostinato/aionis-rtc
 ```
 
+Document workflow compiler and continuity package:
+
+```bash
+npm install @aionis/doc
+```
+
 ## Quick Start
 
 ```ts
@@ -49,6 +55,7 @@ console.log(taskStart.first_action);
 
 1. [packages/full-sdk](packages/full-sdk) -> `@ostinato/aionis`
 2. [packages/runtime-core](packages/runtime-core) -> `@ostinato/aionis-rtc`
+3. [packages/aionis-doc](packages/aionis-doc) -> `@aionis/doc`
 
 ## Start Here
 
@@ -65,7 +72,8 @@ console.log(taskStart.first_action);
 4. [src/store](src/store)
 5. [packages/runtime-core](packages/runtime-core)
 6. [packages/full-sdk](packages/full-sdk)
-7. [apps/lite](apps/lite)
+7. [packages/aionis-doc](packages/aionis-doc)
+8. [apps/lite](apps/lite)
 
 ## Validation
 

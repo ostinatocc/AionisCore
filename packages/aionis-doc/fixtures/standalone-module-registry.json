@@ -1,0 +1,13 @@
+{
+  "version": "aionis_doc_module_registry_v1",
+  "modules": [
+    {
+      "module": "research.claims.v1",
+      "entry": "./modules/research-claims.mjs"
+    },
+    {
+      "module": "copy.summary.v1",
+      "entry": "./modules/copy-summary.mjs"
+    }
+  ]
+}

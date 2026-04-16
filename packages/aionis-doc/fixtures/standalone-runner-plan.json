@@ -1,0 +1,51 @@
+{
+  "plan_version": "execution_plan_v1",
+  "doc": {
+    "id": "standalone-runner-001",
+    "version": "1.0",
+    "kind": "workflow"
+  },
+  "context": {
+    "merged": {
+      "product": "Aionis Doc",
+      "objective": "Explain standalone execution"
+    },
+    "frames": [
+      {
+        "product": "Aionis Doc",
+        "objective": "Explain standalone execution"
+      }
+    ]
+  },
+  "executions": [
+    {
+      "execution_id": "run.claims",
+      "module": "research.claims.v1",
+      "input_ref": "ctx",
+      "output_ref": "run.claims",
+      "depends_on": []
+    },
+    {
+      "execution_id": "out.summary",
+      "module": "copy.summary.v1",
+      "input_ref": "run.claims",
+      "output_ref": "out.summary",
+      "depends_on": [
+        "run.claims"
+      ]
+    }
+  ],
+  "graph": null,
+  "expected_outputs": [
+    "out.summary"
+  ],
+  "required_capabilities": [
+    "direct_execution"
+  ],
+  "determinism": {
+    "executable": true,
+    "replay_mode": "deterministic",
+    "requires_resume_support": false
+  },
+  "diagnostics": []
+}

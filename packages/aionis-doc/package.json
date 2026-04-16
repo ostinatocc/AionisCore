@@ -1,0 +1,63 @@
+{
+  "name": "@aionis/doc",
+  "version": "0.2.0",
+  "description": "Parser and compiler primitives for Aionis Doc",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ostinatocc/AionisCore.git",
+    "directory": "packages/aionis-doc"
+  },
+  "homepage": "https://github.com/ostinatocc/AionisCore/tree/main/packages/aionis-doc",
+  "bugs": {
+    "url": "https://github.com/ostinatocc/AionisCore/issues"
+  },
+  "bin": {
+    "compile-aionis-doc": "dist/cli.js",
+    "run-aionis-doc": "dist/run-cli.js",
+    "validate-aionis-doc-registry": "dist/validate-registry-cli.js",
+    "validate-aionis-doc-module": "dist/validate-module-cli.js",
+    "execute-aionis-doc": "dist/execute-cli.js",
+    "build-aionis-doc-runtime-handoff": "dist/runtime-handoff-cli.js",
+    "build-aionis-doc-handoff-store-request": "dist/handoff-store-cli.js",
+    "publish-aionis-doc-handoff": "dist/publish-cli.js",
+    "recover-aionis-doc-handoff": "dist/recover-cli.js",
+    "resume-aionis-doc-runtime": "dist/resume-cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "pack:dry-run": "npm run build && npm pack --dry-run --cache /tmp/aionis-npm-cache",
+    "publish:dry-run": "npm run build && npm publish --dry-run"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "keywords": [
+    "aionis",
+    "document",
+    "compiler",
+    "typescript"
+  ],
+  "author": "Aionis Core",
+  "license": "Apache-2.0"
+}
