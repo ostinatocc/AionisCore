@@ -1,25 +1,29 @@
-# Aionis Core Boundary
+# Aionis Runtime Open-Core Boundary
 
-This document describes the recommended boundary for Aionis Core.
+Last reviewed: 2026-04-16
+
+Document status: living public boundary reference
+
+This document describes the recommended boundary between the public Aionis Runtime surface and the tighter Aionis Core kernel implementation.
 
 ## Short version
 
 Recommended distribution stance:
 
-1. keep `@ostinato/aionis` open
-2. keep core route and SDK contracts explicit
+1. keep the public runtime packages open
+2. keep route and SDK contracts explicit
 3. keep the strongest kernel learning and governance implementation under tighter control
 
 ## Why this boundary makes sense now
 
-Aionis Core already has real technical depth in:
+The current repository already has real technical depth in:
 
 1. execution-memory learning loops
 2. governed replay, workflow, and tool behavior
 3. benchmark and regression-gated runtime validation
 4. external-LLM shadow-aligned governance evaluation
 
-At the same time, Aionis Core benefits from:
+At the same time, Aionis Runtime benefits from:
 
 1. developer adoption
 2. easy integration
@@ -30,10 +34,11 @@ At the same time, Aionis Core benefits from:
 The default open surface should be:
 
 1. `@ostinato/aionis`
-2. typed SDK contracts
-3. public route-level integration contracts
-4. examples, quickstart, and publishing guidance
-5. enough runtime documentation to explain how the SDK talks to Aionis Core
+2. `@ostinato/aionis-rtc`
+3. `@aionis/doc`
+4. typed SDK and route contracts
+5. examples, quickstart, and publishing guidance
+6. enough runtime documentation to explain how the SDK talks to the runtime
 
 ## Recommended controlled surface
 
@@ -49,9 +54,10 @@ The more controlled layer can include:
 
 Recommended public phrasing:
 
-1. Aionis Core is an execution-memory kernel
+1. Aionis Runtime is the public continuity runtime
 2. `@ostinato/aionis` is the primary developer interface
-3. stronger kernel layers are distributed selectively as the product matures
+3. Aionis Core is the kernel beneath that runtime
+4. stronger kernel layers are distributed selectively as the product matures
 
 ## Immediate implication
 

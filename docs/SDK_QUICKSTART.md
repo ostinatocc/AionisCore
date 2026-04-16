@@ -1,11 +1,15 @@
-# Aionis Core Quickstart
+# Aionis Runtime Quickstart
 
-This guide is the fastest way to get from a running Aionis Core runtime to a working `@ostinato/aionis` integration.
+Last reviewed: 2026-04-16
 
-## 1. Start Aionis Core
+Document status: living public integration quickstart
+
+This guide is the fastest way to get from a running Aionis Runtime instance to a working `@ostinato/aionis` integration.
+
+## 1. Start Aionis Runtime
 
 ```bash
-cd /path/to/AionisCore
+cd /path/to/AionisRuntime
 npm install
 npm run lite:start
 ```
@@ -20,18 +24,6 @@ In your own project:
 
 ```bash
 npm install @ostinato/aionis
-```
-
-Optional CLI sanity check:
-
-```bash
-npx @ostinato/aionis doctor
-```
-
-Optional runtime launcher:
-
-```bash
-npx @ostinato/aionis dev --repo /path/to/Aionis --port 3101
 ```
 
 ## 3. Create a client
@@ -51,13 +43,7 @@ await aionis.memory.write({
   tenant_id: "default",
   scope: "demo-sdk-quickstart",
   actor: "sdk-demo",
-  run_id: "sdk-run-1",
-  observations: [
-    {
-      kind: "workflow_step",
-      summary: "Fetched a CSV report and normalized the rows",
-    },
-  ],
+  input_text: "Fetched a CSV report, normalized the rows, and identified a billing retry timeout in src/billing/retry.ts.",
 });
 ```
 
@@ -139,7 +125,7 @@ await aionis.handoff.store({
 });
 ```
 
-## 9. Complete SDK surface
+## 9. What else is in the SDK
 
 Current complete SDK surface includes:
 
@@ -152,7 +138,7 @@ Current complete SDK surface includes:
 7. sandbox and automation surfaces
 8. host bridge integration
 
-## 9. Inspect host bridge task context
+## 10. Inspect host bridge task context
 
 ```ts
 import { createAionisHostBridge } from "@ostinato/aionis";
@@ -204,7 +190,7 @@ console.log(taskSession.snapshotState());
 console.log(taskSession.snapshotState().transition_guards);
 ```
 
-## 10. Inspect review packs
+## 11. Inspect review packs
 
 ```ts
 const continuityPack = await aionis.memory.reviewPacks.continuity({
@@ -230,7 +216,7 @@ console.log(evolutionPack.evolution_review_pack.learning_summary);
 console.log(evolutionPack.evolution_review_pack.learning_recommendations);
 ```
 
-## 11. Persist standalone delegation records
+## 12. Persist standalone delegation records
 
 ```ts
 const delegationWrite = await aionis.memory.delegationRecords.write({
@@ -299,7 +285,7 @@ const delegationWrite = await aionis.memory.delegationRecords.write({
 console.log(delegationWrite.record_event?.uri);
 ```
 
-## 12. Query typed delegation records
+## 13. Query typed delegation records
 
 ```ts
 const delegationQuery = await aionis.memory.delegationRecords.find({
@@ -316,7 +302,7 @@ console.log(delegationQuery.summary.return_status_counts);
 console.log(delegationQuery.records[0]?.delegation_records_v1.delegation_packets[0]?.mission);
 ```
 
-## 13. Aggregate delegation-record trends
+## 14. Aggregate delegation-record trends
 
 ```ts
 const delegationAggregate = await aionis.memory.delegationRecords.aggregate({
@@ -335,10 +321,10 @@ console.log(delegationAggregate.summary.learning_recommendations);
 console.log(delegationAggregate.summary.top_artifact_refs);
 ```
 
-## 14. Run bundled SDK examples
+## 15. Run bundled SDK examples
 
 ```bash
-cd /path/to/AionisCore
+cd /path/to/AionisRuntime
 npm run sdk:build
 npm run lite:start
 ```

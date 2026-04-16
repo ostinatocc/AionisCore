@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Replay Repair Review Governance Preview Plan
 
 1. add failing repair-review route coverage for an optional governance preview

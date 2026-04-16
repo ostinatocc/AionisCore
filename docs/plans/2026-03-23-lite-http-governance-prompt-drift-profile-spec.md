@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite HTTP Governance Prompt Drift Profile Spec
 
 Date: 2026-03-23

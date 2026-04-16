@@ -2,6 +2,12 @@
 
 Last reviewed: 2026-03-27
 
+Historical status:
+
+`archive snapshot`
+
+This audit is preserved as a point-in-time inventory. It is useful for design history, but it is not the current runtime source of truth.
+
 This document is a capability audit for Aionis Core based on direct inspection of:
 
 1. [Aionis Core](../README.md)

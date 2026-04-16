@@ -1,6 +1,10 @@
 # Aionis Core Planner Packet And Provenance Contract
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-04-16
+
+Internal status:
+
+`active internal packet and provenance contract`
 
 This document defines the stable planner-facing and selector-facing provenance contract introduced during Foundation Memory `V1`.
 

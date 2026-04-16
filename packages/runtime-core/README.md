@@ -1,6 +1,6 @@
 # @ostinato/aionis-rtc
 
-Shared runtime-core boundary for Aionis Core.
+Shared runtime-core boundary for Aionis Runtime.
 
 ## Install
 
@@ -22,7 +22,7 @@ Later phases can move additional bootstrapping and runtime implementation here o
 ## Local workflow
 
 ```bash
-cd /path/to/AionisCore
+cd /path/to/AionisRuntime
 npm install
 npm run runtime-core:build
 ```

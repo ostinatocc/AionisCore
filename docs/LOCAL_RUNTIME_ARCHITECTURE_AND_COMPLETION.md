@@ -1,53 +1,64 @@
-# Aionis Core Local Runtime Architecture And Completion
+# Aionis Runtime Local Runtime Architecture
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-04-16
 
-This document describes the current local-runtime architecture inside the `Aionis Core` repository and records the present completion level of each major capability area.
+Document status: living technical architecture reference
 
-For the endpoint-level public surface, see [docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md).
+This document is the canonical architecture reference for the current Lite local runtime.
 
-## Executive Summary
+It describes the runtime as it exists in the source tree today. It does not try to preserve older completion tracking language or historical codebase metrics.
 
-`Aionis Core` now contains a real local runtime shell and a real local execution-memory kernel.
+For endpoint-by-endpoint public surface details, see [LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md).
 
-Current reality:
+## Runtime model
 
-1. It boots through its own local runtime shell and manifest contracts.
-2. It runs as a single-user local runtime with SQLite-backed persistence.
-3. It includes replay, playbook, sandbox, and a local playbook-driven automation kernel.
-4. It carries a narrower local-runtime surface than the broader core capability set.
-5. It is complete enough to validate directly, but the copied `src/` tree still needs more slimming before the codebase reaches its clean final local-runtime shape.
+The current public runtime story is Lite:
 
-As of this review, the local runtime source tree contains:
+1. a local runtime shell
+2. a Lite-only runtime assembly path
+3. an HTTP host that registers the Lite route surface
+4. SQLite-backed local persistence for write, recall, replay, automation, and host state
+5. local automation and sandbox execution support
 
-1. `112` code files under `src/`
-2. about `44,360` lines of code under `src/`
+The runtime is intentionally narrower than the broader repository capability set. Server-only and control-plane route groups remain outside Lite by design.
 
-The largest remaining modules are:
+## Canonical source files
 
-1. `src/memory/replay.ts`
-2. `src/store/lite-write-store.ts`
-3. `src/memory/sandbox.ts`
-4. `src/routes/memory-context-runtime.ts`
+When this document and the code ever disagree, the code wins. The main runtime sources are:
 
-## Repository Shape
+1. `apps/lite/scripts/start-lite-app.sh`
+2. `apps/lite/src/index.js`
+3. `src/index.ts`
+4. `src/runtime-entry.ts`
+5. `src/app/runtime-services.ts`
+6. `src/app/request-guards.ts`
+7. `src/host/http-host.ts`
+8. `src/host/lite-edition.ts`
 
-The repository is structured around a thin local runtime shell, a local runtime assembly path, and a SQLite-backed local kernel.
+## Repository seams
 
-Top-level product seams:
+The local runtime is split across a few clear seams:
 
 1. `apps/lite/`
    Owns the local runtime shell launcher and startup script.
-2. `src/`
-   Holds the runtime host, route layer, app assembly, memory kernel, and SQLite stores.
-3. `packages/runtime-core/`
-   Marks the extraction seam between shared core capability surfaces and local-runtime surfaces.
-4. `docs/`
-   Holds core boundary and operator-facing architecture material.
+2. `src/runtime-entry.ts`
+   Owns runtime startup assembly and host registration.
+3. `src/app/runtime-services.ts`
+   Owns Lite-only runtime wiring.
+4. `src/host/*`
+   Owns HTTP host behavior, health, request hooks, route registration, and Lite-only unsupported route handling.
+5. `src/memory/*`
+   Owns write, recall, context, handoff, replay, automation, and sandbox behavior.
+6. `src/store/*`
+   Owns SQLite-backed local persistence surfaces.
+7. `packages/full-sdk/`
+   Owns the public SDK integration layer exposed as `@ostinato/aionis`.
+8. `packages/runtime-core/`
+   Marks the extraction seam between shared runtime-core code and Lite runtime concerns.
 
-## Runtime Bootstrap
+## Startup chain
 
-The startup chain is:
+The Lite startup chain is:
 
 1. `apps/lite/scripts/start-lite-app.sh`
 2. `apps/lite/src/index.js`
@@ -57,26 +68,83 @@ The startup chain is:
 Responsibilities:
 
 1. `apps/lite/scripts/start-lite-app.sh`
-   Sets the default local runtime environment:
-   - `AIONIS_EDITION=lite`
-   - `AIONIS_MODE=local`
-   - `MEMORY_AUTH_MODE=off`
-   - `TENANT_QUOTA_ENABLED=false`
-   - `LITE_LOCAL_ACTOR_ID=local-user`
-   - `SANDBOX_ENABLED=true`
-   - `SANDBOX_ADMIN_ONLY=false`
+   Sets the default local runtime environment and launches the Lite shell.
 2. `apps/lite/src/index.js`
-   Launches the local runtime source entry through `tsx`.
+   Starts the source runtime through Node.
 3. `src/index.ts`
-   Is a thin entry that delegates to `startAionisRuntime()`.
+   Delegates to `startAionisRuntime()`.
 4. `src/runtime-entry.ts`
-   Is the runtime truth for startup assembly, route registration, request guards, observability helpers, and bootstrap lifecycle.
+   Loads env, constructs runtime services, builds guards/policies, creates the host, registers routes, and starts the server.
 
-## Runtime Assembly
+## Default Lite environment
 
-The main assembly logic lives in `src/app/runtime-services.ts`.
+The Lite startup script sets the default local runtime behavior:
 
-This module is now explicitly Lite-only and wires:
+1. `AIONIS_EDITION=lite`
+2. `AIONIS_MODE=local`
+3. `MEMORY_AUTH_MODE=off`
+4. `TENANT_QUOTA_ENABLED=false`
+5. `RATE_LIMIT_BYPASS_LOOPBACK=true`
+6. `LITE_REPLAY_SQLITE_PATH` and `LITE_WRITE_SQLITE_PATH` under `.tmp/`
+7. `LITE_LOCAL_ACTOR_ID=local-user`
+8. `SANDBOX_ENABLED=true`
+9. `SANDBOX_ADMIN_ONLY=false`
+
+The shell also supports `LITE_SANDBOX_PROFILE=local_process_echo`, which narrows the sandbox to a local-process echo profile.
+
+## Runtime startup lifecycle
+
+`src/runtime-entry.ts` is not just a thin wrapper around Fastify startup. It defines the actual Lite bootstrap order.
+
+Current startup sequence:
+
+1. `loadEnv()`
+   Resolves the runtime environment before any store or host object exists.
+2. `createRuntimeServices(env)`
+   Builds the Lite store graph, embedding provider, sandbox executor, accessors, limiters, budget policy maps, and recall embed helpers.
+3. `createRequestGuards(...)`
+   Builds the request-time enforcement layer for identity, rate limits, inflight control, admin checks, tenant quota invariants, and Lite-local default identity injection.
+4. `createSandboxBudgetService(...)`
+   Builds the tenant and project sandbox budget gate.
+5. `createRecallPolicy(env)`
+   Builds the recall profile and strategy resolver set.
+6. `createRecallTextEmbedRuntime(...)`
+   Builds the recall-text embedding cache, singleflight, batching, and error mapping helpers.
+7. `createReplayRuntimeOptionBuilders(...)`
+   Builds replay repair review options and automation replay run options from the assembled Lite runtime state.
+8. `createHttpObservabilityHelpers(...)`
+   Builds host CORS resolution and request/context telemetry helpers.
+9. `createReplayRepairReviewPolicy(...)`
+   Builds the Lite replay repair review defaulting policy.
+10. `createHttpApp(env)`
+    Creates the Fastify host instance.
+11. `registerHostErrorHandler(app)`
+    Installs the structured error envelope layer before routes are registered.
+12. `logMemoryApiConfig(...)`
+    Logs the effective runtime, embedding, recall, concurrency, and sandbox configuration.
+13. `registerHostRequestHooks(...)`
+    Installs request ID, request timing, CORS, and telemetry hooks.
+14. `registerHealthRoute(...)`
+    Exposes the runtime health surface before the main application routes.
+15. `registerApplicationRoutes(...)`
+    Mounts the Lite route surface.
+16. `registerBootstrapLifecycle(...)`
+    Registers host shutdown behavior for the sandbox executor and Lite stores.
+17. `assertBootstrapStoreContracts(...)`
+    Verifies recall, replay, and write access contracts before the host starts listening.
+18. `listenHttpApp(app, env)`
+    Starts the HTTP listener on the configured port.
+
+Two details matter here:
+
+1. Lite fails early if the store-access contracts do not match what the host expects.
+2. The shutdown path is explicit: on close, the runtime shuts down the sandbox executor and closes recall, replay, write, automation, and host stores.
+
+## Runtime assembly
+
+The main Lite-only runtime wiring lives in `src/app/runtime-services.ts`.
+
+This module enforces `AIONIS_EDITION=lite` and assembles:
 
 1. Lite host store
 2. Lite write store
@@ -84,137 +152,194 @@ This module is now explicitly Lite-only and wires:
 4. Lite replay store
 5. Lite automation definition store
 6. Lite automation run store
-7. sandbox executor
-8. local rate limiters, inflight gates, and embedding helpers
+7. embedding provider and embedding surface policy
+8. sandbox executor
+9. rate limiters
+10. inflight gates
+11. recall text embed cache and batcher
+12. recall, replay, and write accessors for host registration
+13. store capability flags and health metadata
+14. sandbox remote host and CIDR allowlists
+15. sandbox tenant budget policy parsing
 
-Important current constraints:
+The important architectural point is that Lite assembly is explicit. It does not reuse the full-runtime constructor path and then try to partially disable server behavior later.
+
+## Policy and helper assembly
+
+The runtime does a second assembly pass after stores and executors exist but before any route is registered.
+
+That pass is important because most request behavior is not implemented ad hoc inside the route modules.
+
+Central helper assemblies:
+
+1. `src/app/recall-policy.ts`
+   Owns recall profile defaults, endpoint and tenant overrides, class-aware recall resolution, adaptive recall adjustment, explicit mode handling, strategy resolution, and recall trajectory building.
+2. `src/app/recall-text-embed.ts`
+   Owns recall-text query embedding cache, singleflight deduplication, optional batching, and upstream error normalization.
+3. `src/app/replay-runtime-options.ts`
+   Owns replay repair review option assembly and automation replay run option assembly, including local executor settings, governance providers, learning projection defaults, and sandbox-backed validation execution.
+4. `src/app/replay-repair-review-policy.ts`
+   Owns Lite-supported replay repair review defaulting and policy parsing. In Lite, this policy is intentionally narrower than the broader server-side policy model and accepts only the supported endpoint/global shape.
+5. `src/app/http-observability.ts`
+   Owns memory/admin CORS policy resolution, request-to-telemetry endpoint mapping, request tenant and scope resolution for telemetry, and context-assembly telemetry recording.
+6. `src/app/sandbox-budget.ts`
+   Owns sandbox budget lookup and enforcement across project-specific, tenant-specific, and global defaults from either the database or environment policy maps.
+
+The architectural consequence is deliberate: route registration receives prebuilt policy and helper closures. The route layer composes behavior; it does not define the runtime's policy model from scratch.
+
+## Guard and identity model
+
+`src/app/request-guards.ts` is Lite-only.
+
+Its invariants are:
 
 1. `AIONIS_EDITION` must be `lite`
-2. auth mode is local-only
-3. tenant quota wiring is disabled in Lite
-4. the runtime uses SQLite-backed local stores rather than postgres-backed full-runtime constructors
+2. `MEMORY_AUTH_MODE` must be `off`
+3. `TENANT_QUOTA_ENABLED` must be `false`
 
-## Host Layer
+The runtime still applies:
 
-The HTTP host is defined by `src/host/http-host.ts` and `src/host/lite-edition.ts`.
+1. request identity derivation
+2. admin-token checks where required
+3. rate limiting
+4. inflight backpressure
+5. trusted-proxy and client-IP handling
 
-The host layer does four things:
+Default local identity comes from `LITE_LOCAL_ACTOR_ID`, which is reused across local replay, playbook execution, automation runs, and default local write ownership when a stronger identity is not provided.
 
-1. Registers the stable `/health` contract.
-2. Registers all Lite-supported runtime routes.
-3. Emits structured error envelopes.
-4. Exposes unsupported full/server route groups as structured `501` responses.
+## Host layer
 
-The Lite route matrix currently classifies surfaces as:
+The HTTP host is defined primarily by `src/host/http-host.ts` and `src/host/lite-edition.ts`.
 
-Kernel-required routes:
+The host layer is responsible for:
 
-1. `memory-write`
-2. `memory-handoff`
-3. `memory-recall`
-4. `memory-context-runtime`
-5. `memory-access-partial`
-6. `memory-replay-core`
-7. `memory-feedback-tools`
+1. registering the stable `/health` route
+2. registering Lite-supported route groups
+3. adding request hooks
+4. emitting structured error envelopes
+5. exposing unsupported server-only route groups as structured `501` responses
 
-Optional routes:
+`src/host/lite-edition.ts` defines the Lite route matrix and the explicit server-only route groups.
 
-1. `memory-sandbox`
-2. `memory-replay-governed-partial`
-3. `automations-lite-kernel`
-
-Server-only route groups:
+Current server-only route groups in Lite:
 
 1. `/v1/admin/control/*`
 2. `/v1/memory/archive/rehydrate*`
 3. `/v1/memory/nodes/activate*`
 
-## Identity And Guard Model
+This explicit `501` behavior is part of the product boundary. Lite does not pretend to expose the broader server lifecycle surface.
 
-`src/app/request-guards.ts` is now a Lite-only guard module.
+## Route registration and host flow
 
-Its current model is:
+The host route flow is fixed in `src/host/http-host.ts`.
 
-1. single-user local runtime
-2. `MEMORY_AUTH_MODE=off`
-3. `TENANT_QUOTA_ENABLED=false`
-4. loopback-friendly rate limiting
-5. inflight gates for write and recall pressure
+`registerApplicationRoutes(args)` does three things:
 
-The default local identity is:
+1. asserts the Lite-only source tree contract
+2. registers the Lite `501` server-only route stubs
+3. registers the supported memory, replay, automation, and sandbox route groups
 
-1. `LITE_LOCAL_ACTOR_ID=local-user`
+In Lite, `registerAdminRoutes()` does not expose a working admin control plane. It only mounts the explicit unsupported-route handlers defined in `src/host/lite-edition.ts`.
 
-That actor is reused across:
+`registerMemoryRoutes()` currently mounts routes in this order:
 
-1. replay ownership
-2. playbook execution
-3. automation runs
-4. default local write ownership
-5. sandbox requests that do not carry a stronger explicit local identity
+1. memory write
+2. handoff
+3. memory access
+4. memory recall
+5. memory context runtime
+6. feedback and tool routes
+7. replay core
+8. replay governed
+9. automation routes when the Lite automation store is present
+10. sandbox routes
 
-## Storage Architecture
+Two concrete host-flow details are worth making explicit:
+
+1. memory write and handoff both receive the shared execution state store from `getSharedExecutionStateStore()`
+2. governed replay and automation do not construct their own replay execution environment; they receive the prebuilt replay option builders assembled during bootstrap
+
+## Health and observability
+
+The runtime registers:
+
+1. `/health`
+2. structured request telemetry hooks
+3. structured startup logging for runtime mode, storage backend, embedding state, sandbox state, and recall settings
+
+The health route reports:
+
+1. runtime edition and mode
+2. storage backend
+3. Lite identity, store health snapshots, and route matrix
+4. sandbox executor status
+5. sandbox remote egress policy summary and artifact-object-store configuration
+
+## Storage architecture
 
 Lite is a multi-store local runtime built on SQLite.
 
-Primary stores:
+Primary local stores:
 
 1. `src/store/lite-write-store.ts`
-   Primary write-side persistence for nodes, edges, commits, sessions, packs, rule state, and other local write-backed surfaces.
+   Primary local write-side persistence.
 2. `src/store/lite-recall-store.ts`
-   Local recall and retrieval access.
+   Recall and retrieval access.
 3. `src/store/lite-replay-store.ts`
-   Replay mirror and replay-facing local persistence.
+   Replay-facing local persistence.
 4. `src/store/lite-automation-store.ts`
-   Automation definition storage.
+   Automation definition persistence.
 5. `src/store/lite-automation-run-store.ts`
-   Automation run and node execution storage.
+   Automation run persistence.
 6. `src/store/lite-host-store.ts`
-   Local host-side sandbox session/run/log persistence for Lite.
+   Host-side sandbox session, run, and log persistence.
 
-Secondary compatibility seams still present:
+The storage model is intentionally split by responsibility instead of hiding everything behind one generic local store.
 
-1. `src/store/recall-access.ts`
-2. `src/store/replay-access.ts`
-3. `src/store/write-access.ts`
-4. `src/store/embedded-memory-runtime.ts`
+## Kernel subsystems
 
-These still exist because Lite is a cut-down shared runtime tree, not yet a fully minimized dedicated source tree.
-
-## Memory And Replay Kernel
-
-The memory kernel remains the largest part of the Lite codebase.
+The core Lite runtime behavior lives in `src/memory/`.
 
 Key modules:
 
-1. `src/memory/write.ts`
+1. `write.ts`
    Write preparation and write application flow.
-2. `src/memory/recall.ts`
+2. `recall.ts`
    Recall execution and retrieval behavior.
-3. `src/memory/context.ts`
+3. `context.ts`
    Context assembly behavior.
-4. `src/memory/replay.ts`
-   Replay, playbook, repair review, and governed execution machinery.
-5. `src/memory/replay-write.ts`
-   Replay mirror write behavior.
-6. `src/memory/handoff.ts`
-   Handoff store/recover flow.
-7. `src/memory/feedback.ts`
+4. `handoff.ts`
+   Structured task handoff and recovery.
+5. `replay.ts`
+   Replay lifecycle, playbook promotion, review, and governed execution behavior.
+6. `sandbox.ts`
+   Local sandbox execution behavior.
+7. `automation-lite.ts`
+   Local automation kernel behavior.
+8. `feedback.ts`
    Feedback and rule-feedback persistence.
-8. `src/memory/packs.ts`
-   Pack import/export compatibility.
 
-Current architectural reality:
+These modules are what make Lite a real runtime kernel rather than a thin transport wrapper.
 
-1. replay remains the biggest subsystem in Lite
-2. playbook execution is real, not stubbed
-3. governed replay exists in Lite, but only through the Lite-local path
-4. replay repair review policy in Lite is narrowed to global-plus-endpoint overlays only
-5. stable workflow anchor production is now consistent for both newly promoted stable playbooks and already-stable latest playbooks
+## Public route surface in Lite
 
-## Automation Kernel
+At a high level, the Lite runtime registers these capability groups:
 
-Lite now includes a local automation kernel implemented by:
+1. memory write
+2. handoff store and recover
+3. memory recall and context runtime
+4. memory access subset
+5. feedback, rules, and tool selection
+6. replay and playbook core
+7. governed replay subset
+8. local automation kernel
+9. local sandbox kernel
+
+The exact route list and status matrix live in [LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md).
+
+## Automation kernel
+
+Lite includes a local automation kernel through:
 
 1. `src/routes/automations.ts`
 2. `src/memory/automation-lite.ts`
@@ -228,208 +353,48 @@ Supported node kinds:
 3. `condition`
 4. `artifact_gate`
 
-Supported route surface:
-
-1. `POST /v1/automations/create`
-2. `POST /v1/automations/get`
-3. `POST /v1/automations/list`
-4. `POST /v1/automations/validate`
-5. `POST /v1/automations/graph/validate`
-6. `POST /v1/automations/run`
-7. `POST /v1/automations/runs/get`
-8. `POST /v1/automations/runs/list`
-9. `POST /v1/automations/runs/cancel`
-10. `POST /v1/automations/runs/resume`
-
-Intentionally unsupported automation governance surfaces return structured `501` errors.
-
-These remain out of Lite by design:
-
-1. reviewer assignment
-2. promotion/control-plane review
-3. compensation tooling
-4. telemetry orchestration
-5. shadow review/report governance surfaces
+Lite automation is intentionally local and playbook-driven. Reviewer assignment, control-plane promotion, compensation tooling, and broader orchestration surfaces remain outside Lite.
 
 ## Sandbox
 
-Lite now includes a real local sandbox path implemented by:
+Lite includes a real sandbox path through:
 
 1. `src/routes/memory-sandbox.ts`
 2. `src/memory/sandbox.ts`
 3. `src/store/lite-host-store.ts`
 
-Current sandbox behavior:
+The sandbox executor is created during runtime assembly and supports:
 
-1. enabled by default in Lite
-2. available to ordinary local users by default
-3. still supports explicit relock through `SANDBOX_ADMIN_ONLY=true`
-4. defaults to `SANDBOX_EXECUTOR_MODE=mock`
-5. now exposes a convenience local-process preset through `LITE_SANDBOX_PROFILE=local_process_echo`
+1. local enable/disable control
+2. local-process or remote executor configuration
+3. allowed-command parsing
+4. timeout and concurrency limits
+5. host and CIDR restrictions for remote execution
+6. tenant budget policy enforcement
 
-Supported sandbox routes:
+## Lite boundary
 
-1. `POST /v1/memory/sandbox/sessions`
-2. `POST /v1/memory/sandbox/execute`
-3. `POST /v1/memory/sandbox/runs/get`
-4. `POST /v1/memory/sandbox/runs/logs`
-5. `POST /v1/memory/sandbox/runs/artifact`
-6. `POST /v1/memory/sandbox/runs/cancel`
+The Lite runtime is intentionally local-first and single-user in shape.
 
-Current caveat:
+That means:
 
-1. the default executor is intentionally `mock`
-2. the route surface is real and persistent, but default sandbox execution is still optimized for local validation rather than hardened production execution
-3. the current local-process preset is intentionally narrow and only allows `echo` by default
+1. auth mode is local/off
+2. tenant quota wiring is disabled
+3. SQLite is the persistence backend
+4. unsupported server-only route groups return structured `501`
+5. local automation and sandbox support are real
+6. control-plane lifecycle and hosted orchestration surfaces remain outside Lite
 
-## Execution Memory Runtime Notes
+This boundary is deliberate. It keeps the public runtime honest about what it ships today.
 
-Two runtime semantics are now important enough to treat as architectural behavior rather than implementation detail.
+## Recommended companion references
 
-### 1. Rehydration Identity
+Use these documents and files with this architecture reference:
 
-`rehydrate_payload` follows the Lite single-user identity model.
-
-In practical terms:
-
-1. the normal Lite path inherits `LITE_LOCAL_ACTOR_ID`
-2. private local anchors remain rehydratable through the standard route and tool surfaces
-3. runtime hints do not need to restate actor to remain correct in the default local case
-
-### 2. Policy Reuse Precedence
-
-The `Execution Policy Learning Loop` does not override explicit operator or rule policy.
-
-In practical terms:
-
-1. recalled trusted patterns may shape tool ordering
-2. explicit `tool.prefer` remains higher priority
-3. selector reuse is memory-guided policy learning, not silent policy replacement
-
-## Shared-Core Boundary
-
-`packages/runtime-core/src/index.ts` records the current intended split:
-
-Shared core:
-
-1. `memory-kernel`
-2. `runtime-bootstrap`
-3. `automation-kernel-local`
-
-Local runtime shell:
-
-1. `local-runtime-shell`
-
-Server-only:
-
-1. `admin-control`
-2. `automation-orchestration`
-
-This boundary is already useful, but it is still metadata over a copied tree rather than a fully extracted package graph.
-
-## Stable Contracts
-
-Lite now has stable external contracts in three important areas:
-
-1. Health contract
-   `runtime / storage / lite / sandbox`
-2. Error contract
-   `status / error / message / details`
-3. Automation runtime contract
-   `runtime.edition = "lite"`
-   `runtime.automation_kernel = "local_playbook_v1"`
-
-These contracts are guarded by tests and should now be treated as product-facing.
-
-## Verification Surface
-
-Lite validation is split across:
-
-1. startup contract tests
-2. source-boundary tests
-3. release-baseline tests
-4. automation kernel tests
-5. health contract tests
-6. error contract tests
-7. replay repair policy tests
-8. live smoke
-
-Current commands:
-
-```bash
-npm run -s test:lite
-npm run -s smoke:lite
-```
-
-Current smoke coverage:
-
-1. `/health`
-2. sandbox session -> execute -> logs
-3. approval-only automation run/resume
-4. replay run -> compile playbook -> promote -> automation playbook node run
-
-## Completion By Capability
-
-The percentages below are engineering judgment based on the current code, boundaries, and real validation status.
-
-| Capability Area | Completion | Notes |
-|---|---:|---|
-| Local shell, manifest, and startup | 95% | Fully independent startup chain exists and is validated. |
-| Lite-only runtime assembly | 90% | Main runtime wiring is Lite-only; major full/store fallback has been removed. |
-| Local identity and request guards | 95% | Single-user local actor model is stable and consistently wired. |
-| SQLite write/recall/access/packs kernel | 90% | Core local persistence surface is present and used by the product. |
-| Context runtime, planning, and tools feedback | 85% | Product-complete enough to use, but still fairly large and shared-history heavy. |
-| Replay and playbook kernel | 85% | Real replay and playbook path works and is covered by smoke. |
-| Local automation kernel | 88% | Definition, run, pause/resume, and playbook-driven execution are real and persistent. |
-| Sandbox | 82% | Real route and persistence path exists; default direct use works; default executor still favors local validation. |
-| Health, error, and response contracts | 92% | Stable envelopes are in place and tested. |
-| Repo baseline, CI, and release skeleton | 88% | Strong enough for stable core-repo operation. |
-| Public/operator docs | 82% | Good enough to operate the product, but still not fully polished. |
-| Source-tree slimming and final purity | 65% | Still the biggest unfinished area. |
-
-## What Is Finished Enough To Trust
-
-These parts are now product-grade in practical terms:
-
-1. startup and shell ownership
-2. local SQLite-backed runtime boot
-3. health and error contracts
-4. write/recall/context core path
-5. replay and playbook flow
-6. local automation kernel
-7. local sandbox route surface
-
-## What Is Still Incomplete
-
-The biggest remaining work is not “make Lite usable.” Lite is already usable.
-
-The biggest remaining work is:
-
-1. continue shrinking the copied `src/` tree
-2. isolate shared-core code more aggressively
-3. reduce large multi-purpose modules
-4. keep tightening boundaries between Lite-local kernel and Pro/server orchestration
-
-The most visible evidence of this unfinished work is module size concentration:
-
-1. `src/memory/replay.ts`
-2. `src/store/lite-write-store.ts`
-3. `src/memory/sandbox.ts`
-4. `src/routes/memory-context-runtime.ts`
-
-## Final Assessment
-
-`Aionis Core` now contains a complete local runtime shell and a complete local execution-memory kernel slice.
-
-The current state is best described as:
-
-1. product-complete enough to use directly
-2. architecturally coherent
-3. contract-stable on the main operator-facing surfaces
-4. still carrying extra source-tree mass from the original shared runtime extraction
-
-In short:
-
-1. Lite is already real
-2. Lite is already the most complete usable Lite version
-3. Lite is not yet the cleanest possible final Lite codebase
+1. [LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md)
+2. [LOCAL_RUNTIME_SOURCE_BOUNDARY.md](LOCAL_RUNTIME_SOURCE_BOUNDARY.md)
+3. [../apps/lite/README.md](../apps/lite/README.md)
+4. [../src/runtime-entry.ts](../src/runtime-entry.ts)
+5. [../src/app/runtime-services.ts](../src/app/runtime-services.ts)
+6. [../src/host/http-host.ts](../src/host/http-host.ts)
+7. [../src/host/lite-edition.ts](../src/host/lite-edition.ts)

@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite HTTP Governance Response Drift Profile
 
 The real benchmark suite now tracks HTTP governance response-schema versions as part of the stable suite profile.

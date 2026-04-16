@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 ## Goal
 
 Add a minimal internal model-backed governance provider baseline to Lite without introducing any external model dependency or widening public route surface.

@@ -25,6 +25,9 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Docs check
+        run: npm run -s docs:check
+
       - name: Build
         run: npm run -s build
 

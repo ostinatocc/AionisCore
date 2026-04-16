@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Aionis Core SDK V1 Package Shape
 
 Date: 2026-03-23

@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Aionis Doc Runtime-Repo Migration Plan
 
 Date: 2026-04-16

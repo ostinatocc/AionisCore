@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Workflow Promotion Governance Preview Plan
 
 1. Add workflow-promotion governance preview schemas

@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Shared Governed Operation Runner Plan
 
 1. Add a generic internal governed semantic preview runner in `src/memory`

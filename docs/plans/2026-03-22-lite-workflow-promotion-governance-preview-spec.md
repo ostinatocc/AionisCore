@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Workflow Promotion Governance Preview Spec
 
 ## Goal

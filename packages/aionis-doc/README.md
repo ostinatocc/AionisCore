@@ -2,7 +2,7 @@
 
 Parser, compiler, standalone runner, and continuity toolchain for Aionis Doc.
 
-This package now lives in the official `Aionis Core` repository under [`packages/aionis-doc`](../aionis-doc).
+This package now lives in the official Aionis Runtime repository under [`packages/aionis-doc`](../aionis-doc).
 
 ## Install
 

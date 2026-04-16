@@ -1,6 +1,12 @@
 # Aionis Core Execution-Memory Integrator Guide
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-04-16
+
+Internal status:
+
+`active internal integration reference`
+
+This guide is still aligned with the current planner/context contract, but it is no longer the first stop for external users. External readers should start with [SDK_QUICKSTART.md](SDK_QUICKSTART.md) and the public docs site.
 
 This guide is for consumers integrating against the current Aionis Core execution-memory routes.
 
@@ -14,8 +20,9 @@ Primary references:
 
 1. [docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
 2. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
-3. [docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
-4. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+3. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+4. [src/memory/schemas.ts](../src/memory/schemas.ts)
+5. [scripts/ci/lite-context-runtime-packet-contract.test.ts](../scripts/ci/lite-context-runtime-packet-contract.test.ts)
 
 ## Recommended Read Path
 

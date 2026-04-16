@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Internal Governance Review Provider Plan
 
 1. Add internal governance review-provider types

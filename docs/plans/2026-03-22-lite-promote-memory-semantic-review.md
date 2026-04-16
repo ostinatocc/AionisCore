@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Promote Memory Semantic Review Plan
 
 1. add failing governance contract coverage for a bounded `promote_memory` semantic review packet

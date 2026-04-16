@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 ## Goal
 
 Extract the current Lite governance provider selection logic into one shared provider factory, so runtime builders no longer duplicate mock-model/static precedence rules.

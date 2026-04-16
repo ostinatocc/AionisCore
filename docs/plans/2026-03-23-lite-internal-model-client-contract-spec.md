@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 ## Goal
 
 Define the first real internal governance model-client contract and explicit replacement points, so later internal model implementations can be swapped in without rewriting provider factories or runtime builders.

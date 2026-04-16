@@ -1,8 +1,10 @@
-# Aionis Core API Capability Matrix
+# Aionis Runtime API Capability Matrix
 
 Last reviewed: 2026-03-20
 
-This document records the current public API surface of the `Aionis Core` repository.
+Document status: living technical capability reference
+
+This document records the current public API surface of the Lite runtime in this repository.
 
 Named execution-memory mainline:
 

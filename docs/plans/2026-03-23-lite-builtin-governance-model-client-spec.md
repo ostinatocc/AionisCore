@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 ## Goal
 
 Add a first builtin internal governance model-client baseline so the current model-backed provider path no longer depends on wrapping static providers.

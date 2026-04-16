@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Shared Governance Runtime Builder Plan
 
 1. Add a shared runtime builder under `src/app` for Lite static governance providers.

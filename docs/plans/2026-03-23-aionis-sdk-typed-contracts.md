@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Aionis Core SDK Typed Contracts
 
 This step moves `@ostinato/aionis` from a thin transport layer toward a real SDK surface.

@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 1. Add internal governance model-client types.
 2. Add model-backed provider adapters for `promote_memory` and `form_pattern`.
 3. Add deterministic mock model-client builders using the current static review heuristics.
