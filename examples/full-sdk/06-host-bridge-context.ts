@@ -138,7 +138,12 @@ async function main() {
     text: taskBrief,
     title: "Host bridge export repair task",
   });
-  printJson("Host bridge initial session state", taskSession.snapshotState());
+  const initialState = taskSession.snapshotState();
+  printJson("Host bridge initial session state", initialState);
+  printJson("Host bridge controller actions", {
+    allowed_actions: initialState.allowed_actions,
+    transition_guards: initialState.transition_guards,
+  });
   await taskSession.recordEvent({
     event_text: "observed serializer failure and prepared patch route inspection",
     metadata: {

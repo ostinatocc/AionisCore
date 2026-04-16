@@ -132,12 +132,28 @@ export type AionisHostBridgeTaskSessionCompleteRequest = Omit<
 
 export type AionisHostBridgeTaskSessionStatus = "active" | "paused" | "resumed" | "completed";
 
+export type AionisHostBridgeTaskSessionAction =
+  | "list_events"
+  | "inspect_context"
+  | "record_event"
+  | "plan_start"
+  | "pause"
+  | "resume"
+  | "complete";
+
 export type AionisHostBridgeTaskSessionTransition = {
   summary_version: "host_bridge_task_session_transition_v1";
   transition_kind: "session_opened" | "event_recorded" | "startup_planned" | "paused" | "resumed" | "completed";
   status: AionisHostBridgeTaskSessionStatus;
   at: string;
   detail: string | null;
+};
+
+export type AionisHostBridgeTaskSessionTransitionGuard = {
+  summary_version: "host_bridge_task_session_transition_guard_v1";
+  action: AionisHostBridgeTaskSessionAction;
+  allowed: boolean;
+  reason: string | null;
 };
 
 export type AionisHostBridgeTaskSessionState = {
@@ -151,6 +167,8 @@ export type AionisHostBridgeTaskSessionState = {
   last_startup_mode: AionisHostBridgeStartupDecision["startup_mode"] | null;
   last_handoff_anchor: string | null;
   last_event_text: string | null;
+  allowed_actions: AionisHostBridgeTaskSessionAction[];
+  transition_guards: AionisHostBridgeTaskSessionTransitionGuard[];
 };
 
 export type AionisHostBridgeTaskSession = {
@@ -332,6 +350,90 @@ function cloneTaskSessionState(state: AionisHostBridgeTaskSessionState): AionisH
     ...state,
     last_transition: state.last_transition ? { ...state.last_transition } : null,
     transitions: state.transitions.map((entry) => ({ ...entry })),
+    allowed_actions: [...state.allowed_actions],
+    transition_guards: state.transition_guards.map((entry) => ({ ...entry })),
+  };
+}
+
+function buildTaskSessionTransitionGuards(
+  status: AionisHostBridgeTaskSessionStatus,
+): AionisHostBridgeTaskSessionTransitionGuard[] {
+  const guards: Record<AionisHostBridgeTaskSessionAction, Omit<AionisHostBridgeTaskSessionTransitionGuard, "summary_version" | "action">> = {
+    list_events: {
+      allowed: true,
+      reason: null,
+    },
+    inspect_context: {
+      allowed: true,
+      reason: null,
+    },
+    record_event: {
+      allowed: status === "active" || status === "resumed",
+      reason:
+        status === "paused"
+          ? "task session is paused; resume before recording more events"
+          : status === "completed"
+            ? "task session is completed and is now read-only"
+            : null,
+    },
+    plan_start: {
+      allowed: status === "active" || status === "resumed",
+      reason:
+        status === "paused"
+          ? "task session is paused; resume before planning the next start"
+          : status === "completed"
+            ? "task session is completed and cannot plan a new start"
+            : null,
+    },
+    pause: {
+      allowed: status === "active" || status === "resumed",
+      reason:
+        status === "paused"
+          ? "task session is already paused"
+          : status === "completed"
+            ? "task session is completed and cannot pause again"
+            : null,
+    },
+    resume: {
+      allowed: status === "paused",
+      reason:
+        status === "completed"
+          ? "task session is completed and cannot resume"
+          : "task session must be paused before it can resume",
+    },
+    complete: {
+      allowed: status === "active" || status === "resumed",
+      reason:
+        status === "paused"
+          ? "task session is paused; resume before marking it complete"
+          : status === "completed"
+            ? "task session is already completed"
+            : null,
+    },
+  };
+
+  return ([
+    "list_events",
+    "inspect_context",
+    "record_event",
+    "plan_start",
+    "pause",
+    "resume",
+    "complete",
+  ] as const).map((action) => ({
+    summary_version: "host_bridge_task_session_transition_guard_v1",
+    action,
+    allowed: guards[action].allowed,
+    reason: guards[action].reason,
+  }));
+}
+
+function withTaskSessionControls(state: Omit<AionisHostBridgeTaskSessionState, "allowed_actions" | "transition_guards">): AionisHostBridgeTaskSessionState {
+  const transitionGuards = buildTaskSessionTransitionGuards(state.status);
+  return {
+    ...state,
+    allowed_actions: transitionGuards.filter((entry) => entry.allowed).map((entry) => entry.action),
+    transition_guards: transitionGuards,
   };
 }
 
@@ -355,7 +457,7 @@ function buildInitialTaskSessionState(taskId: string, sessionId: string): Aionis
     status: "active",
     detail: "host task session opened",
   });
-  return {
+  return withTaskSessionControls({
     summary_version: "host_bridge_task_session_state_v1",
     task_id: taskId,
     session_id: sessionId,
@@ -366,7 +468,7 @@ function buildInitialTaskSessionState(taskId: string, sessionId: string): Aionis
     last_startup_mode: null,
     last_handoff_anchor: null,
     last_event_text: null,
-  };
+  });
 }
 
 function advanceTaskSessionState(args: {
@@ -383,7 +485,7 @@ function advanceTaskSessionState(args: {
     status: args.status,
     detail: args.detail,
   });
-  return {
+  return withTaskSessionControls({
     ...args.state,
     status: args.status,
     transition_count: args.state.transition_count + 1,
@@ -392,25 +494,29 @@ function advanceTaskSessionState(args: {
     last_startup_mode: args.startup_mode ?? args.state.last_startup_mode,
     last_handoff_anchor: args.handoff_anchor ?? args.state.last_handoff_anchor,
     last_event_text: args.event_text ?? args.state.last_event_text,
+  });
+}
+
+function getTaskSessionTransitionGuard(
+  state: AionisHostBridgeTaskSessionState,
+  action: AionisHostBridgeTaskSessionAction,
+): AionisHostBridgeTaskSessionTransitionGuard {
+  return state.transition_guards.find((entry) => entry.action === action) ?? {
+    summary_version: "host_bridge_task_session_transition_guard_v1",
+    action,
+    allowed: false,
+    reason: "task session action is not available in the current state",
   };
 }
 
 function assertTaskSessionActionAllowed(args: {
   state: AionisHostBridgeTaskSessionState;
-  action: "record_event" | "plan_start" | "pause" | "resume" | "complete";
+  action: AionisHostBridgeTaskSessionAction;
 }) {
-  const status = args.state.status;
-  if (args.action === "resume" && status !== "paused") {
-    throw new Error(`host bridge task session cannot resume from status ${status}`);
-  }
-  if (args.action === "pause" && status !== "active" && status !== "resumed") {
-    throw new Error(`host bridge task session cannot pause from status ${status}`);
-  }
-  if ((args.action === "record_event" || args.action === "plan_start") && status === "completed") {
-    throw new Error(`host bridge task session cannot ${args.action} after completion`);
-  }
-  if (args.action === "complete" && status === "completed") {
-    throw new Error("host bridge task session is already completed");
+  const guard = getTaskSessionTransitionGuard(args.state, args.action);
+  if (!guard.allowed) {
+    const actionLabel = args.action.replaceAll("_", " ");
+    throw new Error(`host bridge task session cannot ${actionLabel}: ${guard.reason ?? "action is not allowed"}`);
   }
 }
 
@@ -683,6 +789,10 @@ export function createAionisHostBridge(
           return event;
         },
         async listEvents(eventsQuery) {
+          assertTaskSessionActionAllowed({
+            state: sessionState,
+            action: "list_events",
+          });
           return await client.memory.sessions.events({
             tenant_id: input.tenant_id ?? defaults.tenant_id,
             scope: input.scope ?? defaults.scope,
@@ -691,6 +801,10 @@ export function createAionisHostBridge(
           });
         },
         async inspectTaskContext(inspectInput = {}) {
+          assertTaskSessionActionAllowed({
+            state: sessionState,
+            action: "inspect_context",
+          });
           return await bridge.inspectTaskContext({
             ...inspectInput,
             task_id: input.task_id,

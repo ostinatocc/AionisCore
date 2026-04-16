@@ -168,6 +168,7 @@ const taskSession = await bridge.openTaskSession({
 });
 
 console.log(taskSession.snapshotState());
+console.log(taskSession.snapshotState().allowed_actions);
 
 await taskSession.recordEvent({
   event_text: "observed billing timeout failure and prepared repair path inspection",
@@ -200,6 +201,7 @@ const resume = await taskSession.resumeTask();
 console.log(pause.handoff);
 console.log(resume.handoff);
 console.log(taskSession.snapshotState());
+console.log(taskSession.snapshotState().transition_guards);
 ```
 
 ## 10. Inspect review packs

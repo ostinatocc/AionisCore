@@ -43,4 +43,4 @@ Examples:
 - `05-sandbox-runtime.ts`
   creates a sandbox session, executes a sync command, and inspects run outputs
 - `06-host-bridge-context.ts`
-  seeds delegation records, opens a stateful task session adapter, then uses `inspectTaskContext()`, `planTaskStart()`, pause/resume, and complete while printing explicit session state snapshots
+  seeds delegation records, opens a stateful task session adapter, then uses `inspectTaskContext()`, `planTaskStart()`, pause/resume, and complete while printing explicit session state snapshots, `allowed_actions`, and transition guards

@@ -851,6 +851,7 @@ test("host bridge openTaskSession binds session, planning, handoff, and resume f
     title: "Repair export route session",
   });
   const initialState = taskSession.snapshotState();
+  await assert.rejects(taskSession.resumeTask(), /must be paused before it can resume/);
   const event = await taskSession.recordEvent({
     event_text: "observed serializer failure",
     metadata: {
@@ -872,6 +873,7 @@ test("host bridge openTaskSession binds session, planning, handoff, and resume f
     next_action: "Patch src/routes/export.ts",
   });
   const pausedState = taskSession.snapshotState();
+  await assert.rejects(taskSession.planTaskStart(), /paused; resume before planning the next start/);
   const resume = await taskSession.resumeTask();
   const resumedState = taskSession.snapshotState();
   const complete = await taskSession.completeTask({
@@ -886,11 +888,27 @@ test("host bridge openTaskSession binds session, planning, handoff, and resume f
     compile_playbook: false,
   });
   const completedState = taskSession.snapshotState();
+  await assert.rejects(taskSession.recordEvent({
+    event_text: "late event after completion",
+  }), /completed and is now read-only/);
 
   assert.equal(taskSession.summary_version, "host_bridge_task_session_v1");
   assert.equal(taskSession.session_id, "session-host-1");
   assert.equal(initialState.status, "active");
   assert.equal(initialState.transition_count, 1);
+  assert.deepEqual(initialState.allowed_actions, [
+    "list_events",
+    "inspect_context",
+    "record_event",
+    "plan_start",
+    "pause",
+    "complete",
+  ]);
+  assert.equal(initialState.transition_guards.find((entry) => entry.action === "resume")?.allowed, false);
+  assert.equal(
+    initialState.transition_guards.find((entry) => entry.action === "resume")?.reason,
+    "task session must be paused before it can resume",
+  );
   assert.deepEqual(initialState.transitions.map((entry) => entry.transition_kind), ["session_opened"]);
   assert.equal((event as { session_id?: string }).session_id, "session-host-1");
   assert.deepEqual((events as { items?: Array<{ event_text?: string }> }).items?.map((entry) => entry.event_text), ["observed serializer failure"]);
@@ -898,10 +916,19 @@ test("host bridge openTaskSession binds session, planning, handoff, and resume f
   assert.equal(plan.decision.task_family, "task:repair_export");
   assert.equal((pause.handoff as { anchor?: string }).anchor, "task-session-1");
   assert.equal((resume.handoff as { anchor?: string }).anchor, "task-session-1");
+  assert.deepEqual(pausedState.allowed_actions, [
+    "list_events",
+    "inspect_context",
+    "resume",
+  ]);
   assert.equal(completedState.status, "completed");
   assert.equal(completedState.last_startup_mode, "learned_kickoff");
   assert.equal(completedState.last_handoff_anchor, "task-session-1");
   assert.equal(completedState.last_event_text, "observed serializer failure");
+  assert.deepEqual(completedState.allowed_actions, [
+    "list_events",
+    "inspect_context",
+  ]);
   assert.deepEqual(completedState.transitions.map((entry) => entry.transition_kind), [
     "session_opened",
     "event_recorded",
@@ -912,6 +939,14 @@ test("host bridge openTaskSession binds session, planning, handoff, and resume f
   ]);
   assert.equal(pausedState.status, "paused");
   assert.equal(resumedState.status, "resumed");
+  assert.deepEqual(resumedState.allowed_actions, [
+    "list_events",
+    "inspect_context",
+    "record_event",
+    "plan_start",
+    "pause",
+    "complete",
+  ]);
   assert.equal((complete as { replay_run_id?: string }).replay_run_id != null, true);
   assert.equal(calls[0]?.payload?.title, "Repair export route session");
   assert.equal(calls[1]?.payload?.session_id, "session-host-1");
