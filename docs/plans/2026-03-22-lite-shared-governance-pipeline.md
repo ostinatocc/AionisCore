@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Shared Governance Pipeline Plan
 
 1. Add a tiny shared governance helper in `src/memory`

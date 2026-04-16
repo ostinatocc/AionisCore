@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 ## Goal
 
 Extract the current Lite mock governance model-client construction into one shared internal client factory, so later real internal model clients can replace mock clients without changing provider factory or runtime wiring.

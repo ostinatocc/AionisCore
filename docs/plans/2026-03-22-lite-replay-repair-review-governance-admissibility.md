@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Replay Repair Review Governance Admissibility Plan
 
 1. add failing replay repair review route coverage for optional governance review input

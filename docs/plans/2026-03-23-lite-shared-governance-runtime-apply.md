@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Shared Governance Runtime Apply Plan
 
 1. Add a shared runtime-apply gate helper in `src/memory/governance-shared.ts`

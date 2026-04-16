@@ -1,6 +1,10 @@
 # Aionis Core Execution-Memory Contract v1
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-04-16
+
+Internal status:
+
+`active internal product contract`
 
 This document defines the stable execution-memory contract for `Aionis Core`.
 

@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Workflow Promotion Governance Admissibility Plan
 
 1. Extend workflow-promotion governance helper to accept bounded review input

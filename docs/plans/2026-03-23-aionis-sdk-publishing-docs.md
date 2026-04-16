@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Aionis Core SDK Publishing Docs
 
 This slice adds the first direct SDK docs layer on top of the Aionis Core package work that already exists.

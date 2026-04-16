@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Workflow Governance Apply And Provider Plan
 
 1. Add runtime-apply semantics to workflow governance decision trace.

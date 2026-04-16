@@ -1,6 +1,12 @@
 # Aionis Core Memory Trigger Matrix
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-04-16
+
+Internal status:
+
+`design guidance, not a literal runtime decision table`
+
+This matrix is still useful as an operating model for memory governance, but it is not a canonical statement that every trigger class is already implemented exactly as written in the current runtime.
 
 This document turns the Aionis Core memory governance principles into a practical trigger table.
 

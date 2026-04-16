@@ -2,6 +2,12 @@
 
 Last reviewed: 2026-03-23
 
+Historical status:
+
+`archive snapshot`
+
+This document is preserved as a historical status readout. Its benchmark counts and strategy framing reflect the repository state when it was written, not the current runtime baseline.
+
 This document compares the current `Aionis Core` runtime against:
 
 1. [CORE_MEMORY_GOVERNANCE_MODEL.md](./CORE_MEMORY_GOVERNANCE_MODEL.md)

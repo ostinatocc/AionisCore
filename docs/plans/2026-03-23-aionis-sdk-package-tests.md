@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Aionis SDK Package Tests
 
 The SDK now has its own first package-level verification pass.

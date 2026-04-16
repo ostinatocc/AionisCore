@@ -1,15 +1,17 @@
-# Aionis Core Testing Strategy
+# Aionis Runtime Testing Strategy
 
-Last reviewed: 2026-03-23
+Last reviewed: 2026-04-16
 
-This document defines how `Aionis Core` should be tested in its current kernel shape.
+Document status: living technical testing reference
+
+This document defines how the runtime in this repository should be tested in its current kernel shape.
 
 The goal is not generic coverage.
 The goal is to protect the execution-memory product contract.
 
 ## Core Principle
 
-Aionis Core should be tested as an `execution-memory-first runtime`, not as a collection of unrelated utility functions.
+The runtime should be tested as an `execution-memory-first runtime`, not as a collection of unrelated utility functions.
 
 The highest-risk regressions are:
 
@@ -22,7 +24,7 @@ The highest-risk regressions are:
 
 Current practical status:
 
-1. the local real-task benchmark baseline currently passes `14/14`
+1. the local real-task benchmark baseline currently passes `15/15`
 2. the suite profile now covers hard/soft profile drift, HTTP prompt drift, and HTTP response-schema drift
 3. isolated validation can run fully outside the repository worktree
 4. real external HTTP governance shadow runs are now supported and benchmarked on the same scenario surface
@@ -74,7 +76,7 @@ Purpose:
 2. protect planner packet and execution-kernel contract
 3. protect public behavior of selector and replay-review surfaces
 
-This is the highest-value test layer for Aionis Core.
+This is the highest-value test layer for the runtime surface in this repository.
 
 Primary surfaces:
 

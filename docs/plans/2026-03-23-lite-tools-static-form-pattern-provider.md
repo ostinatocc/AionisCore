@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Tools Static Form-Pattern Provider Plan
 
 1. Add a static `form_pattern` governance review provider next to the existing static `promote_memory` provider.

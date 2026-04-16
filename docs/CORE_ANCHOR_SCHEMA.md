@@ -1,6 +1,10 @@
 # Aionis Core Anchor Schema
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-04-16
+
+Internal status:
+
+`active internal anchor schema reference`
 
 This document defines the first concrete `anchor schema` for `Aionis Core`.
 
@@ -8,6 +12,13 @@ Related governance reference:
 
 1. [docs/CORE_MEMORY_GOVERNANCE_MODEL.md](CORE_MEMORY_GOVERNANCE_MODEL.md)
 2. [docs/CORE_MEMORY_TRIGGER_MATRIX.md](CORE_MEMORY_TRIGGER_MATRIX.md)
+3. [src/memory/schemas.ts](../src/memory/schemas.ts)
+4. [src/memory/replay.ts](../src/memory/replay.ts)
+5. [src/memory/tools-pattern-anchor.ts](../src/memory/tools-pattern-anchor.ts)
+6. [src/memory/rehydrate-anchor.ts](../src/memory/rehydrate-anchor.ts)
+7. [scripts/ci/lite-memory-governance-contract.test.ts](../scripts/ci/lite-memory-governance-contract.test.ts)
+8. [scripts/ci/lite-replay-anchor.test.ts](../scripts/ci/lite-replay-anchor.test.ts)
+9. [scripts/ci/lite-tools-pattern-anchor.test.ts](../scripts/ci/lite-tools-pattern-anchor.test.ts)
 
 The design goal is simple:
 

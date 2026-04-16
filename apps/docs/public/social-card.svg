@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#F8F2E8"/>
+  <rect x="42" y="42" width="1116" height="546" rx="28" fill="#121A27"/>
+  <path d="M111 531L302 132L493 531" stroke="#F7E7C8" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M205 356H399" stroke="#0B5FFF" stroke-width="30" stroke-linecap="round"/>
+  <text x="560" y="250" fill="#F8FBFF" font-family="Georgia, serif" font-size="80" font-weight="700">Aionis Core Docs</text>
+  <text x="560" y="334" fill="#A8BCD4" font-family="Courier New, monospace" font-size="34">Execution-memory kernel for coding agents</text>
+  <text x="560" y="420" fill="#DCE7F6" font-family="Courier New, monospace" font-size="28">Learned kickoff · Structured handoff · Replay and playbooks</text>
+</svg>

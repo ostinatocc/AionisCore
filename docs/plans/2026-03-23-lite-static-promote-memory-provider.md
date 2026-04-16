@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Static Promote-Memory Provider Plan
 
 1. Add a deterministic static provider for `promote_memory`.

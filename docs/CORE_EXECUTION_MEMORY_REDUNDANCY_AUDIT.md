@@ -1,6 +1,10 @@
 # Aionis Core Execution-Memory Redundancy Audit
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-04-16
+
+Historical status: archive audit reference
+
+These notes remain useful as repository history, but they are not canonical implementation references for the current runtime.
 
 This document records the current duplication map of the execution-memory product surface.
 

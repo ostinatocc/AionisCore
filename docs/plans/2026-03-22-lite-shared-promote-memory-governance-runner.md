@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Shared Promote-Memory Governance Runner Plan
 
 1. Add a small shared `promote_memory` governance runner in `src/memory`

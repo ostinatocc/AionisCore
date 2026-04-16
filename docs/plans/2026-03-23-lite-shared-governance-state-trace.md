@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Shared Governance State Trace Plan
 
 1. Add a shared stateful decision-trace helper in `src/memory/governance-shared.ts`

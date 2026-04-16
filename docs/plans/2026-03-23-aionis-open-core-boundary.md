@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Aionis Open-Core Boundary
 
 This step turns the current product instinct into a written repository position.

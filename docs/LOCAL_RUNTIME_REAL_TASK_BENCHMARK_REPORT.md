@@ -1,5 +1,9 @@
 # Aionis Real-Task Benchmark Report
 
+Last reviewed: 2026-04-16
+
+Document status: living benchmark report
+
 Generated: `2026-03-28`
 
 Overall status: `pass`

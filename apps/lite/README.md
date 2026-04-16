@@ -1,6 +1,6 @@
-# Aionis Core Lite Runtime Shell
+# Aionis Runtime Lite Runtime Shell
 
-This directory owns the local runtime shell used to boot Aionis Core in development.
+This directory owns the local runtime shell used to boot Aionis Runtime in development.
 
 Current state:
 

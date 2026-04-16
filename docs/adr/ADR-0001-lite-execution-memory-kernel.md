@@ -1,8 +1,20 @@
 # ADR-0001: Position Aionis Core As An Agent Continuity Kernel
 
+Last reviewed: 2026-04-16
+
+Document status: accepted historical decision record
+
 Status: Accepted
 
 Date: 2026-03-20
+
+This ADR still explains the kernel thesis, but it is not the canonical implementation reference for the current runtime.
+
+For current runtime truth, start with:
+
+1. [../LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md](../LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md)
+2. [../AIONIS_PRODUCT_DEFINITION_V1.md](../AIONIS_PRODUCT_DEFINITION_V1.md)
+3. [../RUNTIME_MAINLINE.md](../RUNTIME_MAINLINE.md)
 
 ## Context
 

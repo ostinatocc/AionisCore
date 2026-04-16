@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Governance Provider Plumbing Plan
 
 1. Add provider hook types to replay/tools/workflow internal options/signatures

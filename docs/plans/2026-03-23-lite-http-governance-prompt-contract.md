@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite HTTP Governance Prompt Contract
 
 The HTTP governance client now uses an explicit versioned prompt-contract layer instead of building prompts inline inside the transport code.

@@ -17,6 +17,12 @@
     "node": ">=22.0.0"
   },
   "scripts": {
+    "docs:start": "vitepress dev apps/docs --host 0.0.0.0",
+    "docs:dev": "npm run docs:start",
+    "docs:build": "vitepress build apps/docs",
+    "docs:check": "node scripts/ci/docs-reference-check.mjs && npm run -s docs:build",
+    "docs:serve": "vitepress preview apps/docs --host 0.0.0.0",
+    "docs:preview": "npm run docs:serve",
     "core:build:runtime-host": "test -f src/runtime-entry.ts",
     "core:build:aionis-doc": "npm --prefix packages/aionis-doc run build",
     "core:build:runtime-core": "npm --prefix packages/runtime-core run build",
@@ -83,6 +89,8 @@
     "@types/node": "^22.10.2",
     "@types/pg": "^8.18.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitepress": "^1.6.4",
+    "vue": "^3.5.13"
   }
 }

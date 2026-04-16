@@ -1,6 +1,12 @@
 # Aionis Core Memory Governance Model
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-04-16
+
+Internal status:
+
+`design guidance, partially reflected in current code`
+
+This document explains the intended governance model. It should not be read as a complete description of every currently implemented runtime check or state transition.
 
 This document defines how memory evolution decisions should be governed in `Aionis Core`.
 

@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Governed Learning Benchmark Plan
 
 Date: 2026-03-23

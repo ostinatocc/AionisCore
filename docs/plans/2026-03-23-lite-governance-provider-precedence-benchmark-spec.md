@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Governance Provider Precedence Benchmark Spec
 
 Date: 2026-03-23
