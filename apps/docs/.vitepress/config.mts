@@ -1,23 +1,25 @@
 import { defineConfig } from "vitepress";
 
 const repo = "https://github.com/ostinatocc/AionisCore";
+const base = "/AionisCore/";
+const asset = (path: string) => `${base}${path}`;
 
 export default defineConfig({
   title: "Aionis Runtime",
   description: "Local continuity runtime for coding agents",
   lang: "en-US",
-  base: "/AionisCore/",
+  base,
   cleanUrls: true,
   lastUpdated: true,
   head: [
-    ["link", { rel: "icon", href: "/favicon.svg" }],
+    ["link", { rel: "icon", href: asset("favicon.svg") }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:title", content: "Aionis Runtime Docs" }],
     ["meta", { property: "og:description", content: "Local continuity runtime for coding agents" }],
-    ["meta", { property: "og:image", content: "/social-card.svg" }],
+    ["meta", { property: "og:image", content: asset("social-card.svg") }],
   ],
   themeConfig: {
-    logo: "/logo-mark.svg",
+    logo: asset("logo-mark.svg"),
     nav: [
       { text: "Introduction", link: "/docs/intro" },
       { text: "Architecture", link: "/docs/architecture/overview" },

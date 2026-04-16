@@ -87,6 +87,24 @@ Related document workflow package:
 npm install @aionis/doc
 ```
 
+## Docs
+
+Docs site source lives under `apps/docs`.
+
+Useful commands:
+
+```bash
+npm run docs:start
+npm run docs:build
+npm run docs:serve
+npm run docs:check
+```
+
+Repository docs deployment is wired through:
+
+1. [apps/docs](apps/docs)
+2. [.github/workflows/docs-pages.yml](.github/workflows/docs-pages.yml)
+
 ## What Ships Today
 
 - a Lite local runtime with SQLite-backed persistence
