@@ -64,6 +64,8 @@ export default defineConfig({
           items: [
             { text: "Lite Runtime", link: "/docs/runtime/lite-runtime" },
             { text: "Lite Config and Operations", link: "/docs/runtime/lite-config-and-operations" },
+            { text: "Automation", link: "/docs/runtime/automation" },
+            { text: "Sandbox", link: "/docs/runtime/sandbox" },
           ],
         },
         {
@@ -88,6 +90,7 @@ export default defineConfig({
             { text: "Memory", link: "/docs/reference/memory" },
             { text: "Handoff", link: "/docs/reference/handoff" },
             { text: "Replay and Playbooks", link: "/docs/reference/replay-and-playbooks" },
+            { text: "Review Runtime", link: "/docs/reference/review-runtime" },
           ],
         },
         {

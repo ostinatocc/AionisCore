@@ -111,6 +111,9 @@ If you need env defaults, startup scripts, or path details, continue to [Lite Co
 ## Best reads
 
 - [Lite Config and Operations](./lite-config-and-operations.md)
+- [Automation](./automation.md)
+- [Sandbox](./sandbox.md)
 - [Architecture Overview](../architecture/overview.md)
 - [Contracts and Routes](../reference/contracts-and-routes.md)
+- [Review Runtime](../reference/review-runtime.md)
 - [FAQ and Troubleshooting](../faq-and-troubleshooting.md)

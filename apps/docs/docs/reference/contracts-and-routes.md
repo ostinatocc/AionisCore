@@ -14,6 +14,7 @@ Use this section when you already understand the product shape and need route-le
     <span class="doc-chip">Memory</span>
     <span class="doc-chip">Handoff</span>
     <span class="doc-chip">Replay</span>
+    <span class="doc-chip">Automation + sandbox</span>
     <span class="doc-chip">Raw contracts</span>
   </div>
 </div>
@@ -25,8 +26,11 @@ Start with the page that matches the runtime surface you are integrating:
 - [Memory](./memory.md)
 - [Handoff](./handoff.md)
 - [Replay and Playbooks](./replay-and-playbooks.md)
+- [Review Runtime](./review-runtime.md)
 - [SDK Quickstart](../sdk/quickstart.md)
 - [Lite Config and Operations](../runtime/lite-config-and-operations.md)
+- [Automation](../runtime/automation.md)
+- [Sandbox](../runtime/sandbox.md)
 
 <div class="doc-grid">
   <a class="doc-card" href="./memory.md">
@@ -43,6 +47,11 @@ Start with the page that matches the runtime surface you are integrating:
     <span class="doc-kicker">Reference family</span>
     <h3>Replay and Playbooks</h3>
     <p>Replay lifecycle, playbook compilation, promotion, repair, and Lite execution reuse.</p>
+  </a>
+  <a class="doc-card" href="./review-runtime.md">
+    <span class="doc-kicker">Reference family</span>
+    <h3>Review Runtime</h3>
+    <p>Continuity review packs, evolution review packs, and replay repair review in the Lite governed subset.</p>
   </a>
 </div>
 
@@ -62,6 +71,9 @@ For most integrations, you should not need to start from raw TypeScript files.
 | Memory | Write, recall, planning, task start, sessions, lifecycle | [Memory](./memory.md) |
 | Handoff | Pause, store, recover, and resume task state | [Handoff](./handoff.md) |
 | Replay | Record runs, compile playbooks, promote and reuse | [Replay and Playbooks](./replay-and-playbooks.md) |
+| Review | Build continuity/evolution review material and review replay repairs | [Review Runtime](./review-runtime.md) |
+| Automation | Validate, create, run, pause, and resume local automation graphs | [Automation](../runtime/automation.md) |
+| Sandbox | Execute bounded local runtime actions and inspect logs/artifacts | [Sandbox](../runtime/sandbox.md) |
 | Runtime operations | Boot, health, config, Lite boundary | [Lite Runtime](../runtime/lite-runtime.md) |
 | SDK integration | Call the runtime from TypeScript | [SDK Quickstart](../sdk/quickstart.md) |
 
@@ -72,6 +84,9 @@ For most integrations, you should not need to start from raw TypeScript files.
 | "How do I ask for a better first action?" | [Memory](./memory.md) |
 | "How do I pause work and resume it later?" | [Handoff](./handoff.md) |
 | "How do I turn a successful run into something reusable?" | [Replay and Playbooks](./replay-and-playbooks.md) |
+| "How do I validate or run an automation graph?" | [Automation](../runtime/automation.md) |
+| "How do I execute bounded local commands and inspect outputs?" | [Sandbox](../runtime/sandbox.md) |
+| "How do I get review-ready runtime state?" | [Review Runtime](./review-runtime.md) |
 | "Which route families are really in Lite?" | [Lite Runtime](../runtime/lite-runtime.md) |
 | "How do I integrate this from code?" | [SDK Quickstart](../sdk/quickstart.md) |
 
