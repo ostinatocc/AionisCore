@@ -30,6 +30,13 @@ npm run example:sdk:sandbox
 npm run example:sdk:host-bridge
 ```
 
+The same SDK client can also call Lite lifecycle mutations directly:
+
+- `aionis.memory.archive.rehydrate(...)`
+- `aionis.memory.nodes.activate(...)`
+
+See [docs/SDK_QUICKSTART.md](../../docs/SDK_QUICKSTART.md) for a concrete request example.
+
 Examples:
 
 - `01-recall-and-context.ts`

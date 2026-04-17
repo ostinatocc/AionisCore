@@ -11,6 +11,7 @@ npm install @ostinato/aionis
 ## Coverage
 
 - memory write / recall / context surfaces
+- archive rehydrate and node activation lifecycle surfaces
 - replay core and governed playbook operations
 - handoff storage and recovery
 - automation definitions and runs
@@ -32,6 +33,27 @@ const recall = await aionis.memory.recallText({
   tenant_id: "default",
   scope: "default",
   query_text: "debug the failed replay run",
+});
+```
+
+Lite runtime lifecycle example:
+
+```ts
+await aionis.memory.archive.rehydrate({
+  tenant_id: "default",
+  scope: "demo-sdk",
+  client_ids: ["billing-timeout-repair"],
+  target_tier: "warm",
+  reason: "bring the archived repair memory back into the active set",
+});
+
+await aionis.memory.nodes.activate({
+  tenant_id: "default",
+  scope: "demo-sdk",
+  client_ids: ["billing-timeout-repair"],
+  outcome: "positive",
+  activate: true,
+  reason: "the rehydrated node helped complete the repair",
 });
 ```
 

@@ -22,16 +22,10 @@ In your own project:
 npm install @ostinato/aionis
 ```
 
-Optional CLI sanity check:
+Optional runtime sanity check:
 
 ```bash
-npx @ostinato/aionis doctor
-```
-
-Optional runtime launcher:
-
-```bash
-npx @ostinato/aionis dev --repo /path/to/Aionis --port 3101
+curl http://127.0.0.1:3001/health
 ```
 
 ## 3. Create a client
@@ -47,21 +41,59 @@ const aionis = createAionisClient({
 ## 4. Write execution memory
 
 ```ts
-await aionis.memory.write({
+const write = await aionis.memory.write({
   tenant_id: "default",
   scope: "demo-sdk-quickstart",
   actor: "sdk-demo",
-  run_id: "sdk-run-1",
-  observations: [
+  nodes: [
     {
-      kind: "workflow_step",
-      summary: "Fetched a CSV report and normalized the rows",
+      client_id: "billing-timeout-repair",
+      type: "event",
+      tier: "archive",
+      title: "Billing retry timeout repair context",
+      text_summary: "Observed billing retry timeout failures after three attempts.",
+      slots: {
+        task_kind: "repair_billing_retry",
+        next_action: "inspect retry timeout configuration and retry loop",
+      },
     },
   ],
 });
+
+console.log(write.commit_id);
 ```
 
-## 5. Read planner-visible memory
+## 5. Rehydrate archived memory in Lite
+
+```ts
+await aionis.memory.archive.rehydrate({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  actor: "sdk-demo",
+  client_ids: ["billing-timeout-repair"],
+  target_tier: "warm",
+  reason: "bring the archived billing retry repair context back into the active working set",
+  input_text: "reuse the prior billing retry repair context",
+});
+```
+
+## 6. Record node reuse outcome
+
+```ts
+await aionis.memory.nodes.activate({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  actor: "sdk-demo",
+  client_ids: ["billing-timeout-repair"],
+  run_id: "sdk-run-1",
+  outcome: "positive",
+  activate: true,
+  reason: "the rehydrated node helped choose the correct repair path",
+  input_text: "repair billing retry timeout in service code",
+});
+```
+
+## 7. Read planner-visible memory
 
 ```ts
 const planning = await aionis.memory.planningContext({
@@ -82,7 +114,7 @@ console.log(planning);
 console.log(delegationLearning?.learning_summary);
 ```
 
-## 6. Record tool feedback
+## 8. Record tool feedback
 
 ```ts
 await aionis.memory.tools.feedback({
@@ -95,7 +127,7 @@ await aionis.memory.tools.feedback({
 });
 ```
 
-## 7. Start a task from learned kickoff
+## 9. Start a task from learned kickoff
 
 ```ts
 const taskStart = await aionis.memory.taskStart({
@@ -125,7 +157,7 @@ console.log(experience.learning_summary);
 console.log(experience.learning_recommendations);
 ```
 
-## 8. Store a structured handoff
+## 10. Store a structured handoff
 
 ```ts
 await aionis.handoff.store({
@@ -139,20 +171,21 @@ await aionis.handoff.store({
 });
 ```
 
-## 9. Complete SDK surface
+## 11. Complete SDK surface
 
 Current complete SDK surface includes:
 
 1. memory write / recall / planning / introspection
 2. experience-intelligence, kickoff, and task-start surfaces
-3. handoff store and recover
-4. continuity and evolution review-pack surfaces
-5. standalone delegation-record write, query, and aggregate surfaces
-6. replay run lifecycle and playbooks
-7. sandbox and automation surfaces
-8. host bridge integration
+3. archive rehydrate and node activation lifecycle surfaces
+4. handoff store and recover
+5. continuity and evolution review-pack surfaces
+6. standalone delegation-record write, query, and aggregate surfaces
+7. replay run lifecycle and playbooks
+8. sandbox and automation surfaces
+9. host bridge integration
 
-## 9. Inspect host bridge task context
+## 12. Inspect host bridge task context
 
 ```ts
 import { createAionisHostBridge } from "@ostinato/aionis";
@@ -204,7 +237,7 @@ console.log(taskSession.snapshotState());
 console.log(taskSession.snapshotState().transition_guards);
 ```
 
-## 10. Inspect review packs
+## 13. Inspect review packs
 
 ```ts
 const continuityPack = await aionis.memory.reviewPacks.continuity({
@@ -230,7 +263,7 @@ console.log(evolutionPack.evolution_review_pack.learning_summary);
 console.log(evolutionPack.evolution_review_pack.learning_recommendations);
 ```
 
-## 11. Persist standalone delegation records
+## 14. Persist standalone delegation records
 
 ```ts
 const delegationWrite = await aionis.memory.delegationRecords.write({
@@ -299,7 +332,7 @@ const delegationWrite = await aionis.memory.delegationRecords.write({
 console.log(delegationWrite.record_event?.uri);
 ```
 
-## 12. Query typed delegation records
+## 15. Query typed delegation records
 
 ```ts
 const delegationQuery = await aionis.memory.delegationRecords.find({
@@ -316,7 +349,7 @@ console.log(delegationQuery.summary.return_status_counts);
 console.log(delegationQuery.records[0]?.delegation_records_v1.delegation_packets[0]?.mission);
 ```
 
-## 13. Aggregate delegation-record trends
+## 16. Aggregate delegation-record trends
 
 ```ts
 const delegationAggregate = await aionis.memory.delegationRecords.aggregate({
@@ -335,7 +368,7 @@ console.log(delegationAggregate.summary.learning_recommendations);
 console.log(delegationAggregate.summary.top_artifact_refs);
 ```
 
-## 14. Run bundled SDK examples
+## 17. Run bundled SDK examples
 
 ```bash
 cd /path/to/AionisCore
