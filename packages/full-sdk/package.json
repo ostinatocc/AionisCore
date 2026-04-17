@@ -1,6 +1,6 @@
 {
   "name": "@ostinato/aionis",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Complete Aionis Core SDK surface for runtime, bridge, handoff, replay, governance, and execution memory integration.",
   "type": "module",
   "main": "dist/index.js",

@@ -1,6 +1,6 @@
 # Aionis Runtime Package Publishing
 
-Last reviewed: 2026-04-16
+Last reviewed: 2026-04-17
 
 Document status: living public release checklist
 
@@ -11,6 +11,18 @@ This document defines the release checklist for the public Aionis Runtime npm pa
 1. [@ostinato/aionis](../packages/full-sdk/package.json)
 2. [@ostinato/aionis-rtc](../packages/runtime-core/package.json)
 3. [@aionis/doc](../packages/aionis-doc/package.json)
+
+## Current prepared release target
+
+Prepared next public SDK release:
+
+1. `@ostinato/aionis@0.2.0`
+
+Why this is a minor release instead of a patch:
+
+1. Lite now exposes `memory.archive.rehydrate(...)` and `memory.nodes.activate(...)` through the public SDK path
+2. SDK contracts were expanded to cover the Lite lifecycle request shape
+3. README, quickstart, and docs site pages were updated so the public integration story matches the current runtime
 
 ## Release goals
 
