@@ -7,6 +7,85 @@ slug: /reference/memory
 
 The memory surface is the widest part of the public SDK. It covers write, recall, lifecycle, planning, task start, sessions, rules, tools, review packs, and a few debugging-oriented endpoints.
 
+<div class="doc-lead">
+  <span class="doc-kicker">What memory means here</span>
+  <p>Aionis memory is not just "stored context." It is the substrate behind task start, planning context, lifecycle reuse, review packs, and workflow learning. The memory surface is where execution evidence becomes continuity infrastructure.</p>
+  <div class="doc-chip-row">
+    <span class="doc-chip">Write + recall</span>
+    <span class="doc-chip">Planning context</span>
+    <span class="doc-chip">Lifecycle reuse</span>
+    <span class="doc-chip">Review material</span>
+  </div>
+</div>
+
+<div class="reference-grid">
+  <div class="reference-tile">
+    <span class="reference-kicker">Write + recall</span>
+    <h3>Evidence intake</h3>
+    <p>Persist real execution evidence, then read it back through structured recall and natural-language recall.</p>
+    <code class="reference-route">/v1/memory/write</code>
+  </div>
+  <div class="reference-tile">
+    <span class="reference-kicker">Planning</span>
+    <h3>Context assembly</h3>
+    <p>Assemble planner-facing context, layered recall, and kickoff signals before an agent makes its first move.</p>
+    <code class="reference-route">/v1/memory/planning/*</code>
+  </div>
+  <div class="reference-tile">
+    <span class="reference-kicker">Task start</span>
+    <h3>First-action guidance</h3>
+    <p>Turn accumulated evidence into a better opening move for repeated work instead of restarting from scratch.</p>
+    <code class="reference-route">/v1/memory/kickoff/*</code>
+  </div>
+  <div class="reference-tile">
+    <span class="reference-kicker">Lifecycle</span>
+    <h3>Reuse signals</h3>
+    <p>Rehydrate archived nodes and record whether reused memory actually helped when it was brought back.</p>
+    <code class="reference-route">/v1/memory/archive/*</code>
+  </div>
+  <div class="reference-tile">
+    <span class="reference-kicker">Review</span>
+    <h3>Review-ready packs</h3>
+    <p>Package continuity and evolution state into structures a human or host can inspect without reading raw stores.</p>
+    <code class="reference-route">/v1/memory/*review*</code>
+  </div>
+  <div class="reference-tile">
+    <span class="reference-kicker">Sessions + helpers</span>
+    <h3>Longer-lived continuity</h3>
+    <p>Carry memory across sessions, packs, delegation records, rules, tools, and pattern-level helper surfaces.</p>
+    <code class="reference-route">/v1/memory/sessions/*</code>
+  </div>
+</div>
+
+<div class="section-frame">
+  <span class="doc-kicker">Operating rule</span>
+  <p>Read this page in one direction: write evidence first, assemble planning context second, ask for task-start guidance third, then use lifecycle and review paths only when continuity quality and reuse quality start to matter. If you begin at the heavy helper surfaces, the memory model will feel much more complicated than it really is.</p>
+</div>
+
+<div class="state-strip">
+  <span class="state-badge state-trusted">trusted recall</span>
+  <span class="state-badge state-candidate">candidate kickoff</span>
+  <span class="state-badge state-contested">contested patterns</span>
+  <span class="state-badge state-governed">governed review</span>
+  <span class="state-note">Memory gets stronger only when evidence, reuse, and review stay connected.</span>
+</div>
+
+## Mental model
+
+Use this mental model for the memory surface:
+
+```mermaid
+flowchart LR
+    A["Execution evidence"] --> B["memory.write"]
+    B --> C["Stored nodes and signals"]
+    C --> D["recall / recallText"]
+    C --> E["planningContext / taskStart"]
+    C --> F["review packs / execution introspection"]
+    C --> G["archive.rehydrate / nodes.activate"]
+```
+
+Memory in Aionis is useful because later runtime paths can build on it. It is not only a storage bucket.
+
 ## Core memory families
 
 The public memory surface breaks down into seven practical groups:
@@ -18,6 +97,24 @@ The public memory surface breaks down into seven practical groups:
 5. sessions, packs, find, and resolve
 6. rules, tools, patterns, and payload rehydration
 7. review packs and delegation-learning support
+
+<div class="section-frame">
+  <span class="doc-kicker">Decision frame</span>
+  <p>Memory is not the place to force full orchestration. Its job is narrower and more important: hold execution evidence, assemble better startup context, track reuse signals, and expose review-ready continuity state. Shell execution, hosted governance, and model capability still live elsewhere.</p>
+</div>
+
+## How to choose the right call
+
+| If you want to... | Start with... |
+| --- | --- |
+| Persist new execution evidence | `memory.write(...)` |
+| Search with natural language | `memory.recallText(...)` |
+| Get planner-facing context | `memory.planningContext(...)` |
+| Get the best next first move | `memory.taskStart(...)` |
+| Inspect heavier workflow and learning state | `memory.experienceIntelligence(...)` or `memory.executionIntrospect(...)` |
+| Bring archived memory back into active use | `memory.archive.rehydrate(...)` |
+| Record whether reused memory helped | `memory.nodes.activate(...)` |
+| Build review-ready state | `memory.reviewPacks.*` |
 
 ## Most-used SDK calls
 
@@ -44,6 +141,14 @@ await aionis.memory.write({
     "Patched serializer handling in src/routes/export.ts and verified the export response shape.",
 });
 ```
+
+What makes a good write:
+
+1. the scope matches the work you want to improve later
+2. the text records real execution, not generic commentary
+3. the actor and tenant are consistent with later reads
+
+Weak writes produce weak later task starts.
 
 ## Minimal planning example
 
@@ -80,6 +185,18 @@ If you want the shortest public entrypoint into memory-guided continuity, these 
 
 Use `taskStart` first when you want the best first move. Use `planningContext` first when you want more than one hint and need the runtime to assemble planner-facing context.
 
+## Recommended call order
+
+If you are integrating memory for the first time, this is the best progression:
+
+1. `memory.write(...)`
+2. `memory.recallText(...)`
+3. `memory.planningContext(...)`
+4. `memory.taskStart(...)`
+5. `memory.archive.rehydrate(...)` and `memory.nodes.activate(...)` when reuse quality starts to matter
+
+That order helps you understand the surface from evidence ingestion to better startup guidance.
+
 ## Lifecycle surfaces
 
 Lite now includes the local memory lifecycle routes through the public SDK:
@@ -103,6 +220,14 @@ await aionis.memory.nodes.activate({
 });
 ```
 
+These lifecycle calls matter because they let Lite distinguish between:
+
+- memory that exists
+- memory that should be active again
+- memory that proved useful when reused
+
+That is one of the main reasons the runtime can plausibly claim self-evolving continuity rather than static storage.
+
 ## Sessions and review-oriented helpers
 
 These surfaces are useful when your host needs continuity state beyond a single task-start answer:
@@ -114,6 +239,12 @@ These surfaces are useful when your host needs continuity state beyond a single 
 | `memory.find(...)` / `memory.resolve(...)` | Direct local lookup and node resolution |
 | `memory.reviewPacks.*` | Pull continuity or evolution review material |
 | `memory.delegationRecords.*` | Read or write delegation-learning records |
+
+Use these helpers when continuity is bigger than one answer:
+
+- sessions when a task persists over time
+- review packs when a human or host needs review-ready state
+- delegation records when multi-agent learning needs to be kept explicitly
 
 ## Tools, rules, and patterns
 
@@ -128,6 +259,20 @@ Lite also exposes a narrower local policy-learning loop:
 | `memory.patterns.suppress(...)` | Operator stop-loss on a learned pattern |
 | `memory.anchors.rehydratePayload(...)` | Expand an anchor-linked payload |
 
+This family is easy to ignore, but it matters when the host needs more control over learned behavior rather than only consuming output recommendations.
+
+## Common integration mistakes
+
+Most disappointing first integrations come from one of these:
+
+1. writing generic notes and expecting strong task-start guidance
+2. mixing unrelated work into the same scope
+3. querying one scope and writing into another
+4. expecting hosted control-plane behavior from Lite-local routes
+5. treating `taskStart` as magic instead of as a surface fed by execution evidence
+
+If the runtime feels sparse, the first thing to inspect is usually the shape and quality of the written evidence.
+
 ## Lite boundary notes
 
 Three things matter when integrating against Lite:
@@ -137,6 +282,16 @@ Three things matter when integrating against Lite:
 3. heavy route-by-route debugging still belongs in the repository capability matrix
 
 Lite is honest about its boundary, but the memory lifecycle surface is now inside the public local runtime.
+
+## What memory is responsible for vs not responsible for
+
+| Inside the memory surface | Outside the memory surface |
+| --- | --- |
+| execution evidence | hosted admin control plane |
+| recall and planning context | full remote orchestration |
+| task-start guidance | model capability itself |
+| lifecycle reuse signals | arbitrary shell execution |
+| review-ready runtime material | unrelated product analytics |
 
 ## Raw contract sources
 

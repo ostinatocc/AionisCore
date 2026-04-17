@@ -27,6 +27,19 @@ Before writing any client code, make sure:
 2. your Node version supports `node:sqlite` and the local shell startup
 3. you know the default Lite target is `http://127.0.0.1:3001`
 
+## What this quickstart is trying to prove
+
+This page is not trying to show every endpoint. It is trying to prove that the public SDK path already supports the full continuity loop:
+
+1. write execution evidence
+2. reactivate useful memory
+3. ask for planning or task start
+4. store a trustworthy handoff
+5. record replay
+6. move toward reuse
+
+If you can do that through the public SDK, you already understand the core product path.
+
 ## 1. Start Lite locally
 
 From the repository root:
@@ -42,6 +55,8 @@ Check that the runtime is alive:
 curl http://127.0.0.1:3001/health
 ```
 
+At this point you are proving the runtime host is available, not that continuity is useful yet.
+
 ## 2. Install the public SDK
 
 In the project that will call Aionis:
@@ -49,6 +64,8 @@ In the project that will call Aionis:
 ```bash
 npm install @ostinato/aionis
 ```
+
+If your host already thinks in terms of tasks and session lifecycle, keep in mind that you may later want `createAionisHostBridge`, but start with the raw client first.
 
 ## 3. Create a client
 
@@ -59,6 +76,20 @@ const aionis = createAionisClient({
   baseUrl: "http://127.0.0.1:3001",
 });
 ```
+
+## How to think about the sequence
+
+This quickstart intentionally moves in this order:
+
+| Step | Why it comes here |
+| --- | --- |
+| Write | Give the runtime something real to learn from |
+| Lifecycle reuse | Move useful memory back into active use |
+| Planning / task start | Ask the runtime to improve the next move |
+| Handoff | Preserve runtime state across a pause |
+| Replay | Turn successful execution into reusable workflow knowledge |
+
+If you skip straight to task start on an empty scope, the result will often feel underwhelming even though the runtime is healthy.
 
 ## 4. Seed archived execution memory
 
@@ -88,6 +119,12 @@ console.log(write.commit_id);
 
 This gives Lite a real archived node that can be rehydrated back into the active working set.
 
+What this step proves:
+
+1. the SDK can write successfully
+2. Lite can persist structured node data
+3. later lifecycle and planning steps will have something real to work with
+
 ## 5. Rehydrate archived memory in Lite
 
 ```ts
@@ -101,6 +138,12 @@ await aionis.memory.archive.rehydrate({
   input_text: "reuse the prior billing retry repair context",
 });
 ```
+
+What this step proves:
+
+1. lifecycle routes are part of Lite now
+2. the runtime can bring older memory back into active use
+3. continuity is not only append-only storage
 
 ## 6. Record node reuse outcome
 
@@ -117,6 +160,12 @@ await aionis.memory.nodes.activate({
   input_text: "repair billing retry timeout in service code",
 });
 ```
+
+What this step proves:
+
+1. the runtime can record whether reused memory helped
+2. continuity can accumulate quality signals, not just history
+3. the "self-evolving" claim has a concrete substrate in the public SDK path
 
 ## 7. Ask for planning context
 
@@ -139,6 +188,15 @@ console.log(planning.planner_packet);
 
 This is the most useful first read surface when you want the runtime to assemble recall, workflow hints, and kickoff context into one response.
 
+Read these first:
+
+1. `kickoff_recommendation`
+2. `planner_packet`
+3. `workflow_signals`
+4. `pattern_signals`
+
+If those come back sparse, check the earlier write/lifecycle steps before assuming the planner path is broken.
+
 ## 8. Ask for a learned task start
 
 ```ts
@@ -157,7 +215,26 @@ console.log(taskStart.first_action);
 
 `taskStart` is the shortest path to the runtime's core value: a better first move for a repeated task.
 
-## 9. Store a structured handoff
+`planningContext(...)` is broader. `taskStart(...)` is sharper. In practice:
+
+- use `planningContext(...)` when you want context assembly
+- use `taskStart(...)` when you want the next move
+
+## 9. Optional: pull review-ready runtime state
+
+If your host or reviewer needs structured review material, you can already call:
+
+```ts
+await aionis.memory.reviewPacks.continuity({
+  tenant_id: "default",
+  scope: "docs-sdk-quickstart",
+  anchor: "billing-retry-repair",
+});
+```
+
+This is useful when continuity quality needs human review rather than only runtime reuse.
+
+## 10. Store a structured handoff
 
 ```ts
 await aionis.handoff.store({
@@ -172,7 +249,13 @@ await aionis.handoff.store({
 });
 ```
 
-## 10. Record replay and compile a playbook
+What this step proves:
+
+1. pause/resume is a public runtime path, not a host-only convention
+2. you can store resume-ready task state through the SDK
+3. the continuity loop can survive a pause, not only a completed run
+
+## 11. Record replay and compile a playbook
 
 ```ts
 await aionis.memory.replay.run.start({
@@ -209,7 +292,31 @@ await aionis.memory.replay.step.after({
 
 From there, end the run and compile a playbook through the replay surface. That is the path from remembered execution to reusable operating knowledge.
 
-## 11. Use the host bridge when your app already has task state
+In a full test, finish the run explicitly and then compile:
+
+```ts
+await aionis.memory.replay.run.end({
+  tenant_id: "default",
+  scope: "docs-sdk-quickstart",
+  actor: "sdk-demo",
+  run_id: "billing-retry-run-1",
+  status: "success",
+  summary: "patched retry timeout handling and validated the checks",
+});
+
+await aionis.memory.replay.playbooks.compileFromRun({
+  tenant_id: "default",
+  scope: "docs-sdk-quickstart",
+  actor: "sdk-demo",
+  run_id: "billing-retry-run-1",
+  playbook_id: "billing-retry-repair",
+  name: "Billing retry repair",
+});
+```
+
+That is the step where continuity starts to become reuse instead of memory only.
+
+## 12. Use the host bridge when your app already has task state
 
 If your host already thinks in terms of task IDs, pause/resume, and lifecycle transitions, move up one layer:
 
@@ -234,13 +341,37 @@ const taskContext = await taskSession.inspectTaskContext({
 console.log(taskContext.planning_context.kickoff_recommendation);
 ```
 
+Use the host bridge when your host already thinks in:
+
+- task IDs
+- pause/resume states
+- task sessions
+- completion transitions
+
+Use the raw client when you want direct control over route families.
+
+## What a successful evaluation looks like
+
+After working through this page, you should be able to answer yes to these:
+
+1. Can the SDK talk to Lite locally?
+2. Can Lite persist and reactivate memory?
+3. Can the runtime produce planning or task-start guidance from stored evidence?
+4. Can the SDK store a handoff?
+5. Can the SDK record replay and move toward playbook reuse?
+
+If yes, then the public continuity path is working.
+
 ## Where to go next
 
 1. [Client and Host Bridge](./client-and-bridge.md)
 2. [Memory reference](../reference/memory.md)
 3. [Handoff reference](../reference/handoff.md)
 4. [Replay and Playbooks reference](../reference/replay-and-playbooks.md)
-5. [Lite Config and Operations](../runtime/lite-config-and-operations.md)
+5. [Review Runtime](../reference/review-runtime.md)
+6. [Automation](../runtime/automation.md)
+7. [Sandbox](../runtime/sandbox.md)
+8. [Lite Config and Operations](../runtime/lite-config-and-operations.md)
 
 <div class="doc-grid">
   <a class="doc-card" href="./client-and-bridge.md">

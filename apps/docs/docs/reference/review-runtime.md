@@ -18,6 +18,36 @@ Review-oriented runtime paths are how Aionis surfaces continuity review material
   </div>
 </div>
 
+<div class="reference-grid">
+  <div class="reference-tile">
+    <span class="reference-kicker">Continuity</span>
+    <h3>Can this task resume safely?</h3>
+    <p>Review the latest handoff, resume state, and recovery contract before trusting a pause/resume path.</p>
+    <code class="reference-route">/v1/memory/continuity/review-pack</code>
+  </div>
+  <div class="reference-tile">
+    <span class="reference-kicker">Evolution</span>
+    <h3>Is the runtime learning the right thing?</h3>
+    <p>Review workflow, pattern, and recommendation signals before treating them as trustworthy guidance.</p>
+    <code class="reference-route">/v1/memory/evolution/review-pack</code>
+  </div>
+  <div class="reference-tile">
+    <span class="reference-kicker">Replay repair</span>
+    <h3>Should this repaired playbook advance?</h3>
+    <p>Use the Lite governed subset to approve, reject, or shadow-validate repaired playbook versions.</p>
+    <code class="reference-route">/v1/memory/replay/playbooks/repair/review</code>
+  </div>
+</div>
+
+<div class="state-strip">
+  <span class="state-badge state-trusted">trusted continuity</span>
+  <span class="state-badge state-candidate">candidate evolution</span>
+  <span class="state-badge state-contested">contested pattern</span>
+  <span class="state-badge state-governed">governed decision</span>
+  <span class="state-badge state-shadow">shadow validate</span>
+  <span class="state-note">Review surfaces exist to decide whether runtime state is trustworthy enough to reuse.</span>
+</div>
+
 ## Public review methods
 
 | SDK method | Route | Purpose |
@@ -25,6 +55,11 @@ Review-oriented runtime paths are how Aionis surfaces continuity review material
 | `memory.reviewPacks.continuity(...)` | `POST /v1/memory/continuity/review-pack` | Build a continuity review pack from handoff/recovery context |
 | `memory.reviewPacks.evolution(...)` | `POST /v1/memory/evolution/review-pack` | Build an evolution review pack from kickoff and learning context |
 | `memory.replay.playbooks.repairReview(...)` | `POST /v1/memory/replay/playbooks/repair/review` | Approve or reject a replay playbook repair in the Lite governed subset |
+
+<div class="section-frame">
+  <span class="doc-kicker">Reading rule</span>
+  <p>Read review runtime in one question: what is being trusted or rejected here? Continuity review is about resume trust, evolution review is about learning trust, and replay repair review is about workflow trust. If you keep that decision boundary in mind, the three surfaces stop feeling like unrelated endpoints.</p>
+</div>
 
 ## What each surface is for
 
@@ -121,6 +156,11 @@ That is what review runtime paths are for:
 1. continuity review checks whether pause/resume state is trustworthy
 2. evolution review checks whether learning signals are trustworthy
 3. replay repair review checks whether repaired playbooks are trustworthy
+
+<div class="section-frame">
+  <span class="doc-kicker">Trust boundary</span>
+  <p>Task start, handoff, and replay create continuity artifacts. Review runtime is the layer that decides whether those artifacts deserve reuse. That is why this surface belongs in the public runtime: self-evolving systems still need explicit trust checkpoints.</p>
+</div>
 
 ## Lite boundary notes
 

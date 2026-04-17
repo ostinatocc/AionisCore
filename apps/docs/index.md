@@ -5,8 +5,8 @@ titleTemplate: false
 
 hero:
   name: Aionis Runtime
-  text: Self-evolving continuity for agent systems
-  tagline: Turn task starts, handoffs, and replays into execution memory so repeated work starts better, paused work resumes cleanly, and successful execution becomes reusable operating knowledge.
+  text: Your agent learns. Every run.
+  tagline: Task starts, handoffs, and replays become execution memory so later execution can improve instead of restarting from scratch.
   image:
     src: /logo-mark.svg
     alt: Aionis Runtime
@@ -19,23 +19,17 @@ hero:
       link: /docs/intro
 
 features:
-  - icon: 🧭
-    title: Learned task start
+  - title: Learned task start
     details: Use prior execution evidence to return a better first action for the next similar coding task.
-  - icon: ⏯️
-    title: Structured handoff
+  - title: Structured handoff
     details: Store target files, next action, and recovery context as a runtime handoff instead of relying on chat history.
-  - icon: ♻️
-    title: Replay and playbooks
+  - title: Replay and playbooks
     details: Record successful runs, promote stable playbooks, and reuse them through the local automation kernel.
-  - icon: 🧱
-    title: Explicit runtime contracts
+  - title: Explicit runtime contracts
     details: Integrate against typed SDK surfaces and stable routes for kickoff, recall, replay, automation, sandbox, and review flows.
-  - icon: 💾
-    title: Lite runtime available today
+  - title: Lite runtime available today
     details: Run a real local runtime with SQLite-backed persistence, memory lifecycle routes, route registration, sandbox execution, and automation support.
-  - icon: 🔬
-    title: Architecture with clear seams
+  - title: Architecture with clear seams
     details: The repository separates runtime shell, assembly, host layer, kernel subsystems, SDK, and storage instead of hiding behavior in prompt glue.
 ---
 
@@ -61,6 +55,16 @@ features:
     <p>You can start from local runtime health, move into the SDK, then drop into route and architecture references only when needed.</p>
   </div>
 </div>
+
+<div class="state-strip" aria-label="Runtime state language">
+  <span class="state-badge state-trusted">trusted</span>
+  <span class="state-badge state-candidate">candidate</span>
+  <span class="state-badge state-contested">contested</span>
+  <span class="state-badge state-governed">governed</span>
+  <span class="state-badge state-shadow">shadow</span>
+</div>
+
+<p class="state-note">State colors encode runtime meaning, not decoration.</p>
 
 ## What this site covers
 

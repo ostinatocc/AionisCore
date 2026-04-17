@@ -19,6 +19,50 @@ Use this section when you already understand the product shape and need route-le
   </div>
 </div>
 
+<div class="reference-grid">
+  <a class="reference-tile" href="./memory.md">
+    <span class="reference-kicker">Route family</span>
+    <h3>Memory</h3>
+    <span class="reference-route">/v1/memory/*</span>
+    <p>Write, recall, planning, task start, lifecycle reuse, sessions, tools, and review helpers.</p>
+  </a>
+  <a class="reference-tile" href="./handoff.md">
+    <span class="reference-kicker">Route family</span>
+    <h3>Handoff</h3>
+    <span class="reference-route">/v1/handoff/*</span>
+    <p>Pause and resume through explicit handoff packets and anchor-based recovery.</p>
+  </a>
+  <a class="reference-tile" href="./replay-and-playbooks.md">
+    <span class="reference-kicker">Route family</span>
+    <h3>Replay</h3>
+    <span class="reference-route">/v1/memory/replay/*</span>
+    <p>Run lifecycle, playbooks, promotion, dispatch, repair, and local reuse.</p>
+  </a>
+  <a class="reference-tile" href="./review-runtime.md">
+    <span class="reference-kicker">Route family</span>
+    <h3>Review</h3>
+    <span class="reference-route">/v1/memory/*review*</span>
+    <p>Continuity review packs, evolution review packs, and replay repair review.</p>
+  </a>
+  <a class="reference-tile" href="../runtime/automation.md">
+    <span class="reference-kicker">Route family</span>
+    <h3>Automation</h3>
+    <span class="reference-route">/v1/automations/*</span>
+    <p>Validate, create, run, inspect, resume, and cancel Lite automation graphs.</p>
+  </a>
+  <a class="reference-tile" href="../runtime/sandbox.md">
+    <span class="reference-kicker">Route family</span>
+    <h3>Sandbox</h3>
+    <span class="reference-route">/v1/memory/sandbox/*</span>
+    <p>Create sessions, execute bounded commands, and inspect logs and artifacts.</p>
+  </a>
+</div>
+
+<div class="section-frame">
+  <span class="section-label">How to read this page</span>
+  <p>Think in route families first, not single endpoints. Most integration mistakes happen when teams read one method in isolation and miss the surrounding continuity loop.</p>
+</div>
+
 ## Best entry points
 
 Start with the page that matches the runtime surface you are integrating:
@@ -101,6 +145,11 @@ The docs site already explains:
 - the most important memory, handoff, and replay families
 
 That means the raw repository references should be the second stop, not the first one.
+
+<div class="section-frame">
+  <span class="section-label">Reference rule</span>
+  <p>Use the docs site for shape and meaning. Use raw contracts only when you need exact field names, support boundaries, or source-level debugging.</p>
+</div>
 
 ## Raw sources when you need exactness
 

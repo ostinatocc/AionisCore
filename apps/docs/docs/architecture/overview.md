@@ -18,6 +18,50 @@ The public runtime shape is organized around a thin local runtime shell, a Lite-
   </div>
 </div>
 
+<div class="stack-grid">
+  <div class="stack-layer">
+    <span class="stack-kicker">Layer 01</span>
+    <h3>Runtime shell</h3>
+    <span class="stack-path">apps/lite/</span>
+    <p>Boots Lite locally with the intended local-first defaults.</p>
+  </div>
+  <div class="stack-layer">
+    <span class="stack-kicker">Layer 02</span>
+    <h3>Bootstrap</h3>
+    <span class="stack-path">src/runtime-entry.ts</span>
+    <p>Loads env, assembles runtime services, registers host routes, and owns startup lifecycle.</p>
+  </div>
+  <div class="stack-layer">
+    <span class="stack-kicker">Layer 03</span>
+    <h3>Host layer</h3>
+    <span class="stack-path">src/host/*</span>
+    <p>Exposes the public Lite route matrix and structured boundary behavior.</p>
+  </div>
+  <div class="stack-layer">
+    <span class="stack-kicker">Layer 04</span>
+    <h3>Kernel subsystems</h3>
+    <span class="stack-path">src/memory/*</span>
+    <p>Implements write, recall, handoff, replay, automation, sandbox, and review behavior.</p>
+  </div>
+  <div class="stack-layer">
+    <span class="stack-kicker">Layer 05</span>
+    <h3>Local stores</h3>
+    <span class="stack-path">src/store/*</span>
+    <p>Persists the Lite runtime in SQLite-backed stores instead of one opaque blob.</p>
+  </div>
+  <div class="stack-layer">
+    <span class="stack-kicker">Layer 06</span>
+    <h3>SDK surface</h3>
+    <span class="stack-path">packages/full-sdk/</span>
+    <p>Turns the runtime into typed client and host-bridge integration paths.</p>
+  </div>
+</div>
+
+<div class="section-frame">
+  <span class="section-label">Architectural stance</span>
+  <p>The important design choice here is explicitness. Lite does not hide continuity inside an assistant product shell. The runtime has named seams, named stores, named routes, and named boundaries.</p>
+</div>
+
 ## Repository seams
 
 | Layer | Main paths | Responsibility |
@@ -100,6 +144,14 @@ That boundary is one of the design strengths of the project: Lite is explicit ab
 | Runtime ops | `/health`, config-driven local boot, structured `501` boundaries | admin control plane |
 | Execution | local sandbox and local automation kernel | hosted remote execution plane |
 
+<div class="state-strip" aria-label="Boundary states">
+  <span class="state-badge state-trusted">inside lite</span>
+  <span class="state-badge state-governed">governed subset</span>
+  <span class="state-badge state-shadow">hosted later</span>
+</div>
+
+<p class="state-note">Lite is designed to be narrow and reliable before it is broad.</p>
+
 ## Kernel subsystems
 
 The largest runtime subsystems live in `src/memory/`:
@@ -138,6 +190,11 @@ This architecture does three important things:
 3. it lets continuity live as infrastructure, not as a hidden side effect of one agent product
 
 That is the practical reason Aionis feels different from a thin prompt wrapper or one big monolithic agent app.
+
+<div class="section-frame">
+  <span class="section-label">Reading rule</span>
+  <p>When you read this repo, do not start from random source files. Start from the layer that owns the behavior you care about. That is how the architecture stays understandable.</p>
+</div>
 
 ## Read deeper when you need to
 
