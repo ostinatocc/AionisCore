@@ -1,5 +1,13 @@
 # Aionis Core 0.1.0 Release Note
 
+Last reviewed: 2026-04-16
+
+Historical status:
+
+`release snapshot`
+
+This release note intentionally preserves the 0.1.0 baseline as it was shipped. Do not read its benchmark numbers or package posture as the current repository baseline.
+
 Release date: 2026-03-21
 
 ## Summary

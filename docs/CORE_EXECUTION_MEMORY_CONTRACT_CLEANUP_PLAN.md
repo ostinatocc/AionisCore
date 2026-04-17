@@ -1,6 +1,10 @@
 # Aionis Core Execution-Memory Contract Cleanup Plan
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-04-16
+
+Historical status: archive cleanup plan
+
+These notes remain useful as repository history, but they are not canonical implementation references for the current runtime.
 
 This document turns the `canonical vs transitional` split in the execution-memory product contract into a concrete cleanup plan.
 

@@ -1,8 +1,20 @@
 # ADR-0002: Add Operator Intervention Overlay For Aionis Core Execution Policy Learning
 
+Last reviewed: 2026-04-16
+
+Document status: proposed historical decision record
+
 Status: Proposed
 
 Date: 2026-03-21
+
+This ADR records a proposed direction. It is not part of the canonical current Lite runtime baseline unless a living contract document or code path points back to it directly.
+
+For current runtime truth, start with:
+
+1. [../LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md](../LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md)
+2. [../LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](../LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md)
+3. [../LOCAL_RUNTIME_SOURCE_BOUNDARY.md](../LOCAL_RUNTIME_SOURCE_BOUNDARY.md)
 
 ## Context
 

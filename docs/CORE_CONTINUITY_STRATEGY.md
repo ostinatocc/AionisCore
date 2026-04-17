@@ -1,6 +1,12 @@
 # Aionis Core Continuity Strategy
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-04-16
+
+Internal status:
+
+`strategy and design guidance`
+
+This document is still useful for kernel direction, but it is not the canonical route-by-route or schema-by-schema reference. Use [LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md](LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md), [CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md), and [CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md) when you need the current implementation contract.
 
 This document narrows the broader `Tool-Centric Intelligence` framework into a kernel and architecture strategy that fits the current `Aionis Core` repository.
 

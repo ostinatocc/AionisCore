@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 1. Define shared internal model-client contract types.
 2. Extend the model-client factory with custom factory injection.
 3. Thread replacement hooks through provider factory.

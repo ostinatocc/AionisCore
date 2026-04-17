@@ -1,0 +1,290 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+:root {
+  --vp-c-brand-1: #0b5fff;
+  --vp-c-brand-2: #2670ff;
+  --vp-c-brand-3: #5b94ff;
+  --vp-c-brand-soft: rgba(11, 95, 255, 0.14);
+  --vp-c-bg: #fcfbf8;
+  --vp-c-bg-alt: #f6f0e5;
+  --vp-c-bg-elv: rgba(255, 255, 255, 0.84);
+  --vp-c-bg-soft: rgba(243, 237, 226, 0.8);
+  --vp-c-border: rgba(17, 24, 39, 0.1);
+  --vp-c-divider: rgba(17, 24, 39, 0.08);
+  --vp-c-text-1: #1d2734;
+  --vp-c-text-2: #475569;
+  --vp-c-text-3: #64748b;
+  --vp-c-default-soft: rgba(17, 24, 39, 0.04);
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-bg: #0b5fff;
+  --vp-button-brand-hover-bg: #0a55e5;
+  --vp-button-brand-active-bg: #094fdb;
+  --vp-button-alt-border: rgba(17, 24, 39, 0.12);
+  --vp-button-alt-bg: rgba(255, 255, 255, 0.78);
+  --vp-button-alt-hover-bg: rgba(255, 255, 255, 0.95);
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(135deg, #0b5fff 0%, #8a5c2b 100%);
+  --vp-home-hero-image-background-image:
+    radial-gradient(circle at center, rgba(11, 95, 255, 0.28) 0%, rgba(11, 95, 255, 0.06) 40%, transparent 68%);
+  --vp-home-hero-image-filter: drop-shadow(0 28px 60px rgba(16, 24, 38, 0.18));
+  --vp-font-family-base: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --vp-font-family-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
+}
+
+.dark {
+  --vp-c-bg: #0f1724;
+  --vp-c-bg-alt: #0b1220;
+  --vp-c-bg-elv: rgba(16, 24, 38, 0.9);
+  --vp-c-bg-soft: rgba(20, 29, 45, 0.92);
+  --vp-c-border: rgba(148, 163, 184, 0.18);
+  --vp-c-divider: rgba(148, 163, 184, 0.16);
+  --vp-c-text-1: #eef2f8;
+  --vp-c-text-2: #c8d4e3;
+  --vp-c-text-3: #9fb0c6;
+  --vp-c-default-soft: rgba(255, 255, 255, 0.04);
+  --vp-button-alt-border: rgba(148, 163, 184, 0.2);
+  --vp-button-alt-bg: rgba(16, 24, 38, 0.72);
+  --vp-button-alt-hover-bg: rgba(16, 24, 38, 0.9);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-image:
+    linear-gradient(rgba(11, 95, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11, 95, 255, 0.04) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+.VPNavBar {
+  backdrop-filter: blur(16px);
+  background: color-mix(in srgb, var(--vp-c-bg) 88%, transparent);
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.VPNavBarTitle .title,
+.VPDoc h1,
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.VPHero .name,
+.VPHero .text {
+  font-family: "Fraunces", "Iowan Old Style", "Palatino Linotype", serif;
+  letter-spacing: -0.04em;
+}
+
+.Layout {
+  background:
+    radial-gradient(circle at top right, rgba(11, 95, 255, 0.12), transparent 28%),
+    linear-gradient(180deg, var(--vp-c-bg) 0%, var(--vp-c-bg-alt) 48%, var(--vp-c-bg) 100%);
+}
+
+.VPHome {
+  padding-bottom: 4rem;
+}
+
+.VPHero {
+  padding-top: 72px !important;
+}
+
+.VPHero .container {
+  max-width: 1200px;
+}
+
+.VPHero .tagline {
+  max-width: 58ch;
+  color: var(--vp-c-text-2);
+  font-size: 1.1rem;
+  line-height: 1.8;
+}
+
+.VPHero .actions {
+  gap: 0.85rem;
+}
+
+.VPButton.brand {
+  border: none;
+}
+
+.VPFeatures {
+  padding-top: 0;
+}
+
+.VPFeatures .container {
+  max-width: 1200px;
+}
+
+.VPFeatures .items {
+  gap: 1rem;
+}
+
+.VPFeature {
+  border: 1px solid var(--vp-c-border);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--vp-c-bg-elv) 92%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 40px rgba(20, 24, 32, 0.08);
+}
+
+.VPFeature .title {
+  font-size: 1.05rem;
+}
+
+.VPFeature .details {
+  color: var(--vp-c-text-2);
+  line-height: 1.75;
+}
+
+.VPDocAsideOutline .content,
+.VPDocFooter .prev-next {
+  border-color: var(--vp-c-divider);
+}
+
+.vp-doc a {
+  text-decoration-thickness: 1.5px;
+}
+
+.vp-doc p,
+.vp-doc li {
+  max-width: 72ch;
+  line-height: 1.78;
+}
+
+.vp-doc div[class*="language-"],
+.vp-doc pre {
+  border: 1px solid var(--vp-c-border);
+  border-radius: 18px;
+}
+
+.vp-doc h1 {
+  margin-top: 0.4rem;
+}
+
+.home-proof-grid,
+.home-path-grid,
+.doc-grid {
+  display: grid;
+  gap: 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.home-proof-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.home-proof-card,
+.home-path-card,
+.doc-card,
+.doc-lead {
+  border: 1px solid var(--vp-c-border);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--vp-c-bg-elv) 92%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 40px rgba(20, 24, 32, 0.08);
+}
+
+.home-proof-card,
+.home-path-card,
+.doc-card {
+  padding: 1rem 1.1rem;
+}
+
+.home-proof-label,
+.home-path-kicker,
+.doc-kicker {
+  color: var(--vp-c-text-3);
+  display: block;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.45rem;
+  text-transform: uppercase;
+}
+
+.home-proof-value {
+  color: var(--vp-c-text-1);
+  display: block;
+  font-family: "Fraunces", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: 1.45rem;
+  letter-spacing: -0.04em;
+  margin-bottom: 0.3rem;
+}
+
+.home-proof-card p,
+.home-path-card p,
+.doc-card p,
+.doc-lead p {
+  color: var(--vp-c-text-2);
+  line-height: 1.72;
+  margin: 0;
+}
+
+.home-path-grid,
+.doc-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.home-path-card,
+.doc-card {
+  color: inherit;
+  display: block;
+  text-decoration: none !important;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.home-path-card:hover,
+.doc-card:hover {
+  border-color: color-mix(in srgb, var(--vp-c-brand-1) 30%, var(--vp-c-border));
+  box-shadow: 0 22px 46px rgba(20, 24, 32, 0.11);
+  transform: translateY(-2px);
+}
+
+.home-path-title,
+.doc-card h3 {
+  color: var(--vp-c-text-1);
+  font-family: "Fraunces", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: 1.15rem;
+  letter-spacing: -0.03em;
+  margin: 0 0 0.5rem;
+}
+
+.doc-lead {
+  margin: 1rem 0 1.5rem;
+  padding: 1rem 1.15rem;
+}
+
+.doc-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+
+.doc-chip {
+  background: var(--vp-c-brand-soft);
+  border: 1px solid color-mix(in srgb, var(--vp-c-brand-1) 18%, transparent);
+  border-radius: 999px;
+  color: var(--vp-c-text-1);
+  display: inline-flex;
+  font-size: 0.92rem;
+  line-height: 1;
+  padding: 0.55rem 0.8rem;
+}
+
+.VPLocalSearchBox .shell,
+.VPLocalSearchBox .result {
+  border-color: var(--vp-c-divider);
+}
+
+@media (max-width: 960px) {
+  .VPHero {
+    padding-top: 48px !important;
+  }
+
+  .home-proof-grid,
+  .home-path-grid,
+  .doc-grid {
+    grid-template-columns: 1fr;
+  }
+}

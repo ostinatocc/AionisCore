@@ -1,6 +1,10 @@
 # Aionis Core Execution-Native Route Contract
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-04-16
+
+Internal status:
+
+`active internal route contract`
 
 This document defines the stable execution-native route contract for Aionis Core planner/context surfaces.
 

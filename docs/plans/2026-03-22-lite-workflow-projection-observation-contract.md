@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Workflow Projection Observation Contract Plan
 
 1. add failing projection-contract coverage for equivalent continuity family identity

@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 1. Add a shared provider factory under `src/memory`.
 2. Move `promote_memory` and `form_pattern` selection precedence into that factory.
 3. Rewrite the runtime builder to call the factory instead of branching itself.

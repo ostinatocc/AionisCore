@@ -1,6 +1,10 @@
-# Aionis Core Local Runtime Source Boundary
+# Aionis Runtime Local Runtime Source Boundary
 
-This document records the local-runtime source boundary inside the Aionis Core repository.
+Last reviewed: 2026-04-16
+
+Document status: living technical source-boundary reference
+
+This document records the local-runtime source boundary inside the Aionis Runtime repository.
 
 Current source boundary:
 - `apps/lite/` owns the local runtime shell.

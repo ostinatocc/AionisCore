@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Aionis Core Real-Task Benchmark Suite Spec
 
 ## Goal

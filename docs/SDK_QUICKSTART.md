@@ -1,11 +1,15 @@
-# Aionis Core Quickstart
+# Aionis Runtime Quickstart
 
-This guide is the fastest way to get from a running Aionis Core runtime to a working `@ostinato/aionis` integration.
+Last reviewed: 2026-04-17
 
-## 1. Start Aionis Core
+Document status: living public integration quickstart
+
+This guide is the fastest way to get from a running Aionis Runtime instance to a working `@ostinato/aionis` integration.
+
+## 1. Start Aionis Runtime
 
 ```bash
-cd /path/to/AionisCore
+cd /path/to/AionisRuntime
 npm install
 npm run lite:start
 ```
@@ -13,6 +17,12 @@ npm run lite:start
 Default local SDK target:
 
 1. `http://127.0.0.1:3001`
+
+Check that the runtime is alive:
+
+```bash
+curl http://127.0.0.1:3001/health
+```
 
 ## 2. Install the SDK
 
@@ -22,29 +32,24 @@ In your own project:
 npm install @ostinato/aionis
 ```
 
-Optional runtime sanity check:
-
-```bash
-curl http://127.0.0.1:3001/health
-```
-
 ## 3. Create a client
 
 ```ts
-import { createAionisClient, resolveDelegationLearningProjection } from "@ostinato/aionis";
+import { createAionisClient } from "@ostinato/aionis";
 
 const aionis = createAionisClient({
   baseUrl: "http://127.0.0.1:3001",
 });
 ```
 
-## 4. Write execution memory
+## 4. Seed archived execution memory
 
 ```ts
 const write = await aionis.memory.write({
   tenant_id: "default",
   scope: "demo-sdk-quickstart",
   actor: "sdk-demo",
+  input_text: "Diagnosed a billing retry timeout and confirmed the likely repair path in src/billing/retry.ts.",
   nodes: [
     {
       client_id: "billing-timeout-repair",
@@ -62,6 +67,8 @@ const write = await aionis.memory.write({
 
 console.log(write.commit_id);
 ```
+
+This gives Lite a real archived node that can be rehydrated back into the active working set.
 
 ## 5. Rehydrate archived memory in Lite
 
@@ -93,7 +100,7 @@ await aionis.memory.nodes.activate({
 });
 ```
 
-## 7. Read planner-visible memory
+## 7. Ask for planning context
 
 ```ts
 const planning = await aionis.memory.planningContext({
@@ -101,33 +108,18 @@ const planning = await aionis.memory.planningContext({
   scope: "demo-sdk-quickstart",
   query_text: "repair billing retry timeout in service code",
   context: {
-    task_kind: "repair_billing_retry",
     goal: "repair billing retry timeout in service code",
+    task_kind: "repair_billing_retry",
   },
   tool_candidates: ["bash", "edit", "test"],
   return_layered_context: true,
 });
 
-const delegationLearning = resolveDelegationLearningProjection(planning);
-
-console.log(planning);
-console.log(delegationLearning?.learning_summary);
+console.log(planning.kickoff_recommendation);
+console.log(planning.planner_packet);
 ```
 
-## 8. Record tool feedback
-
-```ts
-await aionis.memory.tools.feedback({
-  tenant_id: "default",
-  scope: "demo-sdk-quickstart",
-  actor: "sdk-demo",
-  tool_name: "fetch_report",
-  feedback: "The fetch_report tool worked and returned clean rows.",
-  outcome: "positive",
-});
-```
-
-## 9. Start a task from learned kickoff
+## 8. Ask for a learned task start
 
 ```ts
 const taskStart = await aionis.memory.taskStart({
@@ -141,51 +133,63 @@ const taskStart = await aionis.memory.taskStart({
 });
 
 console.log(taskStart.first_action);
-
-const experience = await aionis.memory.experienceIntelligence({
-  tenant_id: "default",
-  scope: "demo-sdk-quickstart",
-  query_text: "repair billing retry timeout in service code",
-  context: {
-    goal: "repair billing retry timeout in service code",
-  },
-  candidates: ["bash", "edit", "test"],
-});
-
-console.log(experience.recommendation.combined_next_action);
-console.log(experience.learning_summary);
-console.log(experience.learning_recommendations);
 ```
 
-## 10. Store a structured handoff
+## 9. Store a structured handoff
 
 ```ts
 await aionis.handoff.store({
   tenant_id: "default",
   scope: "demo-sdk-quickstart",
+  actor: "sdk-demo",
+  handoff_kind: "repair",
   anchor: "sdk-quickstart-task",
   summary: "Task paused with a clear next action",
   handoff_text: "Resume in the billing retry service and rerun timeout checks.",
   target_files: ["src/billing/retry.ts"],
   next_action: "Patch retry timeout handling and rerun the retry checks.",
+  acceptance_checks: ["npm run -s test -- billing-retry"],
 });
 ```
 
-## 11. Complete SDK surface
+## 10. Record replay and move toward a playbook
 
-Current complete SDK surface includes:
+```ts
+await aionis.memory.replay.run.start({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  actor: "sdk-demo",
+  run_id: "billing-retry-run-1",
+  goal: "repair billing retry timeout",
+});
 
-1. memory write / recall / planning / introspection
-2. experience-intelligence, kickoff, and task-start surfaces
-3. archive rehydrate and node activation lifecycle surfaces
-4. handoff store and recover
-5. continuity and evolution review-pack surfaces
-6. standalone delegation-record write, query, and aggregate surfaces
-7. replay run lifecycle and playbooks
-8. sandbox and automation surfaces
-9. host bridge integration
+await aionis.memory.replay.step.before({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  actor: "sdk-demo",
+  run_id: "billing-retry-run-1",
+  step_index: 1,
+  tool_name: "edit",
+  tool_input: { file_path: "src/billing/retry.ts" },
+});
 
-## 12. Inspect host bridge task context
+await aionis.memory.replay.step.after({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  actor: "sdk-demo",
+  run_id: "billing-retry-run-1",
+  step_index: 1,
+  status: "success",
+  output_signature: {
+    kind: "patch_result",
+    summary: "patched retry timeout handling",
+  },
+});
+```
+
+From there, end the run and compile a playbook through the replay surface.
+
+## 11. Inspect host bridge task context
 
 ```ts
 import { createAionisHostBridge } from "@ostinato/aionis";
@@ -200,178 +204,34 @@ const taskSession = await bridge.openTaskSession({
   title: "Billing retry repair task",
 });
 
-console.log(taskSession.snapshotState());
-console.log(taskSession.snapshotState().allowed_actions);
-
-await taskSession.recordEvent({
-  event_text: "observed billing timeout failure and prepared repair path inspection",
-});
-
 const taskContext = await taskSession.inspectTaskContext({
   context: {
     task_kind: "repair_billing_retry",
   },
-});
-
-console.log(taskContext.delegation_learning?.learning_summary);
-console.log(taskContext.planning_context.kickoff_recommendation);
-
-const taskStartPlan = await taskSession.planTaskStart({
-  context: {
-    task_kind: "repair_billing_retry",
-  },
-});
-
-console.log(taskStartPlan.decision);
-
-const pause = await taskSession.pauseTask({
-  summary: "pause billing retry repair",
-  handoff_text: "Resume in the billing retry service and rerun timeout checks.",
-});
-
-const resume = await taskSession.resumeTask();
-
-console.log(pause.handoff);
-console.log(resume.handoff);
-console.log(taskSession.snapshotState());
-console.log(taskSession.snapshotState().transition_guards);
-```
-
-## 13. Inspect review packs
-
-```ts
-const continuityPack = await aionis.memory.reviewPacks.continuity({
-  tenant_id: "default",
-  scope: "demo-sdk-quickstart",
-  anchor: "sdk-quickstart-task",
-  handoff_kind: "repair",
-});
-
-const evolutionPack = await aionis.memory.reviewPacks.evolution({
-  tenant_id: "default",
-  scope: "demo-sdk-quickstart",
-  query_text: "repair billing retry timeout in service code",
-  context: {
-    goal: "repair billing retry timeout in service code",
-  },
   candidates: ["bash", "edit", "test"],
 });
 
-console.log(continuityPack.continuity_review_pack.review_contract);
-console.log(evolutionPack.evolution_review_pack.review_contract.next_action);
-console.log(evolutionPack.evolution_review_pack.learning_summary);
-console.log(evolutionPack.evolution_review_pack.learning_recommendations);
+console.log(taskContext.planning_context.kickoff_recommendation);
 ```
 
-## 14. Persist standalone delegation records
+## 12. What else is in the SDK
 
-```ts
-const delegationWrite = await aionis.memory.delegationRecords.write({
-  tenant_id: "default",
-  scope: "demo-sdk-quickstart",
-  run_id: "sdk-review-run-1",
-  handoff_anchor: "sdk-quickstart-task",
-  delegation_records_v1: {
-    summary_version: "execution_delegation_records_v1",
-    record_mode: "packet_backed",
-    route_role: "review",
-    packet_count: 1,
-    return_count: 1,
-    artifact_routing_count: 2,
-    missing_record_types: [],
-    delegation_packets: [{
-      version: 1,
-      role: "review",
-      mission: "Review the billing retry patch and confirm the final checks.",
-      working_set: ["src/billing/retry.ts"],
-      acceptance_checks: ["npm run -s test -- billing-retry"],
-      output_contract: "Return review findings and exact validation status.",
-      preferred_artifact_refs: ["artifact://billing/retry-patch"],
-      inherited_evidence: ["evidence://billing/retry-test"],
-      routing_reason: "packet-backed review route",
-      task_family: "repair",
-      family_scope: "aionis://demo-sdk-quickstart/review",
-      source_mode: "packet_backed",
-    }],
-    delegation_returns: [{
-      version: 1,
-      role: "review",
-      status: "passed",
-      summary: "Review completed and billing retry checks passed.",
-      evidence: ["evidence://billing/retry-test"],
-      working_set: ["src/billing/retry.ts"],
-      acceptance_checks: ["npm run -s test -- billing-retry"],
-      source_mode: "packet_backed",
-    }],
-    artifact_routing_records: [{
-      version: 1,
-      ref: "artifact://billing/retry-patch",
-      ref_kind: "artifact",
-      route_role: "review",
-      route_intent: "review",
-      route_mode: "packet_backed",
-      task_family: "repair",
-      family_scope: "aionis://demo-sdk-quickstart/review",
-      routing_reason: "review artifact route",
-      source: "execution_packet",
-    }, {
-      version: 1,
-      ref: "evidence://billing/retry-test",
-      ref_kind: "evidence",
-      route_role: "review",
-      route_intent: "review",
-      route_mode: "packet_backed",
-      task_family: "repair",
-      family_scope: "aionis://demo-sdk-quickstart/review",
-      routing_reason: "review evidence route",
-      source: "execution_packet",
-    }],
-  },
-});
+Current complete SDK surface includes:
 
-console.log(delegationWrite.record_event?.uri);
-```
+1. memory write / recall / planning / introspection
+2. archive rehydrate and node activation lifecycle surfaces
+3. experience-intelligence, kickoff, and task-start surfaces
+4. handoff store and recover
+5. continuity and evolution review-pack surfaces
+6. standalone delegation-record write, query, and aggregate surfaces
+7. replay run lifecycle and playbooks
+8. sandbox and automation surfaces
+9. host bridge integration
 
-## 15. Query typed delegation records
-
-```ts
-const delegationQuery = await aionis.memory.delegationRecords.find({
-  tenant_id: "default",
-  scope: "demo-sdk-quickstart",
-  route_role: "review",
-  task_family: "repair",
-  include_payload: true,
-  limit: 10,
-});
-
-console.log(delegationQuery.summary.record_mode_counts);
-console.log(delegationQuery.summary.return_status_counts);
-console.log(delegationQuery.records[0]?.delegation_records_v1.delegation_packets[0]?.mission);
-```
-
-## 16. Aggregate delegation-record trends
-
-```ts
-const delegationAggregate = await aionis.memory.delegationRecords.aggregate({
-  tenant_id: "default",
-  scope: "demo-sdk-quickstart",
-  route_role: "review",
-  task_family: "repair",
-  limit: 100,
-});
-
-console.log(delegationAggregate.summary.route_role_counts);
-console.log(delegationAggregate.summary.return_status_counts);
-console.log(delegationAggregate.summary.record_outcome_counts);
-console.log(delegationAggregate.summary.top_reusable_patterns);
-console.log(delegationAggregate.summary.learning_recommendations);
-console.log(delegationAggregate.summary.top_artifact_refs);
-```
-
-## 17. Run bundled SDK examples
+## 13. Run bundled SDK examples
 
 ```bash
-cd /path/to/AionisCore
+cd /path/to/AionisRuntime
 npm run sdk:build
 npm run lite:start
 ```

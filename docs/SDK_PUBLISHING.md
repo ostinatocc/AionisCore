@@ -1,11 +1,16 @@
-# Aionis Core Package Publishing
+# Aionis Runtime Package Publishing
 
-This document defines the release checklist for the public Aionis Core npm packages.
+Last reviewed: 2026-04-16
+
+Document status: living public release checklist
+
+This document defines the release checklist for the public Aionis Runtime npm packages.
 
 ## Public package set
 
 1. [@ostinato/aionis](../packages/full-sdk/package.json)
 2. [@ostinato/aionis-rtc](../packages/runtime-core/package.json)
+3. [@aionis/doc](../packages/aionis-doc/package.json)
 
 ## Release goals
 
@@ -37,6 +42,15 @@ npm run runtime-core:publish:dry-run
 npm run runtime-core:release:check
 ```
 
+### `@aionis/doc`
+
+```bash
+npm run aionis-doc:build
+npm run aionis-doc:pack:dry-run
+npm run aionis-doc:publish:dry-run
+npm run aionis-doc:release:check
+```
+
 ### Full package sweep
 
 ```bash
@@ -61,30 +75,42 @@ Artifacts are written outside the repository, for example:
 
 When publish credentials are ready:
 
-cd /path/to/AionisCore/packages/full-sdk
+```bash
+cd /path/to/AionisRuntime/packages/full-sdk
 npm publish --access public
 ```
 
 ### `@ostinato/aionis-rtc`
 
 ```bash
-cd /path/to/AionisCore/packages/runtime-core
+cd /path/to/AionisRuntime/packages/runtime-core
+npm publish --access public
+```
+
+### `@aionis/doc`
+
+```bash
+cd /path/to/AionisRuntime/packages/aionis-doc
 npm publish --access public
 ```
 
 ## Recommended release checklist
 
-1. confirm versions in [packages/full-sdk/package.json](../packages/full-sdk/package.json) and [packages/runtime-core/package.json](../packages/runtime-core/package.json)
-2. run `npm run sdk:build`
-3. run `npm run sdk:test`
-4. run `npm run sdk:pack:dry-run`
-5. run `npm run sdk:publish:dry-run`
-6. run `npm run sdk:release:check`
-7. run `npm run runtime-core:build`
-8. run `npm run runtime-core:pack:dry-run`
-9. run `npm run runtime-core:publish:dry-run`
-10. run `npm run runtime-core:release:check`
-11. run `npm run packages:release:check`
-12. check [packages/full-sdk/README.md](../packages/full-sdk/README.md) and [packages/runtime-core/README.md](../packages/runtime-core/README.md)
-13. create and push the release tag
-14. publish each package from its package directory
+1. confirm versions in [packages/full-sdk/package.json](../packages/full-sdk/package.json), [packages/runtime-core/package.json](../packages/runtime-core/package.json), and [packages/aionis-doc/package.json](../packages/aionis-doc/package.json)
+2. run `npm run aionis-doc:build`
+3. run `npm run aionis-doc:pack:dry-run`
+4. run `npm run aionis-doc:publish:dry-run`
+5. run `npm run aionis-doc:release:check`
+6. run `npm run sdk:build`
+7. run `npm run sdk:test`
+8. run `npm run sdk:pack:dry-run`
+9. run `npm run sdk:publish:dry-run`
+10. run `npm run sdk:release:check`
+11. run `npm run runtime-core:build`
+12. run `npm run runtime-core:pack:dry-run`
+13. run `npm run runtime-core:publish:dry-run`
+14. run `npm run runtime-core:release:check`
+15. run `npm run packages:release:check`
+16. check [packages/full-sdk/README.md](../packages/full-sdk/README.md), [packages/runtime-core/README.md](../packages/runtime-core/README.md), and [packages/aionis-doc/README.md](../packages/aionis-doc/README.md)
+17. create and push the release tag
+18. publish each package from its package directory

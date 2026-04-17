@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite HTTP Governance Shadow Benchmark
 
 ## Decision

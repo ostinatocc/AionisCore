@@ -1,14 +1,18 @@
-# Aionis Core Product Definition v1
+# Aionis Runtime Product Definition v1
+
+Last reviewed: 2026-04-16
+
+Document status: living public product definition
 
 ## One-Line Definition
 
-Aionis Core is the kernel for agent continuity.
+Aionis Runtime is the local continuity runtime for coding agents.
 
-It owns the runtime primitives that let an agent system start better, resume cleanly, and reuse prior execution.
+It is built from the Aionis Core kernel in this repository and owns the runtime primitives that let an agent system start better, resume cleanly, and reuse prior execution.
 
 ## Core Definition
 
-Aionis Core is responsible for:
+The runtime product in this repository is responsible for:
 
 1. classifying task shape and execution intent
 2. projecting prior execution into better kickoff guidance
@@ -17,7 +21,7 @@ Aionis Core is responsible for:
 5. recording replay runs and compiling reusable playbooks
 6. applying governance and workflow learning over execution memory
 
-## Core Capability Surfaces
+## Runtime Capability Surfaces
 
 ### 1. Task Start
 
@@ -67,7 +71,7 @@ The repository should be treated as three layers:
 
 ## Build Rule
 
-New work belongs in Aionis Core when it strengthens one of these:
+New public-facing work belongs here when it strengthens one of these:
 
 1. learned kickoff quality
 2. handoff integrity and recovery quality
@@ -79,6 +83,6 @@ New work belongs in Aionis Core when it strengthens one of these:
 
 When deciding what to build next, ask:
 
-**Does this make Aionis Core a stronger kernel for task continuity?**
+**Does this make Aionis Runtime a stronger runtime for task continuity, or the Aionis Core kernel beneath it stronger?**
 
 If yes, it belongs here.

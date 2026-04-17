@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Shared Governance Policy-Effect Plan
 
 1. Add a shared policy-effect preview helper in `src/memory/governance-shared.ts`

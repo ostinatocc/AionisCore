@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Lite Replay Repair Review Governance Policy Apply Plan
 
 ## Steps

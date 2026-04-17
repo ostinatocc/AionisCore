@@ -1,3 +1,7 @@
+Last reviewed: 2026-04-16
+
+Document status: historical implementation plan
+
 # Aionis Core SDK Surface Design
 
 Date: 2026-03-23

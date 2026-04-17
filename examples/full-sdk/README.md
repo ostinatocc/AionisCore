@@ -1,21 +1,21 @@
-# Aionis Core SDK Examples
+# Aionis Runtime SDK Examples
 
-These examples use the main Aionis Core SDK package:
+These examples use the main Aionis Runtime SDK package:
 
 - `@ostinato/aionis`
 
 Build the SDK first:
 
 ```bash
-cd /path/to/AionisCore
+cd /path/to/AionisRuntime
 npm install
 npm run sdk:build
 ```
 
-Start the local Aionis Core runtime shell:
+Start the local Aionis Runtime shell:
 
 ```bash
-cd /path/to/AionisCore
+cd /path/to/AionisRuntime
 npm run lite:start
 ```
 
