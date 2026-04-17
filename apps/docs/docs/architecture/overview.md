@@ -41,6 +41,25 @@ The Lite startup chain is:
 
 This keeps the shell thin and makes `src/runtime-entry.ts` the runtime truth for startup and route assembly.
 
+## Request flow at a glance
+
+```mermaid
+flowchart LR
+    A["SDK client / host bridge"] --> B["HTTP host"]
+    B --> C["Route handlers"]
+    C --> D["Runtime policies and helpers"]
+    D --> E["Memory / replay / handoff subsystems"]
+    E --> F["SQLite-backed Lite stores"]
+    E --> G["Sandbox / automation executors"]
+```
+
+This is the shape that matters to integrators:
+
+1. the SDK talks to the host through stable routes
+2. the host composes runtime helpers and policies
+3. the subsystem layer owns behavior
+4. the stores own local persistence
+
 ## Lite runtime assembly
 
 The main Lite-only wiring lives in `src/app/runtime-services.ts`.
@@ -71,6 +90,16 @@ Its job is to:
 
 That boundary is one of the design strengths of the project: Lite is explicit about what is public and what remains server-only.
 
+## Lite boundary model
+
+| Category | Inside Lite today | Outside Lite today |
+| --- | --- | --- |
+| Memory | write, recall, planning, task start, lifecycle routes | broader hosted control-plane memory operations |
+| Handoff | store and recover | hosted coordination layers beyond Lite |
+| Replay | replay runs, playbooks, governed subset | broader server-only governance surfaces |
+| Runtime ops | `/health`, config-driven local boot, structured `501` boundaries | admin control plane |
+| Execution | local sandbox and local automation kernel | hosted remote execution plane |
+
 ## Kernel subsystems
 
 The largest runtime subsystems live in `src/memory/`:
@@ -100,15 +129,19 @@ Primary stores include:
 
 That split makes the runtime easier to evolve by responsibility rather than hiding everything behind one persistence abstraction.
 
-## Deeper references
+## Why this architecture matters
 
-For the full local-runtime deep dive, read:
+This architecture does three important things:
 
-- [Local Runtime Architecture](https://github.com/ostinatocc/AionisCore/blob/main/docs/LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md)
-- [Local Runtime Source Boundary](https://github.com/ostinatocc/AionisCore/blob/main/docs/LOCAL_RUNTIME_SOURCE_BOUNDARY.md)
-- [Local Runtime API Capability Matrix](https://github.com/ostinatocc/AionisCore/blob/main/docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md)
-- [runtime-entry.ts](https://github.com/ostinatocc/AionisCore/blob/main/src/runtime-entry.ts)
-- [runtime-services.ts](https://github.com/ostinatocc/AionisCore/blob/main/src/app/runtime-services.ts)
+1. it keeps the public runtime honest about its Lite boundary
+2. it makes runtime behavior inspectable instead of burying it in prompts
+3. it lets continuity live as infrastructure, not as a hidden side effect of one agent product
+
+That is the practical reason Aionis feels different from a thin prompt wrapper or one big monolithic agent app.
+
+## Read deeper when you need to
+
+You can stay inside the docs site for normal product and integration understanding. Only drop to raw repository references when you need exact contract names, route availability, or source-level debugging.
 
 <div class="doc-grid">
   <a class="doc-card" href="../runtime/lite-runtime.md">

@@ -5,7 +5,7 @@ slug: /intro
 
 # What Aionis Runtime is
 
-`Aionis Runtime` is a local continuity runtime for coding agents.
+`Aionis Runtime` is a self-evolving continuity runtime for agent systems.
 
 <div class="doc-lead">
   <span class="doc-kicker">Short version</span>
@@ -38,7 +38,7 @@ The concrete failure is agent continuity:
 2. a paused task is resumed and the agent has no trustworthy execution state
 3. a successful repair finishes and the knowledge disappears instead of becoming reusable
 
-That failure is especially visible in coding workflows, where file targets, next action, repair steps, and tool choice matter more than chat history.
+That failure is especially visible in coding workflows, but it is not limited to coding. Any agent workflow that depends on reliable startup guidance, pause/resume, or replay reuse will hit the same continuity problem.
 
 ## What Aionis Runtime does
 
@@ -53,6 +53,41 @@ The runtime exposes three core surfaces:
 
 Around those surfaces, Lite also exposes local automation, sandbox, and review-oriented runtime paths.
 
+## What "self-evolving" means here
+
+The runtime is not claiming magical self-improvement in the abstract.
+
+In Aionis, self-evolving means that later execution can be informed by earlier execution through explicit runtime structures:
+
+1. previous execution evidence can influence the next task start
+2. a paused task can be resumed from structured handoff state
+3. successful runs can be replayed, compiled, and promoted into reusable playbooks
+4. memory lifecycle routes can rehydrate useful nodes and record activation feedback
+
+The system improves because continuity is persisted and reused, not because the product merely promises "AI memory".
+
+## Single-agent and multi-agent use
+
+The current public runtime is especially well suited to:
+
+- coding agents
+- ops and automation agents
+- task-oriented hosts that need pause/resume
+- multi-agent systems that need trustworthy handoff between workers
+
+The common requirement is not domain. The common requirement is continuity.
+
+## What the runtime is not
+
+Aionis Runtime is not:
+
+- a hosted control plane
+- a generic chat memory plugin
+- a vague orchestration wrapper with continuity hidden in prompts
+- a replacement for the model, agent UI, or workflow host you already use
+
+Instead, it sits underneath those systems as continuity infrastructure.
+
 ## Why the runtime shape matters
 
 The key design choice is that continuity is exposed as runtime infrastructure:
@@ -64,12 +99,38 @@ The key design choice is that continuity is exposed as runtime infrastructure:
 
 This makes the runtime easier to inspect, integrate, validate, and extend.
 
+## How the execution loop works
+
+```mermaid
+flowchart TD
+    A["Task arrives"] --> B["Task start / planning context"]
+    B --> C["Agent executes through runtime tools and stores"]
+    C --> D["Pause or handoff state captured"]
+    C --> E["Run recorded for replay / playbook promotion"]
+    D --> F["Resume with structured recovery context"]
+    E --> G["Next similar task starts with better first action"]
+```
+
+This is the loop Aionis is trying to own. The runtime is not only storing data; it is trying to improve later execution quality.
+
 ## What ships today
 
 - a Lite local runtime with SQLite-backed persistence
 - a public SDK through `@ostinato/aionis`
 - replay, handoff, automation, sandbox, and review-pack surfaces
 - validation evidence through smoke tests, contract tests, and benchmark reports
+
+## How to think about the public product
+
+Use this mental model:
+
+| Layer | What it means |
+| --- | --- |
+| `Aionis Core` | The underlying kernel concepts and runtime substrate |
+| `Aionis Runtime` | The public runtime shape you integrate against |
+| `Lite` | The local distribution that ships publicly today |
+
+If you are evaluating or integrating Aionis, you mainly care about `Aionis Runtime` and `Lite`.
 
 ## Recommended reading order
 
@@ -101,10 +162,10 @@ This makes the runtime easier to inspect, integrate, validate, and extend.
   </a>
 </div>
 
-## Deep dives
+## After this page
 
-The public docs site is intentionally curated. If you need deeper repository detail after reading the main docs path, start with:
+If you want to keep going in the shortest useful order:
 
-- [Contracts and Routes](./reference/contracts-and-routes.md)
-- [Lite Config and Operations](./runtime/lite-config-and-operations.md)
-- [Validation and Benchmarks](./evidence/validation-and-benchmarks.md)
+1. read [Why Aionis](./why-aionis.md) for the differentiators
+2. read [Architecture Overview](./architecture/overview.md) for the runtime shape
+3. read [Getting Started](./getting-started.md) or [SDK Quickstart](./sdk/quickstart.md) to evaluate the public path

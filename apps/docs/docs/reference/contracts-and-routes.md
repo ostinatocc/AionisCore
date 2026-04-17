@@ -46,7 +46,52 @@ Start with the page that matches the runtime surface you are integrating:
   </a>
 </div>
 
-## SDK contracts
+## How to use this section
+
+Use this section in two passes:
+
+1. stay in the docs site for the public surface and family-level understanding
+2. only open raw contracts when you need exact field names or source-level debugging
+
+For most integrations, you should not need to start from raw TypeScript files.
+
+## Public route families
+
+| Family | Main job | Start here |
+| --- | --- | --- |
+| Memory | Write, recall, planning, task start, sessions, lifecycle | [Memory](./memory.md) |
+| Handoff | Pause, store, recover, and resume task state | [Handoff](./handoff.md) |
+| Replay | Record runs, compile playbooks, promote and reuse | [Replay and Playbooks](./replay-and-playbooks.md) |
+| Runtime operations | Boot, health, config, Lite boundary | [Lite Runtime](../runtime/lite-runtime.md) |
+| SDK integration | Call the runtime from TypeScript | [SDK Quickstart](../sdk/quickstart.md) |
+
+## Common lookup tasks
+
+| If you are trying to answer... | Read this page first |
+| --- | --- |
+| "How do I ask for a better first action?" | [Memory](./memory.md) |
+| "How do I pause work and resume it later?" | [Handoff](./handoff.md) |
+| "How do I turn a successful run into something reusable?" | [Replay and Playbooks](./replay-and-playbooks.md) |
+| "Which route families are really in Lite?" | [Lite Runtime](../runtime/lite-runtime.md) |
+| "How do I integrate this from code?" | [SDK Quickstart](../sdk/quickstart.md) |
+
+## What the public docs already cover
+
+The docs site already explains:
+
+- the runtime model
+- the main continuity surfaces
+- the public SDK integration path
+- the Lite runtime boundary
+- the most important memory, handoff, and replay families
+
+That means the raw repository references should be the second stop, not the first one.
+
+## Raw sources when you need exactness
+
+Sometimes you do need the literal source of truth. Use the raw sources below only when the docs page above is not enough.
+
+### SDK contracts
 
 The main typed SDK request and response shapes live here:
 
@@ -59,7 +104,7 @@ Use that file when you need:
 - handoff envelopes
 - automation and sandbox contracts
 
-## Runtime capability matrix
+### Runtime capability matrix
 
 The best raw route-level reference today is:
 
@@ -72,23 +117,23 @@ Use it to answer:
 3. which are conditional
 4. which are intentionally unavailable in Lite
 
-## Runtime boundary
+### Runtime boundary
 
 For public product boundary and open-core distribution stance:
 
 - [OPEN_CORE_BOUNDARY.md](https://github.com/ostinatocc/AionisCore/blob/main/docs/OPEN_CORE_BOUNDARY.md)
 
-## Package-level references
+### Package-level references
 
 - [`@ostinato/aionis`](https://github.com/ostinatocc/AionisCore/blob/main/packages/full-sdk/README.md)
 - [`@aionis/doc`](https://github.com/ostinatocc/AionisCore/blob/main/packages/aionis-doc/README.md)
 
-## What this page does not try to be
+## What this page is not trying to be
 
-This docs site still uses the repository markdown and TypeScript contracts as the final raw reference.
+This page is not trying to reproduce every field-level schema in the repository.
 
 That means:
 
 1. the docs site explains the public shape and integration path
-2. the repository contract files remain the literal source of truth for every field
+2. the repository contract files still remain the literal source of truth for exact field-level detail
 3. deeper route-by-route debugging still sometimes requires reading the raw capability matrix or SDK contracts

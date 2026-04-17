@@ -5,8 +5,8 @@ titleTemplate: false
 
 hero:
   name: Aionis Runtime
-  text: Continuity, not prompt glue
-  tagline: Start repeated coding tasks with a better first move, resume paused work from structured runtime state, and turn successful execution into reusable playbooks.
+  text: Self-evolving continuity for agent systems
+  tagline: Turn task starts, handoffs, and replays into execution memory so repeated work starts better, paused work resumes cleanly, and successful execution becomes reusable operating knowledge.
   image:
     src: /logo-mark.svg
     alt: Aionis Runtime
@@ -81,7 +81,7 @@ It should answer four questions quickly:
 
 The practical mental model is:
 
-`Aionis Runtime = a local continuity runtime for coding agents`
+`Aionis Runtime = a self-evolving continuity runtime for agent systems`
 
 It provides explicit runtime surfaces for:
 
@@ -90,6 +90,8 @@ It provides explicit runtime surfaces for:
 - replay and playbook promotion
 - local automation and sandbox execution
 - typed SDK and stable route contracts
+
+Today, the runtime is strongest for coding and ops workflows, but the continuity model is broader than coding alone. If an agent or multi-agent workflow needs reliable task start, trustworthy handoff, and reusable replay, Aionis is in scope.
 
 ## Why teams use it
 
@@ -102,6 +104,38 @@ Typical failure modes are:
 3. successful repairs do not become reusable operating knowledge
 
 Aionis addresses those problems by turning continuity into runtime infrastructure instead of leaving it inside prompts and chat transcripts.
+
+## What makes it different
+
+Many agent products can already run long tasks. That is not the point of Aionis.
+
+Aionis is about what happens across runs:
+
+1. a task should start from prior execution, not from zero
+2. a pause should recover structured runtime state, not a vague summary
+3. a successful run should become reusable execution memory, not disappear into logs
+
+That is why the public runtime is organized around `task start`, `handoff`, and `replay` instead of generic "AI memory".
+
+## How continuity improves over time
+
+```mermaid
+flowchart LR
+    A["New task arrives"] --> B["Task start uses prior execution"]
+    B --> C["Agent works through Lite runtime"]
+    C --> D["Pause or handoff stores structured state"]
+    C --> E["Successful run recorded as replay"]
+    D --> F["Next agent resumes from runtime state"]
+    E --> G["Replay promoted into reusable guidance"]
+    F --> H["Next similar task starts better"]
+    G --> H
+```
+
+This is the core product loop:
+
+- execution produces evidence
+- evidence becomes execution memory
+- execution memory improves the next task start, handoff, and replay path
 
 ## Choose your path
 
@@ -147,6 +181,30 @@ See [Architecture Overview](/docs/architecture/overview) for the full runtime br
 - local automation kernel
 - local sandbox executor
 - typed SDK integration through `@ostinato/aionis`
+
+## What this means in practice
+
+If you run Lite locally today, you already get a real runtime shape:
+
+- an HTTP host with explicit supported routes
+- multiple SQLite stores instead of one opaque blob
+- lifecycle-aware memory operations such as rehydrate and activate
+- a public SDK that can call task start, handoff, replay, automation, and sandbox flows
+
+That matters because the runtime is inspectable. You can see which surfaces exist, test them directly, and integrate them into your own host or workflow system.
+
+## Who should read what
+
+Use this docs site based on the question you are trying to answer:
+
+| If you want to know... | Start here |
+| --- | --- |
+| What Aionis is and why it exists | [Introduction](/docs/intro) |
+| Why continuity is the core differentiator | [Why Aionis](/docs/why-aionis) |
+| How the runtime is assembled | [Architecture Overview](/docs/architecture/overview) |
+| How to boot Lite and call it | [Getting Started](/docs/getting-started) |
+| How to integrate from TypeScript | [SDK Quickstart](/docs/sdk/quickstart) |
+| What fields and route families exist | [Contracts and Routes](/docs/reference/contracts-and-routes) |
 
 ## Start here
 

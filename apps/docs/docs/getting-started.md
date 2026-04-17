@@ -37,6 +37,14 @@ The default local target is:
 http://127.0.0.1:3001
 ```
 
+Before moving on, confirm the runtime is alive:
+
+```bash
+curl http://127.0.0.1:3001/health
+```
+
+You should get a structured JSON health response from the local host.
+
 ## 2. Install the public SDK
 
 In your own project:
@@ -55,7 +63,21 @@ const aionis = createAionisClient({
 });
 ```
 
-## 4. Ask for a learned kickoff
+## 4. Write one piece of execution evidence
+
+```ts
+await aionis.memory.write({
+  tenant_id: "default",
+  scope: "docs-eval",
+  actor: "local-user",
+  input_text:
+    "Investigated a serializer bug in src/routes/export.ts, patched the output shape, and validated the response contract.",
+});
+```
+
+This gives Lite something real to work with. `taskStart` and `planningContext` are more useful when the local runtime already has execution evidence in the relevant scope.
+
+## 5. Ask for a learned kickoff
 
 ```ts
 const taskStart = await aionis.memory.taskStart({
@@ -71,7 +93,60 @@ const taskStart = await aionis.memory.taskStart({
 console.log(taskStart.first_action);
 ```
 
-## 5. Next paths
+Read these fields first:
+
+1. `first_action`
+2. `kickoff_recommendation`
+3. `kickoff_recommendation.next_action`
+4. `kickoff_recommendation.selected_tool`
+
+If those come back sparse, the runtime is usually healthy but your local scope does not have much relevant execution evidence yet.
+
+## 6. Optional: ask for richer planner context
+
+Use `planningContext` when you want more than one next step:
+
+```ts
+const planning = await aionis.memory.planningContext({
+  tenant_id: "default",
+  scope: "docs-eval",
+  query_text: "repair export route serialization",
+  context: {
+    goal: "repair export route serialization",
+    task_kind: "bugfix",
+  },
+  tool_candidates: ["read", "edit", "test"],
+  return_layered_context: true,
+});
+
+console.log(planning.kickoff_recommendation);
+console.log(planning.workflow_signals);
+```
+
+## What a successful first evaluation looks like
+
+You do not need the runtime to look "smart" on the first call. You need it to prove the public path is working.
+
+A healthy first evaluation looks like:
+
+1. Lite boots locally and `/health` responds
+2. `memory.write(...)` succeeds
+3. `memory.taskStart(...)` returns a structured response
+4. `memory.planningContext(...)` returns planner-facing fields
+5. the SDK can talk to the runtime without custom glue code
+
+## If the response feels empty
+
+The most common reasons are:
+
+- you are querying a fresh scope with no relevant execution evidence
+- the `query_text` is too generic to match prior work
+- you wrote evidence into one scope and queried another
+- Lite is running, but you expected hosted-only behavior that is intentionally outside the public local path
+
+The runtime being sparse is not the same thing as the runtime being broken.
+
+## Next paths
 
 - Want the full developer flow? Read [SDK Quickstart](./sdk/quickstart.md).
 - Want the runtime shape and startup model? Read [Lite Runtime](./runtime/lite-runtime.md).
@@ -95,3 +170,14 @@ console.log(taskStart.first_action);
     <p>Debug the most common reasons Lite feels empty, won’t boot, or returns `501` behavior.</p>
   </a>
 </div>
+
+## Ten-minute evaluation checklist
+
+If you are evaluating whether Aionis is worth integrating, the shortest serious test is:
+
+1. boot Lite
+2. confirm `/health`
+3. write one or two realistic execution notes
+4. call `taskStart`
+5. call `planningContext`
+6. decide whether the runtime shape matches how your host thinks about work
