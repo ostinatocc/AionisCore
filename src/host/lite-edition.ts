@@ -6,15 +6,6 @@ export const LITE_SERVER_ONLY_ROUTE_GROUPS = {
     prefixes: ["/v1/admin/control", "/v1/admin/control/*"],
     reason: "admin control routes are unavailable in lite edition",
   },
-  memory_lifecycle: {
-    prefixes: [
-      "/v1/memory/archive/rehydrate",
-      "/v1/memory/archive/rehydrate/*",
-      "/v1/memory/nodes/activate",
-      "/v1/memory/nodes/activate/*",
-    ],
-    reason: "memory lifecycle routes are unavailable in lite edition",
-  },
 } as const;
 
 export function buildLiteRouteMatrix() {
@@ -28,7 +19,12 @@ export function buildLiteRouteMatrix() {
       "memory-replay-core",
       "memory-feedback-tools",
     ],
-    optional_routes: ["memory-sandbox", "memory-replay-governed-partial", "automations-lite-kernel"],
+    optional_routes: [
+      "memory-lifecycle-lite",
+      "memory-sandbox",
+      "memory-replay-governed-partial",
+      "automations-lite-kernel",
+    ],
     server_only_route_groups: Object.entries(LITE_SERVER_ONLY_ROUTE_GROUPS).map(([group, value]) => ({
       group,
       prefixes: value.prefixes,

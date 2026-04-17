@@ -116,6 +116,18 @@ Look for:
 3. `lite.stores`
 4. `sandbox`
 
+## Memory lifecycle routes
+
+Lite now exposes local memory lifecycle mutations directly:
+
+1. `POST /v1/memory/archive/rehydrate`
+2. `POST /v1/memory/nodes/activate`
+
+From the SDK, those map to:
+
+1. `aionis.memory.archive.rehydrate(...)`
+2. `aionis.memory.nodes.activate(...)`
+
 ### Rebuild or validate before sharing
 
 ```bash
@@ -130,7 +142,7 @@ Lite is intentionally opinionated:
 
 1. auth is off by default
 2. tenant quota enforcement is off by default
-3. some server-only route groups return structured `501`
+3. some server-only route groups, such as admin control, return structured `501`
 4. Lite is local-first, not a hosted control plane
 
 ## Related docs

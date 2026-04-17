@@ -75,6 +75,29 @@ const taskStart = await aionis.memory.taskStart({
 console.log(taskStart.first_action);
 ```
 
+## Lite Memory Lifecycle
+
+The Lite runtime now supports the public SDK lifecycle mutations locally.
+
+```ts
+await aionis.memory.archive.rehydrate({
+  tenant_id: "default",
+  scope: "default",
+  client_ids: ["billing-timeout-repair"],
+  target_tier: "warm",
+  reason: "bring the prior repair memory back into the active working set",
+});
+
+await aionis.memory.nodes.activate({
+  tenant_id: "default",
+  scope: "default",
+  client_ids: ["billing-timeout-repair"],
+  outcome: "positive",
+  activate: true,
+  reason: "the recalled repair memory produced the correct fix path",
+});
+```
+
 Need the low-level runtime boundary package instead?
 
 ```bash
@@ -108,6 +131,7 @@ Repository docs deployment is wired through:
 ## What Ships Today
 
 - a Lite local runtime with SQLite-backed persistence
+- archive rehydrate and node activation lifecycle routes in Lite
 - `@ostinato/aionis` as the main integration surface
 - replay, playbooks, handoff, packs, and review-pack routes
 - local automation and sandbox kernels

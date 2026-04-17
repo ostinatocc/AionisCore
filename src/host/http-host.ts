@@ -11,6 +11,7 @@ import type { InflightGateToken } from "../util/inflight_gate.js";
 import { registerMemoryAccessRoutes } from "../routes/memory-access.js";
 import { registerMemoryContextRuntimeRoutes } from "../routes/memory-context-runtime.js";
 import { registerMemoryFeedbackToolRoutes } from "../routes/memory-feedback-tools.js";
+import { registerLiteMemoryLifecycleRoutes } from "../routes/memory-lifecycle-lite.js";
 import { registerHandoffRoutes } from "../routes/handoff.js";
 import { registerMemoryRecallRoutes } from "../routes/memory-recall.js";
 import { registerMemoryReplayCoreRoutes } from "../routes/memory-replay-core.js";
@@ -441,6 +442,18 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
     liteRecallAccess,
     writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
     requireStoreFeatureCapability,
+    requireMemoryPrincipal,
+    withIdentityFromRequest,
+    enforceRateLimit,
+    enforceTenantQuota,
+    tenantFromBody,
+    acquireInflightSlot,
+  });
+
+  registerLiteMemoryLifecycleRoutes({
+    app,
+    env,
+    liteWriteStore,
     requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,

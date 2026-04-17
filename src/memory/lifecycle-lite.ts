@@ -1,0 +1,406 @@
+import stableStringify from "fast-json-stable-stringify";
+import { sha256Hex } from "../util/crypto.js";
+import { normalizeText } from "../util/normalize.js";
+import { redactPII } from "../util/redaction.js";
+import { badRequest } from "../util/http.js";
+import { MemoryArchiveRehydrateRequest, MemoryNodesActivateRequest } from "./schemas.js";
+import { resolveTenantScope } from "./tenant.js";
+import type { LiteFindNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
+
+type LifecycleLiteStore = Pick<LiteWriteStore, "findNodes" | "latestCommit" | "insertCommit" | "updateNodeAnchorState">;
+
+type LifecycleOptions = {
+  maxTextLen: number;
+  piiRedaction: boolean;
+  defaultActor: string;
+};
+
+type Tier = "archive" | "cold" | "warm" | "hot";
+
+const TIER_RANK: Record<Tier, number> = {
+  archive: 0,
+  cold: 1,
+  warm: 2,
+  hot: 3,
+};
+
+function uniqStrings(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+function normalizeMaybeRedact(input: string | undefined, opts: LifecycleOptions): string | undefined {
+  if (!input) return input;
+  const normalized = normalizeText(input, opts.maxTextLen);
+  if (!opts.piiRedaction) return normalized;
+  return redactPII(normalized).text;
+}
+
+async function resolveLifecycleNodes(args: {
+  liteWriteStore: LifecycleLiteStore;
+  scope: string;
+  actor: string;
+  requestedNodeIds: string[];
+  requestedClientIds: string[];
+}) {
+  const { liteWriteStore, scope, actor, requestedNodeIds, requestedClientIds } = args;
+  const foundById = new Map<string, LiteFindNodeRow>();
+  const resolvedByClient: Array<{ client_id: string; node_id: string }> = [];
+  const missingClientIds: string[] = [];
+
+  for (const nodeId of requestedNodeIds) {
+    const { rows } = await liteWriteStore.findNodes({
+      scope,
+      id: nodeId,
+      consumerAgentId: actor,
+      consumerTeamId: null,
+      limit: 1,
+      offset: 0,
+    });
+    const row = rows[0];
+    if (row) foundById.set(row.id, row);
+  }
+
+  for (const clientId of requestedClientIds) {
+    const { rows } = await liteWriteStore.findNodes({
+      scope,
+      clientId,
+      consumerAgentId: actor,
+      consumerTeamId: null,
+      limit: 1,
+      offset: 0,
+    });
+    const row = rows[0];
+    if (!row) {
+      missingClientIds.push(clientId);
+      continue;
+    }
+    resolvedByClient.push({ client_id: clientId, node_id: row.id });
+    foundById.set(row.id, row);
+  }
+
+  const resolvedNodeIds = uniqStrings([
+    ...requestedNodeIds,
+    ...resolvedByClient.map((row) => row.node_id),
+  ]);
+  const missingNodeIds = resolvedNodeIds.filter((id) => !foundById.has(id));
+
+  return {
+    resolvedNodeIds,
+    resolvedByClient,
+    missingClientIds,
+    missingNodeIds,
+    foundRows: resolvedNodeIds.map((id) => foundById.get(id)).filter((row): row is LiteFindNodeRow => !!row),
+  };
+}
+
+export async function rehydrateArchiveNodesLite(
+  liteWriteStore: LifecycleLiteStore,
+  body: unknown,
+  defaultScope: string,
+  defaultTenantId: string,
+  opts: LifecycleOptions,
+) {
+  const parsed = MemoryArchiveRehydrateRequest.parse(body);
+  const tenancy = resolveTenantScope(
+    { scope: parsed.scope, tenant_id: parsed.tenant_id },
+    { defaultScope, defaultTenantId },
+  );
+  const scope = tenancy.scope_key;
+  const actor = parsed.actor ?? opts.defaultActor;
+  const startedAt = new Date().toISOString();
+  const reason = normalizeMaybeRedact(parsed.reason, opts) ?? null;
+  const inputText = normalizeMaybeRedact(parsed.input_text, opts);
+  const inputSha = parsed.input_sha256 ?? sha256Hex(inputText ?? "");
+
+  const requestedNodeIds = uniqStrings((parsed.node_ids ?? []).map((id) => id.toLowerCase()));
+  const requestedClientIds = uniqStrings((parsed.client_ids ?? []).map((id) => id.trim()).filter((id) => id.length > 0));
+  const { resolvedNodeIds, resolvedByClient, missingClientIds, missingNodeIds, foundRows } = await resolveLifecycleNodes({
+    liteWriteStore,
+    scope,
+    actor,
+    requestedNodeIds,
+    requestedClientIds,
+  });
+
+  if (resolvedNodeIds.length === 0) {
+    badRequest("rehydrate_no_resolved_nodes", "No valid node_ids/client_ids resolved under this scope");
+  }
+
+  const movableRows: LiteFindNodeRow[] = [];
+  const noopIds: string[] = [];
+  for (const row of foundRows) {
+    const fromRank = TIER_RANK[row.tier as Tier] ?? TIER_RANK.archive;
+    const toRank = TIER_RANK[parsed.target_tier];
+    if (fromRank < toRank) movableRows.push(row);
+    else noopIds.push(row.id);
+  }
+
+  if (movableRows.length === 0) {
+    return {
+      scope: tenancy.scope,
+      tenant_id: tenancy.tenant_id,
+      target_tier: parsed.target_tier,
+      commit_id: null as string | null,
+      commit_hash: null as string | null,
+      rehydrated: {
+        requested_node_ids: requestedNodeIds.length,
+        requested_client_ids: requestedClientIds.length,
+        resolved_node_ids: resolvedNodeIds.length,
+        found_nodes: foundRows.length,
+        moved_nodes: 0,
+        noop_nodes: noopIds.length,
+        missing_node_ids: missingNodeIds,
+        missing_client_ids: missingClientIds,
+        moved_ids: [] as string[],
+        noop_ids: noopIds,
+      },
+    };
+  }
+
+  const parent = await liteWriteStore.latestCommit(scope);
+  const diff = {
+    job: "archive_rehydrate",
+    started_at: startedAt,
+    scope,
+    actor,
+    target_tier: parsed.target_tier,
+    reason,
+    requested: {
+      node_ids: requestedNodeIds,
+      client_ids: requestedClientIds,
+    },
+    resolved_by_client: resolvedByClient,
+    moved_ids: movableRows.map((row) => row.id),
+    noop_ids: noopIds,
+    missing_node_ids: missingNodeIds,
+    missing_client_ids: missingClientIds,
+  };
+  const diffJson = stableStringify(diff);
+  const diffSha = sha256Hex(diffJson);
+  const commitHash = sha256Hex(stableStringify({
+    parentHash: parent?.commit_hash ?? "",
+    inputSha,
+    diffSha,
+    scope,
+    actor,
+    kind: "archive_rehydrate",
+  }));
+  const commitId = await liteWriteStore.insertCommit({
+    scope,
+    parentCommitId: parent?.id ?? null,
+    inputSha256: inputSha,
+    diffJson,
+    actor,
+    modelVersion: null,
+    promptVersion: null,
+    commitHash,
+  });
+
+  for (const row of movableRows) {
+    const nextSlots = {
+      ...row.slots,
+      last_rehydrated_at: startedAt,
+      last_rehydrated_job: "archive_rehydrate",
+      last_rehydrated_from_tier: row.tier,
+      last_rehydrated_to_tier: parsed.target_tier,
+      last_rehydrated_reason: reason,
+      last_rehydrated_input_sha256: inputSha,
+    };
+    await liteWriteStore.updateNodeAnchorState({
+      scope,
+      id: row.id,
+      tier: parsed.target_tier,
+      slots: nextSlots,
+      textSummary: row.text_summary,
+      salience: row.salience,
+      importance: row.importance,
+      confidence: row.confidence,
+      commitId,
+    });
+  }
+
+  return {
+    scope: tenancy.scope,
+    tenant_id: tenancy.tenant_id,
+    target_tier: parsed.target_tier,
+    commit_id: commitId,
+    commit_hash: commitHash,
+    rehydrated: {
+      requested_node_ids: requestedNodeIds.length,
+      requested_client_ids: requestedClientIds.length,
+      resolved_node_ids: resolvedNodeIds.length,
+      found_nodes: foundRows.length,
+      moved_nodes: movableRows.length,
+      noop_nodes: noopIds.length,
+      missing_node_ids: missingNodeIds,
+      missing_client_ids: missingClientIds,
+      moved_ids: movableRows.map((row) => row.id),
+      noop_ids: noopIds,
+    },
+  };
+}
+
+function asNonNegativeInt(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.trunc(value));
+  if (typeof value !== "string") return 0;
+  if (!/^[0-9]+$/.test(value.trim())) return 0;
+  return Math.max(0, Number(value));
+}
+
+function asFeedbackQuality(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(-1, Math.min(1, value));
+  if (typeof value !== "string") return 0;
+  const input = value.trim();
+  if (!/^-?[0-9]+(\.[0-9]+)?$/.test(input)) return 0;
+  return Math.max(-1, Math.min(1, Number(input)));
+}
+
+export async function activateMemoryNodesLite(
+  liteWriteStore: LifecycleLiteStore,
+  body: unknown,
+  defaultScope: string,
+  defaultTenantId: string,
+  opts: LifecycleOptions,
+) {
+  const parsed = MemoryNodesActivateRequest.parse(body);
+  const tenancy = resolveTenantScope(
+    { scope: parsed.scope, tenant_id: parsed.tenant_id },
+    { defaultScope, defaultTenantId },
+  );
+  const scope = tenancy.scope_key;
+  const actor = parsed.actor ?? opts.defaultActor;
+  const startedAt = new Date().toISOString();
+  const reason = normalizeMaybeRedact(parsed.reason, opts) ?? null;
+  const inputText = normalizeMaybeRedact(parsed.input_text, opts);
+  const inputSha = parsed.input_sha256 ?? sha256Hex(inputText ?? "");
+
+  const requestedNodeIds = uniqStrings((parsed.node_ids ?? []).map((id) => id.toLowerCase()));
+  const requestedClientIds = uniqStrings((parsed.client_ids ?? []).map((id) => id.trim()).filter((id) => id.length > 0));
+  const { resolvedNodeIds, resolvedByClient, missingClientIds, missingNodeIds, foundRows } = await resolveLifecycleNodes({
+    liteWriteStore,
+    scope,
+    actor,
+    requestedNodeIds,
+    requestedClientIds,
+  });
+
+  if (resolvedNodeIds.length === 0) {
+    badRequest("nodes_activate_no_resolved_nodes", "No valid node_ids/client_ids resolved under this scope");
+  }
+
+  if (foundRows.length === 0) {
+    return {
+      scope: tenancy.scope,
+      tenant_id: tenancy.tenant_id,
+      commit_id: null as string | null,
+      commit_hash: null as string | null,
+      activated: {
+        requested_node_ids: requestedNodeIds.length,
+        requested_client_ids: requestedClientIds.length,
+        resolved_node_ids: resolvedNodeIds.length,
+        found_nodes: 0,
+        updated_nodes: 0,
+        missing_node_ids: missingNodeIds,
+        missing_client_ids: missingClientIds,
+        updated_ids: [] as string[],
+      },
+    };
+  }
+
+  const parent = await liteWriteStore.latestCommit(scope);
+  const diff = {
+    job: "nodes_activate",
+    started_at: startedAt,
+    scope,
+    actor,
+    run_id: parsed.run_id ?? null,
+    outcome: parsed.outcome,
+    activate: parsed.activate,
+    reason,
+    requested: {
+      node_ids: requestedNodeIds,
+      client_ids: requestedClientIds,
+    },
+    resolved_by_client: resolvedByClient,
+    found_node_ids: foundRows.map((row) => row.id),
+    missing_node_ids: missingNodeIds,
+    missing_client_ids: missingClientIds,
+  };
+  const diffJson = stableStringify(diff);
+  const diffSha = sha256Hex(diffJson);
+  const commitHash = sha256Hex(stableStringify({
+    parentHash: parent?.commit_hash ?? "",
+    inputSha,
+    diffSha,
+    scope,
+    actor,
+    kind: "nodes_activate",
+  }));
+  const commitId = await liteWriteStore.insertCommit({
+    scope,
+    parentCommitId: parent?.id ?? null,
+    inputSha256: inputSha,
+    diffJson,
+    actor,
+    modelVersion: null,
+    promptVersion: null,
+    commitHash,
+  });
+
+  const posInc = parsed.outcome === "positive" ? 1 : 0;
+  const negInc = parsed.outcome === "negative" ? 1 : 0;
+  const qualitySignal = parsed.outcome === "positive" ? 1 : parsed.outcome === "negative" ? -1 : 0;
+
+  for (const row of foundRows) {
+    const prevPos = asNonNegativeInt(row.slots.feedback_positive);
+    const prevNeg = asNonNegativeInt(row.slots.feedback_negative);
+    const prevQuality = asFeedbackQuality(row.slots.feedback_quality);
+    const nextQuality =
+      parsed.outcome === "neutral"
+        ? prevQuality
+        : Math.max(-1, Math.min(1, 0.8 * prevQuality + 0.2 * qualitySignal));
+    const nextSlots: Record<string, unknown> = {
+      ...row.slots,
+      feedback_positive: prevPos + posInc,
+      feedback_negative: prevNeg + negInc,
+      feedback_quality: Number(nextQuality.toFixed(4)),
+      last_feedback_outcome: parsed.outcome,
+      last_feedback_at: startedAt,
+      last_feedback_run_id: parsed.run_id ?? null,
+      last_feedback_reason: reason,
+      last_feedback_input_sha256: inputSha,
+    };
+    if (parsed.activate) {
+      nextSlots.last_activated_at = startedAt;
+    }
+    await liteWriteStore.updateNodeAnchorState({
+      scope,
+      id: row.id,
+      slots: nextSlots,
+      textSummary: row.text_summary,
+      salience: row.salience,
+      importance: row.importance,
+      confidence: row.confidence,
+      commitId,
+    });
+  }
+
+  return {
+    scope: tenancy.scope,
+    tenant_id: tenancy.tenant_id,
+    commit_id: commitId,
+    commit_hash: commitHash,
+    activated: {
+      requested_node_ids: requestedNodeIds.length,
+      requested_client_ids: requestedClientIds.length,
+      resolved_node_ids: resolvedNodeIds.length,
+      found_nodes: foundRows.length,
+      updated_nodes: foundRows.length,
+      missing_node_ids: missingNodeIds,
+      missing_client_ids: missingClientIds,
+      updated_ids: foundRows.map((row) => row.id),
+      outcome: parsed.outcome,
+      activate: parsed.activate,
+    },
+  };
+}

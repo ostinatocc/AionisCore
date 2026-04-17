@@ -5,24 +5,27 @@ slug: /reference/memory
 
 # Memory reference
 
-The memory surface is the widest part of the public SDK. It covers write, recall, planning, task start, sessions, rules, tools, review packs, and a few debugging-oriented endpoints.
+The memory surface is the widest part of the public SDK. It covers write, recall, lifecycle, planning, task start, sessions, rules, tools, review packs, and a few debugging-oriented endpoints.
 
 ## Core memory families
 
-The public memory surface breaks down into six practical groups:
+The public memory surface breaks down into seven practical groups:
 
 1. write and recall
-2. planning and context assembly
-3. task start and experience intelligence
-4. sessions, packs, find, and resolve
-5. rules, tools, patterns, and payload rehydration
-6. review packs and delegation-learning support
+2. archive rehydrate and node activation lifecycle
+3. planning and context assembly
+4. task start and experience intelligence
+5. sessions, packs, find, and resolve
+6. rules, tools, patterns, and payload rehydration
+7. review packs and delegation-learning support
 
 ## Most-used SDK calls
 
 | SDK method | Route | What it is for |
 | --- | --- | --- |
 | `memory.write(...)` | `POST /v1/memory/write` | Persist execution evidence into Lite |
+| `memory.archive.rehydrate(...)` | `POST /v1/memory/archive/rehydrate` | Bring archived nodes back into `warm` or `hot` in Lite |
+| `memory.nodes.activate(...)` | `POST /v1/memory/nodes/activate` | Record reuse outcome and activation feedback on Lite nodes |
 | `memory.recallText(...)` | `POST /v1/memory/recall_text` | Ask recall using natural language |
 | `memory.planningContext(...)` | `POST /v1/memory/planning/context` | Get planner-facing recall and kickoff context |
 | `memory.contextAssemble(...)` | `POST /v1/memory/context/assemble` | Build final context runtime payload |
@@ -77,6 +80,29 @@ If you want the shortest public entrypoint into memory-guided continuity, these 
 
 Use `taskStart` first when you want the best first move. Use `planningContext` first when you want more than one hint and need the runtime to assemble planner-facing context.
 
+## Lifecycle surfaces
+
+Lite now includes the local memory lifecycle routes through the public SDK:
+
+```ts
+await aionis.memory.archive.rehydrate({
+  tenant_id: "default",
+  scope: "repair-flow",
+  client_ids: ["billing-timeout-repair"],
+  target_tier: "warm",
+  reason: "bring the archived repair memory back into the active set",
+});
+
+await aionis.memory.nodes.activate({
+  tenant_id: "default",
+  scope: "repair-flow",
+  client_ids: ["billing-timeout-repair"],
+  outcome: "positive",
+  activate: true,
+  reason: "the rehydrated node helped complete the repair",
+});
+```
+
 ## Sessions and review-oriented helpers
 
 These surfaces are useful when your host needs continuity state beyond a single task-start answer:
@@ -106,11 +132,11 @@ Lite also exposes a narrower local policy-learning loop:
 
 Three things matter when integrating against Lite:
 
-1. memory archive lifecycle routes are not a Lite feature
-2. node activation lifecycle routes are not a Lite feature
+1. archive rehydrate and node activation lifecycle routes are part of Lite now
+2. admin control and broader server-only control-plane routes still return structured `501`
 3. heavy route-by-route debugging still belongs in the repository capability matrix
 
-If you call server-only groups in Lite, the runtime returns structured `501` behavior rather than pretending the feature exists.
+Lite is honest about its boundary, but the memory lifecycle surface is now inside the public local runtime.
 
 ## Raw contract sources
 

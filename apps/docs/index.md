@@ -33,7 +33,7 @@ features:
     details: Integrate against typed SDK surfaces and stable routes for kickoff, recall, replay, automation, sandbox, and review flows.
   - icon: 💾
     title: Lite runtime available today
-    details: Run a real local runtime with SQLite-backed persistence, route registration, sandbox execution, and automation support.
+    details: Run a real local runtime with SQLite-backed persistence, memory lifecycle routes, route registration, sandbox execution, and automation support.
   - icon: 🔬
     title: Architecture with clear seams
     details: The repository separates runtime shell, assembly, host layer, kernel subsystems, SDK, and storage instead of hiding behavior in prompt glue.
@@ -140,6 +140,7 @@ See [Architecture Overview](/docs/architecture/overview) for the full runtime br
 ## What ships in Lite today
 
 - SQLite-backed local persistence
+- archive rehydrate and node activation lifecycle routes
 - memory write, recall, and context runtime
 - task handoff store and recover
 - replay core and governed replay subset

@@ -5,6 +5,8 @@
 Use it when you want an agent to:
 
 - start repeated tasks with a better first action
+- rehydrate archived execution memory back into the active working set
+- record node reuse outcomes on Lite memory nodes
 - store and recover structured handoffs
 - turn successful runs into replayable playbooks
 - inspect continuity state through typed runtime contracts
@@ -19,6 +21,7 @@ npm install @ostinato/aionis
 
 - memory write / recall / planning / context assembly
 - kickoff recommendation and task-start surfaces
+- archive rehydrate and node activation lifecycle surfaces
 - replay run lifecycle and playbook operations
 - handoff storage and recovery
 - automation definitions and runs
@@ -46,6 +49,27 @@ const taskStart = await aionis.memory.taskStart({
 });
 
 console.log(taskStart.first_action);
+```
+
+Lite runtime lifecycle example:
+
+```ts
+await aionis.memory.archive.rehydrate({
+  tenant_id: "default",
+  scope: "demo-sdk",
+  client_ids: ["billing-timeout-repair"],
+  target_tier: "warm",
+  reason: "bring the archived repair memory back into the active set",
+});
+
+await aionis.memory.nodes.activate({
+  tenant_id: "default",
+  scope: "demo-sdk",
+  client_ids: ["billing-timeout-repair"],
+  outcome: "positive",
+  activate: true,
+  reason: "the rehydrated node helped complete the repair",
+});
 ```
 
 ## Local Workflow

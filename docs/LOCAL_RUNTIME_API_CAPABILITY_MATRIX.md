@@ -219,6 +219,17 @@ Unsupported governance/orchestration routes:
 | `POST` | `/v1/automations/compensation/policy_matrix` | Unsupported (501) | Returns `automation_feature_not_supported_in_lite`. |
 | `POST` | `/v1/automations/telemetry` | Unsupported (501) | Returns `automation_feature_not_supported_in_lite`. |
 
+## Memory Lifecycle
+
+Lite now exposes the local execution-memory lifecycle routes directly against the SQLite-backed store.
+
+Supported lifecycle routes:
+
+| Method | Path | Status | Notes |
+| --- | --- | --- | --- |
+| `POST` | `/v1/memory/archive/rehydrate` | Supported | Rehydrates resolved nodes from colder tiers into `warm` or `hot` within Lite. |
+| `POST` | `/v1/memory/nodes/activate` | Supported | Records reuse outcome and activation feedback on Lite memory nodes. |
+
 ## Sandbox
 
 Sandbox is available in Lite and is now enabled by default for ordinary local users.
@@ -248,8 +259,6 @@ These route groups are intentionally owned by the full/server runtime and return
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |
 | `ALL` | `/v1/admin/control/*` | Unsupported (501) | Admin/control-plane surface stays outside the current local-runtime shell. |
-| `ALL` | `/v1/memory/archive/rehydrate*` | Unsupported (501) | Archive lifecycle restore is not implemented in Lite. |
-| `ALL` | `/v1/memory/nodes/activate*` | Unsupported (501) | Node lifecycle activation is not implemented in Lite. |
 
 ## Practical Product Boundary
 

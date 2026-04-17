@@ -11,7 +11,14 @@ No. The current public runtime story is Lite, which runs locally and stores data
 
 ## Why do some routes return `501` in Lite?
 
-Because Lite is explicit about its boundary. Server-only route groups such as admin control or archive lifecycle routes are intentionally outside the Lite runtime.
+Because Lite is explicit about its boundary. Server-only route groups such as admin control are intentionally outside the Lite runtime.
+
+## Are archive rehydrate and node activation available in Lite?
+
+Yes. Lite now exposes both local memory lifecycle routes:
+
+1. `POST /v1/memory/archive/rehydrate`
+2. `POST /v1/memory/nodes/activate`
 
 ## Why will Lite not start on my machine?
 

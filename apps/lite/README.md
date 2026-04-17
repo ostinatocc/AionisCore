@@ -42,3 +42,9 @@ Default sandbox behavior:
 1. local shell startup exports `SANDBOX_ENABLED=true`
 2. local shell startup exports `SANDBOX_ADMIN_ONLY=false`
 3. set `SANDBOX_ADMIN_ONLY=true` when you want to relock sandbox routes behind the admin token
+
+Default local memory lifecycle behavior:
+
+1. Lite exposes `POST /v1/memory/archive/rehydrate`
+2. Lite exposes `POST /v1/memory/nodes/activate`
+3. the public SDK can call these through `aionis.memory.archive.rehydrate(...)` and `aionis.memory.nodes.activate(...)`

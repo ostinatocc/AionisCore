@@ -221,13 +221,18 @@ The host layer is responsible for:
 
 `src/host/lite-edition.ts` defines the Lite route matrix and the explicit server-only route groups.
 
+Supported optional route groups include:
+
+1. `memory-lifecycle-lite`
+2. `memory-sandbox`
+3. `memory-replay-governed-partial`
+4. `automations-lite-kernel`
+
 Current server-only route groups in Lite:
 
 1. `/v1/admin/control/*`
-2. `/v1/memory/archive/rehydrate*`
-3. `/v1/memory/nodes/activate*`
 
-This explicit `501` behavior is part of the product boundary. Lite does not pretend to expose the broader server lifecycle surface.
+This explicit `501` behavior is part of the product boundary. Lite does not pretend to expose a broader hosted control plane.
 
 ## Route registration and host flow
 

@@ -9,12 +9,13 @@ This is the fastest station-internal path from zero to a working `@ostinato/aion
 
 <div class="doc-lead">
   <span class="doc-kicker">Developer path</span>
-  <p>The intended order is simple: boot Lite, create a client, write execution memory, ask for planning or task start, then move into handoff and replay when you need richer continuity.</p>
+  <p>The intended order is simple: boot Lite, create a client, seed execution memory, rehydrate or activate nodes when reuse matters, then move into planning, handoff, and replay.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">createAionisClient</span>
+    <span class="doc-chip">archive.rehydrate</span>
+    <span class="doc-chip">nodes.activate</span>
     <span class="doc-chip">planningContext</span>
-    <span class="doc-chip">taskStart</span>
-    <span class="doc-chip">handoff + replay</span>
+    <span class="doc-chip">taskStart + replay</span>
   </div>
 </div>
 
@@ -59,21 +60,65 @@ const aionis = createAionisClient({
 });
 ```
 
-## 4. Seed execution memory
+## 4. Seed archived execution memory
 
 ```ts
-await aionis.memory.write({
+const write = await aionis.memory.write({
   tenant_id: "default",
   scope: "docs-sdk-quickstart",
   actor: "sdk-demo",
-  input_text:
-    "Diagnosed a billing retry timeout, narrowed the failure to src/billing/retry.ts, and confirmed the next step was to patch the retry timeout handling.",
+  input_text: "Diagnosed a billing retry timeout and confirmed the likely repair path in src/billing/retry.ts.",
+  nodes: [
+    {
+      client_id: "billing-timeout-repair",
+      type: "event",
+      tier: "archive",
+      title: "Billing retry timeout repair context",
+      text_summary: "Observed billing retry timeout failures after three attempts.",
+      slots: {
+        task_kind: "repair_billing_retry",
+        next_action: "inspect retry timeout configuration and retry loop",
+      },
+    },
+  ],
+});
+
+console.log(write.commit_id);
+```
+
+This gives Lite a real archived node that can be rehydrated back into the active working set.
+
+## 5. Rehydrate archived memory in Lite
+
+```ts
+await aionis.memory.archive.rehydrate({
+  tenant_id: "default",
+  scope: "docs-sdk-quickstart",
+  actor: "sdk-demo",
+  client_ids: ["billing-timeout-repair"],
+  target_tier: "warm",
+  reason: "bring the archived billing retry repair context back into the active working set",
+  input_text: "reuse the prior billing retry repair context",
 });
 ```
 
-This gives the runtime something real to recall later. Without prior writes, task-start quality will look weak because there is no continuity data to reuse.
+## 6. Record node reuse outcome
 
-## 5. Ask for planning context
+```ts
+await aionis.memory.nodes.activate({
+  tenant_id: "default",
+  scope: "docs-sdk-quickstart",
+  actor: "sdk-demo",
+  client_ids: ["billing-timeout-repair"],
+  run_id: "docs-sdk-run-1",
+  outcome: "positive",
+  activate: true,
+  reason: "the rehydrated node helped choose the correct repair path",
+  input_text: "repair billing retry timeout in service code",
+});
+```
+
+## 7. Ask for planning context
 
 ```ts
 const planning = await aionis.memory.planningContext({
@@ -94,7 +139,7 @@ console.log(planning.planner_packet);
 
 This is the most useful first read surface when you want the runtime to assemble recall, workflow hints, and kickoff context into one response.
 
-## 6. Ask for a learned task start
+## 8. Ask for a learned task start
 
 ```ts
 const taskStart = await aionis.memory.taskStart({
@@ -112,7 +157,7 @@ console.log(taskStart.first_action);
 
 `taskStart` is the shortest path to the runtime's core value: a better first move for a repeated task.
 
-## 7. Store a structured handoff
+## 9. Store a structured handoff
 
 ```ts
 await aionis.handoff.store({
@@ -127,7 +172,7 @@ await aionis.handoff.store({
 });
 ```
 
-## 8. Record replay and compile a playbook
+## 10. Record replay and compile a playbook
 
 ```ts
 await aionis.memory.replay.run.start({
@@ -164,7 +209,7 @@ await aionis.memory.replay.step.after({
 
 From there, end the run and compile a playbook through the replay surface. That is the path from remembered execution to reusable operating knowledge.
 
-## 9. Use the host bridge when your app already has task state
+## 11. Use the host bridge when your app already has task state
 
 If your host already thinks in terms of task IDs, pause/resume, and lifecycle transitions, move up one layer:
 
