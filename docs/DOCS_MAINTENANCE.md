@@ -76,6 +76,17 @@ That command currently does two things:
 1. rejects forbidden references to removed docs in living doc surfaces
 2. rebuilds the VitePress site
 
+It also checks that the shared `core path` block stays synchronized across:
+
+1. `README.md`
+2. `packages/full-sdk/README.md`
+3. `apps/docs/index.md`
+
+The source of truth for that block is:
+
+1. `docs/fragments/core-path.md`
+2. `scripts/sync-core-path.mjs`
+
 ## 7. Scope of docs check
 
 `docs:check` is intentionally lightweight. It is not a semantic diff against the entire codebase.

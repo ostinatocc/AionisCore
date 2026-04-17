@@ -20,7 +20,8 @@
     "docs:start": "vitepress dev apps/docs --host 0.0.0.0",
     "docs:dev": "npm run docs:start",
     "docs:build": "vitepress build apps/docs",
-    "docs:check": "node scripts/ci/docs-reference-check.mjs && npm run -s docs:build",
+    "docs:sync:core-path": "node scripts/sync-core-path.mjs",
+    "docs:check": "node scripts/sync-core-path.mjs --check && node scripts/ci/docs-reference-check.mjs && npm run -s docs:build",
     "docs:serve": "vitepress preview apps/docs --host 0.0.0.0",
     "docs:preview": "npm run docs:serve",
     "core:build:runtime-host": "test -f src/runtime-entry.ts",
@@ -61,6 +62,7 @@
     "validate:lite:real": "npm run -s lite:validate:real",
     "smoke:lite": "npm run -s lite:smoke",
     "smoke:lite:local-process": "npm run -s lite:smoke:local-process",
+    "example:sdk:core-path": "npx tsx examples/full-sdk/00-core-path.ts",
     "example:sdk:recall": "npx tsx examples/full-sdk/01-recall-and-context.ts",
     "example:sdk:replay": "npx tsx examples/full-sdk/02-replay-run-lifecycle.ts",
     "example:sdk:sessions": "npx tsx examples/full-sdk/03-sessions-and-handoff.ts",
@@ -88,9 +90,11 @@
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/pg": "^8.18.0",
+    "mermaid": "^11.14.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vitepress": "^1.6.4",
+    "vitepress-plugin-mermaid": "^2.0.17",
     "vue": "^3.5.13"
   }
 }

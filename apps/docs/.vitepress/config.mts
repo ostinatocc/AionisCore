@@ -1,10 +1,11 @@
 import { defineConfig } from "vitepress";
+import { withMermaid } from "vitepress-plugin-mermaid";
 
 const repo = "https://github.com/ostinatocc/AionisCore";
 const base = "/AionisCore/";
 const asset = (path: string) => `${base}${path}`;
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   title: "Aionis Runtime",
   description: "Local continuity runtime for coding agents",
   lang: "en-US",
@@ -19,11 +20,15 @@ export default defineConfig({
     ["meta", { property: "og:image", content: asset("social-card.svg") }],
   ],
   themeConfig: {
-    logo: asset("logo-mark.svg"),
+    logo: "/logo-mark.svg",
+    siteTitle: "Aionis Runtime",
     nav: [
       { text: "Introduction", link: "/docs/intro" },
       { text: "Architecture", link: "/docs/architecture/overview" },
       { text: "Quickstart", link: "/docs/getting-started" },
+      { text: "SDK", link: "/docs/sdk/quickstart" },
+      { text: "Reference", link: "/docs/reference/contracts-and-routes" },
+      { text: "v0.1.0 · Lite", link: "/docs/runtime/lite-runtime" },
       { text: "GitHub", link: repo },
     ],
     search: {
@@ -113,5 +118,37 @@ export default defineConfig({
         },
       ],
     },
+  },
+}), {
+  mermaid: {
+    securityLevel: "loose",
+    fontFamily: "Newsreader, Iowan Old Style, Palatino Linotype, Georgia, serif",
+    themeVariables: {
+      // Morandi palette aligned with the docs theme
+      background: "#f6f3ea",
+      primaryColor: "#ede8db",
+      primaryTextColor: "#2a2620",
+      primaryBorderColor: "#7a6fa4",
+      secondaryColor: "#e2dccd",
+      secondaryTextColor: "#2a2620",
+      secondaryBorderColor: "rgba(42, 38, 32, 0.18)",
+      tertiaryColor: "#f6f3ea",
+      tertiaryTextColor: "#6b6358",
+      tertiaryBorderColor: "rgba(42, 38, 32, 0.08)",
+      lineColor: "rgba(42, 38, 32, 0.38)",
+      textColor: "#2a2620",
+      mainBkg: "#ede8db",
+      nodeBorder: "#7a6fa4",
+      clusterBkg: "#f6f3ea",
+      clusterBorder: "rgba(42, 38, 32, 0.12)",
+      titleColor: "#2a2620",
+      edgeLabelBackground: "#f6f3ea",
+      noteBkgColor: "#ede8db",
+      noteBorderColor: "#7a6fa4",
+      noteTextColor: "#2a2620",
+    },
+  },
+  mermaidPlugin: {
+    class: "mermaid aionis-mermaid",
   },
 });

@@ -28,6 +28,34 @@ The purpose of the runtime is straightforward:
 2. help paused work resume from structured runtime state
 3. help successful work become reusable operating knowledge
 
+## The default product path
+
+<div class="reference-grid">
+  <div class="reference-tile">
+    <span class="reference-kicker">Core</span>
+    <h3>Continuity baseline</h3>
+    <p>Use write, planning or task start, handoff, and replay to prove that repeated work no longer starts from zero and paused work no longer resumes from guesswork.</p>
+    <code class="reference-route">write -> planning/taskStart -> handoff -> replay</code>
+  </div>
+  <div class="reference-tile">
+    <span class="reference-kicker">Enhanced</span>
+    <h3>Self-improvement loop</h3>
+    <p>Add lifecycle reuse, review packs, and sessions so the runtime can reactivate useful nodes, record reuse quality, and expose continuity state to humans or hosts.</p>
+    <code class="reference-route">rehydrate -> activate -> reviewPacks -> sessions</code>
+  </div>
+  <div class="reference-tile">
+    <span class="reference-kicker">Advanced</span>
+    <h3>Kernel control surfaces</h3>
+    <p>Add experience intelligence, execution introspection, delegation records, tools, rules, patterns, and payload helpers when you need a deeper learning and governance substrate.</p>
+    <code class="reference-route">introspect -> delegate -> tools/rules/patterns</code>
+  </div>
+</div>
+
+<div class="section-frame">
+  <span class="doc-kicker">Why this matters</span>
+  <p>The public memory surface is wide. If you present everything as one flat story, users either miss the real power or feel buried in endpoints. The layered product path solves that: the core path proves continuity, the enhanced path proves self-improvement, and the advanced path exposes deeper substrate controls for more serious hosts.</p>
+</div>
+
 ## The failure it targets
 
 The problem is not generic “AI memory”.
@@ -53,6 +81,15 @@ The runtime exposes three core surfaces:
 
 Around those surfaces, Lite also exposes local automation, sandbox, and review-oriented runtime paths.
 
+## Where the other valuable surfaces fit
+
+Not every valuable capability belongs in the first evaluation loop.
+
+- `experienceIntelligence(...)` and `executionIntrospect(...)` belong in the advanced path because they help a host inspect and tune how learning is accumulating.
+- `sessions.*` and `reviewPacks.*` belong in the enhanced path because they make continuity persist beyond a single answer and make review possible.
+- `delegationRecords.*` belongs in the advanced path because it matters most when multi-agent learning becomes explicit.
+- `tools.*`, `rules.*`, and `patterns.*` belong in the advanced path because they govern learned behavior rather than simply exposing outputs.
+
 ## What "self-evolving" means here
 
 The runtime is not claiming magical self-improvement in the abstract.
@@ -65,6 +102,13 @@ In Aionis, self-evolving means that later execution can be informed by earlier e
 4. memory lifecycle routes can rehydrate useful nodes and record activation feedback
 
 The system improves because continuity is persisted and reused, not because the product merely promises "AI memory".
+
+<div class="state-strip">
+  <span class="state-badge state-trusted">core continuity</span>
+  <span class="state-badge state-candidate">enhanced reuse</span>
+  <span class="state-badge state-governed">advanced controls</span>
+  <span class="state-note">Aionis should feel deeper over time, not heavier on day one.</span>
+</div>
 
 ## Single-agent and multi-agent use
 
@@ -136,13 +180,14 @@ If you are evaluating or integrating Aionis, you mainly care about `Aionis Runti
 
 1. [Why Aionis](./why-aionis.md)
 2. [Architecture Overview](./architecture/overview.md)
-3. [Getting Started](./getting-started.md)
-4. [SDK Quickstart](./sdk/quickstart.md)
+3. [Getting Started](./getting-started.md) for the core path
+4. [SDK Quickstart](./sdk/quickstart.md) for the full layered path
 5. [Task Start](./concepts/task-start.md)
 6. [Handoff](./concepts/handoff.md)
 7. [Replay](./concepts/replay.md)
-8. [Lite Runtime](./runtime/lite-runtime.md)
-9. [Contracts and Routes](./reference/contracts-and-routes.md)
+8. [Memory](./reference/memory.md) for enhanced and advanced surfaces
+9. [Lite Runtime](./runtime/lite-runtime.md)
+10. [Contracts and Routes](./reference/contracts-and-routes.md)
 
 <div class="doc-grid">
   <a class="doc-card" href="./getting-started.md">

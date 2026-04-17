@@ -5,18 +5,52 @@ slug: /sdk/quickstart
 
 # SDK quickstart
 
-This is the fastest station-internal path from zero to a working `@ostinato/aionis` integration.
+This is the fastest path from zero to a working `@ostinato/aionis` integration without flattening the whole runtime into one giant checklist.
 
 <div class="doc-lead">
   <span class="doc-kicker">Developer path</span>
-  <p>The intended order is simple: boot Lite, create a client, seed execution memory, rehydrate or activate nodes when reuse matters, then move into planning, handoff, and replay.</p>
+  <p>The intended order is now layered: prove the core continuity loop first, add reuse and review signals second, then move into deeper learning and control surfaces only if your host actually needs them.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">createAionisClient</span>
-    <span class="doc-chip">archive.rehydrate</span>
-    <span class="doc-chip">nodes.activate</span>
-    <span class="doc-chip">planningContext</span>
-    <span class="doc-chip">taskStart + replay</span>
+    <span class="doc-chip">Core path</span>
+    <span class="doc-chip">Enhanced path</span>
+    <span class="doc-chip">Advanced path</span>
   </div>
+</div>
+
+## The layered SDK path
+
+<div class="reference-grid">
+  <div class="reference-tile">
+    <span class="reference-kicker">Core path</span>
+    <h3>Continuity baseline</h3>
+    <p>Use write, planning or task start, handoff, and replay to prove that the runtime can improve startup, preserve pause state, and turn success into reuse.</p>
+    <code class="reference-route">write -> taskStart -> handoff -> replay</code>
+  </div>
+  <div class="reference-tile">
+    <span class="reference-kicker">Enhanced path</span>
+    <h3>Reuse and review</h3>
+    <p>Use lifecycle reuse, review packs, and sessions when you need to reactivate useful memory, record reuse quality, and inspect continuity over time.</p>
+    <code class="reference-route">rehydrate -> activate -> reviewPacks -> sessions</code>
+  </div>
+  <div class="reference-tile">
+    <span class="reference-kicker">Advanced path</span>
+    <h3>Learning and control</h3>
+    <p>Use introspection, delegation, and policy-learning surfaces when your host needs a deeper substrate than the main continuity loop.</p>
+    <code class="reference-route">experience -> introspect -> delegate -> tools/rules</code>
+  </div>
+</div>
+
+<div class="section-frame">
+  <span class="doc-kicker">Reading rule</span>
+  <p>This page intentionally does not present every memory endpoint as one flat checklist. The right question is: what are you trying to prove right now? If you are proving continuity, stay in the core path. If you are proving self-improvement, add the enhanced path. If you are building a deeper host substrate, continue into the advanced path.</p>
+</div>
+
+<div class="state-strip">
+  <span class="state-badge state-trusted">core path</span>
+  <span class="state-badge state-candidate">enhanced path</span>
+  <span class="state-badge state-governed">advanced path</span>
+  <span class="state-note">The SDK surface is wide, but the product path should stay layered.</span>
 </div>
 
 ## What you need first
@@ -29,14 +63,11 @@ Before writing any client code, make sure:
 
 ## What this quickstart is trying to prove
 
-This page is not trying to show every endpoint. It is trying to prove that the public SDK path already supports the full continuity loop:
+This page is not trying to show every endpoint. It is trying to prove that the public SDK path supports a layered continuity product:
 
-1. write execution evidence
-2. reactivate useful memory
-3. ask for planning or task start
-4. store a trustworthy handoff
-5. record replay
-6. move toward reuse
+1. core path: prove continuity
+2. enhanced path: prove self-improvement
+3. advanced path: expose deeper learning and control seams
 
 If you can do that through the public SDK, you already understand the core product path.
 
@@ -79,19 +110,19 @@ const aionis = createAionisClient({
 
 ## How to think about the sequence
 
-This quickstart intentionally moves in this order:
+This quickstart intentionally moves in three layers:
 
-| Step | Why it comes here |
+| Layer | Why it comes here |
 | --- | --- |
-| Write | Give the runtime something real to learn from |
-| Lifecycle reuse | Move useful memory back into active use |
-| Planning / task start | Ask the runtime to improve the next move |
-| Handoff | Preserve runtime state across a pause |
-| Replay | Turn successful execution into reusable workflow knowledge |
+| Core | Prove the continuity loop is real |
+| Enhanced | Prove the runtime can improve its own reuse quality |
+| Advanced | Prove the kernel exposes deeper control surfaces |
 
-If you skip straight to task start on an empty scope, the result will often feel underwhelming even though the runtime is healthy.
+If you skip straight to advanced surfaces before proving the core loop, the runtime will feel wider than it needs to.
 
-## 4. Seed archived execution memory
+## Core path
+
+### 4. Write execution memory
 
 ```ts
 const write = await aionis.memory.write({
@@ -117,57 +148,13 @@ const write = await aionis.memory.write({
 console.log(write.commit_id);
 ```
 
-This gives Lite a real archived node that can be rehydrated back into the active working set.
-
 What this step proves:
 
 1. the SDK can write successfully
 2. Lite can persist structured node data
-3. later lifecycle and planning steps will have something real to work with
+3. later planning, task start, handoff, and replay steps will have something real to work with
 
-## 5. Rehydrate archived memory in Lite
-
-```ts
-await aionis.memory.archive.rehydrate({
-  tenant_id: "default",
-  scope: "docs-sdk-quickstart",
-  actor: "sdk-demo",
-  client_ids: ["billing-timeout-repair"],
-  target_tier: "warm",
-  reason: "bring the archived billing retry repair context back into the active working set",
-  input_text: "reuse the prior billing retry repair context",
-});
-```
-
-What this step proves:
-
-1. lifecycle routes are part of Lite now
-2. the runtime can bring older memory back into active use
-3. continuity is not only append-only storage
-
-## 6. Record node reuse outcome
-
-```ts
-await aionis.memory.nodes.activate({
-  tenant_id: "default",
-  scope: "docs-sdk-quickstart",
-  actor: "sdk-demo",
-  client_ids: ["billing-timeout-repair"],
-  run_id: "docs-sdk-run-1",
-  outcome: "positive",
-  activate: true,
-  reason: "the rehydrated node helped choose the correct repair path",
-  input_text: "repair billing retry timeout in service code",
-});
-```
-
-What this step proves:
-
-1. the runtime can record whether reused memory helped
-2. continuity can accumulate quality signals, not just history
-3. the "self-evolving" claim has a concrete substrate in the public SDK path
-
-## 7. Ask for planning context
+### 5. Ask for planning context
 
 ```ts
 const planning = await aionis.memory.planningContext({
@@ -195,9 +182,9 @@ Read these first:
 3. `workflow_signals`
 4. `pattern_signals`
 
-If those come back sparse, check the earlier write/lifecycle steps before assuming the planner path is broken.
+If those come back sparse, check the earlier write step before assuming the planner path is broken.
 
-## 8. Ask for a learned task start
+### 6. Ask for a learned task start
 
 ```ts
 const taskStart = await aionis.memory.taskStart({
@@ -220,21 +207,7 @@ console.log(taskStart.first_action);
 - use `planningContext(...)` when you want context assembly
 - use `taskStart(...)` when you want the next move
 
-## 9. Optional: pull review-ready runtime state
-
-If your host or reviewer needs structured review material, you can already call:
-
-```ts
-await aionis.memory.reviewPacks.continuity({
-  tenant_id: "default",
-  scope: "docs-sdk-quickstart",
-  anchor: "billing-retry-repair",
-});
-```
-
-This is useful when continuity quality needs human review rather than only runtime reuse.
-
-## 10. Store a structured handoff
+### 7. Store a structured handoff
 
 ```ts
 await aionis.handoff.store({
@@ -255,7 +228,7 @@ What this step proves:
 2. you can store resume-ready task state through the SDK
 3. the continuity loop can survive a pause, not only a completed run
 
-## 11. Record replay and compile a playbook
+### 8. Record replay and compile a playbook
 
 ```ts
 await aionis.memory.replay.run.start({
@@ -316,7 +289,84 @@ await aionis.memory.replay.playbooks.compileFromRun({
 
 That is the step where continuity starts to become reuse instead of memory only.
 
-## 12. Use the host bridge when your app already has task state
+## Enhanced path
+
+### 9. Rehydrate archived memory in Lite
+
+```ts
+await aionis.memory.archive.rehydrate({
+  tenant_id: "default",
+  scope: "docs-sdk-quickstart",
+  actor: "sdk-demo",
+  client_ids: ["billing-timeout-repair"],
+  target_tier: "warm",
+  reason: "bring the archived billing retry repair context back into the active working set",
+  input_text: "reuse the prior billing retry repair context",
+});
+```
+
+What this step proves:
+
+1. lifecycle routes are part of Lite now
+2. the runtime can bring older memory back into active use
+3. continuity is not only append-only storage
+
+### 10. Record node reuse outcome
+
+```ts
+await aionis.memory.nodes.activate({
+  tenant_id: "default",
+  scope: "docs-sdk-quickstart",
+  actor: "sdk-demo",
+  client_ids: ["billing-timeout-repair"],
+  run_id: "docs-sdk-run-1",
+  outcome: "positive",
+  activate: true,
+  reason: "the rehydrated node helped choose the correct repair path",
+  input_text: "repair billing retry timeout in service code",
+});
+```
+
+What this step proves:
+
+1. the runtime can record whether reused memory helped
+2. continuity can accumulate quality signals, not just history
+3. the self-evolving claim has a concrete substrate in the public SDK path
+
+### 11. Pull review-ready runtime state
+
+If your host or reviewer needs structured review material, you can already call:
+
+```ts
+await aionis.memory.reviewPacks.continuity({
+  tenant_id: "default",
+  scope: "docs-sdk-quickstart",
+  anchor: "billing-retry-repair",
+});
+```
+
+This is useful when continuity quality needs human review rather than only runtime reuse.
+
+### 12. Add a session when continuity spans time
+
+When continuity needs to persist beyond one answer or one handoff packet, move into the session family:
+
+```ts
+await aionis.memory.sessions.create({
+  tenant_id: "default",
+  scope: "docs-sdk-quickstart",
+  actor: "sdk-demo",
+  session_id: "billing-retry-session-1",
+  title: "Billing retry repair working session",
+  summary: "Track continuity across multiple repair passes",
+});
+```
+
+That is the point where continuity becomes an explicit longer-lived runtime object instead of only a better first move.
+
+## Advanced path
+
+### 13. Use the host bridge when your app already has task state
 
 If your host already thinks in terms of task IDs, pause/resume, and lifecycle transitions, move up one layer:
 
@@ -350,17 +400,29 @@ Use the host bridge when your host already thinks in:
 
 Use the raw client when you want direct control over route families.
 
+### 14. Move into deeper learning and control surfaces
+
+When the core and enhanced paths already work, the next valuable surfaces are:
+
+- `memory.experienceIntelligence(...)`
+- `memory.executionIntrospect(...)`
+- `memory.delegationRecords.*`
+- `memory.tools.*`
+- `memory.rules.*`
+- `memory.patterns.*`
+- `memory.anchors.rehydratePayload(...)`
+
+These do not belong in the first evaluation loop. They belong here because they help a serious host inspect learning quality, keep delegation state explicit, and govern how learned behavior should or should not keep applying.
+
 ## What a successful evaluation looks like
 
 After working through this page, you should be able to answer yes to these:
 
-1. Can the SDK talk to Lite locally?
-2. Can Lite persist and reactivate memory?
-3. Can the runtime produce planning or task-start guidance from stored evidence?
-4. Can the SDK store a handoff?
-5. Can the SDK record replay and move toward playbook reuse?
+1. core path: can the SDK talk to Lite, produce kickoff guidance, store handoff, and record replay?
+2. enhanced path: can Lite reactivate memory, record reuse outcome, and surface review-ready state?
+3. advanced path: do deeper learning and control seams exist for the kind of host you want to build?
 
-If yes, then the public continuity path is working.
+If yes, then the public continuity path is working at the right depth for your use case.
 
 ## Where to go next
 
@@ -382,7 +444,7 @@ If yes, then the public continuity path is working.
   <a class="doc-card" href="../reference/memory.md">
     <span class="doc-kicker">Reference</span>
     <h3>Memory</h3>
-    <p>See the write, recall, planning, review-pack, and tool-learning surfaces in one place.</p>
+    <p>See the core, enhanced, and advanced memory families in one place.</p>
   </a>
   <a class="doc-card" href="../reference/replay-and-playbooks.md">
     <span class="doc-kicker">Reference</span>

@@ -22,6 +22,7 @@ npm run lite:start
 Run examples:
 
 ```bash
+npm run example:sdk:core-path
 npm run example:sdk:recall
 npm run example:sdk:replay
 npm run example:sdk:sessions
@@ -39,6 +40,8 @@ See [docs/SDK_QUICKSTART.md](../../docs/SDK_QUICKSTART.md) for a concrete reques
 
 Examples:
 
+- `00-core-path.ts`
+  runs the smallest serious continuity loop: write, task start, handoff, and replay
 - `01-recall-and-context.ts`
   seeds memory, then calls `recall_text` and `planning/context`
 - `02-replay-run-lifecycle.ts`

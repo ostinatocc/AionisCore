@@ -9,7 +9,7 @@ The fastest evaluation path is:
 
 <div class="doc-lead">
   <span class="doc-kicker">Fastest path</span>
-  <p>If you only have ten minutes, run Lite locally, install `@ostinato/aionis`, and call `taskStart` or `planningContext` against `http://127.0.0.1:3001`.</p>
+  <p>If you only have ten minutes, treat this page as the core path: run Lite locally, install `@ostinato/aionis`, write one piece of execution evidence, and call `taskStart` or `planningContext` against `http://127.0.0.1:3001`.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">Lite local shell</span>
     <span class="doc-chip">SDK-first integration</span>
@@ -21,6 +21,18 @@ The fastest evaluation path is:
 1. start the Lite runtime locally
 2. install the public SDK
 3. call `taskStart` or `planningContext`
+
+<div class="section-frame">
+  <span class="doc-kicker">Core path only</span>
+  <p>This page is intentionally narrow. It is here to prove the continuity baseline, not the whole runtime. Lifecycle reuse, review packs, sessions, introspection, and policy-learning surfaces belong to the enhanced or advanced path later. If you try to evaluate all of that in ten minutes, the product will feel wider than it needs to.</p>
+</div>
+
+<div class="state-strip">
+  <span class="state-badge state-trusted">core path</span>
+  <span class="state-badge state-candidate">enhanced next</span>
+  <span class="state-badge state-governed">advanced later</span>
+  <span class="state-note">Getting Started proves the baseline: continuity works at all.</span>
+</div>
 
 ## 1. Start the Lite runtime
 
@@ -148,7 +160,7 @@ The runtime being sparse is not the same thing as the runtime being broken.
 
 ## Next paths
 
-- Want the full developer flow? Read [SDK Quickstart](./sdk/quickstart.md).
+- Want the full layered developer flow? Read [SDK Quickstart](./sdk/quickstart.md).
 - Want the runtime shape and startup model? Read [Lite Runtime](./runtime/lite-runtime.md).
 - Want operational details and env defaults? Read [Lite Config and Operations](./runtime/lite-config-and-operations.md).
 - Want the route-level surface? Read [Contracts and Routes](./reference/contracts-and-routes.md).
@@ -181,3 +193,10 @@ If you are evaluating whether Aionis is worth integrating, the shortest serious 
 4. call `taskStart`
 5. call `planningContext`
 6. decide whether the runtime shape matches how your host thinks about work
+
+If that baseline works and feels promising, move next into the enhanced path:
+
+1. `memory.archive.rehydrate(...)`
+2. `memory.nodes.activate(...)`
+3. `memory.reviewPacks.*`
+4. `memory.sessions.*`
