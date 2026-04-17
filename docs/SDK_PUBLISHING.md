@@ -2,9 +2,9 @@
 
 Last reviewed: 2026-04-17
 
-Document status: living public release checklist
+Internal status: living package release checklist
 
-This document defines the release checklist for the public Aionis Runtime npm packages.
+This document defines the repository maintainer checklist for releasing Aionis Runtime npm packages.
 
 ## Public package set
 

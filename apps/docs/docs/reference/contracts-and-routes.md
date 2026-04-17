@@ -81,7 +81,6 @@ For public product boundary and open-core distribution stance:
 ## Package-level references
 
 - [`@ostinato/aionis`](https://github.com/ostinatocc/AionisCore/blob/main/packages/full-sdk/README.md)
-- [`@ostinato/aionis-rtc`](https://github.com/ostinatocc/AionisCore/blob/main/packages/runtime-core/README.md)
 - [`@aionis/doc`](https://github.com/ostinatocc/AionisCore/blob/main/packages/aionis-doc/README.md)
 
 ## What this page does not try to be

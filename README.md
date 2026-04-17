@@ -98,12 +98,6 @@ await aionis.memory.nodes.activate({
 });
 ```
 
-Need the low-level runtime boundary package instead?
-
-```bash
-npm install @ostinato/aionis-rtc
-```
-
 Related document workflow package:
 
 ```bash
@@ -154,8 +148,7 @@ Repository docs deployment is wired through:
 ## Public Packages
 
 1. [packages/full-sdk](packages/full-sdk) -> `@ostinato/aionis`
-2. [packages/runtime-core](packages/runtime-core) -> `@ostinato/aionis-rtc`
-3. [packages/aionis-doc](packages/aionis-doc) -> `@aionis/doc`
+2. [packages/aionis-doc](packages/aionis-doc) -> `@aionis/doc`
 
 ## Core Areas
 
@@ -163,10 +156,9 @@ Repository docs deployment is wired through:
 2. [src/routes](src/routes)
 3. [src/execution](src/execution)
 4. [src/store](src/store)
-5. [packages/runtime-core](packages/runtime-core)
-6. [packages/full-sdk](packages/full-sdk)
-7. [packages/aionis-doc](packages/aionis-doc)
-8. [apps/lite](apps/lite)
+5. [packages/full-sdk](packages/full-sdk)
+6. [packages/aionis-doc](packages/aionis-doc)
+7. [apps/lite](apps/lite)
 
 ## Validation
 

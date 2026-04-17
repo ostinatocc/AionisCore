@@ -1,6 +1,6 @@
 # Aionis Runtime Open-Core Boundary
 
-Last reviewed: 2026-04-16
+Last reviewed: 2026-04-17
 
 Document status: living public boundary reference
 
@@ -34,11 +34,10 @@ At the same time, Aionis Runtime benefits from:
 The default open surface should be:
 
 1. `@ostinato/aionis`
-2. `@ostinato/aionis-rtc`
-3. `@aionis/doc`
-4. typed SDK and route contracts
-5. examples, quickstart, and publishing guidance
-6. enough runtime documentation to explain how the SDK talks to the runtime
+2. `@aionis/doc`
+3. typed SDK and route contracts
+4. examples, quickstart, and publishing guidance
+5. enough runtime documentation to explain how the SDK talks to the runtime
 
 ## Recommended controlled surface
 
@@ -57,7 +56,7 @@ Recommended public phrasing:
 1. Aionis Runtime is the public continuity runtime
 2. `@ostinato/aionis` is the primary developer interface
 3. Aionis Core is the kernel beneath that runtime
-4. stronger kernel layers are distributed selectively as the product matures
+4. lower-level boundary layers do not need to sit in the primary public story before they carry real shared implementation weight
 
 ## Immediate implication
 

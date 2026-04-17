@@ -1,6 +1,6 @@
 # Aionis Runtime Documentation Taxonomy
 
-Last reviewed: 2026-04-16
+Last reviewed: 2026-04-17
 
 Document status: living repository taxonomy
 
@@ -29,17 +29,15 @@ These are the primary product-positioning documents for external readers.
 These documents describe the runtime, SDK, package, and validation surfaces that should stay aligned with the current codebase.
 
 1. [SDK_QUICKSTART.md](SDK_QUICKSTART.md)
-2. [SDK_PUBLISHING.md](SDK_PUBLISHING.md)
-3. [LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md](LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md)
-4. [LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md)
-5. [LOCAL_RUNTIME_SOURCE_BOUNDARY.md](LOCAL_RUNTIME_SOURCE_BOUNDARY.md)
-6. [LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md](LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md)
-7. [CORE_TESTING_STRATEGY.md](CORE_TESTING_STRATEGY.md)
-8. [../apps/lite/README.md](../apps/lite/README.md)
-9. [../packages/full-sdk/README.md](../packages/full-sdk/README.md)
-10. [../packages/runtime-core/README.md](../packages/runtime-core/README.md)
-11. [../packages/aionis-doc/README.md](../packages/aionis-doc/README.md)
-12. [../examples/full-sdk/README.md](../examples/full-sdk/README.md)
+2. [LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md](LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md)
+3. [LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md)
+4. [LOCAL_RUNTIME_SOURCE_BOUNDARY.md](LOCAL_RUNTIME_SOURCE_BOUNDARY.md)
+5. [LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md](LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md)
+6. [CORE_TESTING_STRATEGY.md](CORE_TESTING_STRATEGY.md)
+7. [../apps/lite/README.md](../apps/lite/README.md)
+8. [../packages/full-sdk/README.md](../packages/full-sdk/README.md)
+9. [../packages/aionis-doc/README.md](../packages/aionis-doc/README.md)
+10. [../examples/full-sdk/README.md](../examples/full-sdk/README.md)
 
 ## 3. Docs Site Source
 
@@ -66,8 +64,15 @@ These documents describe internal kernel contracts that are still backed by curr
 4. [CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
 5. [CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
 6. [CORE_ANCHOR_SCHEMA.md](CORE_ANCHOR_SCHEMA.md)
+7. [../packages/runtime-core/README.md](../packages/runtime-core/README.md)
 
-## 5. Internal Strategy And Design Docs
+## 5. Internal Release And Package Maintenance Docs
+
+These are repository maintainer docs for package release flow. They are not part of the primary external integration path.
+
+1. [SDK_PUBLISHING.md](SDK_PUBLISHING.md)
+
+## 6. Internal Strategy And Design Docs
 
 These documents still explain the intended kernel direction, but they should not be treated as canonical route-by-route or schema-by-schema references.
 
@@ -75,7 +80,7 @@ These documents still explain the intended kernel direction, but they should not
 2. [CORE_MEMORY_GOVERNANCE_MODEL.md](CORE_MEMORY_GOVERNANCE_MODEL.md)
 3. [CORE_MEMORY_TRIGGER_MATRIX.md](CORE_MEMORY_TRIGGER_MATRIX.md)
 
-## 6. Plans And ADRs
+## 7. Plans And ADRs
 
 These are internal design and decision-history documents.
 
@@ -84,7 +89,7 @@ These are internal design and decision-history documents.
 3. all files under `docs/adr/`
 4. all files under `docs/plans/`
 
-## 7. Historical Archive
+## 8. Historical Archive
 
 These documents are useful as historical record, audit trail, or release history, but they are not current product or runtime references.
 
@@ -99,20 +104,20 @@ These documents are useful as historical record, audit trail, or release history
 9. [CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md](CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md)
 10. [CORE_GOVERNANCE_AND_STRATEGY_STATUS.md](CORE_GOVERNANCE_AND_STRATEGY_STATUS.md)
 
-## 8. Repository Meta Docs
+## 9. Repository Meta Docs
 
 These are repository-operation docs, not runtime/product docs.
 
 1. [../CONTRIBUTING.md](../CONTRIBUTING.md)
 2. [../SECURITY.md](../SECURITY.md)
 
-## 9. Docs Maintenance
+## 10. Docs Maintenance
 
 This is the repository rulebook for how living docs, archive docs, and docs validation should be maintained.
 
 1. [DOCS_MAINTENANCE.md](DOCS_MAINTENANCE.md)
 
-## 10. Removed Obsolete Docs
+## 11. Removed Obsolete Docs
 
 These files were removed because they were redundant or historical scratch notes that no longer described the current repository accurately.
 

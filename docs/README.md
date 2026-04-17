@@ -1,6 +1,6 @@
 # Aionis Runtime Docs
 
-Last reviewed: 2026-04-16
+Last reviewed: 2026-04-17
 
 Document status: docs index
 
@@ -25,17 +25,15 @@ Use these documents to understand the public Aionis Runtime story.
 Use these documents when integrating with the runtime, SDK, or Lite runtime shell.
 
 1. [SDK_QUICKSTART.md](SDK_QUICKSTART.md)
-2. [SDK_PUBLISHING.md](SDK_PUBLISHING.md)
-3. [LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md](LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md)
-4. [LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md)
-5. [LOCAL_RUNTIME_SOURCE_BOUNDARY.md](LOCAL_RUNTIME_SOURCE_BOUNDARY.md)
-6. [LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md](LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md)
-7. [CORE_TESTING_STRATEGY.md](CORE_TESTING_STRATEGY.md)
-8. [../apps/lite/README.md](../apps/lite/README.md)
-9. [../packages/full-sdk/README.md](../packages/full-sdk/README.md)
-10. [../packages/runtime-core/README.md](../packages/runtime-core/README.md)
-11. [../packages/aionis-doc/README.md](../packages/aionis-doc/README.md)
-12. [../examples/full-sdk/README.md](../examples/full-sdk/README.md)
+2. [LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md](LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md)
+3. [LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md)
+4. [LOCAL_RUNTIME_SOURCE_BOUNDARY.md](LOCAL_RUNTIME_SOURCE_BOUNDARY.md)
+5. [LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md](LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md)
+6. [CORE_TESTING_STRATEGY.md](CORE_TESTING_STRATEGY.md)
+7. [../apps/lite/README.md](../apps/lite/README.md)
+8. [../packages/full-sdk/README.md](../packages/full-sdk/README.md)
+9. [../packages/aionis-doc/README.md](../packages/aionis-doc/README.md)
+10. [../examples/full-sdk/README.md](../examples/full-sdk/README.md)
 
 ## 3. Docs Site Source
 
@@ -59,8 +57,15 @@ These documents are internal kernel references that were checked against current
 4. [CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
 5. [CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
 6. [CORE_ANCHOR_SCHEMA.md](CORE_ANCHOR_SCHEMA.md)
+7. [../packages/runtime-core/README.md](../packages/runtime-core/README.md)
 
-## 5. Internal Strategy And Design Docs
+## 5. Internal Release And Package Maintenance Docs
+
+Use these documents when maintaining package releases or repository publishing flow, not as external integration docs.
+
+1. [SDK_PUBLISHING.md](SDK_PUBLISHING.md)
+
+## 6. Internal Strategy And Design Docs
 
 These documents still matter, but they are strategy or design guidance rather than canonical code contracts.
 
@@ -68,7 +73,7 @@ These documents still matter, but they are strategy or design guidance rather th
 2. [CORE_MEMORY_GOVERNANCE_MODEL.md](CORE_MEMORY_GOVERNANCE_MODEL.md)
 3. [CORE_MEMORY_TRIGGER_MATRIX.md](CORE_MEMORY_TRIGGER_MATRIX.md)
 
-## 6. Plans, ADRs, And Historical Archive
+## 7. Plans, ADRs, And Historical Archive
 
 Use these when you need design history or implementation planning, not current public docs.
 
@@ -85,7 +90,7 @@ Use these when you need design history or implementation planning, not current p
 11. [CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md](CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md)
 12. [CORE_GOVERNANCE_AND_STRATEGY_STATUS.md](CORE_GOVERNANCE_AND_STRATEGY_STATUS.md)
 
-## 7. Docs Maintenance
+## 8. Docs Maintenance
 
 Use this when you are changing docs and need the repository rules for living docs, archive markers, and docs CI.
 
