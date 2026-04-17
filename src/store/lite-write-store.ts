@@ -424,6 +424,7 @@ export type LiteWriteStore = WriteStoreAccess & {
     salience: number;
     importance: number;
     confidence: number;
+    tier?: string | null;
     commitId?: string | null;
   }): Promise<LiteFindNodeRow | null>;
   setNodeEmbeddingFailed(args: {
@@ -2210,26 +2211,33 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
     },
 
     async updateNodeAnchorState(args): Promise<LiteFindNodeRow | null> {
-      db.prepare(
-        `UPDATE lite_memory_nodes
-         SET slots_json = ?,
-             text_summary = ?,
-             salience = ?,
-             importance = ?,
-             confidence = ?,
-             commit_id = COALESCE(?, commit_id)
-         WHERE scope = ?
-           AND id = ?`,
-      ).run(
+      const updates = [
+        "slots_json = ?",
+        "text_summary = ?",
+        "salience = ?",
+        "importance = ?",
+        "confidence = ?",
+        "commit_id = COALESCE(?, commit_id)",
+      ];
+      const params: unknown[] = [
         stringifyJson(args.slots),
         args.textSummary,
         args.salience,
         args.importance,
         args.confidence,
         args.commitId ?? null,
-        args.scope,
-        args.id,
-      );
+      ];
+      if (args.tier) {
+        updates.push("tier = ?");
+        params.push(args.tier);
+      }
+      params.push(args.scope, args.id);
+      db.prepare(
+        `UPDATE lite_memory_nodes
+         SET ${updates.join(", ")}
+         WHERE scope = ?
+           AND id = ?`,
+      ).run(...params);
       const { rows } = await this.findNodes({
         scope: args.scope,
         id: args.id,

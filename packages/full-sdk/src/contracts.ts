@@ -769,14 +769,25 @@ export type AionisArchiveRehydrateRequest = {
   scope?: string;
   actor?: string;
   node_ids?: string[];
-  limit?: number;
+  client_ids?: string[];
+  target_tier?: "warm" | "hot";
+  reason?: string;
+  input_text?: string;
+  input_sha256?: string;
 } & AionisRequestPayload;
 
 export type AionisNodesActivateRequest = {
   tenant_id?: string;
   scope?: string;
   actor?: string;
-  node_ids: string[];
+  node_ids?: string[];
+  client_ids?: string[];
+  run_id?: string;
+  outcome?: "positive" | "negative" | "neutral";
+  activate?: boolean;
+  reason?: string;
+  input_text?: string;
+  input_sha256?: string;
 } & AionisRequestPayload;
 
 export type AionisDelegationRecordsWriteRequest = {

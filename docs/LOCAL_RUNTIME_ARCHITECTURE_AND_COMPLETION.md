@@ -119,15 +119,14 @@ Kernel-required routes:
 
 Optional routes:
 
-1. `memory-sandbox`
-2. `memory-replay-governed-partial`
-3. `automations-lite-kernel`
+1. `memory-lifecycle-lite`
+2. `memory-sandbox`
+3. `memory-replay-governed-partial`
+4. `automations-lite-kernel`
 
 Server-only route groups:
 
 1. `/v1/admin/control/*`
-2. `/v1/memory/archive/rehydrate*`
-3. `/v1/memory/nodes/activate*`
 
 ## Identity And Guard Model
 

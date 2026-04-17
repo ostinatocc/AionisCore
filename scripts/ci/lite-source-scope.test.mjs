@@ -258,13 +258,13 @@ test("lite handoff routes do not keep store fallback branches", () => {
   assert.match(handoffFile, /aionis-lite handoff routes only support AIONIS_EDITION=lite/);
 });
 
-test("lite host does not register broken memory lifecycle routes and exposes them as unsupported", () => {
+test("lite host does not register PG-only memory lifecycle routes and keeps a Lite-native lifecycle surface", () => {
   const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
   const liteEditionFile = fs.readFileSync(path.join(ROOT, "src", "host", "lite-edition.ts"), "utf8");
   assert.equal(hostFile.includes("registerMemoryLifecycleRoutes"), false, "lite host should not register PG-only memory lifecycle routes");
-  assert.match(liteEditionFile, /memory lifecycle routes are unavailable in lite edition/);
-  assert.match(liteEditionFile, /\/v1\/memory\/archive\/rehydrate/);
-  assert.match(liteEditionFile, /\/v1\/memory\/nodes\/activate/);
+  assert.match(hostFile, /registerLiteMemoryLifecycleRoutes/);
+  assert.equal(liteEditionFile.includes("/v1/memory/archive/rehydrate"), false, "lite edition should not stub archive rehydrate once implemented");
+  assert.equal(liteEditionFile.includes("/v1/memory/nodes/activate"), false, "lite edition should not stub nodes activate once implemented");
 });
 
 test("lite memory-replay-governed routes do not keep store fallback branches", () => {
