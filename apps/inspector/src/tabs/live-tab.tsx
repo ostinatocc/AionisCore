@@ -68,7 +68,7 @@ export function LiveTab({ client, config, health, onConfigChange }: LiveTabProps
       >
         <div class="card">
           <SeedPackButton client={client} config={config} onConfigChange={onConfigChange} />
-          <p class="mt-3 text-xs text-slate-500">
+          <p class="mt-3 text-xs text-ink0">
             The pack ships with the Inspector bundle (<code>seed-pack.json</code>). Imports land in an
             isolated scope so existing data is never overwritten. Regenerate from real recorded data
             with <code>npm --prefix apps/inspector run seed:generate</code>.
@@ -117,8 +117,8 @@ export function LiveTab({ client, config, health, onConfigChange }: LiveTabProps
             </div>
           ) : (
             <table class="w-full border-collapse text-left text-xs">
-              <thead class="text-slate-400">
-                <tr class="border-b border-slate-800/80">
+              <thead class="text-text-2">
+                <tr class="border-b border-line">
                   <th class="px-4 py-2 font-medium">When</th>
                   <th class="px-4 py-2 font-medium">Method</th>
                   <th class="px-4 py-2 font-medium">Route</th>
@@ -129,25 +129,25 @@ export function LiveTab({ client, config, health, onConfigChange }: LiveTabProps
               </thead>
               <tbody class="font-mono">
                 {log.map((entry) => (
-                  <tr class="border-b border-slate-900 last:border-b-0" key={entry.id}>
-                    <td class="px-4 py-2 text-slate-400">{formatRelativeTime(entry.startedAt)}</td>
-                    <td class="px-4 py-2 text-slate-300">{entry.method}</td>
-                    <td class="px-4 py-2 text-slate-100">{entry.route}</td>
+                  <tr class="border-b border-line last:border-b-0" key={entry.id}>
+                    <td class="px-4 py-2 text-text-2">{formatRelativeTime(entry.startedAt)}</td>
+                    <td class="px-4 py-2 text-ink/80">{entry.method}</td>
+                    <td class="px-4 py-2 text-ink">{entry.route}</td>
                     <td class="px-4 py-2">
                       <span
                         class={
                           entry.status === null
-                            ? "text-rose-300"
+                            ? "text-contested"
                             : entry.status >= 400
-                              ? "text-orange-300"
-                              : "text-emerald-300"
+                              ? "text-contested"
+                              : "text-trusted"
                         }
                       >
                         {entry.status ?? "ERR"}
                       </span>
                     </td>
-                    <td class="px-4 py-2 text-slate-400">{formatDurationMs(entry.durationMs)}</td>
-                    <td class="px-4 py-2 text-slate-400">
+                    <td class="px-4 py-2 text-text-2">{formatDurationMs(entry.durationMs)}</td>
+                    <td class="px-4 py-2 text-text-2">
                       {entry.errorMessage ?? entry.summary ?? "-"}
                     </td>
                   </tr>

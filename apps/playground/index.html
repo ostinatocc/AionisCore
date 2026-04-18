@@ -15,12 +15,16 @@
       content="Local continuity runtime for coding agents. See what Aionis remembers, and what it does differently next time."
     />
     <title>Aionis Playground</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap"
-    />
+    <!--
+      No third-party font CDN: Playground is accessed from regions where
+      fonts.googleapis.com is slow or blocked (notably mainland China), and a
+      blocking stylesheet from a public CDN hurts first-paint everywhere
+      else. We rely on the VI fallback chain declared in
+      `@aionis/ui-kit/theme/fonts`. To upgrade brand fidelity for the hosted
+      build, self-host Newsreader and JetBrains Mono woff2 files under
+      `apps/playground/public/fonts/` and declare `@font-face` rules in a
+      separate, bundled stylesheet.
+    -->
     <link
       rel="icon"
       type="image/svg+xml"

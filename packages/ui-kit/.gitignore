@@ -1,0 +1,14 @@
+# Generated tsc output. Rebuilt on demand by `npm run build` and every
+# consumer's `prebuild` / `predev` hook. Never commit.
+dist/
+
+# Local install tree. Peer dep resolution and `file:` linking populate
+# this; it is recreated by `npm install`.
+node_modules/
+
+# Incremental tsc state and common build leftovers.
+*.tsbuildinfo
+*.tgz
+
+# Editor / OS noise.
+.DS_Store

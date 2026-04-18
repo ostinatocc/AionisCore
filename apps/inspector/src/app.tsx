@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useState } from "preact/hooks";
+import { LogoMark } from "@aionis/ui-kit/components";
+import { formatDurationMs } from "@aionis/ui-kit/lib";
 import { createClient } from "./lib/aionis-client";
 import type { HealthResponse } from "./lib/aionis-client";
 import {
@@ -7,7 +9,6 @@ import {
   type RuntimeConfig,
 } from "./lib/runtime-config";
 import { useAsync } from "./lib/use-async";
-import { formatDurationMs } from "./lib/format";
 import { ConnectionBar } from "./components/connection-bar";
 import { LiveTab } from "./tabs/live-tab";
 import { MemoryTab } from "./tabs/memory-tab";
@@ -64,7 +65,6 @@ export function App() {
   const handleConfigChange = useCallback((next: RuntimeConfig) => {
     saveRuntimeConfig(next);
     setConfig(next);
-    // Switching scope/tenant makes any previous focus stale.
     setMemoryFocus(null);
   }, []);
 
@@ -85,16 +85,18 @@ export function App() {
       : "unreachable";
 
   return (
-    <div class="flex min-h-screen flex-col">
-      <header class="border-b border-slate-800/80 bg-slate-950">
+    <div class="flex min-h-screen flex-col bg-paper text-ink">
+      <header class="border-b border-line bg-paper">
         <div class="flex items-center justify-between px-6 py-3">
           <div class="flex items-center gap-3">
-            <LogoMark />
+            <span class="flex h-9 w-9 items-center justify-center rounded-card border border-line bg-paper-soft text-signal">
+              <LogoMark size={18} stroke="currentColor" />
+            </span>
             <div class="leading-tight">
-              <div class="text-sm font-semibold tracking-tight text-slate-100">
+              <div class="text-[15px] font-medium tracking-tight text-ink no-transform">
                 Aionis Inspector
               </div>
-              <div class="text-[11px] text-slate-500">
+              <div class="font-mono text-[11px] text-text-3 no-transform">
                 local, read-only · v{__INSPECTOR_VERSION__}
               </div>
             </div>
@@ -108,7 +110,7 @@ export function App() {
                 onClick={() => setTab(t.id)}
                 title={t.description}
               >
-                {t.label}
+                <span class="no-transform">{t.label}</span>
               </button>
             ))}
           </nav>
@@ -148,7 +150,7 @@ export function App() {
         )}
       </main>
 
-      <footer class="border-t border-slate-800/80 bg-slate-950 px-6 py-2 text-[11px] text-slate-500">
+      <footer class="border-t border-line bg-paper px-6 py-2 font-mono text-[11px] text-text-3 no-transform">
         Inspector is read-only. It calls the same public SDK surfaces external integrators use. No
         write, archive, or delete operations are exposed from this UI.
       </footer>
@@ -157,10 +159,7 @@ export function App() {
 }
 
 function tabButtonClass(active: boolean): string {
-  const base =
-    "rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-sky-500/40";
-  if (active) return `${base} bg-slate-800 text-slate-50`;
-  return `${base} text-slate-400 hover:bg-slate-900 hover:text-slate-100`;
+  return active ? "tab-button tab-button-active" : "tab-button";
 }
 
 function formatRuntimeLabel(health: HealthResponse | null, config: RuntimeConfig): string {
@@ -170,17 +169,4 @@ function formatRuntimeLabel(health: HealthResponse | null, config: RuntimeConfig
   const mode = health.mode ?? health.runtime?.mode;
   const tail = [edition, mode].filter(Boolean).join("·");
   return tail ? `${origin} · ${tail}` : origin;
-}
-
-function LogoMark() {
-  return (
-    <span
-      aria-hidden="true"
-      class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 ring-1 ring-inset ring-slate-700"
-    >
-      <svg viewBox="0 0 24 24" class="h-4 w-4 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M5 19 L12 5 L19 19 M7.5 14 L16.5 14" />
-      </svg>
-    </span>
-  );
 }

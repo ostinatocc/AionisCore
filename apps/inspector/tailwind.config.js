@@ -1,36 +1,17 @@
+/**
+ * Tailwind config for the Aionis Inspector.
+ *
+ * Delegates theme tokens to `@aionis/ui-kit`. Inspector v0.1 used a dark
+ * slate theme; from Aionis Workbench UI Phase 1 forward Inspector runs on
+ * the VI light theme (paper / ink / signal). Tab-local colour tweaks should
+ * go through the state palette (`trusted`, `candidate`, `contested`), not
+ * hard-coded hex.
+ */
+
+import aionisPreset from "@aionis/ui-kit/theme/tailwind-preset";
+
 /** @type {import('tailwindcss').Config} */
 export default {
+  presets: [aionisPreset],
   content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
-  theme: {
-    extend: {
-      fontFamily: {
-        sans: [
-          "Inter",
-          "ui-sans-serif",
-          "system-ui",
-          "-apple-system",
-          "Segoe UI",
-          "Roboto",
-          "sans-serif",
-        ],
-        mono: [
-          "JetBrains Mono",
-          "ui-monospace",
-          "SFMono-Regular",
-          "Menlo",
-          "monospace",
-        ],
-      },
-      colors: {
-        accent: {
-          trusted: "#22c55e",
-          candidate: "#fbbf24",
-          contested: "#f97316",
-          governed: "#a855f7",
-          shadow: "#64748b",
-        },
-      },
-    },
-  },
-  plugins: [],
 };

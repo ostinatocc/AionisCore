@@ -4,6 +4,7 @@ import { sha256Hex } from "../util/crypto.js";
 import { normalizeText } from "../util/normalize.js";
 import { redactPII } from "../util/redaction.js";
 import { badRequest } from "../util/http.js";
+import { computeFeedbackUpdatedNodeState } from "./node-feedback-state.js";
 import { MemoryNodesActivateRequest } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
 
@@ -14,7 +15,14 @@ type ActivateOptions = {
 
 type NodeRow = {
   id: string;
-  slots: any;
+  type: string;
+  title: string | null;
+  text_summary: string | null;
+  tier: string | null;
+  slots: Record<string, unknown> | null;
+  salience: number;
+  importance: number;
+  confidence: number;
 };
 
 function uniqStrings(xs: string[]): string[] {
@@ -26,21 +34,6 @@ function normalizeMaybeRedact(input: string | undefined, opts: ActivateOptions):
   const normalized = normalizeText(input, opts.maxTextLen);
   if (!opts.piiRedaction) return normalized;
   return redactPII(normalized).text;
-}
-
-function asNonNegativeInt(v: unknown): number {
-  if (typeof v === "number" && Number.isFinite(v)) return Math.max(0, Math.trunc(v));
-  if (typeof v !== "string") return 0;
-  if (!/^[0-9]+$/.test(v.trim())) return 0;
-  return Math.max(0, Number(v));
-}
-
-function asFeedbackQuality(v: unknown): number {
-  if (typeof v === "number" && Number.isFinite(v)) return Math.max(-1, Math.min(1, v));
-  if (typeof v !== "string") return 0;
-  const s = v.trim();
-  if (!/^-?[0-9]+(\.[0-9]+)?$/.test(s)) return 0;
-  return Math.max(-1, Math.min(1, Number(s)));
 }
 
 export async function activateMemoryNodes(
@@ -61,10 +54,6 @@ export async function activateMemoryNodes(
   const reason = normalizeMaybeRedact(parsed.reason, opts) ?? null;
   const inputText = normalizeMaybeRedact(parsed.input_text, opts);
   const inputSha = parsed.input_sha256 ?? sha256Hex(inputText!);
-
-  const posInc = parsed.outcome === "positive" ? 1 : 0;
-  const negInc = parsed.outcome === "negative" ? 1 : 0;
-  const qualitySignal = parsed.outcome === "positive" ? 1 : parsed.outcome === "negative" ? -1 : 0;
 
   const requestedNodeIds = uniqStrings((parsed.node_ids ?? []).map((x) => x.toLowerCase()));
   const requestedClientIds = uniqStrings((parsed.client_ids ?? []).map((x) => x.trim()).filter((x) => x.length > 0));
@@ -102,7 +91,16 @@ export async function activateMemoryNodes(
 
   const foundRes = await client.query<NodeRow>(
     `
-    SELECT id::text AS id, slots
+    SELECT
+      id::text AS id,
+      type,
+      title,
+      text_summary,
+      tier::text AS tier,
+      slots,
+      salience,
+      importance,
+      confidence
     FROM memory_nodes
     WHERE scope = $1
       AND id = ANY($2::uuid[])
@@ -170,37 +168,45 @@ export async function activateMemoryNodes(
   const commitId = commitRes.rows[0].id;
 
   for (const row of foundRes.rows) {
-    const slots = { ...(row.slots ?? {}) };
-    const prevPos = asNonNegativeInt(slots.feedback_positive);
-    const prevNeg = asNonNegativeInt(slots.feedback_negative);
-    const prevQuality = asFeedbackQuality(slots.feedback_quality);
-    const nextPos = prevPos + posInc;
-    const nextNeg = prevNeg + negInc;
-    const nextQuality =
-      parsed.outcome === "neutral"
-        ? prevQuality
-        : Math.max(-1, Math.min(1, 0.8 * prevQuality + 0.2 * qualitySignal));
-
-    slots.feedback_positive = nextPos;
-    slots.feedback_negative = nextNeg;
-    slots.feedback_quality = Number(nextQuality.toFixed(4));
-    slots.last_feedback_outcome = parsed.outcome;
-    slots.last_feedback_at = startedAt;
-    slots.last_feedback_run_id = parsed.run_id ?? null;
-    slots.last_feedback_reason = reason;
-    slots.last_feedback_input_sha256 = inputSha;
+    const nextState = computeFeedbackUpdatedNodeState({
+      node: row,
+      feedback: {
+        outcome: parsed.outcome,
+        run_id: parsed.run_id ?? null,
+        reason,
+        input_sha256: inputSha,
+        source: "nodes_activate",
+        timestamp: startedAt,
+      },
+    });
+    const slots = { ...nextState.slots };
+    if (parsed.activate) {
+      slots.last_activated_at = startedAt;
+    }
 
     await client.query(
       `
       UPDATE memory_nodes
       SET
         slots = $1::jsonb,
-        last_activated = CASE WHEN $2::bool THEN now() ELSE last_activated END,
-        commit_id = $3::uuid
-      WHERE scope = $4
-        AND id = $5::uuid
+        salience = $2,
+        importance = $3,
+        confidence = $4,
+        last_activated = CASE WHEN $5::bool THEN now() ELSE last_activated END,
+        commit_id = $6::uuid
+      WHERE scope = $7
+        AND id = $8::uuid
       `,
-      [JSON.stringify(slots), parsed.activate, commitId, scope, row.id],
+      [
+        JSON.stringify(slots),
+        nextState.salience,
+        nextState.importance,
+        nextState.confidence,
+        parsed.activate,
+        commitId,
+        scope,
+        row.id,
+      ],
     );
   }
 

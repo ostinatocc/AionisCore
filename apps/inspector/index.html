@@ -3,12 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="color-scheme" content="light" />
     <meta name="robots" content="noindex" />
     <title>Aionis Inspector</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f172a'/%3E%3Cpath d='M18 44 L32 20 L46 44 M23 36 L41 36' stroke='%2338bdf8' stroke-width='4' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
+    <!--
+      Inspector is local-first and must not depend on a third-party font CDN
+      at runtime. We rely on the VI fallback chain defined in
+      `@aionis/ui-kit/theme/fonts` (Newsreader -> Iowan Old Style -> Palatino
+      Linotype -> Georgia -> serif; JetBrains Mono -> SFMono-Regular ->
+      ui-monospace -> Menlo -> monospace). If you want the branded Newsreader
+      face in a hosted context, self-host the woff2 files under
+      `public/fonts/` and declare `@font-face` rules; don't re-add a public
+      Google Fonts link here.
+    -->
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23f6f3ea'/%3E%3Cpath d='M18 44 L32 20 L46 44 M23 36 L41 36' stroke='%237a6fa4' stroke-width='4' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E"
+    />
   </head>
-  <body class="bg-slate-950 text-slate-100 antialiased">
+  <body class="bg-paper text-ink antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

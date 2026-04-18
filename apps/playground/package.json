@@ -5,12 +5,17 @@
   "type": "module",
   "description": "Public hosted demo for Aionis Runtime; MVP sub-slice of the Inspector+Playground plan",
   "scripts": {
+    "ui-kit:build": "npm --prefix ../../packages/ui-kit run build",
+    "predev": "npm run -s ui-kit:build",
+    "prebuild": "npm run -s ui-kit:build",
+    "pretypecheck": "npm run -s ui-kit:build",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aionis/ui-kit": "file:../../packages/ui-kit",
     "preact": "^10.25.4"
   },
   "devDependencies": {

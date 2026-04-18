@@ -5,6 +5,10 @@
   "type": "module",
   "description": "Local read-only observation UI for Aionis Lite runtime",
   "scripts": {
+    "ui-kit:build": "npm --prefix ../../packages/ui-kit run build",
+    "predev": "npm run -s ui-kit:build",
+    "prebuild": "npm run -s ui-kit:build",
+    "pretypecheck": "npm run -s ui-kit:build",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
@@ -12,6 +16,7 @@
     "seed:generate": "node scripts/generate-seed.mjs"
   },
   "dependencies": {
+    "@aionis/ui-kit": "file:../../packages/ui-kit",
     "preact": "^10.25.4"
   },
   "devDependencies": {

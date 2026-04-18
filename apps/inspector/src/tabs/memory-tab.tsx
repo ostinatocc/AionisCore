@@ -176,7 +176,7 @@ export function MemoryTab({ client, config, focus, onClearFocus }: MemoryTabProp
             <EmptyState title="Memory find failed" description={find.error.message} />
           ) : (
             <div class="card p-0">
-              <ul class="scroll-area max-h-[70vh] divide-y divide-slate-800/80">
+              <ul class="scroll-area max-h-[70vh] divide-y divide-line">
                 {displayList.map((node) => {
                   const isSelected =
                     selected?.id === node.id && node.id !== undefined;
@@ -186,43 +186,43 @@ export function MemoryTab({ client, config, focus, onClearFocus }: MemoryTabProp
                     node.id === focus.anchorId;
                   const label = node.title ?? node.client_id ?? node.id ?? "—";
                   const rowClass = isFocused
-                    ? "border-l-2 border-l-sky-500 bg-sky-500/10 hover:bg-sky-500/15"
+                    ? "border-l-2 border-l-sky-500 bg-signal/10 hover:bg-signal/15"
                     : isSelected
-                      ? "bg-slate-800/60"
+                      ? "bg-paper-sink"
                       : "";
                   return (
                     <li key={String(node.id ?? label)}>
                       <button
                         type="button"
-                        class={`w-full px-4 py-3 text-left transition hover:bg-slate-800/40 ${rowClass}`}
+                        class={`w-full px-4 py-3 text-left transition hover:bg-paper-sink ${rowClass}`}
                         onClick={() => setSelected(node)}
                       >
                         <div class="flex items-center justify-between gap-2">
                           <span
-                            class="truncate text-sm font-semibold text-slate-100"
+                            class="truncate text-sm font-semibold text-ink"
                             title={String(label)}
                           >
                             {truncate(String(label), 80)}
                           </span>
                           <div class="flex shrink-0 items-center gap-2">
                             {isFocused ? (
-                              <span class="pill border-sky-500/60 bg-sky-500/15 text-sky-200">
+                              <span class="pill border-signal/60 bg-signal/15 text-signal-strong">
                                 focused
                               </span>
                             ) : null}
                             {node.tier ? (
-                              <span class="pill border-slate-700 bg-slate-900/80 text-slate-300">
+                              <span class="pill border-line-strong bg-paper-soft text-ink/80">
                                 tier {String(node.tier)}
                               </span>
                             ) : null}
                             {node.memory_lane ? (
-                              <span class="pill border-slate-700 bg-slate-900/80 text-slate-400">
+                              <span class="pill border-line-strong bg-paper-soft text-text-2">
                                 {String(node.memory_lane)}
                               </span>
                             ) : null}
                           </div>
                         </div>
-                        <div class="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
+                        <div class="mt-1 flex items-center gap-3 text-[11px] text-ink0">
                           <span>type {String(node.type ?? "—")}</span>
                           <span>·</span>
                           <span>id {shortId(node.id)}</span>
@@ -230,7 +230,7 @@ export function MemoryTab({ client, config, focus, onClearFocus }: MemoryTabProp
                           <span>last {formatRelativeTime(node.last_activated ?? node.updated_at ?? null)}</span>
                         </div>
                         {node.text_summary ? (
-                          <p class="mt-1 text-xs text-slate-400">
+                          <p class="mt-1 text-xs text-text-2">
                             {truncate(String(node.text_summary), 160)}
                           </p>
                         ) : null}
@@ -247,15 +247,15 @@ export function MemoryTab({ client, config, focus, onClearFocus }: MemoryTabProp
           {selected ? (
             <div class="card flex flex-col gap-3">
               <div>
-                <div class="text-xs uppercase tracking-wide text-slate-400">Title</div>
-                <div class="break-all text-sm text-slate-100">
+                <div class="text-xs uppercase tracking-wide text-text-2">Title</div>
+                <div class="break-all text-sm text-ink">
                   {String(selected.title ?? "—")}
                 </div>
               </div>
               {selected.text_summary ? (
                 <div>
-                  <div class="text-xs uppercase tracking-wide text-slate-400">Summary</div>
-                  <div class="text-sm text-slate-200">{String(selected.text_summary)}</div>
+                  <div class="text-xs uppercase tracking-wide text-text-2">Summary</div>
+                  <div class="text-sm text-ink">{String(selected.text_summary)}</div>
                 </div>
               ) : null}
               <div class="grid grid-cols-2 gap-2">
@@ -322,23 +322,23 @@ function FocusBanner({
   const title =
     (resolved?.title as string | undefined) ?? focus.label ?? "(no title)";
   return (
-    <div class="card flex items-start justify-between gap-4 border-sky-500/40 bg-sky-500/5">
-      <div class="min-w-0 text-xs text-slate-300">
+    <div class="card flex items-start justify-between gap-4 border-signal/40 bg-signal/5">
+      <div class="min-w-0 text-xs text-ink/80">
         <div class="flex flex-wrap items-center gap-2">
-          <span class="pill border-sky-500/60 bg-sky-500/15 text-sky-200">
+          <span class="pill border-signal/60 bg-signal/15 text-signal-strong">
             from {originLabel}
           </span>
-          <span class="truncate text-sm font-semibold text-slate-100" title={title}>
+          <span class="truncate text-sm font-semibold text-ink" title={title}>
             {truncate(title, 90)}
           </span>
         </div>
-        <div class="mt-1 font-mono text-[11px] text-slate-400">
+        <div class="mt-1 font-mono text-[11px] text-text-2">
           anchor {focus.anchorId}
         </div>
         {error ? (
-          <div class="mt-1 text-[11px] text-rose-300">{error}</div>
+          <div class="mt-1 text-[11px] text-contested">{error}</div>
         ) : !resolved ? (
-          <div class="mt-1 text-[11px] text-slate-400">Looking up node…</div>
+          <div class="mt-1 text-[11px] text-text-2">Looking up node…</div>
         ) : null}
       </div>
       <button type="button" class="btn shrink-0" onClick={onClear}>
@@ -350,9 +350,9 @@ function FocusBanner({
 
 function MetaBlock({ label, value }: { label: string; value: string }) {
   return (
-    <div class="rounded-md border border-slate-800/80 bg-slate-950/40 px-3 py-2">
-      <div class="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div class="mt-0.5 truncate font-mono text-xs text-slate-200" title={value}>
+    <div class="rounded-md border border-line bg-paper/40 px-3 py-2">
+      <div class="text-[10px] uppercase tracking-wide text-ink0">{label}</div>
+      <div class="mt-0.5 truncate font-mono text-xs text-ink" title={value}>
         {value}
       </div>
     </div>
@@ -375,15 +375,15 @@ function SummaryStrip({
   const typeEntries = Object.entries(summary.type_counts ?? {});
   const laneEntries = Object.entries(summary.memory_lane_counts ?? {});
   return (
-    <div class="card flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] text-slate-400">
-      <span class="font-mono text-slate-200">total {total}</span>
+    <div class="card flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] text-text-2">
+      <span class="font-mono text-ink">total {total}</span>
       {typeEntries.length > 0 ? (
         <span class="flex flex-wrap items-center gap-1.5">
-          <span class="text-slate-500">by type</span>
+          <span class="text-ink0">by type</span>
           {typeEntries.map(([k, v]) => (
             <span
               key={`type-${k}`}
-              class="rounded-md border border-slate-800 bg-slate-900/70 px-1.5 py-0.5 font-mono text-[10px] text-slate-300"
+              class="rounded-md border border-line bg-paper-soft/70 px-1.5 py-0.5 font-mono text-[10px] text-ink/80"
             >
               {k} · {v}
             </span>
@@ -392,11 +392,11 @@ function SummaryStrip({
       ) : null}
       {tierEntries.length > 0 ? (
         <span class="flex flex-wrap items-center gap-1.5">
-          <span class="text-slate-500">by tier</span>
+          <span class="text-ink0">by tier</span>
           {tierEntries.map(([k, v]) => (
             <span
               key={`tier-${k}`}
-              class="rounded-md border border-slate-800 bg-slate-900/70 px-1.5 py-0.5 font-mono text-[10px] text-slate-300"
+              class="rounded-md border border-line bg-paper-soft/70 px-1.5 py-0.5 font-mono text-[10px] text-ink/80"
             >
               {k} · {v}
             </span>
@@ -405,11 +405,11 @@ function SummaryStrip({
       ) : null}
       {laneEntries.length > 0 ? (
         <span class="flex flex-wrap items-center gap-1.5">
-          <span class="text-slate-500">by lane</span>
+          <span class="text-ink0">by lane</span>
           {laneEntries.map(([k, v]) => (
             <span
               key={`lane-${k}`}
-              class="rounded-md border border-slate-800 bg-slate-900/70 px-1.5 py-0.5 font-mono text-[10px] text-slate-300"
+              class="rounded-md border border-line bg-paper-soft/70 px-1.5 py-0.5 font-mono text-[10px] text-ink/80"
             >
               {k} · {v}
             </span>

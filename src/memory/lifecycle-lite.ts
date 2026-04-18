@@ -3,6 +3,7 @@ import { sha256Hex } from "../util/crypto.js";
 import { normalizeText } from "../util/normalize.js";
 import { redactPII } from "../util/redaction.js";
 import { badRequest } from "../util/http.js";
+import { computeFeedbackUpdatedNodeState } from "./node-feedback-state.js";
 import { MemoryArchiveRehydrateRequest, MemoryNodesActivateRequest } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
 import type { LiteFindNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
@@ -240,21 +241,6 @@ export async function rehydrateArchiveNodesLite(
   };
 }
 
-function asNonNegativeInt(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.trunc(value));
-  if (typeof value !== "string") return 0;
-  if (!/^[0-9]+$/.test(value.trim())) return 0;
-  return Math.max(0, Number(value));
-}
-
-function asFeedbackQuality(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.max(-1, Math.min(1, value));
-  if (typeof value !== "string") return 0;
-  const input = value.trim();
-  if (!/^-?[0-9]+(\.[0-9]+)?$/.test(input)) return 0;
-  return Math.max(-1, Math.min(1, Number(input)));
-}
-
 export async function activateMemoryNodesLite(
   liteWriteStore: LifecycleLiteStore,
   body: unknown,
@@ -347,28 +333,20 @@ export async function activateMemoryNodesLite(
     commitHash,
   });
 
-  const posInc = parsed.outcome === "positive" ? 1 : 0;
-  const negInc = parsed.outcome === "negative" ? 1 : 0;
-  const qualitySignal = parsed.outcome === "positive" ? 1 : parsed.outcome === "negative" ? -1 : 0;
-
   for (const row of foundRows) {
-    const prevPos = asNonNegativeInt(row.slots.feedback_positive);
-    const prevNeg = asNonNegativeInt(row.slots.feedback_negative);
-    const prevQuality = asFeedbackQuality(row.slots.feedback_quality);
-    const nextQuality =
-      parsed.outcome === "neutral"
-        ? prevQuality
-        : Math.max(-1, Math.min(1, 0.8 * prevQuality + 0.2 * qualitySignal));
+    const nextState = computeFeedbackUpdatedNodeState({
+      node: row,
+      feedback: {
+        outcome: parsed.outcome,
+        run_id: parsed.run_id ?? null,
+        reason,
+        input_sha256: inputSha,
+        source: "nodes_activate",
+        timestamp: startedAt,
+      },
+    });
     const nextSlots: Record<string, unknown> = {
-      ...row.slots,
-      feedback_positive: prevPos + posInc,
-      feedback_negative: prevNeg + negInc,
-      feedback_quality: Number(nextQuality.toFixed(4)),
-      last_feedback_outcome: parsed.outcome,
-      last_feedback_at: startedAt,
-      last_feedback_run_id: parsed.run_id ?? null,
-      last_feedback_reason: reason,
-      last_feedback_input_sha256: inputSha,
+      ...nextState.slots,
     };
     if (parsed.activate) {
       nextSlots.last_activated_at = startedAt;
@@ -378,9 +356,9 @@ export async function activateMemoryNodesLite(
       id: row.id,
       slots: nextSlots,
       textSummary: row.text_summary,
-      salience: row.salience,
-      importance: row.importance,
-      confidence: row.confidence,
+      salience: nextState.salience,
+      importance: nextState.importance,
+      confidence: nextState.confidence,
       commitId,
     });
   }

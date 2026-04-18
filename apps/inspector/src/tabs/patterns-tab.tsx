@@ -167,7 +167,7 @@ function BucketBlock({
   return (
     <div class="flex flex-col gap-3">
       <div class="flex items-center gap-2">
-        <h3 class="text-sm font-semibold text-slate-200">{title}</h3>
+        <h3 class="text-sm font-semibold text-ink">{title}</h3>
         <StateBadge value={state} />
       </div>
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
@@ -215,21 +215,21 @@ function PacketCard({
     : null;
 
   return (
-    <article class="card flex flex-col gap-3 transition hover:border-slate-700">
+    <article class="card flex flex-col gap-3 transition hover:border-line-strong">
       <header class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <div
-            class="truncate text-sm font-semibold text-slate-100"
+            class="truncate text-sm font-semibold text-ink"
             title={String(label)}
           >
             {truncate(String(label), 80)}
           </div>
-          <div class="mt-0.5 flex items-center gap-2 font-mono text-[11px] text-slate-500">
+          <div class="mt-0.5 flex items-center gap-2 font-mono text-[11px] text-ink0">
             <span>id {shortId(item.anchor_id)}</span>
             {openInMemory ? (
               <button
                 type="button"
-                class="rounded border border-slate-700/60 px-1.5 py-0.5 text-[10px] font-sans font-medium text-sky-300 transition hover:border-sky-500/60 hover:text-sky-200"
+                class="rounded border border-line-strong/60 px-1.5 py-0.5 text-[10px] font-sans font-medium text-signal transition hover:border-signal/60 hover:text-signal-strong"
                 onClick={openInMemory}
                 title="Open the originating memory node in the Memory tab"
               >
@@ -242,7 +242,7 @@ function PacketCard({
       </header>
 
       {item.summary && item.summary !== item.title ? (
-        <p class="text-xs text-slate-400">{truncate(String(item.summary), 160)}</p>
+        <p class="text-xs text-text-2">{truncate(String(item.summary), 160)}</p>
       ) : null}
 
       <dl class="grid grid-cols-2 gap-2 text-[11px]">
@@ -280,7 +280,7 @@ function PacketCard({
         ) : null}
       </dl>
 
-      <footer class="flex items-center justify-between text-[11px] text-slate-500">
+      <footer class="flex items-center justify-between text-[11px] text-ink0">
         <span>
           observed {observed}
           {required > 0 ? ` / ${required}` : ""}
@@ -302,10 +302,10 @@ function PacketCard({
 
 function Cell({ k, v, mono = false }: { k: string; v: string; mono?: boolean }) {
   return (
-    <div class="flex flex-col gap-0.5 rounded-md border border-slate-800/70 bg-slate-950/40 px-2 py-1">
-      <span class="text-[10px] uppercase tracking-wide text-slate-500">{k}</span>
+    <div class="flex flex-col gap-0.5 rounded-md border border-line/70 bg-paper/40 px-2 py-1">
+      <span class="text-[10px] uppercase tracking-wide text-ink0">{k}</span>
       <span
-        class={`truncate text-[11px] ${mono ? "font-mono text-slate-200" : "text-slate-300"}`}
+        class={`truncate text-[11px] ${mono ? "font-mono text-ink" : "text-ink/80"}`}
         title={v}
       >
         {v}
@@ -341,11 +341,11 @@ function LifecycleStrip({
   const visible = entries.filter((e) => typeof e.value === "number");
   if (visible.length === 0) return null;
   return (
-    <div class="card flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
+    <div class="card flex flex-wrap items-center gap-3 text-[11px] text-text-2">
       {visible.map((e) => (
         <span key={e.label} class="flex items-center gap-1.5">
-          <span class="text-slate-500">{displayOf(e.label)}</span>
-          <span class="rounded-md border border-slate-800 bg-slate-900/70 px-1.5 py-0.5 font-mono text-[10px] text-slate-200">
+          <span class="text-ink0">{displayOf(e.label)}</span>
+          <span class="rounded-md border border-line bg-paper-soft/70 px-1.5 py-0.5 font-mono text-[10px] text-ink">
             {e.value}
           </span>
         </span>

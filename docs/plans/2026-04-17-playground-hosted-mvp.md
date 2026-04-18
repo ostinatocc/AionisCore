@@ -1,6 +1,15 @@
 Last reviewed: 2026-04-17
 
-Document status: active implementation sub-plan
+Document status: historical — shipped, but the deployment target pivoted.
+The hosted Playground ships at https://playground.aionisos.com (Vercel)
+in front of a Lite instance on a Google Cloud VM at
+https://cloud.aionisos.com (Debian 12 + systemd + Caddy). The Fly.io
+path described below under "deployment plan" was explored but not
+shipped; the related repo artefacts (`Dockerfile.playground`,
+`fly.toml`, `scripts/playground-container-entrypoint.sh`,
+`scripts/playground-fly-dns.sh`, and the `adapter:fly:*` / `adapter:docker:*`
+npm scripts) were removed in a follow-up commit. Sections that reference
+them are left intact as a record of the tradeoffs considered.
 
 # Aionis Playground Hosted MVP
 

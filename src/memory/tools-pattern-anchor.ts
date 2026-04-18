@@ -5,6 +5,7 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import type { LiteFindNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
 import { createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
 import { sha256Hex } from "../util/crypto.js";
+import { resolveNodePriorityProfile } from "./importance-dynamics.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema, type MemoryAnchorV1 } from "./schemas.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 import {
@@ -200,32 +201,6 @@ function buildPatternSummary(args: {
           ? "after one successful rule-backed tool selection."
           : "after one successful tool selection.";
   return truncate(`${prefix}: ${body} ${evidence}`, 400);
-}
-
-function buildPatternNodeTrustProfile(credibilityState: PatternCredibilityState): {
-  salience: number;
-  importance: number;
-  confidence: number;
-} {
-  if (credibilityState === "trusted") {
-    return {
-      salience: 0.82,
-      importance: 0.9,
-      confidence: 0.92,
-    };
-  }
-  if (credibilityState === "contested") {
-    return {
-      salience: 0.63,
-      importance: 0.7,
-      confidence: 0.41,
-    };
-  }
-  return {
-    salience: 0.68,
-    importance: 0.74,
-    confidence: 0.58,
-  };
 }
 
 function parseExistingAnchor(node: ExistingPatternAnchorNode): MemoryAnchorV1 {
@@ -748,7 +723,6 @@ export async function writeToolsDecisionPatternAnchor(
     governedPatternStateOverride: args.governed_pattern_state_override ?? null,
   });
   const summary = anchor.summary;
-  const trustProfile = buildPatternNodeTrustProfile((anchor.credibility_state ?? "candidate") as PatternCredibilityState);
   const slots = buildPatternAnchorSlots({
     anchor,
     patternSignature,
@@ -756,6 +730,13 @@ export async function writeToolsDecisionPatternAnchor(
     candidates: args.candidates,
     sourceRuleIds: args.source_rule_ids,
     feedbackOutcome: args.feedback_outcome,
+  });
+  const trustProfile = resolveNodePriorityProfile({
+    type: "concept",
+    tier: "warm",
+    title,
+    text_summary: summary,
+    slots,
   });
 
   if (existingNode) {

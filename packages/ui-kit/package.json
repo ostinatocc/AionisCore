@@ -1,0 +1,77 @@
+{
+  "name": "@aionis/ui-kit",
+  "version": "0.1.0",
+  "description": "Shared Aionis UI primitives, brand theme, and hooks used by Inspector, Playground, and Workbench UI.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./theme/tailwind-preset": {
+      "import": "./dist/theme/tailwind-preset.js",
+      "default": "./dist/theme/tailwind-preset.js"
+    },
+    "./theme/tokens.css": "./dist/theme/tokens.css",
+    "./theme/fonts": {
+      "types": "./dist/theme/fonts.d.ts",
+      "import": "./dist/theme/fonts.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks/index.d.ts",
+      "import": "./dist/hooks/index.js"
+    },
+    "./lib": {
+      "types": "./dist/lib/index.d.ts",
+      "import": "./dist/lib/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ostinatocc/AionisCore.git",
+    "directory": "packages/ui-kit"
+  },
+  "homepage": "https://github.com/ostinatocc/AionisCore/tree/main/packages/ui-kit",
+  "bugs": {
+    "url": "https://github.com/ostinatocc/AionisCore/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-static.mjs",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit",
+    "pack:dry-run": "npm run build && npm pack --dry-run --cache /tmp/aionis-npm-cache",
+    "publish:dry-run": "npm run build && npm publish --dry-run"
+  },
+  "peerDependencies": {
+    "preact": ">=10.20.0"
+  },
+  "devDependencies": {
+    "preact": "^10.25.4",
+    "typescript": "^5.7.3"
+  },
+  "keywords": [
+    "aionis",
+    "ui-kit",
+    "design-system",
+    "preact",
+    "tailwind"
+  ],
+  "author": "Aionis",
+  "license": "Apache-2.0"
+}

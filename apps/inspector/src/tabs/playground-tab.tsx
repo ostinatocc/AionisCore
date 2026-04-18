@@ -93,16 +93,16 @@ export function PlaygroundTab({ client, config }: PlaygroundTabProps) {
               }
               placeholder="comma-separated tool names"
             />
-            <span class="mt-1 block text-[10px] text-slate-500">
+            <span class="mt-1 block text-[10px] text-ink0">
               Lite requires at least one candidate tool. Aionis picks from this
               list.
             </span>
           </label>
           <div class="flex items-center justify-between gap-3">
-            <span class="text-[11px] text-slate-500">
-              tenant <span class="font-mono text-slate-300">{config.tenantId}</span>{" "}
+            <span class="text-[11px] text-ink0">
+              tenant <span class="font-mono text-ink/80">{config.tenantId}</span>{" "}
               · scope{" "}
-              <span class="font-mono text-slate-300">{config.scope}</span>
+              <span class="font-mono text-ink/80">{config.scope}</span>
             </span>
             <button
               type="submit"
@@ -167,7 +167,7 @@ export function PlaygroundTab({ client, config }: PlaygroundTabProps) {
               />
             ) : null}
             <div class="card">
-              <h3 class="mb-2 text-sm font-semibold text-slate-100">
+              <h3 class="mb-2 text-sm font-semibold text-ink">
                 Raw response
               </h3>
               <JsonView value={response} collapsed />
@@ -221,34 +221,34 @@ function HeroCard({
       <div class="flex flex-wrap items-center gap-2">
         {sourceKind ? (
           <span
-            class="pill border-sky-500/60 bg-sky-500/10 text-sky-200"
+            class="pill border-signal/60 bg-signal/10 text-signal-strong"
             title={sourceAlias?.internal ?? sourceKind}
           >
             {sourceAlias?.display ?? sourceKind}
           </span>
         ) : null}
         {historyApplied === true ? (
-          <span class="pill border-emerald-500/60 bg-emerald-500/10 text-emerald-200">
+          <span class="pill border-trusted-line bg-trusted-wash text-trusted">
             history applied
           </span>
         ) : historyApplied === false ? (
-          <span class="pill border-slate-600/70 bg-slate-800/70 text-slate-300">
+          <span class="pill border-line-strong/70 bg-paper-sink/70 text-ink/80">
             no history applied
           </span>
         ) : null}
       </div>
 
       <div class="flex flex-col gap-1.5">
-        <span class="text-[10px] uppercase tracking-wide text-slate-500">
+        <span class="text-[10px] uppercase tracking-wide text-ink0">
           Selected tool
         </span>
         <div class="flex items-baseline gap-3">
-          <span class="font-mono text-lg font-semibold text-slate-50">
+          <span class="font-mono text-lg font-semibold text-ink">
             {tool ?? "—"}
           </span>
           {filePath ? (
             <span
-              class="truncate font-mono text-xs text-slate-400"
+              class="truncate font-mono text-xs text-text-2"
               title={filePath}
             >
               {filePath}
@@ -258,11 +258,11 @@ function HeroCard({
       </div>
 
       {nextAction ? (
-        <div class="rounded-md border border-slate-800/80 bg-slate-950/50 px-3 py-2">
-          <div class="text-[10px] uppercase tracking-wide text-slate-500">
+        <div class="rounded-md border border-line bg-paper-soft px-3 py-2">
+          <div class="text-[10px] uppercase tracking-wide text-ink0">
             Next action
           </div>
-          <div class="mt-0.5 text-sm text-slate-100">{nextAction}</div>
+          <div class="mt-0.5 text-sm text-ink">{nextAction}</div>
         </div>
       ) : null}
     </div>
@@ -287,8 +287,8 @@ function RationaleCard({
   if (!parsed) {
     return (
       <div class="card">
-        <h3 class="text-sm font-semibold text-slate-100">Why this pick</h3>
-        <p class="mt-1 text-xs text-slate-400">
+        <h3 class="text-sm font-semibold text-ink">Why this pick</h3>
+        <p class="mt-1 text-xs text-text-2">
           The runtime returned no rationale for this kickoff.
         </p>
       </div>
@@ -297,17 +297,17 @@ function RationaleCard({
   return (
     <div class="card flex flex-col gap-3">
       <div class="flex items-center justify-between gap-2">
-        <h3 class="text-sm font-semibold text-slate-100">Why this pick</h3>
-        <span class="text-[10px] text-slate-500">
+        <h3 class="text-sm font-semibold text-ink">Why this pick</h3>
+        <span class="text-[10px] text-ink0">
           parsed from <code>rationale.summary</code>
         </span>
       </div>
 
       {parsed.narrative.length > 0 ? (
-        <ul class="flex flex-col gap-1.5 text-xs text-slate-300">
+        <ul class="flex flex-col gap-1.5 text-xs text-ink/80">
           {parsed.narrative.map((line, i) => (
             <li key={`n-${i}`} class="flex items-start gap-2">
-              <span class="mt-1 inline-block h-1 w-1 shrink-0 rounded-full bg-sky-400" />
+              <span class="mt-1 inline-block h-1 w-1 shrink-0 rounded-full bg-signal" />
               <span>{line}</span>
             </li>
           ))}
@@ -316,7 +316,7 @@ function RationaleCard({
 
       {parsed.signals.length > 0 ? (
         <div class="flex flex-col gap-2">
-          <div class="text-[10px] uppercase tracking-wide text-slate-500">
+          <div class="text-[10px] uppercase tracking-wide text-ink0">
             Signals
           </div>
           <dl class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
@@ -328,9 +328,9 @@ function RationaleCard({
       ) : null}
 
       {parsed.narrative.length === 0 && parsed.signals.length === 0 ? (
-        <p class="text-xs text-slate-400">
+        <p class="text-xs text-text-2">
           Rationale present but no parseable pieces:{" "}
-          <code class="font-mono text-slate-300">{parsed.raw}</code>
+          <code class="font-mono text-ink/80">{parsed.raw}</code>
         </p>
       ) : null}
     </div>
@@ -344,17 +344,17 @@ function SignalRow({ signal }: { signal: { key: string; value: string } }) {
   const isNumber = /^-?\d+(\.\d+)?$/.test(signal.value);
   const valueClass = isBool
     ? signal.value === "true"
-      ? "text-emerald-300"
-      : "text-slate-400"
+      ? "text-trusted"
+      : "text-text-2"
     : isNumber
-      ? "text-sky-300"
-      : "text-slate-200";
+      ? "text-signal"
+      : "text-ink";
   return (
     <div
-      class="flex items-start justify-between gap-3 rounded-md border border-slate-800/70 bg-slate-950/40 px-2.5 py-1.5"
+      class="flex items-start justify-between gap-3 rounded-md border border-line/70 bg-paper/40 px-2.5 py-1.5"
       title={signal.key}
     >
-      <dt class="text-[10px] uppercase tracking-wide text-slate-500">{key}</dt>
+      <dt class="text-[10px] uppercase tracking-wide text-ink0">{key}</dt>
       <dd
         class={`truncate text-right font-mono text-[11px] ${valueClass}`}
         title={signal.value}
@@ -374,7 +374,7 @@ function CandidatesStrip({
 }) {
   return (
     <div class="card flex flex-wrap items-center gap-2 text-[11px]">
-      <span class="text-slate-500">Candidates considered</span>
+      <span class="text-ink0">Candidates considered</span>
       {candidates.map((tool) => {
         const isChosen = chosen !== null && tool === chosen;
         return (
@@ -382,8 +382,8 @@ function CandidatesStrip({
             key={tool}
             class={`pill font-mono ${
               isChosen
-                ? "border-sky-500/60 bg-sky-500/15 text-sky-200"
-                : "border-slate-700 bg-slate-900/80 text-slate-300"
+                ? "border-signal/60 bg-signal/15 text-signal-strong"
+                : "border-line-strong bg-paper-soft text-ink/80"
             }`}
           >
             {tool}
@@ -407,8 +407,8 @@ function JsonSubSection({
   return (
     <div class="card flex flex-col gap-2">
       <div>
-        <h3 class="text-sm font-semibold text-slate-100">{title}</h3>
-        <p class="text-[11px] text-slate-500">{description}</p>
+        <h3 class="text-sm font-semibold text-ink">{title}</h3>
+        <p class="text-[11px] text-ink0">{description}</p>
       </div>
       <JsonView value={value} collapsed />
     </div>

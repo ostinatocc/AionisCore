@@ -1,0 +1,228 @@
+/*
+ * @aionis/ui-kit — CSS token + base + component layer.
+ *
+ * REQUIRED import order (PostCSS / Tailwind 3):
+ *
+ *   @import "@aionis/ui-kit/theme/tokens.css";
+ *   @tailwind base;
+ *   @tailwind components;
+ *   @tailwind utilities;
+ *
+ * Why this order matters:
+ *   - CSS `@import` rules must come before any non-`@import` / non-`@charset`
+ *     at-rules, so they must precede the `@tailwind` directives.
+ *   - Tailwind then resolves the `@layer base / components / utilities`
+ *     blocks below into its own base / components / utilities layers, which
+ *     is how `@apply` inside the components block picks up Tailwind
+ *     utilities.
+ *   - Putting `@import` *after* `@tailwind` is a silent footgun: PostCSS
+ *     may hoist the import to the top anyway, but your own `@layer base`
+ *     declarations that depended on Tailwind's reset will end up
+ *     double-applied or mis-ordered. Don't rely on that.
+ *
+ * Both shipped consumers (apps/inspector/src/styles.css,
+ * apps/playground/src/styles.css) follow the import-first order. New
+ * consumers should do the same.
+ *
+ * Follows Aionis Visual Identity v1. Enforced rules:
+ *   - paper-first surface, ink text, single signal accent
+ *   - Newsreader body; JetBrains Mono code + kickers
+ *   - no uppercase anywhere in UI or body (VI §4.3)
+ *   - cards are 10px, buttons are pills, nothing has a shadow
+ *   - state colors are runtime semantics, not generic chrome
+ */
+
+:root {
+  --aionis-paper: #f6f3ea;
+  --aionis-paper-soft: #ede8db;
+  --aionis-paper-sink: #e2dccd;
+  --aionis-ink: #2a2620;
+  --aionis-ink-soft: #4a4338;
+  --aionis-text-2: #6b6358;
+  --aionis-text-3: #9a948a;
+  --aionis-signal: #7a6fa4;
+  --aionis-signal-strong: #5e5484;
+  --aionis-signal-soft: #aba2c8;
+  --aionis-signal-wash: rgba(122, 111, 164, 0.1);
+  --aionis-signal-deep: #352e4d;
+  --aionis-line: rgba(42, 38, 32, 0.08);
+  --aionis-line-strong: rgba(42, 38, 32, 0.14);
+  --aionis-trusted: #8ba392;
+  --aionis-trusted-wash: rgba(139, 163, 146, 0.14);
+  --aionis-candidate: #b39a74;
+  --aionis-candidate-wash: rgba(179, 154, 116, 0.14);
+  --aionis-contested: #a88580;
+  --aionis-contested-wash: rgba(168, 133, 128, 0.14);
+  --aionis-governed: #7a6fa4;
+  --aionis-governed-wash: rgba(122, 111, 164, 0.14);
+  --aionis-shadow: #9a948a;
+  color-scheme: light;
+}
+
+@layer base {
+  html {
+    font-optical-sizing: auto;
+    scroll-behavior: smooth;
+    background-color: var(--aionis-paper);
+    color: var(--aionis-ink);
+  }
+
+  html,
+  body,
+  #root,
+  #app {
+    min-height: 100%;
+  }
+
+  body {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-variation-settings: "opsz" 18, "wght" 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--aionis-paper);
+    color: var(--aionis-ink);
+  }
+
+  p {
+    max-width: 70ch;
+  }
+
+  ::selection {
+    background-color: var(--aionis-signal-wash);
+    color: var(--aionis-ink);
+  }
+
+  h1 {
+    font-variation-settings: "opsz" 60, "wght" 500;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+  }
+
+  h2 {
+    font-variation-settings: "opsz" 48, "wght" 500;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+
+  h3 {
+    font-variation-settings: "opsz" 32, "wght" 500;
+    letter-spacing: -0.012em;
+    line-height: 1.3;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp {
+    font-feature-settings: "calt" 1, "liga" 0;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-card border border-line bg-paper p-6 transition-[border-color,background-color,transform] duration-hover ease-out;
+  }
+
+  .card-soft {
+    @apply rounded-card border border-transparent bg-paper-soft p-6;
+  }
+
+  .card-interactive {
+    @apply hover:-translate-y-px hover:border-signal/30 hover:bg-paper/70;
+  }
+
+  .btn {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border px-[22px] text-[14px] font-medium leading-none transition-colors duration-hover ease-out disabled:cursor-not-allowed disabled:opacity-50;
+    font-variation-settings: "opsz" 14, "wght" 500;
+    letter-spacing: -0.005em;
+  }
+
+  .btn-primary {
+    @apply border-signal bg-signal text-paper hover:border-signal-strong hover:bg-signal-strong;
+  }
+
+  .btn-alt {
+    @apply border-line-strong bg-transparent text-ink hover:bg-ink/[0.04];
+  }
+
+  .btn-ghost {
+    @apply h-10 border-transparent bg-transparent px-[22px] text-ink/80 hover:text-ink;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line bg-paper-sink px-3 py-[5px] font-mono text-[11px] text-text-2;
+    letter-spacing: 0.02em;
+  }
+
+  .pill-interactive {
+    @apply transition-colors duration-hover ease-out hover:border-signal/40 hover:text-ink;
+  }
+
+  .kicker {
+    @apply font-mono text-[11px] text-text-3;
+    letter-spacing: 0.02em;
+  }
+
+  .field-label {
+    @apply kicker mb-2 block;
+  }
+
+  .field-input {
+    @apply w-full rounded-card border border-line-strong bg-paper-soft px-3 py-2 font-mono text-sm text-ink placeholder:text-text-3 focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal-wash;
+  }
+
+  .kv-row {
+    @apply flex items-baseline justify-between gap-4 border-b border-line py-2 last:border-b-0;
+  }
+
+  .kv-key {
+    @apply kicker;
+  }
+
+  .kv-value {
+    @apply truncate font-mono text-[12px] text-ink;
+  }
+
+  .text-link {
+    @apply text-signal transition-colors duration-link;
+    text-decoration: underline;
+    text-decoration-color: rgba(122, 111, 164, 0.45);
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+  }
+
+  .text-link:hover {
+    @apply text-signal-strong;
+    text-decoration-color: currentColor;
+  }
+
+  .code-inline {
+    @apply rounded-inline bg-paper-sink px-[0.4rem] py-[0.14rem] font-mono text-[0.84em] text-ink;
+  }
+
+  .scroll-area {
+    @apply overflow-y-auto overscroll-contain;
+  }
+}
+
+@layer utilities {
+  .measure {
+    max-width: 70ch;
+  }
+
+  .text-balance-hero {
+    text-wrap: balance;
+  }
+
+  .no-transform {
+    text-transform: none !important;
+    letter-spacing: 0.02em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}

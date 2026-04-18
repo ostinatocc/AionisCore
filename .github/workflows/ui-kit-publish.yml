@@ -1,0 +1,68 @@
+# Publishes @aionis/ui-kit to public npm whenever a tag matching `ui-kit-v*`
+# is pushed. Tag format: `ui-kit-v0.1.0`.
+#
+# Required repo secret: NPM_TOKEN (public-npm automation token with publish
+# rights to the @aionis scope).
+#
+# The workflow also runs on manual dispatch for a dry-run.
+name: ui-kit publish
+
+on:
+  push:
+    tags:
+      - "ui-kit-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only run npm publish --dry-run"
+        required: false
+        default: "true"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: packages/ui-kit
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          always-auth: true
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/ui-kit-v')
+        run: |
+          tag="${GITHUB_REF##refs/tags/ui-kit-v}"
+          pkg_version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg_version" ]; then
+            echo "tag ui-kit-v$tag does not match package.json version $pkg_version" >&2
+            exit 1
+          fi
+
+      - name: Publish (dry-run)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'false'
+        run: npm publish --dry-run --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/ui-kit-v')
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
