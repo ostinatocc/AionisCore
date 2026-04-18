@@ -7,6 +7,7 @@ import { createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/
 import { sha256Hex } from "../util/crypto.js";
 import { HttpError } from "../util/http.js";
 import { stableUuid } from "../util/uuid.js";
+import { buildWorkflowMaintenanceMetadata, buildWorkflowPromotionMetadata } from "./evolution-operators.js";
 import { MemoryAnchorV1Schema } from "./schemas.js";
 import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 import { updateRuleState } from "./rules.js";
@@ -284,21 +285,19 @@ function buildReplayLearningStableWorkflowAnchor(args: {
       last_used_at: null,
     },
     maintenance: {
-      model: "lazy_online_v1",
-      maintenance_state: "retain",
-      offline_priority: "retain_workflow",
-      lazy_update_fields: ["usage_count", "last_used_at"],
-      last_maintenance_at: args.promotedAt,
+      ...buildWorkflowMaintenanceMetadata({
+        promotion_state: "stable",
+        at: args.promotedAt,
+      }),
     },
-    workflow_promotion: {
+    workflow_promotion: buildWorkflowPromotionMetadata({
       promotion_state: "stable",
       promotion_origin: "replay_learning_auto_promotion",
       required_observations: REPLAY_LEARNING_WORKFLOW_REQUIRED_OBSERVATIONS,
       observed_count: args.observedCount,
-      last_transition: "promoted_to_stable",
-      last_transition_at: args.promotedAt,
       source_status: null,
-    },
+      at: args.promotedAt,
+    }),
     schema_version: "anchor_v1",
   });
 }
@@ -389,22 +388,18 @@ export function buildReplayLearningProjectionArtifacts(args: {
                 workflow_signature: args.workflowSignature,
                 anchor_kind: "workflow",
                 anchor_level: "L1",
-                workflow_promotion: {
+                workflow_promotion: buildWorkflowPromotionMetadata({
                   promotion_state: "candidate",
                   promotion_origin: "replay_learning_episode",
                   required_observations: REPLAY_LEARNING_WORKFLOW_REQUIRED_OBSERVATIONS,
                   observed_count: args.observedWorkflowCount,
-                  last_transition: "candidate_observed",
-                  last_transition_at: args.projectedAt,
                   source_status: null,
-                },
-                maintenance: {
-                  model: "lazy_online_v1",
-                  maintenance_state: "observe",
-                  offline_priority: "promote_candidate",
-                  lazy_update_fields: ["usage_count", "last_used_at"],
-                  last_maintenance_at: args.projectedAt,
-                },
+                  at: args.projectedAt,
+                }),
+                maintenance: buildWorkflowMaintenanceMetadata({
+                  promotion_state: "candidate",
+                  at: args.projectedAt,
+                }),
               },
             }
           : {}),

@@ -25,6 +25,7 @@ import {
   type ReplayLearningProjectionResolvedConfig,
   type ReplayLearningProjectionResult,
 } from "./replay-learning.js";
+import { buildWorkflowMaintenanceMetadata, buildWorkflowPromotionMetadata } from "./evolution-operators.js";
 import {
   buildGovernedStateDecisionTrace,
   buildGovernanceDecisionTraceBase,
@@ -465,6 +466,7 @@ function buildReplayPlaybookAnchor(args: {
   const summary = args.textSummary ?? args.title ?? `Replay playbook ${args.playbookId}`;
   const payloadCostHint: "low" | "medium" | "high" =
     stepsTotal <= 4 ? "low" : stepsTotal <= 10 ? "medium" : "high";
+  const promotionAt = new Date().toISOString();
   return MemoryAnchorV1Schema.parse({
     anchor_kind: "workflow",
     anchor_level: "L2",
@@ -513,20 +515,16 @@ function buildReplayPlaybookAnchor(args: {
       reuse_failure_count: 0,
       last_used_at: null,
     },
-    maintenance: {
-      model: "lazy_online_v1",
-      maintenance_state: "retain",
-      offline_priority: "retain_workflow",
-      lazy_update_fields: ["usage_count", "last_used_at"],
-      last_maintenance_at: new Date().toISOString(),
-    },
-    workflow_promotion: {
+    maintenance: buildWorkflowMaintenanceMetadata({
+      promotion_state: "stable",
+      at: promotionAt,
+    }),
+    workflow_promotion: buildWorkflowPromotionMetadata({
       promotion_state: "stable",
       promotion_origin: args.promotionOrigin,
-      last_transition: args.promotionOrigin === "replay_stable_normalization" ? "normalized_latest_stable" : "promoted_to_stable",
-      last_transition_at: new Date().toISOString(),
       source_status: args.status,
-    },
+      at: promotionAt,
+    }),
     schema_version: "anchor_v1",
   });
 }

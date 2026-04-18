@@ -1,6 +1,7 @@
 import stableStringify from "fast-json-stable-stringify";
 import { ExecutionPacketV1Schema, ExecutionStateV1Schema, type ExecutionPacketV1, type ExecutionStateV1 } from "../execution/types.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema } from "./schemas.js";
+import { buildWorkflowMaintenanceMetadata, buildWorkflowPromotionMetadata } from "./evolution-operators.js";
 import { sha256Hex } from "../util/crypto.js";
 import { stableUuid } from "../util/uuid.js";
 import type { PromoteMemoryGovernanceReviewProvider } from "./governance-provider-types.js";
@@ -500,21 +501,19 @@ function buildStableWorkflowAnchor(args: {
       last_used_at: null,
     },
     maintenance: {
-      model: "lazy_online_v1",
-      maintenance_state: "retain",
-      offline_priority: "retain_workflow",
-      lazy_update_fields: ["usage_count", "last_used_at"],
-      last_maintenance_at: args.promotedAt,
+      ...buildWorkflowMaintenanceMetadata({
+        promotion_state: "stable",
+        at: args.promotedAt,
+      }),
     },
-    workflow_promotion: {
+    workflow_promotion: buildWorkflowPromotionMetadata({
       promotion_state: "stable",
       promotion_origin: "execution_write_auto_promotion",
       required_observations: 2,
       observed_count: args.observedCount,
-      last_transition: "promoted_to_stable",
-      last_transition_at: args.promotedAt,
       source_status: null,
-    },
+      at: args.promotedAt,
+    }),
     schema_version: "anchor_v1",
   });
 }
@@ -593,22 +592,18 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
       workflow_signature: workflowSignature,
       anchor_kind: "workflow",
       anchor_level: "L1",
-      workflow_promotion: {
+      workflow_promotion: buildWorkflowPromotionMetadata({
         promotion_state: "candidate",
         promotion_origin: "execution_write_projection",
         required_observations: requiredObservations,
         observed_count: observedCount,
-        last_transition: "candidate_observed",
-        last_transition_at: now,
         source_status: null,
-      },
-      maintenance: {
-        model: "lazy_online_v1",
-        maintenance_state: "observe",
-        offline_priority: "promote_candidate",
-        lazy_update_fields: ["usage_count", "last_used_at"],
-        last_maintenance_at: now,
-      },
+        at: now,
+      }),
+      maintenance: buildWorkflowMaintenanceMetadata({
+        promotion_state: "candidate",
+        at: now,
+      }),
       file_path: filePath,
       target_files: targetFiles,
       next_action: nextAction,
