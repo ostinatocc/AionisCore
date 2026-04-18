@@ -13,6 +13,7 @@ Review-oriented runtime paths are how Aionis surfaces continuity review material
   <div class="doc-chip-row">
     <span class="doc-chip">Continuity review pack</span>
     <span class="doc-chip">Evolution review pack</span>
+    <span class="doc-chip">Evolution inspect</span>
     <span class="doc-chip">Replay repair review</span>
     <span class="doc-chip">Governed subset</span>
   </div>
@@ -85,6 +86,9 @@ The response centers on:
 - stable and promotion-ready workflows
 - trusted, contested, and suppressed patterns
 - learning summary and recommendations
+- `evolution_inspect`
+- policy review and governance contract
+- optional governance apply payload or result
 
 ### Replay repair review
 
@@ -129,6 +133,10 @@ Read these fields first:
 1. `evolution_review_pack.review_contract`
 2. `evolution_review_pack.learning_summary`
 3. `evolution_review_pack.learning_recommendations`
+4. `evolution_review_pack.evolution_inspect`
+5. `evolution_review_pack.policy_governance_contract`
+
+If you are reviewing self-evolving policy state, this is the page where `evolution_inspect` becomes visible in the public runtime.
 
 ## Minimal replay repair review example
 
@@ -175,6 +183,7 @@ The practical rule is:
 ## Related docs
 
 1. [Memory](./memory.md)
-2. [Replay and Playbooks](./replay-and-playbooks.md)
-3. [Handoff](./handoff.md)
-4. [Automation](../runtime/automation.md)
+2. [Policy Memory and Evolution](./policy-memory.md)
+3. [Replay and Playbooks](./replay-and-playbooks.md)
+4. [Handoff](./handoff.md)
+5. [Automation](../runtime/automation.md)

@@ -14,6 +14,7 @@ The current public runtime story is Lite.
     <span class="doc-chip">Local shell</span>
     <span class="doc-chip">SQLite stores</span>
     <span class="doc-chip">Memory lifecycle</span>
+    <span class="doc-chip">Policy memory</span>
     <span class="doc-chip">Sandbox + automation</span>
   </div>
 </div>
@@ -39,6 +40,7 @@ That is different from a toy "local demo mode". Lite is the public runtime shape
 - memory write and recall
 - archive rehydrate and node activation lifecycle routes
 - planning and context runtime
+- policy memory materialization and governance routes
 - handoff store and recover
 - replay core
 - governed replay subset
@@ -104,6 +106,7 @@ When Lite is healthy, you should expect:
 - stable local startup defaults
 - local SQLite files under `.tmp/` by default
 - memory, handoff, replay, automation, and sandbox surfaces available through the same host
+- policy memory and evolution review visible through the same local runtime
 - structured errors instead of ambiguous local failures
 
 If you need env defaults, startup scripts, or path details, continue to [Lite Config and Operations](./lite-config-and-operations.md).
@@ -116,4 +119,5 @@ If you need env defaults, startup scripts, or path details, continue to [Lite Co
 - [Architecture Overview](../architecture/overview.md)
 - [Contracts and Routes](../reference/contracts-and-routes.md)
 - [Review Runtime](../reference/review-runtime.md)
+- [Policy Memory and Evolution](../reference/policy-memory.md)
 - [FAQ and Troubleshooting](../faq-and-troubleshooting.md)

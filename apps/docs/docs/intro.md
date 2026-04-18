@@ -100,6 +100,7 @@ In Aionis, self-evolving means that later execution can be informed by earlier e
 2. a paused task can be resumed from structured handoff state
 3. successful runs can be replayed, compiled, and promoted into reusable playbooks
 4. memory lifecycle routes can rehydrate useful nodes and record activation feedback
+5. stable feedback can materialize policy memory that later review and governance can inspect or retire
 
 The system improves because continuity is persisted and reused, not because the product merely promises "AI memory".
 

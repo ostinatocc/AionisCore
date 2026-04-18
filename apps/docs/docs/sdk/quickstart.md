@@ -30,8 +30,8 @@ This is the fastest path from zero to a working `@ostinato/aionis` integration w
   <div class="reference-tile">
     <span class="reference-kicker">Enhanced path</span>
     <h3>Reuse and review</h3>
-    <p>Use lifecycle reuse, review packs, and sessions when you need to reactivate useful memory, record reuse quality, and inspect continuity over time.</p>
-    <code class="reference-route">rehydrate -> activate -> reviewPacks -> sessions</code>
+    <p>Use lifecycle reuse, review packs, policy memory, and sessions when you need to reactivate useful memory, record reuse quality, and inspect self-improvement over time.</p>
+    <code class="reference-route">rehydrate -> activate -> reviewPacks -> policy-memory -> sessions</code>
   </div>
   <div class="reference-tile">
     <span class="reference-kicker">Advanced path</span>
@@ -347,6 +347,26 @@ await aionis.memory.reviewPacks.continuity({
 
 This is useful when continuity quality needs human review rather than only runtime reuse.
 
+You can also pull the evolution-oriented review surface:
+
+```ts
+const evolutionPack = await aionis.memory.reviewPacks.evolution({
+  tenant_id: "default",
+  scope: "docs-sdk-quickstart",
+  query_text: "repair billing retry timeout in service code",
+  context: {
+    goal: "repair billing retry timeout in service code",
+    task_kind: "repair_billing_retry",
+  },
+  tool_candidates: ["bash", "edit", "test"],
+});
+
+console.log(evolutionPack.evolution_review_pack.evolution_inspect);
+console.log(evolutionPack.evolution_review_pack.policy_governance_contract);
+```
+
+That step is where the docs path starts to expose self-evolving policy rather than only continuity artifacts.
+
 ### 12. Add a session when continuity spans time
 
 When continuity needs to persist beyond one answer or one handoff packet, move into the session family:
@@ -409,6 +429,7 @@ When the core and enhanced paths already work, the next valuable surfaces are:
 - `memory.delegationRecords.*`
 - `memory.tools.*`
 - `memory.rules.*`
+- `memory.policies.governanceApply(...)`
 - `memory.patterns.*`
 - `memory.anchors.rehydratePayload(...)`
 

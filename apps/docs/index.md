@@ -31,7 +31,7 @@ features:
   - title: Typed SDK, stable routes
     details: Integrate against a typed TypeScript surface and explicit HTTP routes for kickoff, recall, replay, sandbox, and review.
   - title: Runs locally today
-    details: SQLite-backed persistence, memory lifecycle routes, sandbox execution, and automation — all in the public Lite distribution.
+    details: SQLite-backed persistence, memory lifecycle routes, policy memory, sandbox execution, and automation — all in the public Lite distribution.
   - title: Inspectable by design
     details: Runtime shell, assembly, host, kernel, and stores live in separate seams — continuity is not hidden inside a prompt.
 ---

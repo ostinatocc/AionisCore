@@ -12,6 +12,7 @@ Use this section when you already understand the product shape and need route-le
   <p>This section is the bridge between product docs and raw repository contracts. Use it when you need to know which public surface exists, which route backs it, and where the literal source of truth lives.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">Memory</span>
+    <span class="doc-chip">Policy memory</span>
     <span class="doc-chip">Handoff</span>
     <span class="doc-chip">Replay</span>
     <span class="doc-chip">Automation + sandbox</span>
@@ -25,6 +26,12 @@ Use this section when you already understand the product shape and need route-le
     <h3>Memory</h3>
     <span class="reference-route">/v1/memory/*</span>
     <p>Write, recall, planning, task start, lifecycle reuse, sessions, tools, and review helpers.</p>
+  </a>
+  <a class="reference-tile" href="./policy-memory.md">
+    <span class="reference-kicker">Cross-cutting surface</span>
+    <h3>Policy Memory</h3>
+    <span class="reference-route">feedback -> experience -> review -> governance</span>
+    <p>Persisted policy contracts, evolution inspect, and the retire/reactivate governance path.</p>
   </a>
   <a class="reference-tile" href="./handoff.md">
     <span class="reference-kicker">Route family</span>
@@ -68,6 +75,7 @@ Use this section when you already understand the product shape and need route-le
 Start with the page that matches the runtime surface you are integrating:
 
 - [Memory](./memory.md)
+- [Policy Memory and Evolution](./policy-memory.md)
 - [Handoff](./handoff.md)
 - [Replay and Playbooks](./replay-and-playbooks.md)
 - [Review Runtime](./review-runtime.md)
@@ -81,6 +89,11 @@ Start with the page that matches the runtime surface you are integrating:
     <span class="doc-kicker">Reference family</span>
     <h3>Memory</h3>
     <p>Write, recall, planning, task start, sessions, tools, review packs, and delegation-learning helpers.</p>
+  </a>
+  <a class="doc-card" href="./policy-memory.md">
+    <span class="doc-kicker">Cross-cutting surface</span>
+    <h3>Policy Memory and Evolution</h3>
+    <p>Read how feedback can materialize policy memory, how review exposes evolution inspect, and how governance retires or reactivates learned policy.</p>
   </a>
   <a class="doc-card" href="./handoff.md">
     <span class="doc-kicker">Reference family</span>
@@ -113,6 +126,7 @@ For most integrations, you should not need to start from raw TypeScript files.
 | Family | Main job | Start here |
 | --- | --- | --- |
 | Memory | Write, recall, planning, task start, sessions, lifecycle | [Memory](./memory.md) |
+| Policy memory | Persist, inspect, and govern self-evolving policy state | [Policy Memory and Evolution](./policy-memory.md) |
 | Handoff | Pause, store, recover, and resume task state | [Handoff](./handoff.md) |
 | Replay | Record runs, compile playbooks, promote and reuse | [Replay and Playbooks](./replay-and-playbooks.md) |
 | Review | Build continuity/evolution review material and review replay repairs | [Review Runtime](./review-runtime.md) |
@@ -126,6 +140,7 @@ For most integrations, you should not need to start from raw TypeScript files.
 | If you are trying to answer... | Read this page first |
 | --- | --- |
 | "How do I ask for a better first action?" | [Memory](./memory.md) |
+| "How do I inspect or govern self-evolving policy state?" | [Policy Memory and Evolution](./policy-memory.md) |
 | "How do I pause work and resume it later?" | [Handoff](./handoff.md) |
 | "How do I turn a successful run into something reusable?" | [Replay and Playbooks](./replay-and-playbooks.md) |
 | "How do I validate or run an automation graph?" | [Automation](../runtime/automation.md) |

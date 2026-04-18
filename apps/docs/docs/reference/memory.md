@@ -14,6 +14,7 @@ The memory surface is the widest part of the public SDK. It covers write, recall
     <span class="doc-chip">Write + recall</span>
     <span class="doc-chip">Planning context</span>
     <span class="doc-chip">Lifecycle reuse</span>
+    <span class="doc-chip">Policy memory</span>
     <span class="doc-chip">Review material</span>
   </div>
 </div>
@@ -50,6 +51,12 @@ The memory surface is the widest part of the public SDK. It covers write, recall
     <code class="reference-route">/v1/memory/*review*</code>
   </div>
   <div class="reference-tile">
+    <span class="reference-kicker">Evolution</span>
+    <h3>Policy memory</h3>
+    <p>Persist stable tool policy, read it back through experience intelligence, and govern whether it stays active.</p>
+    <code class="reference-route">/v1/memory/tools/* + /v1/memory/policies/*</code>
+  </div>
+  <div class="reference-tile">
     <span class="reference-kicker">Sessions + helpers</span>
     <h3>Longer-lived continuity</h3>
     <p>Carry memory across sessions, packs, delegation records, rules, tools, and pattern-level helper surfaces.</p>
@@ -82,13 +89,15 @@ flowchart LR
     C --> E["planningContext / taskStart"]
     C --> F["review packs / execution introspection"]
     C --> G["archive.rehydrate / nodes.activate"]
+    C --> H["tools.feedback -> policy memory"]
+    H --> I["experience intelligence / governance"]
 ```
 
 Memory in Aionis is useful because later runtime paths can build on it. It is not only a storage bucket.
 
 ## Core memory families
 
-The public memory surface breaks down into seven practical groups:
+The public memory surface breaks down into eight practical groups:
 
 1. write and recall
 2. archive rehydrate and node activation lifecycle
@@ -96,7 +105,8 @@ The public memory surface breaks down into seven practical groups:
 4. task start and experience intelligence
 5. sessions, packs, find, and resolve
 6. rules, tools, patterns, and payload rehydration
-7. review packs and delegation-learning support
+7. policy memory, evolution review, and governance
+8. review packs and delegation-learning support
 
 <div class="section-frame">
   <span class="doc-kicker">Decision frame</span>
@@ -129,6 +139,9 @@ The public memory surface breaks down into seven practical groups:
 | `memory.experienceIntelligence(...)` | `POST /v1/memory/experience/intelligence` | Inspect learned workflow and tool guidance |
 | `memory.taskStart(...)` | `POST /v1/memory/kickoff/recommendation` | Get the best first action for a repeated task |
 | `memory.executionIntrospect(...)` | `POST /v1/memory/execution/introspect` | Pull the heavier local introspection surface |
+| `memory.tools.feedback(...)` | `POST /v1/memory/tools/feedback` | Record tool outcome and potentially materialize policy memory |
+| `memory.reviewPacks.evolution(...)` | `POST /v1/memory/evolution/review-pack` | Review evolution state, policy review, and governance contracts |
+| `memory.policies.governanceApply(...)` | `POST /v1/memory/policies/governance/apply` | Retire or reactivate a persisted policy memory |
 
 ## Minimal write example
 
@@ -227,6 +240,20 @@ These lifecycle calls matter because they let Lite distinguish between:
 - memory that proved useful when reused
 
 That is one of the main reasons the runtime can plausibly claim self-evolving continuity rather than static storage.
+
+## Policy memory and evolution
+
+The newest self-evolving surface in public Lite is policy memory.
+
+This is the loop:
+
+1. `memory.tools.feedback(...)` records whether a tool decision worked
+2. stable pattern and workflow evidence can materialize a persisted policy memory
+3. `memory.experienceIntelligence(...)` can read that memory back as a live `policy_contract`
+4. `memory.executionIntrospect(...)` and `memory.reviewPacks.evolution(...)` can inspect it
+5. `memory.policies.governanceApply(...)` can retire or reactivate it
+
+If you want the fuller walkthrough, read [Policy Memory and Evolution](./policy-memory.md).
 
 ## Sessions and review-oriented helpers
 
