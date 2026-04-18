@@ -364,10 +364,13 @@ function buildDemoSurface(args: {
     ...args.recommendedWorkflows.slice(0, 6).map((entry) => {
       const title = entry.title ?? entry.summary ?? entry.anchor_id;
       const tools = Array.isArray(entry.tool_set) && entry.tool_set.length > 0 ? `; tools=${entry.tool_set.join(", ")}` : "";
+      const distillation = entry.distillation_origin
+        ? `; distillation=${entry.distillation_origin}; target=${entry.preferred_promotion_target ?? "unknown"}`
+        : "";
       const projection = entry.projection_generated_by
         ? `; projection=${entry.projection_generated_by}; source_node=${entry.projection_source_node_id ?? "unknown"}`
         : "";
-      return `stable workflow: ${title}; source=${entry.source_kind ?? "unknown"}${tools}${projection}; transition=${entry.last_transition ?? "unknown"}; maintenance=${entry.maintenance_state ?? "unknown"}`;
+      return `stable workflow: ${title}; source=${entry.source_kind ?? "unknown"}${distillation}${tools}${projection}; transition=${entry.last_transition ?? "unknown"}; maintenance=${entry.maintenance_state ?? "unknown"}`;
     }),
     ...args.candidateWorkflows.slice(0, 6).map((entry) => {
       const title = entry.title ?? entry.summary ?? entry.anchor_id;
@@ -378,11 +381,14 @@ function buildDemoSurface(args: {
         ? `observed=${entry.observed_count}/${entry.required_observations}`
         : "observed=unknown";
       const source = entry.source_kind ? `; source=${entry.source_kind}` : "";
+      const distillation = entry.distillation_origin
+        ? `; distillation=${entry.distillation_origin}; target=${entry.preferred_promotion_target ?? "unknown"}`
+        : "";
       const tools = Array.isArray(entry.tool_set) && entry.tool_set.length > 0 ? `; tools=${entry.tool_set.join(", ")}` : "";
       const projection = entry.projection_generated_by
         ? `; projection=${entry.projection_generated_by}; source_node=${entry.projection_source_node_id ?? "unknown"}`
         : "";
-      return `candidate workflow: ${title}; ${observed}${source}${tools}${projection}; promotion=${entry.promotion_ready ? "ready" : "observing"}; maintenance=${entry.maintenance_state ?? "unknown"}`;
+      return `candidate workflow: ${title}; ${observed}${source}${distillation}${tools}${projection}; promotion=${entry.promotion_ready ? "ready" : "observing"}; maintenance=${entry.maintenance_state ?? "unknown"}`;
     }),
   ];
   const patternLines = [

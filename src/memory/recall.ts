@@ -163,6 +163,8 @@ type ActionRecallWorkflow = {
   anchor_level: string;
   promotion_state: "candidate" | "stable" | null;
   source_kind: string | null;
+  distillation_origin: string | null;
+  preferred_promotion_target: "workflow" | "pattern" | "policy" | null;
   promotion_origin: "replay_promote" | "replay_stable_normalization" | "replay_learning_episode" | "replay_learning_auto_promotion" | null;
   required_observations: number | null;
   observed_count: number | null;
@@ -401,6 +403,7 @@ function buildActionRecallPacket(args: {
       : null;
     actionAnchorIds.add(node.id);
     if (anchorKind === "workflow") {
+      const distillation = asRecord(meta.executionNative?.distillation ?? anchor?.distillation);
       const workflowEntry: ActionRecallWorkflow = {
         anchor_id: node.id,
         uri,
@@ -414,6 +417,8 @@ function buildActionRecallPacket(args: {
           workflowPromotion: meta.workflowPromotion,
           executionKind: meta.executionKind,
         }),
+        distillation_origin: firstString(distillation?.distillation_origin),
+        preferred_promotion_target: firstString(distillation?.preferred_promotion_target) as any,
         promotion_origin: firstString(meta.workflowPromotion?.promotion_origin) as any,
         required_observations: firstFinite(meta.workflowPromotion?.required_observations),
         observed_count: firstFinite(meta.workflowPromotion?.observed_count),

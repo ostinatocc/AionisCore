@@ -302,6 +302,21 @@ test("handoff/store projects workflow memory into planner guidance through the g
     assert.equal(firstBody.planner_packet.sections.candidate_workflows.length, 1);
     assert.equal(firstBody.planner_packet.sections.recommended_workflows.length, 0);
     assert.equal(firstBody.workflow_signals[0]?.promotion_ready, false);
+    assert.equal(firstBody.planning_summary.distillation_signal_summary.origin_counts.handoff_continuity_carrier, 1);
+    assert.match(firstBody.planner_packet.sections.candidate_workflows[0] ?? "", /distillation=handoff_continuity_carrier/i);
+    const projectedRows = await liteWriteStore.findExecutionNativeNodes({
+      scope: "default",
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      executionKind: "workflow_candidate",
+      limit: 8,
+      offset: 0,
+    });
+    assert.equal(projectedRows.rows.length, 1);
+    assert.equal(
+      (projectedRows.rows[0]?.slots?.execution_native_v1 as any)?.distillation?.distillation_origin,
+      "handoff_continuity_carrier",
+    );
 
     const secondStore = await app.inject({
       method: "POST",
@@ -350,6 +365,7 @@ test("handoff/store projects workflow memory into planner guidance through the g
     assert.equal(introspectBody.candidate_workflows.length, 0);
     assert.equal(introspectBody.continuity_carrier_summary.handoff_count, 2);
     assert.equal(introspectBody.continuity_carrier_summary.session_event_count, 0);
+    assert.ok(introspectBody.demo_surface.sections.workflows.some((line) => line.includes("distillation=handoff_continuity_carrier")));
     assert.match(introspectBody.demo_surface.merged_text, /Fix export failure/i);
   } finally {
     await app.close();

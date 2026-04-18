@@ -462,6 +462,7 @@ function buildPlannerPacketText(packet: ReturnType<typeof normalizeActionRecallP
       String(entry?.title || "").trim() || String(entry?.summary || "").trim() || null,
       String(entry?.anchor_id || "").trim() ? `anchor=${String(entry.anchor_id).trim()}` : null,
       String(entry?.source_kind || "").trim() ? `source=${String(entry.source_kind).trim()}` : null,
+      String(entry?.distillation_origin || "").trim() ? `distillation=${String(entry.distillation_origin).trim()}` : null,
       Array.isArray(entry?.tool_set) && entry.tool_set.length > 0 ? `tools=${entry.tool_set.join(", ")}` : null,
       String(entry?.anchor_level || "").trim() ? `level=${String(entry.anchor_level).trim()}` : null,
       String(entry?.last_transition || "").trim() ? `transition=${String(entry.last_transition).trim()}` : null,
@@ -474,6 +475,7 @@ function buildPlannerPacketText(packet: ReturnType<typeof normalizeActionRecallP
       String(entry?.title || "").trim() || String(entry?.summary || "").trim() || null,
       String(entry?.anchor_id || "").trim() ? `anchor=${String(entry.anchor_id).trim()}` : null,
       String(entry?.source_kind || "").trim() ? `source=${String(entry.source_kind).trim()}` : null,
+      String(entry?.distillation_origin || "").trim() ? `distillation=${String(entry.distillation_origin).trim()}` : null,
       Array.isArray(entry?.tool_set) && entry.tool_set.length > 0 ? `tools=${entry.tool_set.join(", ")}` : null,
       String(entry?.anchor_level || "").trim() ? `level=${String(entry.anchor_level).trim()}` : null,
       Number.isFinite(Number(entry?.observed_count)) && Number.isFinite(Number(entry?.required_observations))

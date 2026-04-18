@@ -121,5 +121,7 @@ test("replay-learning projection artifacts auto-promote to stable workflow when 
   assert.equal(workflow?.slots?.execution_native_v1?.workflow_promotion?.promotion_state, "stable");
   assert.equal(workflow?.slots?.execution_native_v1?.workflow_promotion?.observed_count, 2);
   assert.equal(workflow?.slots?.execution_native_v1?.workflow_promotion?.required_observations, 2);
+  assert.equal(workflow?.slots?.execution_native_v1?.distillation?.distillation_origin, "replay_learning_episode");
+  assert.equal(workflow?.slots?.execution_native_v1?.distillation?.preferred_promotion_target, "workflow");
   assert.ok(plan.edges.some((edge) => (edge as any).src?.client_id === plan.workflowClientId && (edge as any).dst?.client_id === plan.episodeClientId));
 });

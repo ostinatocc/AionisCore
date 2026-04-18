@@ -368,6 +368,9 @@ export const MemoryDistillationOrigin = z.enum([
   "write_distillation_event_node",
   "write_distillation_evidence_node",
   "execution_write_projection",
+  "handoff_continuity_carrier",
+  "session_event_continuity_carrier",
+  "session_continuity_carrier",
   "replay_learning_episode",
 ]);
 
@@ -376,6 +379,9 @@ export const MemoryDistillationTransitionKind = z.enum([
   "distilled_from_event_node",
   "distilled_from_evidence_node",
   "projected_from_execution_write",
+  "projected_from_handoff_carrier",
+  "projected_from_session_event_carrier",
+  "projected_from_session_carrier",
   "projected_from_replay_learning",
 ]);
 
@@ -1305,6 +1311,9 @@ export const DistillationSignalSummarySchema = z.object({
     write_distillation_event_node: z.number().int().min(0),
     write_distillation_evidence_node: z.number().int().min(0),
     execution_write_projection: z.number().int().min(0),
+    handoff_continuity_carrier: z.number().int().min(0),
+    session_event_continuity_carrier: z.number().int().min(0),
+    session_continuity_carrier: z.number().int().min(0),
     replay_learning_episode: z.number().int().min(0),
   }),
   promotion_target_counts: z.object({

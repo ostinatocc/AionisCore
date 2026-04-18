@@ -152,8 +152,11 @@ test("replayPlaybookPromote writes workflow anchor payload onto stable playbook 
     assert.equal(promoted.slots.compression_layer, "L2");
     assert.equal(promoted.slots.anchor_v1.anchor_kind, "workflow");
     assert.equal(promoted.slots.anchor_v1.anchor_level, "L2");
+    assert.equal(promoted.slots.execution_native_v1.execution_kind, "workflow_anchor");
+    assert.equal(promoted.slots.execution_native_v1.summary_kind, "workflow_anchor");
     assert.equal(promoted.slots.anchor_v1.maintenance.maintenance_state, "retain");
     assert.equal(promoted.slots.anchor_v1.maintenance.offline_priority, "retain_workflow");
+    assert.equal(promoted.slots.execution_native_v1.workflow_promotion.promotion_origin, "replay_promote");
     assert.equal(promoted.slots.anchor_v1.workflow_promotion.promotion_state, "stable");
     assert.equal(promoted.slots.anchor_v1.workflow_promotion.promotion_origin, "replay_promote");
     assert.equal(promoted.slots.anchor_v1.workflow_promotion.last_transition, "promoted_to_stable");
@@ -932,6 +935,72 @@ test("replayPlaybookPromote normalizes latest stable playbooks onto workflow anc
     assert.equal(beforeVersions.length, 1);
     assert.equal(beforeVersions[0]?.slots.anchor_v1, undefined);
 
+    const seededRows = await liteWriteStore.findNodes({
+      scope: "default",
+      id: sourceNodeId,
+      consumerAgentId: null,
+      consumerTeamId: null,
+      limit: 1,
+      offset: 0,
+    });
+    const seededNode = seededRows.rows[0];
+    assert.ok(seededNode);
+    const seededSlots = {
+      ...(seededNode.slots ?? {}),
+      execution_native_v1: {
+        schema_version: "execution_native_v1",
+        execution_kind: "workflow_anchor",
+        summary_kind: "workflow_anchor",
+        compression_layer: "L2",
+        task_signature: `replay_playbook:${playbookId}`,
+        workflow_signature: `replay_workflow:${playbookId}`,
+        anchor_kind: "workflow",
+        anchor_level: "L2",
+        workflow_promotion: {
+          promotion_state: "stable",
+          promotion_origin: "replay_promote",
+          last_transition: "promoted_to_stable",
+          last_transition_at: "2026-03-20T00:00:00Z",
+          source_status: "active",
+        },
+        maintenance: {
+          model: "lazy_online_v1",
+          maintenance_state: "retain",
+          offline_priority: "retain_workflow",
+          lazy_update_fields: ["usage_count", "last_used_at"],
+          last_maintenance_at: "2026-03-20T00:00:00Z",
+        },
+        rehydration: {
+          default_mode: "partial",
+          payload_cost_hint: "low",
+          recommended_when: ["workflow_summary_is_not_enough"],
+        },
+        distillation: {
+          abstraction_state: "distilled",
+          distillation_origin: "replay_learning_episode",
+          source_kind: "replay_learning",
+          preferred_promotion_target: "workflow",
+          extraction_pattern: null,
+          source_node_id: sourceNodeId,
+          source_evidence_node_id: null,
+          has_execution_signature: false,
+          last_transition: "projected_from_replay_learning",
+          last_transition_at: "2026-03-20T00:00:00Z",
+        },
+      },
+    };
+    const updatedSeed = await liteWriteStore.updateNodeAnchorState({
+      scope: "default",
+      id: sourceNodeId,
+      slots: seededSlots,
+      textSummary: seededNode.text_summary,
+      salience: seededNode.salience,
+      importance: seededNode.importance,
+      confidence: seededNode.confidence,
+      commitId: seededNode.commit_id,
+    });
+    assert.ok(updatedSeed);
+
     const out = await replayPlaybookPromote({} as any, {
       tenant_id: "default",
       scope: "default",
@@ -972,8 +1041,12 @@ test("replayPlaybookPromote normalizes latest stable playbooks onto workflow anc
     assert.equal(latestNode.embedding_status, "ready");
     assert.equal(latestNode.slots.summary_kind, "workflow_anchor");
     assert.equal(latestNode.slots.anchor_v1.anchor_kind, "workflow");
+    assert.equal(latestNode.slots.execution_native_v1.execution_kind, "workflow_anchor");
     assert.equal(latestNode.slots.anchor_v1.workflow_promotion.promotion_origin, "replay_stable_normalization");
     assert.equal(latestNode.slots.anchor_v1.workflow_promotion.last_transition, "normalized_latest_stable");
+    assert.equal(latestNode.slots.execution_native_v1.workflow_promotion.promotion_origin, "replay_stable_normalization");
+    assert.equal(latestNode.slots.execution_native_v1.distillation.distillation_origin, "replay_learning_episode");
+    assert.equal(latestNode.slots.execution_native_v1.distillation.preferred_promotion_target, "workflow");
     assert.equal(latestNode.slots.anchor_v1.source.playbook_id, playbookId);
     assert.deepEqual(latestNode.slots.anchor_v1.payload_refs.node_ids, [sourceNodeId]);
     assert.equal(latestNode.slots.semantic_forgetting_v1.action, "retain");

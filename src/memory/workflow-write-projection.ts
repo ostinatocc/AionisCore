@@ -228,6 +228,19 @@ function deriveTaskFamilyFromSource(source: WriteProjectionSourceNode): string |
   return firstString(slots?.task_family) ?? firstString(slots?.task_kind);
 }
 
+function resolveWorkflowProjectionDistillationSourceKind(
+  source: WriteProjectionSourceNode,
+): "execution_projection" | "handoff_carrier" | "session_event_carrier" | "session_carrier" {
+  const slots = asRecord(source.slots);
+  const summaryKind = firstString(slots?.summary_kind);
+  if (summaryKind === "handoff") return "handoff_carrier";
+
+  const systemKind = firstString(slots?.system_kind);
+  if (systemKind === "session_event") return "session_event_carrier";
+  if (systemKind === "session") return "session_carrier";
+  return "execution_projection";
+}
+
 function deriveCandidateTitle(
   source: WriteProjectionSourceNode,
   state: ExecutionStateV1 | null,
@@ -585,6 +598,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
     const filePath = firstString(packet?.resume_anchor?.file_path ?? null) ?? targetFiles[0] ?? null;
     const nextAction = firstString(packet?.next_action ?? null);
     const toolSet = deriveWorkflowToolSet(state, packet);
+    const distillationSourceKind = resolveWorkflowProjectionDistillationSourceKind(source);
 
     const executionNative = ExecutionNativeV1Schema.parse({
       schema_version: "execution_native_v1",
@@ -609,7 +623,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         at: now,
       }),
       distillation: buildDistillationMetadata({
-        source_kind: "execution_projection",
+        source_kind: distillationSourceKind,
         distillation_kind: "workflow_candidate",
         at: now,
         source_node_id: source.id,
@@ -741,6 +755,12 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
             workflow_promotion: stableAnchor.workflow_promotion,
             maintenance: stableAnchor.maintenance,
             rehydration: stableAnchor.rehydration,
+            distillation: buildDistillationMetadata({
+              source_kind: distillationSourceKind,
+              distillation_kind: "workflow_candidate",
+              at: now,
+              source_node_id: source.id,
+            }),
           },
           workflow_write_projection: {
             generated_by: "execution_write_projection_v1",

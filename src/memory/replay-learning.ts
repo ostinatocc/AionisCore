@@ -471,6 +471,12 @@ export function buildReplayLearningProjectionArtifacts(args: {
           workflow_promotion: workflowAnchor.workflow_promotion,
           maintenance: workflowAnchor.maintenance,
           rehydration: workflowAnchor.rehydration,
+          distillation: buildDistillationMetadata({
+            source_kind: "replay_learning",
+            distillation_kind: "workflow_candidate",
+            at: args.projectedAt,
+            source_node_id: args.source.playbook_node_id,
+          }),
         },
         replay_learning: {
           generated_by: "replay_learning_v1",

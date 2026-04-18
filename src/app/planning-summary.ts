@@ -176,6 +176,9 @@ export type DistillationSignalSummary = {
     write_distillation_event_node: number;
     write_distillation_evidence_node: number;
     execution_write_projection: number;
+    handoff_continuity_carrier: number;
+    session_event_continuity_carrier: number;
+    session_continuity_carrier: number;
     replay_learning_episode: number;
   };
   promotion_target_counts: {
@@ -1997,7 +2000,11 @@ export function summarizeDistillationSignalSurface(surface: PlannerPacketSummary
   const factEntries = safeRecordArray(supportingKnowledge).filter((entry) => entry.summary_kind === "write_distillation_fact");
   const projectedCandidates = safeRecordArray(candidateWorkflows).filter((entry) => {
     const origin = typeof entry.distillation_origin === "string" ? entry.distillation_origin.trim() : "";
-    return origin === "execution_write_projection" || origin === "replay_learning_episode";
+    return origin === "execution_write_projection"
+      || origin === "handoff_continuity_carrier"
+      || origin === "session_event_continuity_carrier"
+      || origin === "session_continuity_carrier"
+      || origin === "replay_learning_episode";
   });
   const allEntries = [...evidenceEntries, ...factEntries, ...projectedCandidates];
 
@@ -2006,6 +2013,9 @@ export function summarizeDistillationSignalSurface(surface: PlannerPacketSummary
     write_distillation_event_node: 0,
     write_distillation_evidence_node: 0,
     execution_write_projection: 0,
+    handoff_continuity_carrier: 0,
+    session_event_continuity_carrier: 0,
+    session_continuity_carrier: 0,
     replay_learning_episode: 0,
   };
   const promotionTargetCounts: DistillationSignalSummary["promotion_target_counts"] = {

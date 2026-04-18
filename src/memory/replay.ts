@@ -47,6 +47,7 @@ import {
   ReplayRunStartRequest,
   ReplayStepAfterRequest,
   ReplayStepBeforeRequest,
+  ExecutionNativeV1Schema,
   MemoryAnchorV1Schema,
   MemoryPromoteRequest,
   type ReplayRepairReviewGovernanceDecisionTrace,
@@ -563,11 +564,30 @@ async function buildStablePlaybookNodeFields(args: {
     sourceCommitId: args.sourceCommitId,
     slots: args.slots,
   });
+  const existingExecutionNative = asObject(asObject(args.slots)?.execution_native_v1);
+  const existingDistillation = asObject(existingExecutionNative?.distillation);
+  const executionNative = ExecutionNativeV1Schema.parse({
+    schema_version: "execution_native_v1",
+    execution_kind: "workflow_anchor",
+    summary_kind: "workflow_anchor",
+    compression_layer: "L2",
+    task_signature: anchor.task_signature,
+    task_class: anchor.task_class,
+    workflow_signature: anchor.workflow_signature,
+    anchor_kind: "workflow",
+    anchor_level: "L2",
+    tool_set: anchor.tool_set,
+    workflow_promotion: anchor.workflow_promotion,
+    maintenance: anchor.maintenance,
+    rehydration: anchor.rehydration,
+    ...(existingDistillation ? { distillation: existingDistillation } : {}),
+  });
   const slots = {
     ...args.slots,
     summary_kind: "workflow_anchor",
     compression_layer: "L2",
     anchor_v1: anchor,
+    execution_native_v1: executionNative,
   };
   const embedText = `${args.title}\n${anchor.summary}\n${anchor.tool_set.join(" ")}\n${anchor.task_signature}`;
   if (!args.embedder) {

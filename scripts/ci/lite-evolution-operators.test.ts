@@ -204,3 +204,26 @@ test("distillation operators map projected workflow candidates to workflow promo
   assert.equal(replay.last_transition, "projected_from_replay_learning");
   assert.equal(replay.preferred_promotion_target, "workflow");
 });
+
+test("distillation operators preserve continuity carrier provenance for workflow candidates", () => {
+  const at = "2026-04-18T12:00:00.000Z";
+  const handoff = buildDistillationMetadata({
+    source_kind: "handoff_carrier",
+    distillation_kind: "workflow_candidate",
+    at,
+    source_node_id: "handoff-1",
+  });
+  const sessionEvent = buildDistillationMetadata({
+    source_kind: "session_event_carrier",
+    distillation_kind: "workflow_candidate",
+    at,
+    source_node_id: "session-event-1",
+  });
+
+  assert.equal(handoff.distillation_origin, "handoff_continuity_carrier");
+  assert.equal(handoff.last_transition, "projected_from_handoff_carrier");
+  assert.equal(handoff.preferred_promotion_target, "workflow");
+  assert.equal(sessionEvent.distillation_origin, "session_event_continuity_carrier");
+  assert.equal(sessionEvent.last_transition, "projected_from_session_event_carrier");
+  assert.equal(sessionEvent.preferred_promotion_target, "workflow");
+});

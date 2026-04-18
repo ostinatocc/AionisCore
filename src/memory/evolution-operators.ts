@@ -325,9 +325,20 @@ export function buildPatternPromotionMetadata(args: {
 }
 
 export function resolveDistillationOrigin(
-  sourceKind: "input_text" | "event_nodes" | "evidence_nodes" | "execution_projection" | "replay_learning",
+  sourceKind:
+    | "input_text"
+    | "event_nodes"
+    | "evidence_nodes"
+    | "execution_projection"
+    | "handoff_carrier"
+    | "session_event_carrier"
+    | "session_carrier"
+    | "replay_learning",
 ): DistillationOrigin {
   if (sourceKind === "execution_projection") return "execution_write_projection";
+  if (sourceKind === "handoff_carrier") return "handoff_continuity_carrier";
+  if (sourceKind === "session_event_carrier") return "session_event_continuity_carrier";
+  if (sourceKind === "session_carrier") return "session_continuity_carrier";
   if (sourceKind === "replay_learning") return "replay_learning_episode";
   if (sourceKind === "event_nodes") return "write_distillation_event_node";
   if (sourceKind === "evidence_nodes") return "write_distillation_evidence_node";
@@ -335,9 +346,20 @@ export function resolveDistillationOrigin(
 }
 
 export function resolveDistillationTransition(
-  sourceKind: "input_text" | "event_nodes" | "evidence_nodes" | "execution_projection" | "replay_learning",
+  sourceKind:
+    | "input_text"
+    | "event_nodes"
+    | "evidence_nodes"
+    | "execution_projection"
+    | "handoff_carrier"
+    | "session_event_carrier"
+    | "session_carrier"
+    | "replay_learning",
 ): DistillationTransitionKind {
   if (sourceKind === "execution_projection") return "projected_from_execution_write";
+  if (sourceKind === "handoff_carrier") return "projected_from_handoff_carrier";
+  if (sourceKind === "session_event_carrier") return "projected_from_session_event_carrier";
+  if (sourceKind === "session_carrier") return "projected_from_session_carrier";
   if (sourceKind === "replay_learning") return "projected_from_replay_learning";
   if (sourceKind === "event_nodes") return "distilled_from_event_node";
   if (sourceKind === "evidence_nodes") return "distilled_from_evidence_node";
@@ -375,7 +397,15 @@ export function buildDistillationMaintenanceMetadata(args: {
 }
 
 export function buildDistillationMetadata(args: {
-  source_kind: "input_text" | "event_nodes" | "evidence_nodes" | "execution_projection" | "replay_learning";
+  source_kind:
+    | "input_text"
+    | "event_nodes"
+    | "evidence_nodes"
+    | "execution_projection"
+    | "handoff_carrier"
+    | "session_event_carrier"
+    | "session_carrier"
+    | "replay_learning";
   distillation_kind: "write_distillation_evidence" | "write_distillation_fact" | "workflow_candidate";
   at: string;
   extraction_pattern?: string | null;
