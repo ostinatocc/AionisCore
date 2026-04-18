@@ -1,7 +1,7 @@
 ---
 layout: home
 title: Aionis Runtime
-titleTemplate: Local continuity runtime for coding agents
+titleTemplate: Self-evolving continuity runtime for agent systems
 
 hero:
   name: Aionis Runtime
@@ -48,7 +48,7 @@ features:
 </div>
 
 <div class="home-proof-section">
-  <span class="home-demo-caption">Observed proof from live Lite runs on 2026-04-18</span>
+  <span class="home-demo-caption">Observed proof from six live Lite runs on 2026-04-18</span>
   <div class="home-proof-runbook">
     <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
       <span class="home-proof-runbook-label">Demo 1</span>
@@ -84,6 +84,13 @@ features:
       <p>Repeated session state now counts as distinct workflow observations instead of depending on an event-only path.</p>
       <div class="home-proof-metric"><code>distillation=session_continuity_carrier</code></div>
       <div class="home-proof-code"><code>observed_count = 2</code></div>
+    </a>
+    <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
+      <span class="home-proof-runbook-label">Demo 6</span>
+      <h3>Semantic forgetting cooled memory without deleting it</h3>
+      <p>Archived workflow memory now surfaces lifecycle decay, cold relocation, and differential payload restore instead of silently disappearing.</p>
+      <div class="home-proof-metric"><code>semantic_forgetting.action = "archive"</code></div>
+      <div class="home-proof-code"><code>rehydration_mode = "differential"</code></div>
     </a>
   </div>
 </div>

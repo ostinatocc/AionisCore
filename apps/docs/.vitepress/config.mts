@@ -7,7 +7,7 @@ const asset = (path: string) => `${base}${path}`;
 
 export default withMermaid(defineConfig({
   title: "Aionis Runtime",
-  description: "Local continuity runtime for coding agents",
+  description: "Self-evolving continuity runtime for agent systems",
   lang: "en-US",
   base,
   cleanUrls: true,
@@ -16,7 +16,7 @@ export default withMermaid(defineConfig({
     ["link", { rel: "icon", href: asset("favicon.svg") }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:title", content: "Aionis Runtime Docs" }],
-    ["meta", { property: "og:description", content: "Local continuity runtime for coding agents" }],
+    ["meta", { property: "og:description", content: "Self-evolving continuity runtime for agent systems" }],
     ["meta", { property: "og:image", content: asset("social-card.svg") }],
   ],
   themeConfig: {
@@ -28,7 +28,7 @@ export default withMermaid(defineConfig({
       { text: "Quickstart", link: "/docs/getting-started" },
       { text: "SDK", link: "/docs/sdk/quickstart" },
       { text: "Reference", link: "/docs/reference/contracts-and-routes" },
-      { text: "v0.1.0 · Lite", link: "/docs/runtime/lite-runtime" },
+      { text: "Lite Runtime", link: "/docs/runtime/lite-runtime" },
       { text: "GitHub", link: repo },
     ],
     search: {
@@ -42,7 +42,7 @@ export default withMermaid(defineConfig({
       text: "Edit this page on GitHub",
     },
     footer: {
-      message: "Local continuity runtime for coding agents",
+      message: "Self-evolving continuity runtime for agent systems",
       copyright: `Copyright © ${new Date().getFullYear()} Aionis Runtime`,
     },
     sidebar: {
