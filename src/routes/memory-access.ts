@@ -6,6 +6,12 @@ import type { EmbeddingProvider } from "../embeddings/types.js";
 import { buildLiteGovernanceRuntimeProviders } from "../app/governance-runtime-providers.js";
 import { memoryFindLite } from "../memory/find.js";
 import {
+  buildAgentMemoryHandoffPackLite,
+  buildAgentMemoryInspectLite,
+  buildAgentMemoryReviewPackLite,
+  buildAgentMemoryResumePackLite,
+} from "../memory/agent-memory-inspect-core.js";
+import {
   buildExperienceIntelligenceLite,
   buildKickoffRecommendationResponseFromExperience,
 } from "../memory/experience-intelligence.js";
@@ -27,6 +33,10 @@ type MemoryAccessRequestKind =
   | "resolve"
   | "rehydrate_payload"
   | "continuity_review_pack"
+  | "agent_memory_inspect"
+  | "agent_memory_review_pack"
+  | "agent_memory_resume_pack"
+  | "agent_memory_handoff_pack"
   | "execution_introspect"
   | "evolution_review_pack"
   | "experience_intelligence"
@@ -297,6 +307,74 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
         defaultScope: env.MEMORY_SCOPE,
         defaultTenantId: env.MEMORY_TENANT_ID,
         consumerAgentId: env.LITE_LOCAL_ACTOR_ID,
+      }),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/agent/inspect",
+    requestKind: "agent_memory_inspect",
+    inflightKind: "recall",
+    execute: (body) =>
+      buildAgentMemoryInspectLite({
+        liteWriteStore,
+        liteRecallAccess,
+        embedder,
+        body,
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        defaultActorId: env.LITE_LOCAL_ACTOR_ID,
+      }),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/agent/review-pack",
+    requestKind: "agent_memory_review_pack",
+    inflightKind: "recall",
+    execute: (body) =>
+      buildAgentMemoryReviewPackLite({
+        liteWriteStore,
+        liteRecallAccess,
+        embedder,
+        body,
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        defaultActorId: env.LITE_LOCAL_ACTOR_ID,
+      }),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/agent/resume-pack",
+    requestKind: "agent_memory_resume_pack",
+    inflightKind: "recall",
+    execute: (body) =>
+      buildAgentMemoryResumePackLite({
+        liteWriteStore,
+        liteRecallAccess,
+        embedder,
+        body,
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        defaultActorId: env.LITE_LOCAL_ACTOR_ID,
+      }),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/agent/handoff-pack",
+    requestKind: "agent_memory_handoff_pack",
+    inflightKind: "recall",
+    execute: (body) =>
+      buildAgentMemoryHandoffPackLite({
+        liteWriteStore,
+        liteRecallAccess,
+        embedder,
+        body,
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        defaultActorId: env.LITE_LOCAL_ACTOR_ID,
       }),
   });
 

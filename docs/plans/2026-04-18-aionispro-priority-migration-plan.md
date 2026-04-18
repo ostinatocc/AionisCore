@@ -436,6 +436,12 @@ git commit -m "feat: add agent memory contracts"
 
 ### Task 8: Port `agent-memory-inspect-core.ts` As A Lite Façade
 
+Status: completed on 2026-04-18
+Implemented:
+- `src/memory/agent-memory-inspect-core.ts`
+- `src/memory/schemas.ts` agent-memory inspect/review/resume/handoff contracts
+- `scripts/ci/lite-agent-memory-inspect.test.ts`
+
 **Files:**
 - Create: `src/memory/agent-memory-inspect-core.ts`
 - Modify: `src/memory/reviewer-packs.ts`
@@ -475,6 +481,14 @@ git commit -m "feat: add agent memory inspect facade"
 
 ### Task 9: Add Agent-Memory Routes Selectively
 
+Status: completed on 2026-04-18
+Implemented:
+- `/v1/memory/agent/inspect`
+- `/v1/memory/agent/review-pack`
+- `/v1/memory/agent/resume-pack`
+- `/v1/memory/agent/handoff-pack`
+- route coverage folded into `scripts/ci/lite-agent-memory-inspect.test.ts`
+
 **Files:**
 - Modify: `src/routes/memory-access.ts`
 - Modify: `src/host/http-host.ts`
@@ -513,6 +527,16 @@ git commit -m "feat: add agent memory routes to lite runtime"
 ```
 
 ### Task 10: Selectively Port Agent-Memory Public SDK Methods Into `packages/full-sdk`
+
+Status: completed on 2026-04-18
+Implemented:
+- `packages/full-sdk/src/contracts.ts`
+- `packages/full-sdk/src/client.ts`
+- public surface: `aionis.memory.agent.inspect/reviewPack/resumePack/handoffPack`
+
+Deferred:
+- `examples/full-sdk/07-agent-memory-inspect.ts`
+- README/example docs for the new surface
 
 **Files:**
 - Modify: `packages/full-sdk/src/client.ts`
@@ -555,6 +579,8 @@ git commit -m "feat: expose agent memory surfaces in public sdk"
 
 ### Task 11: Add A Narrow Internal CLI For Evolution/Agent-Memory Diagnostics
 
+Status: not started
+
 **Files:**
 - Modify: `packages/sdk/src/client.ts`
 - Modify: `packages/sdk/src/cli.ts`
@@ -591,6 +617,8 @@ git commit -m "feat: add internal diagnostics for evolution and agent memory"
 ```
 
 ### Task 12: Port A Minimal Experimental Python Client After TS Stabilizes
+
+Status: not started
 
 **Files:**
 - Create: `packages/python-sdk/pyproject.toml`
@@ -675,4 +703,3 @@ python -m pytest packages/python-sdk/tests -q
 - If policy-memory requires large schema/store changes that destabilize Lite writes, stop after Task 4 and re-scope.
 - If agent-memory façade work starts pulling in control-plane/ops dependencies, stop after Task 8 and re-scope.
 - If public SDK changes begin mirroring the desktop full SDK wholesale, stop and re-scope back to additive methods only.
-

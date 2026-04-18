@@ -115,6 +115,50 @@ test("createAionisRuntimeClient exposes the full Aionis Core SDK surface and map
     context: { goal: "repair export route" },
     candidates: ["bash", "edit", "test"],
   });
+  await client.memory.agent.inspect({
+    tenant_id: "default",
+    scope: "runtime-sdk",
+    query_text: "repair export route",
+    context: { goal: "repair export route" },
+    candidates: ["bash", "edit", "test"],
+    anchor: "handoff://anchor",
+    handoff_kind: "repair",
+    repo_root: "/tmp/demo-repo",
+    file_path: "src/routes/export.ts",
+  });
+  await client.memory.agent.reviewPack({
+    tenant_id: "default",
+    scope: "runtime-sdk",
+    query_text: "repair export route",
+    context: { goal: "repair export route" },
+    candidates: ["bash", "edit", "test"],
+    anchor: "handoff://anchor",
+    handoff_kind: "repair",
+    repo_root: "/tmp/demo-repo",
+    file_path: "src/routes/export.ts",
+  });
+  await client.memory.agent.resumePack({
+    tenant_id: "default",
+    scope: "runtime-sdk",
+    query_text: "repair export route",
+    context: { goal: "repair export route" },
+    candidates: ["bash", "edit", "test"],
+    anchor: "handoff://anchor",
+    handoff_kind: "repair",
+    repo_root: "/tmp/demo-repo",
+    file_path: "src/routes/export.ts",
+  });
+  await client.memory.agent.handoffPack({
+    tenant_id: "default",
+    scope: "runtime-sdk",
+    query_text: "repair export route",
+    context: { goal: "repair export route" },
+    candidates: ["bash", "edit", "test"],
+    anchor: "handoff://anchor",
+    handoff_kind: "repair",
+    repo_root: "/tmp/demo-repo",
+    file_path: "src/routes/export.ts",
+  });
   await client.memory.delegationRecords.write({
     tenant_id: "default",
     scope: "runtime-sdk",
@@ -215,6 +259,10 @@ test("createAionisRuntimeClient exposes the full Aionis Core SDK surface and map
       "http://127.0.0.1:3001/v1/handoff/recover",
       "http://127.0.0.1:3001/v1/memory/continuity/review-pack",
       "http://127.0.0.1:3001/v1/memory/evolution/review-pack",
+      "http://127.0.0.1:3001/v1/memory/agent/inspect",
+      "http://127.0.0.1:3001/v1/memory/agent/review-pack",
+      "http://127.0.0.1:3001/v1/memory/agent/resume-pack",
+      "http://127.0.0.1:3001/v1/memory/agent/handoff-pack",
       "http://127.0.0.1:3001/v1/memory/delegation/records",
       "http://127.0.0.1:3001/v1/memory/delegation/records/find",
       "http://127.0.0.1:3001/v1/memory/delegation/records/aggregate",
@@ -229,7 +277,7 @@ test("createAionisRuntimeClient exposes the full Aionis Core SDK surface and map
   assert.equal(calls[4]?.init?.method, "POST");
   assert.equal(calls[5]?.init?.method, "GET");
   assert.equal(calls[6]?.init?.method, "GET");
-  for (const call of [calls[1], calls[2], calls[3], calls[4], calls[7], calls[8], calls[9], calls[10], calls[11], calls[12], calls[13], calls[14], calls[15], calls[16], calls[17]]) {
+  for (const call of [calls[1], calls[2], calls[3], calls[4], calls[7], calls[8], calls[9], calls[10], calls[11], calls[12], calls[13], calls[14], calls[15], calls[16], calls[17], calls[18], calls[19], calls[20], calls[21]]) {
     assert.equal(call?.init?.method, "POST");
     assert.equal((call?.init?.headers as Record<string, string>)["content-type"], "application/json");
   }

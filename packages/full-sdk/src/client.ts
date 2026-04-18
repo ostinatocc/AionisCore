@@ -1,4 +1,12 @@
 import type {
+  AionisAgentMemoryHandoffPackRequest,
+  AionisAgentMemoryHandoffPackResponse,
+  AionisAgentMemoryInspectRequest,
+  AionisAgentMemoryInspectResponse,
+  AionisAgentMemoryResumePackRequest,
+  AionisAgentMemoryResumePackResponse,
+  AionisAgentMemoryReviewPackRequest,
+  AionisAgentMemoryReviewPackResponse,
   AionisAnchorRehydratePayloadRequest,
   AionisArchiveRehydrateRequest,
   AionisAutomationCreateRequest,
@@ -212,6 +220,24 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
         evolution: createPostMethod<AionisEvolutionReviewPackRequest, AionisEvolutionReviewPackResponse>(
           http,
           "/v1/memory/evolution/review-pack",
+        ),
+      },
+      agent: {
+        inspect: createPostMethod<AionisAgentMemoryInspectRequest, AionisAgentMemoryInspectResponse>(
+          http,
+          "/v1/memory/agent/inspect",
+        ),
+        reviewPack: createPostMethod<AionisAgentMemoryReviewPackRequest, AionisAgentMemoryReviewPackResponse>(
+          http,
+          "/v1/memory/agent/review-pack",
+        ),
+        resumePack: createPostMethod<AionisAgentMemoryResumePackRequest, AionisAgentMemoryResumePackResponse>(
+          http,
+          "/v1/memory/agent/resume-pack",
+        ),
+        handoffPack: createPostMethod<AionisAgentMemoryHandoffPackRequest, AionisAgentMemoryHandoffPackResponse>(
+          http,
+          "/v1/memory/agent/handoff-pack",
         ),
       },
       sessions: {

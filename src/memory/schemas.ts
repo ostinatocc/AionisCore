@@ -1634,6 +1634,198 @@ export const EvolutionReviewPackResponseSchema = z.object({
 
 export type EvolutionReviewPackResponse = z.infer<typeof EvolutionReviewPackResponseSchema>;
 
+export const AgentMemoryInspectRequest = ExperienceIntelligenceRequest.extend({
+  handoff_id: z.string().min(1).optional(),
+  handoff_uri: z.string().min(1).optional(),
+  anchor: z.string().min(1).optional(),
+  repo_root: z.string().min(1).optional(),
+  file_path: z.string().min(1).optional(),
+  symbol: z.string().min(1).optional(),
+  handoff_kind: z.enum(["patch_handoff", "review_handoff", "task_handoff"]).optional(),
+  memory_lane: z.enum(["private", "shared"]).optional(),
+  include_payload: z.boolean().optional(),
+  session_id: z.string().min(1).max(128).optional(),
+  source_kind: z.string().min(1).optional(),
+  continuity_kind: z.string().min(1).optional(),
+  continuity_phase: z.string().min(1).optional(),
+  include_meta: z.boolean().default(false),
+  limit: z.coerce.number().int().positive().max(20).default(5),
+  offset: z.coerce.number().int().min(0).max(200000).default(0),
+});
+
+export type AgentMemoryInspectInput = z.infer<typeof AgentMemoryInspectRequest>;
+
+export const AgentMemoryInspectSummarySchema = z.object({
+  summary_version: z.literal("agent_memory_inspect_summary_v1"),
+  has_continuity: z.boolean(),
+  latest_handoff_anchor: z.string().nullable(),
+  latest_resume_source_kind: z.string().nullable(),
+  selected_tool: z.string().nullable(),
+  recommended_file_path: z.string().nullable(),
+  recommended_next_action: z.string().nullable(),
+  history_applied: z.boolean(),
+  stable_workflow_count: z.number().int().min(0),
+  promotion_ready_workflow_count: z.number().int().min(0),
+  trusted_pattern_count: z.number().int().min(0),
+  suppressed_pattern_count: z.number().int().min(0),
+  handoff_related_items: z.number().int().min(0),
+  resume_related_items: z.number().int().min(0),
+  derived_policy_source_kind: z.enum(["trusted_pattern", "stable_workflow", "blended"]).nullable().default(null),
+  derived_policy_selected_tool: z.string().nullable().default(null),
+  derived_policy_state: z.enum(["candidate", "stable"]).nullable().default(null),
+  policy_activation_mode: z.enum(["hint", "default"]).nullable().default(null),
+  policy_review_recommended: z.boolean().default(false),
+  contested_policy_count: z.number().int().min(0).default(0),
+  retired_policy_count: z.number().int().min(0).default(0),
+  selected_policy_memory_state: z.enum(["active", "contested", "retired"]).nullable().default(null),
+  policy_governance_action: z.enum(["none", "monitor", "refresh", "retire", "reactivate"]).default("none"),
+  policy_governance_review_required: z.boolean().default(false),
+  policy_governance_apply_payload: PolicyGovernanceApplyPayloadSchema.nullable().default(null),
+  policy_governance_auto_applied: z.boolean().default(false),
+});
+
+export type AgentMemoryInspectSummary = z.infer<typeof AgentMemoryInspectSummarySchema>;
+
+export const AgentMemoryInspectResponseSchema = z.object({
+  summary_version: z.literal("agent_memory_inspect_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  query_text: z.string(),
+  continuity_inspect: ContinuityInspectSummarySchema.nullable(),
+  continuity_review_pack: ContinuityReviewPackSummarySchema.nullable(),
+  evolution_inspect: EvolutionInspectResponseSchema,
+  evolution_review_pack: EvolutionReviewPackSummarySchema,
+  derived_policy: DerivedPolicySurfaceSchema.nullable().default(null),
+  policy_contract: PolicyContractSchema.nullable().default(null),
+  policy_review: PolicyReviewSummarySchema,
+  policy_governance_contract: PolicyGovernanceContractSchema,
+  policy_governance_apply_payload: PolicyGovernanceApplyPayloadSchema.nullable().default(null),
+  policy_governance_apply_result: PolicyGovernanceApplyResultSchema.nullable().default(null),
+  agent_memory_summary: AgentMemoryInspectSummarySchema,
+}).passthrough();
+
+export type AgentMemoryInspectResponse = z.infer<typeof AgentMemoryInspectResponseSchema>;
+
+export const AgentMemoryReviewPackRequest = AgentMemoryInspectRequest;
+export type AgentMemoryReviewPackInput = z.infer<typeof AgentMemoryReviewPackRequest>;
+
+export const AgentMemoryReviewPackSummarySchema = z.object({
+  pack_version: z.literal("agent_memory_review_pack_v1"),
+  selected_tool: z.string().nullable(),
+  recommended_file_path: z.string().nullable(),
+  recommended_next_action: z.string().nullable(),
+  latest_handoff_anchor: z.string().nullable(),
+  latest_resume_source_kind: z.string().nullable(),
+  stable_workflow_anchor_id: z.string().nullable(),
+  promotion_ready_anchor_ids: z.array(z.string()),
+  trusted_pattern_anchor_ids: z.array(z.string()),
+  contested_pattern_anchor_ids: z.array(z.string()),
+  suppressed_pattern_anchor_ids: z.array(z.string()),
+  handoff_target_files: z.array(z.string()),
+  acceptance_checks: z.array(z.string()),
+  must_change: z.array(z.string()),
+  must_remove: z.array(z.string()),
+  must_keep: z.array(z.string()),
+  rollback_required: z.boolean(),
+  derived_policy: DerivedPolicySurfaceSchema.nullable().default(null),
+  policy_contract: PolicyContractSchema.nullable().default(null),
+  policy_review: PolicyReviewSummarySchema,
+  policy_governance_contract: PolicyGovernanceContractSchema,
+  policy_governance_apply_payload: PolicyGovernanceApplyPayloadSchema.nullable().default(null),
+  policy_governance_apply_result: PolicyGovernanceApplyResultSchema.nullable().default(null),
+});
+
+export type AgentMemoryReviewPackSummary = z.infer<typeof AgentMemoryReviewPackSummarySchema>;
+
+export const AgentMemoryReviewPackResponseSchema = z.object({
+  summary_version: z.literal("agent_memory_review_pack_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  query_text: z.string(),
+  agent_memory_inspect: AgentMemoryInspectResponseSchema,
+  agent_memory_review_pack: AgentMemoryReviewPackSummarySchema,
+}).passthrough();
+
+export type AgentMemoryReviewPackResponse = z.infer<typeof AgentMemoryReviewPackResponseSchema>;
+
+export const AgentMemoryResumePackRequest = AgentMemoryInspectRequest;
+export type AgentMemoryResumePackInput = z.infer<typeof AgentMemoryResumePackRequest>;
+
+export const AgentMemoryResumePackSummarySchema = z.object({
+  pack_version: z.literal("agent_memory_resume_pack_v1"),
+  latest_handoff_anchor: z.string().nullable(),
+  latest_resume_source_kind: z.string().nullable(),
+  resume_selected_tool: z.string().nullable(),
+  resume_file_path: z.string().nullable(),
+  resume_target_files: z.array(z.string()),
+  resume_next_action: z.string().nullable(),
+  stable_workflow_anchor_id: z.string().nullable(),
+  promotion_ready_anchor_ids: z.array(z.string()),
+  trusted_pattern_anchor_ids: z.array(z.string()),
+  suppressed_pattern_anchor_ids: z.array(z.string()),
+  rollback_required: z.boolean(),
+  recovered_handoff: z.record(z.unknown()).nullable(),
+  execution_ready_handoff: z.record(z.unknown()).nullable(),
+  derived_policy: DerivedPolicySurfaceSchema.nullable().default(null),
+  policy_contract: PolicyContractSchema.nullable().default(null),
+  policy_governance_apply_payload: PolicyGovernanceApplyPayloadSchema.nullable().default(null),
+  policy_governance_apply_result: PolicyGovernanceApplyResultSchema.nullable().default(null),
+});
+
+export type AgentMemoryResumePackSummary = z.infer<typeof AgentMemoryResumePackSummarySchema>;
+
+export const AgentMemoryResumePackResponseSchema = z.object({
+  summary_version: z.literal("agent_memory_resume_pack_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  query_text: z.string(),
+  agent_memory_inspect: AgentMemoryInspectResponseSchema,
+  agent_memory_resume_pack: AgentMemoryResumePackSummarySchema,
+}).passthrough();
+
+export type AgentMemoryResumePackResponse = z.infer<typeof AgentMemoryResumePackResponseSchema>;
+
+export const AgentMemoryHandoffPackRequest = AgentMemoryInspectRequest;
+export type AgentMemoryHandoffPackInput = z.infer<typeof AgentMemoryHandoffPackRequest>;
+
+export const AgentMemoryHandoffPackSummarySchema = z.object({
+  pack_version: z.literal("agent_memory_handoff_pack_v1"),
+  latest_handoff_anchor: z.string().nullable(),
+  handoff_kind: z.string().nullable(),
+  handoff_file_path: z.string().nullable(),
+  handoff_repo_root: z.string().nullable(),
+  handoff_symbol: z.string().nullable(),
+  handoff_target_files: z.array(z.string()),
+  handoff_next_action: z.string().nullable(),
+  acceptance_checks: z.array(z.string()),
+  must_change: z.array(z.string()),
+  must_remove: z.array(z.string()),
+  must_keep: z.array(z.string()),
+  rollback_required: z.boolean(),
+  stable_workflow_anchor_id: z.string().nullable(),
+  trusted_pattern_anchor_ids: z.array(z.string()),
+  suppressed_pattern_anchor_ids: z.array(z.string()),
+  recovered_handoff: z.record(z.unknown()).nullable(),
+  execution_ready_handoff: z.record(z.unknown()).nullable(),
+  derived_policy: DerivedPolicySurfaceSchema.nullable().default(null),
+  policy_contract: PolicyContractSchema.nullable().default(null),
+  policy_governance_apply_payload: PolicyGovernanceApplyPayloadSchema.nullable().default(null),
+  policy_governance_apply_result: PolicyGovernanceApplyResultSchema.nullable().default(null),
+});
+
+export type AgentMemoryHandoffPackSummary = z.infer<typeof AgentMemoryHandoffPackSummarySchema>;
+
+export const AgentMemoryHandoffPackResponseSchema = z.object({
+  summary_version: z.literal("agent_memory_handoff_pack_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  query_text: z.string(),
+  agent_memory_inspect: AgentMemoryInspectResponseSchema,
+  agent_memory_handoff_pack: AgentMemoryHandoffPackSummarySchema,
+}).passthrough();
+
+export type AgentMemoryHandoffPackResponse = z.infer<typeof AgentMemoryHandoffPackResponseSchema>;
+
 export const PolicyGovernanceApplyRequestSchema = ExperienceIntelligenceRequest.partial()
   .extend({
     tenant_id: z.string().min(1).optional(),

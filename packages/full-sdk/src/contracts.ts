@@ -1422,6 +1422,177 @@ export type AionisEvolutionReviewPackResponse = {
   evolution_review_pack: AionisEvolutionReviewPackSummary;
 } & AionisRuntimeResponse;
 
+export type AionisAgentMemoryInspectRequest = AionisExperienceIntelligenceRequest & {
+  handoff_id?: string;
+  handoff_uri?: string;
+  anchor?: string;
+  repo_root?: string;
+  file_path?: string;
+  symbol?: string;
+  handoff_kind?: string;
+  memory_lane?: "private" | "shared";
+  include_payload?: boolean;
+  session_id?: string;
+  source_kind?: string;
+  continuity_kind?: string;
+  continuity_phase?: string;
+  include_meta?: boolean;
+  limit?: number;
+  offset?: number;
+};
+
+export type AionisAgentMemoryInspectSummary = {
+  summary_version: "agent_memory_inspect_summary_v1";
+  has_continuity: boolean;
+  latest_handoff_anchor: string | null;
+  latest_resume_source_kind: string | null;
+  selected_tool: string | null;
+  recommended_file_path: string | null;
+  recommended_next_action: string | null;
+  history_applied: boolean;
+  stable_workflow_count: number;
+  promotion_ready_workflow_count: number;
+  trusted_pattern_count: number;
+  suppressed_pattern_count: number;
+  handoff_related_items: number;
+  resume_related_items: number;
+  derived_policy_source_kind: "trusted_pattern" | "stable_workflow" | "blended" | null;
+  derived_policy_selected_tool: string | null;
+  derived_policy_state: "candidate" | "stable" | null;
+  policy_activation_mode: "hint" | "default" | null;
+  policy_review_recommended: boolean;
+  contested_policy_count: number;
+  retired_policy_count: number;
+  selected_policy_memory_state: "active" | "contested" | "retired" | null;
+  policy_governance_action: "none" | "monitor" | "refresh" | "retire" | "reactivate";
+  policy_governance_review_required: boolean;
+  policy_governance_apply_payload: AionisPolicyGovernanceApplyPayload | null;
+  policy_governance_auto_applied: boolean;
+};
+
+export type AionisAgentMemoryInspectResponse = {
+  summary_version: "agent_memory_inspect_v1";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  continuity_inspect: AionisContinuityInspectSummary | null;
+  continuity_review_pack: AionisContinuityReviewPackSummary | null;
+  evolution_inspect: AionisEvolutionInspectResponse;
+  evolution_review_pack: AionisEvolutionReviewPackSummary;
+  derived_policy: AionisDerivedPolicySurface | null;
+  policy_contract: AionisPolicyContract | null;
+  policy_review: AionisPolicyReviewSummary;
+  policy_governance_contract: AionisPolicyGovernanceContract;
+  policy_governance_apply_payload: AionisPolicyGovernanceApplyPayload | null;
+  policy_governance_apply_result: AionisPolicyGovernanceApplyResult | null;
+  agent_memory_summary: AionisAgentMemoryInspectSummary;
+} & AionisRuntimeResponse;
+
+export type AionisAgentMemoryReviewPackRequest = AionisAgentMemoryInspectRequest;
+
+export type AionisAgentMemoryReviewPackSummary = {
+  pack_version: "agent_memory_review_pack_v1";
+  selected_tool: string | null;
+  recommended_file_path: string | null;
+  recommended_next_action: string | null;
+  latest_handoff_anchor: string | null;
+  latest_resume_source_kind: string | null;
+  stable_workflow_anchor_id: string | null;
+  promotion_ready_anchor_ids: string[];
+  trusted_pattern_anchor_ids: string[];
+  contested_pattern_anchor_ids: string[];
+  suppressed_pattern_anchor_ids: string[];
+  handoff_target_files: string[];
+  acceptance_checks: string[];
+  must_change: string[];
+  must_remove: string[];
+  must_keep: string[];
+  rollback_required: boolean;
+  derived_policy: AionisDerivedPolicySurface | null;
+  policy_contract: AionisPolicyContract | null;
+  policy_review: AionisPolicyReviewSummary;
+  policy_governance_contract: AionisPolicyGovernanceContract;
+  policy_governance_apply_payload: AionisPolicyGovernanceApplyPayload | null;
+  policy_governance_apply_result: AionisPolicyGovernanceApplyResult | null;
+} & AionisPassthroughObject;
+
+export type AionisAgentMemoryReviewPackResponse = {
+  summary_version: "agent_memory_review_pack_v1";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  agent_memory_inspect: AionisAgentMemoryInspectResponse;
+  agent_memory_review_pack: AionisAgentMemoryReviewPackSummary;
+} & AionisRuntimeResponse;
+
+export type AionisAgentMemoryResumePackRequest = AionisAgentMemoryInspectRequest;
+
+export type AionisAgentMemoryResumePackSummary = {
+  pack_version: "agent_memory_resume_pack_v1";
+  latest_handoff_anchor: string | null;
+  latest_resume_source_kind: string | null;
+  resume_selected_tool: string | null;
+  resume_file_path: string | null;
+  resume_target_files: string[];
+  resume_next_action: string | null;
+  stable_workflow_anchor_id: string | null;
+  promotion_ready_anchor_ids: string[];
+  trusted_pattern_anchor_ids: string[];
+  suppressed_pattern_anchor_ids: string[];
+  rollback_required: boolean;
+  recovered_handoff: AionisPassthroughObject | null;
+  execution_ready_handoff: AionisPassthroughObject | null;
+  derived_policy: AionisDerivedPolicySurface | null;
+  policy_contract: AionisPolicyContract | null;
+  policy_governance_apply_payload: AionisPolicyGovernanceApplyPayload | null;
+  policy_governance_apply_result: AionisPolicyGovernanceApplyResult | null;
+} & AionisPassthroughObject;
+
+export type AionisAgentMemoryResumePackResponse = {
+  summary_version: "agent_memory_resume_pack_v1";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  agent_memory_inspect: AionisAgentMemoryInspectResponse;
+  agent_memory_resume_pack: AionisAgentMemoryResumePackSummary;
+} & AionisRuntimeResponse;
+
+export type AionisAgentMemoryHandoffPackRequest = AionisAgentMemoryInspectRequest;
+
+export type AionisAgentMemoryHandoffPackSummary = {
+  pack_version: "agent_memory_handoff_pack_v1";
+  latest_handoff_anchor: string | null;
+  handoff_kind: string | null;
+  handoff_file_path: string | null;
+  handoff_repo_root: string | null;
+  handoff_symbol: string | null;
+  handoff_target_files: string[];
+  handoff_next_action: string | null;
+  acceptance_checks: string[];
+  must_change: string[];
+  must_remove: string[];
+  must_keep: string[];
+  rollback_required: boolean;
+  stable_workflow_anchor_id: string | null;
+  trusted_pattern_anchor_ids: string[];
+  suppressed_pattern_anchor_ids: string[];
+  recovered_handoff: AionisPassthroughObject | null;
+  execution_ready_handoff: AionisPassthroughObject | null;
+  derived_policy: AionisDerivedPolicySurface | null;
+  policy_contract: AionisPolicyContract | null;
+  policy_governance_apply_payload: AionisPolicyGovernanceApplyPayload | null;
+  policy_governance_apply_result: AionisPolicyGovernanceApplyResult | null;
+} & AionisPassthroughObject;
+
+export type AionisAgentMemoryHandoffPackResponse = {
+  summary_version: "agent_memory_handoff_pack_v1";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  agent_memory_inspect: AionisAgentMemoryInspectResponse;
+  agent_memory_handoff_pack: AionisAgentMemoryHandoffPackSummary;
+} & AionisRuntimeResponse;
+
 export type AionisReplayRunStartRequest = {
   tenant_id?: string;
   scope?: string;
