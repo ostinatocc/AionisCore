@@ -90,6 +90,7 @@
     "example:sdk:task-start-proof": "npx tsx examples/full-sdk/08-self-evolving-task-start.ts",
     "example:sdk:policy-memory": "npx tsx examples/full-sdk/09-policy-memory-materialization.ts",
     "example:sdk:policy-governance": "npx tsx examples/full-sdk/10-policy-governance-loop.ts",
+    "example:sdk:continuity-provenance": "npx tsx examples/full-sdk/11-continuity-provenance-proof.ts",
     "example:internal-sdk:workflow": "npx tsx examples/sdk/01-workflow-guidance.ts",
     "example:internal-sdk:tools-feedback": "npx tsx examples/sdk/02-tools-feedback-pattern.ts",
     "example:internal-sdk:introspect": "npx tsx examples/sdk/03-execution-introspect-and-rehydrate.ts",

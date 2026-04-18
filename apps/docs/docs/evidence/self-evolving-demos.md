@@ -7,11 +7,12 @@ slug: /evidence/self-evolving-demos
 
 This page is the runnable companion to the higher-level [Proof by Evidence](./proof-by-evidence.md) page.
 
-The goal is not to show every route. The goal is to show three concrete loops:
+The goal is not to show every route. The goal is to show four concrete loops:
 
 1. the second task start gets better
 2. positive execution feedback becomes persisted policy memory
 3. that policy memory can be governed instead of silently drifting forever
+4. continuity provenance survives workflow promotion instead of being erased
 
 <div class="doc-lead">
   <span class="doc-kicker">Proof path</span>
@@ -20,6 +21,7 @@ The goal is not to show every route. The goal is to show three concrete loops:
     <span class="doc-chip">Task start</span>
     <span class="doc-chip">Policy memory</span>
     <span class="doc-chip">Governance</span>
+    <span class="doc-chip">Continuity provenance</span>
     <span class="doc-chip">Public SDK</span>
   </div>
 </div>
@@ -34,7 +36,7 @@ npm run sdk:build
 npm run lite:start
 ```
 
-All three demos use the public SDK against the Lite runtime at:
+All four demos use the public SDK against the Lite runtime at:
 
 `http://127.0.0.1:3001`
 
@@ -121,24 +123,42 @@ What to inspect in the output:
 
 The strongest signal is a real `retire -> reactivate` loop with a live policy contract still visible afterward.
 
-## Supporting inspection: provenance survives workflow promotion
+## Demo 4: Continuity provenance survives promotion
 
-The three demos above prove startup improvement, policy materialization, and governance.
+This proof depends on stable workflow promotion. Restart Lite with the workflow static provider enabled:
 
-There is a fourth supporting inspection path worth checking while you run them:
+```bash
+WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED=true npm run lite:start
+```
 
-1. store a `handoff`
-2. or write two `session_event` records for the same task
-3. call `memory.planningContext(...)`
-4. call `memory.executionIntrospect(...)`
+Run:
 
-What to inspect:
+```bash
+npm run example:sdk:continuity-provenance
+```
 
-- `planning_summary.continuity_carrier_summary`
-- `distillation_signal_summary.origin_counts`
-- workflow lines containing:
-  - `distillation=handoff_continuity_carrier`
-  - `distillation=session_event_continuity_carrier`
+What it proves:
+
+1. `handoff` and `session_event` are treated as first-class continuity carriers
+2. the first carrier creates a projected candidate workflow with explicit provenance
+3. the second carrier promotes the workflow to stable without erasing `distillation_origin`
+4. the same provenance stays visible through `planningContext(...)` and `executionIntrospect(...)`
+
+What to inspect in the output:
+
+- `handoff_candidate_line`
+- `handoff_stable_line`
+- `handoff_demo_line`
+- `session_candidate_line`
+- `session_stable_line`
+- `session_demo_line`
+- `handoff_count`
+- `session_event_count`
+
+The strongest signals are stable workflow lines that still contain:
+
+- `distillation=handoff_continuity_carrier`
+- `distillation=session_event_continuity_carrier`
 
 Why this matters:
 
@@ -146,7 +166,7 @@ Why this matters:
 - projected workflows retain the source of that learning
 - stable workflows no longer have to hide the execution provenance that created them
 
-## Why these three matter together
+## Why these four matter together
 
 Each demo proves a different layer of the self-evolving claim:
 
@@ -155,6 +175,7 @@ Each demo proves a different layer of the self-evolving claim:
 | Better second task start | Aionis improves startup behavior from prior execution |
 | Policy memory materialization | Aionis can turn stable execution feedback into persistent execution policy |
 | Governance loop | Aionis exposes reviewable, reversible policy evolution instead of silent drift |
+| Continuity provenance survives promotion | Aionis preserves where learned workflow guidance came from even after promotion |
 
 Taken together, they show that the runtime is not just:
 

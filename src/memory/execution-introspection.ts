@@ -444,6 +444,7 @@ export async function buildExecutionMemoryIntrospectionLite(
     workflowCandidates,
     patternAnchors,
     recentSourceEvents,
+    recentSessions,
     delegationRecordRows,
     policyMemoryNodes,
     distilledEvidenceNodes,
@@ -479,6 +480,14 @@ export async function buildExecutionMemoryIntrospectionLite(
       consumerAgentId,
       consumerTeamId,
       limit: Math.max(limit * 4, 24),
+      offset: 0,
+    }),
+    liteWriteStore.findNodes({
+      scope,
+      type: "topic",
+      consumerAgentId,
+      consumerTeamId,
+      limit: Math.max(limit * 2, 12),
       offset: 0,
     }),
     listRecentDelegationRecordNodeRowsLite({
@@ -577,10 +586,14 @@ export async function buildExecutionMemoryIntrospectionLite(
     ...distilledEvidenceNodes.rows.map((row) => toDistillationEntry(row, tenantId, scope)),
     ...distilledFactNodes.rows.map((row) => toDistillationEntry(row, tenantId, scope)),
   ];
-  const continuitySourceEvents = recentSourceEvents.rows
-    .filter((row) => !hasWorkflowProjectionMarker(asRecord(row.slots)))
-    .slice(0, Math.max(limit, 8));
-  const continuityKnowledge = continuitySourceEvents
+  const continuitySourceNodes = [
+    ...recentSourceEvents.rows.filter((row) => !hasWorkflowProjectionMarker(asRecord(row.slots))),
+    ...recentSessions.rows.filter((row) => {
+      if (hasWorkflowProjectionMarker(asRecord(row.slots))) return false;
+      return firstString(asRecord(row.slots)?.system_kind) === "session";
+    }),
+  ].slice(0, Math.max(limit * 2, 12));
+  const continuityKnowledge = continuitySourceNodes
     .map((row) => toContinuityEntry(row, tenantId, scope))
     .filter((entry) => entry.summary_kind === "handoff" || entry.summary_kind === "session_event" || entry.summary_kind === "session");
   const supportingKnowledge = [
@@ -611,7 +624,7 @@ export async function buildExecutionMemoryIntrospectionLite(
   };
   const summaryBundle = buildExecutionMemorySummaryBundle(surface);
   const continuityProjectionSamples = await Promise.all(
-    continuitySourceEvents.map(async (row) => {
+    continuitySourceNodes.map(async (row) => {
       const explained = await explainWorkflowProjectionForSourceNode({
         scope,
         source: {

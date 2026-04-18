@@ -117,6 +117,17 @@ npm run example:sdk:automation
 npm run example:sdk:sandbox
 npm run example:sdk:host-bridge
 npm run example:sdk:agent-memory
+npm run example:sdk:continuity-provenance
+```
+
+Proof demos for the self-evolving claim:
+
+```bash
+npm run example:sdk:task-start-proof
+npm run example:sdk:policy-memory
+npm run example:sdk:policy-governance
+WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED=true npm run lite:start
+npm run example:sdk:continuity-provenance
 ```
 
 Agent-memory façade example:

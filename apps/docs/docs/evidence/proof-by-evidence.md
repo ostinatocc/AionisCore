@@ -9,7 +9,7 @@ This page exists for a narrow question:
 
 `Does Aionis actually improve execution over time, or does it only describe that idea well?`
 
-The answer here is based on three live Lite runs through the public SDK on `2026-04-18`, not on hypothetical product language.
+The answer here is based on four live Lite runs through the public SDK on `2026-04-18`, not on hypothetical product language.
 
 <div class="doc-lead">
   <span class="doc-kicker">What this page is for</span>
@@ -26,10 +26,11 @@ The answer here is based on three live Lite runs through the public SDK on `2026
   <span class="state-badge state-trusted">task start</span>
   <span class="state-badge state-candidate">policy memory</span>
   <span class="state-badge state-governed">governance loop</span>
+  <span class="state-badge state-shadow">provenance</span>
   <span class="state-note">These proofs were produced from real Lite runs, not hand-written example output.</span>
 </div>
 
-## What the three proofs show
+## What the four proofs show
 
 <div class="doc-grid">
   <div class="doc-card">
@@ -46,6 +47,11 @@ The answer here is based on three live Lite runs through the public SDK on `2026
     <span class="doc-kicker">Proof 3</span>
     <h3>Policy can be governed</h3>
     <p>The resulting policy memory can be retired and reactivated through explicit runtime governance instead of drifting silently.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Proof 4</span>
+    <h3>Promotion keeps provenance</h3>
+    <p>Continuity carriers still expose where stable workflow guidance came from after candidate promotion and replay-side normalization.</p>
   </div>
 </div>
 
@@ -157,13 +163,51 @@ Why this matters:
 - it proves governance is a runtime action, not just a metadata idea
 - it shows that self-evolving does not have to mean uncontrolled drift
 
-## What these three proofs mean together
+## Proof 4: Continuity provenance survives promotion
+
+The fourth claim is narrower but important:
+
+`a self-evolving runtime should preserve where learned workflow guidance came from even after promotion`
+
+<div class="doc-grid">
+  <div class="doc-card">
+    <span class="doc-kicker">Before</span>
+    <h3>Carrier provenance could disappear</h3>
+    <p>`handoff`, `session_event`, and `session` could be stored and even projected, but the stable workflow path could stop showing the original continuity signal clearly enough for a host to trust it.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">After</span>
+    <h3>Promotion preserves origin</h3>
+    <p>After two `handoff` writes and two `session_event` writes for the same task family, the runtime promoted stable workflow guidance while preserving `distillation_origin` all the way into planner and introspection surfaces.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Proof</span>
+    <h3>Observed signal</h3>
+    <p>The demo produced stable workflow lines containing <code>distillation=handoff_continuity_carrier</code> and <code>distillation=session_event_continuity_carrier</code>, and introspection reported carrier counts of <code>2</code> for each corresponding flow.</p>
+  </div>
+</div>
+
+Run it yourself:
+
+```bash
+WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED=true npm run lite:start
+npm run example:sdk:continuity-provenance
+```
+
+Why this matters:
+
+- it proves continuity learning stays explainable after workflow promotion
+- it proves `handoff` and `session_event` are not only stored, but promoted with preserved lineage
+- it makes task-start and review surfaces easier to trust because the learning source survives normalization
+
+## What these four proofs mean together
 
 | Claim | What the evidence shows |
 | --- | --- |
 | Aionis improves startup | The second task start became more specific and file-aware |
 | Aionis learns execution policy | Stable feedback became persisted policy memory |
 | Aionis governs its learned policy | Policy memory moved through retire/reactivate cleanly |
+| Aionis preserves learned provenance | Stable workflow guidance still shows whether it came from handoff or session-event continuity |
 
 That combination is the real point of the product:
 
@@ -171,39 +215,7 @@ That combination is the real point of the product:
 - not just long tasks
 - not just replay
 
-It is a continuity runtime that can improve startup, materialize execution policy, and govern what it learned.
-
-## Supporting proof: continuity provenance survives promotion
-
-The new question after the first three proofs is:
-
-`can Aionis still explain where a learned workflow came from after it has been promoted?`
-
-That matters because a self-evolving runtime should not only learn. It should preserve the reason it learned something.
-
-<div class="doc-grid">
-  <div class="doc-card">
-    <span class="doc-kicker">Carrier</span>
-    <h3>Raw continuity input</h3>
-    <p>Lite now treats <code>handoff</code>, <code>session_event</code>, and <code>session</code> as explicit continuity carriers rather than just generic stored events.</p>
-  </div>
-  <div class="doc-card">
-    <span class="doc-kicker">Promotion</span>
-    <h3>Workflow keeps provenance</h3>
-    <p>When those carriers project into <code>workflow_candidate</code> and later stabilize into <code>workflow_anchor</code>, the runtime now preserves <code>distillation_origin</code>.</p>
-  </div>
-  <div class="doc-card">
-    <span class="doc-kicker">Visible proof</span>
-    <h3>Public surfaces expose it</h3>
-    <p><code>planningContext(...)</code> and <code>executionIntrospect(...)</code> now expose lines such as <code>distillation=handoff_continuity_carrier</code> and <code>distillation=session_event_continuity_carrier</code>.</p>
-  </div>
-</div>
-
-Why this matters:
-
-- it proves continuity memory is not only accumulated, but traceable
-- it proves workflow promotion does not erase where the learning signal came from
-- it makes replay, handoff, and session-driven learning easier to inspect and trust
+It is a continuity runtime that can improve startup, materialize execution policy, govern what it learned, and preserve the provenance of how that learning happened.
 
 ## Next steps
 

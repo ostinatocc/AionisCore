@@ -1985,6 +1985,11 @@ export function summarizeDistillationSignalSurface(surface: PlannerPacketSummary
     surface.action_recall_packet && typeof surface.action_recall_packet === "object"
       ? (surface.action_recall_packet as Record<string, unknown>)
       : {};
+  const recommendedWorkflows = Array.isArray(surface.recommended_workflows)
+    ? surface.recommended_workflows
+    : Array.isArray(packet.recommended_workflows)
+      ? packet.recommended_workflows
+      : [];
   const candidateWorkflows = Array.isArray(surface.candidate_workflows)
     ? surface.candidate_workflows
     : Array.isArray(packet.candidate_workflows)
@@ -1998,6 +2003,14 @@ export function summarizeDistillationSignalSurface(surface: PlannerPacketSummary
 
   const evidenceEntries = safeRecordArray(supportingKnowledge).filter((entry) => entry.summary_kind === "write_distillation_evidence");
   const factEntries = safeRecordArray(supportingKnowledge).filter((entry) => entry.summary_kind === "write_distillation_fact");
+  const promotedWorkflows = safeRecordArray(recommendedWorkflows).filter((entry) => {
+    const origin = typeof entry.distillation_origin === "string" ? entry.distillation_origin.trim() : "";
+    return origin === "execution_write_projection"
+      || origin === "handoff_continuity_carrier"
+      || origin === "session_event_continuity_carrier"
+      || origin === "session_continuity_carrier"
+      || origin === "replay_learning_episode";
+  });
   const projectedCandidates = safeRecordArray(candidateWorkflows).filter((entry) => {
     const origin = typeof entry.distillation_origin === "string" ? entry.distillation_origin.trim() : "";
     return origin === "execution_write_projection"
@@ -2006,7 +2019,7 @@ export function summarizeDistillationSignalSurface(surface: PlannerPacketSummary
       || origin === "session_continuity_carrier"
       || origin === "replay_learning_episode";
   });
-  const allEntries = [...evidenceEntries, ...factEntries, ...projectedCandidates];
+  const allEntries = [...evidenceEntries, ...factEntries, ...projectedCandidates, ...promotedWorkflows];
 
   const originCounts: DistillationSignalSummary["origin_counts"] = {
     write_distillation_input_text: 0,

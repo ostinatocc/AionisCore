@@ -42,7 +42,7 @@ features:
 
 <div class="trust-strip" aria-label="Project status">
   <span>Lite ships today</span>
-  <span>v0.1.0</span>
+  <span>SDK v0.2.0</span>
   <span>MIT licensed</span>
   <span>15 / 15 benchmark scenarios</span>
 </div>
@@ -70,6 +70,13 @@ features:
       <p>The runtime retired policy memory and reactivated it with fresh live evidence through the public route.</p>
       <div class="home-proof-metric"><code>active → retired → active</code></div>
       <div class="home-proof-code"><code>live_policy_selected_tool = "bash"</code></div>
+    </a>
+    <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
+      <span class="home-proof-runbook-label">Demo 4</span>
+      <h3>Provenance survived promotion</h3>
+      <p>Stable workflow guidance kept explicit continuity provenance instead of erasing where the learning signal came from.</p>
+      <div class="home-proof-metric"><code>distillation=handoff_continuity_carrier</code></div>
+      <div class="home-proof-code"><code>distillation=session_event_continuity_carrier</code></div>
     </a>
   </div>
 </div>
@@ -141,11 +148,12 @@ Aionis turns continuity into runtime infrastructure instead of leaving it inside
 
 <div class="section-frame">
   <span class="section-label">Why the new proof path matters</span>
-  <p>Many systems can run a long task. That is not the same as proving that the next task starts better, that stable execution becomes inspectable policy memory, and that the resulting policy can be governed instead of silently drifting. The new evidence path is meant to prove those three claims directly.</p>
+  <p>Many systems can run a long task. That is not the same as proving that the next task starts better, that stable execution becomes inspectable policy memory, that the resulting policy can be governed instead of silently drifting, and that continuity provenance survives workflow promotion. The new evidence path is meant to prove those four claims directly.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">task-start-proof</span>
     <span class="doc-chip">policy-memory</span>
     <span class="doc-chip">policy-governance</span>
+    <span class="doc-chip">continuity-provenance</span>
   </div>
 </div>
 

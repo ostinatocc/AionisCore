@@ -33,6 +33,7 @@ npm run example:sdk:agent-memory
 npm run example:sdk:task-start-proof
 npm run example:sdk:policy-memory
 npm run example:sdk:policy-governance
+npm run example:sdk:continuity-provenance
 ```
 
 The same SDK client can also call Lite lifecycle mutations directly:
@@ -66,3 +67,5 @@ Examples:
   records repeated positive tool feedback and shows persisted `policy memory` through evolution review and agent inspect
 - `10-policy-governance-loop.ts`
   materializes policy memory, retires it, reactivates it, and confirms the governance loop through the public SDK
+- `11-continuity-provenance-proof.ts`
+  proves that handoff and session-event continuity carriers keep their `distillation_origin` through candidate and stable workflow promotion
