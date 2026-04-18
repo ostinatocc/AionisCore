@@ -9,7 +9,7 @@ This page exists for a narrow question:
 
 `Does Aionis actually improve execution over time, or does it only describe that idea well?`
 
-The answer here is based on four live Lite runs through the public SDK on `2026-04-18`, not on hypothetical product language.
+The answer here is based on five live Lite runs through the public SDK on `2026-04-18`, not on hypothetical product language.
 
 <div class="doc-lead">
   <span class="doc-kicker">What this page is for</span>
@@ -30,7 +30,7 @@ The answer here is based on four live Lite runs through the public SDK on `2026-
   <span class="state-note">These proofs were produced from real Lite runs, not hand-written example output.</span>
 </div>
 
-## What the four proofs show
+## What the five proofs show
 
 <div class="doc-grid">
   <div class="doc-card">
@@ -52,6 +52,11 @@ The answer here is based on four live Lite runs through the public SDK on `2026-
     <span class="doc-kicker">Proof 4</span>
     <h3>Promotion keeps provenance</h3>
     <p>Continuity carriers still expose where stable workflow guidance came from after candidate promotion and replay-side normalization.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Proof 5</span>
+    <h3>Session state alone can promote workflows</h3>
+    <p>Repeated session continuity writes now count as distinct observations and can promote stable workflow guidance without needing an append-only event path.</p>
   </div>
 </div>
 
@@ -200,7 +205,44 @@ Why this matters:
 - it proves `handoff` and `session_event` are not only stored, but promoted with preserved lineage
 - it makes task-start and review surfaces easier to trust because the learning source survives normalization
 
-## What these four proofs mean together
+## Proof 5: Session continuity carriers promote stable workflows
+
+The fifth claim tightens the continuity story:
+
+`session state itself should be able to produce durable workflow guidance`
+
+<div class="doc-grid">
+  <div class="doc-card">
+    <span class="doc-kicker">Before</span>
+    <h3>Session continuity was weaker than session events</h3>
+    <p>`memory.sessions.create(...)` could store execution state, but repeated updates to the same session topic did not reliably count as independent workflow observations.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">After</span>
+    <h3>Session carriers now promote</h3>
+    <p>Repeated session continuity writes for the same task family now move from candidate workflow guidance to stable workflow guidance through <code>session_continuity_carrier</code>.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Proof</span>
+    <h3>Observed signal</h3>
+    <p>The demo produced a first candidate workflow with <code>distillation=session_continuity_carrier</code>, then promoted it to a stable workflow with <code>observed_count = 2</code> while keeping the same provenance and support counts visible in both planning and introspection surfaces.</p>
+  </div>
+</div>
+
+Run it yourself:
+
+```bash
+WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED=true npm run lite:start
+npm run example:sdk:session-continuity
+```
+
+Why this matters:
+
+- it proves session continuity is a first-class learning input, not only supporting metadata
+- it proves updated session state can count as distinct workflow observations
+- it makes the continuity model broader than event-only carrier streams
+
+## What these five proofs mean together
 
 | Claim | What the evidence shows |
 | --- | --- |
@@ -208,6 +250,7 @@ Why this matters:
 | Aionis learns execution policy | Stable feedback became persisted policy memory |
 | Aionis governs its learned policy | Policy memory moved through retire/reactivate cleanly |
 | Aionis preserves learned provenance | Stable workflow guidance still shows whether it came from handoff or session-event continuity |
+| Aionis learns directly from session state | Stable workflow guidance can now be promoted from repeated session continuity writes |
 
 That combination is the real point of the product:
 
@@ -215,7 +258,7 @@ That combination is the real point of the product:
 - not just long tasks
 - not just replay
 
-It is a continuity runtime that can improve startup, materialize execution policy, govern what it learned, and preserve the provenance of how that learning happened.
+It is a continuity runtime that can improve startup, materialize execution policy, govern what it learned, preserve the provenance of how that learning happened, and lift repeated session state into stable workflow guidance.
 
 ## Next steps
 

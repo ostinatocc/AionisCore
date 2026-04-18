@@ -7,16 +7,17 @@ slug: /evidence/self-evolving-demos
 
 This page is the runnable companion to the higher-level [Proof by Evidence](./proof-by-evidence.md) page.
 
-The goal is not to show every route. The goal is to show four concrete loops:
+The goal is not to show every route. The goal is to show five concrete loops:
 
 1. the second task start gets better
 2. positive execution feedback becomes persisted policy memory
 3. that policy memory can be governed instead of silently drifting forever
 4. continuity provenance survives workflow promotion instead of being erased
+5. session continuity alone can promote stable workflow guidance
 
 <div class="doc-lead">
   <span class="doc-kicker">Proof path</span>
-  <p>If these three demos work, Aionis is doing more than storing transcripts. It is improving startup, materializing execution policy, and exposing a real governance loop.</p>
+  <p>If these five demos work, Aionis is doing more than storing transcripts. It is improving startup, materializing execution policy, governing what it learns, and turning continuity carriers into stable workflow memory with preserved provenance.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">Task start</span>
     <span class="doc-chip">Policy memory</span>
@@ -36,7 +37,7 @@ npm run sdk:build
 npm run lite:start
 ```
 
-All four demos use the public SDK against the Lite runtime at:
+All five demos use the public SDK against the Lite runtime at:
 
 `http://127.0.0.1:3001`
 
@@ -166,7 +167,50 @@ Why this matters:
 - projected workflows retain the source of that learning
 - stable workflows no longer have to hide the execution provenance that created them
 
-## Why these four matter together
+## Demo 5: Session continuity carriers promote stable workflows
+
+This proof depends on stable workflow promotion. Restart Lite with the workflow static provider enabled:
+
+```bash
+WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED=true npm run lite:start
+```
+
+Run:
+
+```bash
+npm run example:sdk:session-continuity
+```
+
+What it proves:
+
+1. `memory.sessions.create(...)` can act as a first-class continuity carrier, not only as metadata around session events
+2. the first session continuity write creates a projected candidate workflow with `distillation=session_continuity_carrier`
+3. the second session continuity write promotes stable workflow guidance even though the underlying session topic is updated in place
+4. the promoted workflow still exposes `session_continuity_carrier` provenance through planning and introspection surfaces
+
+What to inspect in the output:
+
+- `candidate_workflow_line`
+- `stable_workflow_line`
+- `planning_observed_count`
+- `introspection_workflow_line`
+- `origin_count`
+- `observed_count`
+- `session_count`
+
+The strongest signals are:
+
+- the first planning packet contains `distillation=session_continuity_carrier`
+- the second planning packet moves that same workflow family into `recommended_workflows`
+- `planning_observed_count = 2` and `observed_count = 2` appear on the promoted workflow
+
+Why this matters:
+
+- continuity can be promoted from session state itself, not only from emitted events
+- repeated session snapshots now count as distinct workflow observations
+- Aionis can preserve continuity provenance even when the carrier is an updated topic node instead of an append-only event stream
+
+## Why these five matter together
 
 Each demo proves a different layer of the self-evolving claim:
 
@@ -176,6 +220,7 @@ Each demo proves a different layer of the self-evolving claim:
 | Policy memory materialization | Aionis can turn stable execution feedback into persistent execution policy |
 | Governance loop | Aionis exposes reviewable, reversible policy evolution instead of silent drift |
 | Continuity provenance survives promotion | Aionis preserves where learned workflow guidance came from even after promotion |
+| Session continuity promotes stable workflows | Aionis can lift repeated session state into stable workflow guidance without needing an event-only path |
 
 Taken together, they show that the runtime is not just:
 

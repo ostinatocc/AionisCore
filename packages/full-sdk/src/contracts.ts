@@ -912,8 +912,17 @@ export type AionisSessionCreateRequest = {
   actor?: string;
   session_id?: string;
   title?: string;
-  summary?: string;
+  text_summary?: string;
+  input_text?: string;
   metadata?: Record<string, unknown>;
+  auto_embed?: boolean;
+  memory_lane?: "private" | "shared";
+  producer_agent_id?: string;
+  owner_agent_id?: string;
+  owner_team_id?: string;
+  execution_state_v1?: Record<string, unknown>;
+  execution_packet_v1?: Record<string, unknown>;
+  execution_transitions_v1?: Array<Record<string, unknown>>;
 } & AionisRequestPayload;
 
 export type AionisSessionListQuery = {

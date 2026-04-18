@@ -216,6 +216,9 @@ export async function createSession(client: pg.PoolClient, body: unknown, opts: 
     system_kind: "session",
     session_id: sid,
     ...(parsed.metadata ?? {}),
+    ...(parsed.execution_state_v1 ? { execution_state_v1: parsed.execution_state_v1 } : {}),
+    ...(parsed.execution_packet_v1 ? { execution_packet_v1: parsed.execution_packet_v1 } : {}),
+    ...(parsed.execution_transitions_v1 ? { execution_transitions_v1: parsed.execution_transitions_v1 } : {}),
   };
 
   const writeReq = {
@@ -223,7 +226,7 @@ export async function createSession(client: pg.PoolClient, body: unknown, opts: 
     scope: tenancy.scope,
     actor: parsed.actor ?? "session_api",
     input_text: inputText,
-    auto_embed: parsed.auto_embed ?? false,
+    auto_embed: parsed.auto_embed ?? true,
     memory_lane: parsed.memory_lane,
     producer_agent_id: parsed.producer_agent_id,
     owner_agent_id: parsed.owner_agent_id,
@@ -252,14 +255,22 @@ export async function createSession(client: pg.PoolClient, body: unknown, opts: 
     opts.embedder,
   );
   const out = opts.liteWriteStore
-    ? await opts.liteWriteStore.withTx(() => applyMemoryWrite({} as any, prepared, {
-        maxTextLen: opts.maxTextLen,
-        piiRedaction: opts.piiRedaction,
-        allowCrossScopeEdges: opts.allowCrossScopeEdges,
-        shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
-        shadowDualWriteStrict: opts.shadowDualWriteStrict,
-        write_access: opts.liteWriteStore as any,
-      }))
+    ? (
+        await commitLitePreparedWriteWithProjection({
+          prepared: prepared as any,
+          liteWriteStore: opts.liteWriteStore as any,
+          embedder: opts.embedder,
+          governanceReviewProviders: opts.governanceReviewProviders,
+          writeOptions: {
+            maxTextLen: opts.maxTextLen,
+            piiRedaction: opts.piiRedaction,
+            allowCrossScopeEdges: opts.allowCrossScopeEdges,
+            shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
+            shadowDualWriteStrict: opts.shadowDualWriteStrict,
+            associativeLinkOrigin: "session_create",
+          },
+        })
+      ).out
     : await applyMemoryWrite(client, prepared, {
         maxTextLen: opts.maxTextLen,
         piiRedaction: opts.piiRedaction,

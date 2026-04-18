@@ -78,6 +78,13 @@ features:
       <div class="home-proof-metric"><code>distillation=handoff_continuity_carrier</code></div>
       <div class="home-proof-code"><code>distillation=session_event_continuity_carrier</code></div>
     </a>
+    <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
+      <span class="home-proof-runbook-label">Demo 5</span>
+      <h3>Session continuity promoted a stable workflow</h3>
+      <p>Repeated session state now counts as distinct workflow observations instead of depending on an event-only path.</p>
+      <div class="home-proof-metric"><code>distillation=session_continuity_carrier</code></div>
+      <div class="home-proof-code"><code>observed_count = 2</code></div>
+    </a>
   </div>
 </div>
 
@@ -148,12 +155,13 @@ Aionis turns continuity into runtime infrastructure instead of leaving it inside
 
 <div class="section-frame">
   <span class="section-label">Why the new proof path matters</span>
-  <p>Many systems can run a long task. That is not the same as proving that the next task starts better, that stable execution becomes inspectable policy memory, that the resulting policy can be governed instead of silently drifting, and that continuity provenance survives workflow promotion. The new evidence path is meant to prove those four claims directly.</p>
+  <p>Many systems can run a long task. That is not the same as proving that the next task starts better, that stable execution becomes inspectable policy memory, that the resulting policy can be governed instead of silently drifting, that continuity provenance survives workflow promotion, and that repeated session state can itself promote stable workflow guidance. The new evidence path is meant to prove those five claims directly.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">task-start-proof</span>
     <span class="doc-chip">policy-memory</span>
     <span class="doc-chip">policy-governance</span>
     <span class="doc-chip">continuity-provenance</span>
+    <span class="doc-chip">session-continuity</span>
   </div>
 </div>
 

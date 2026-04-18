@@ -24,6 +24,7 @@ export const AssociativeLinkTriggerOriginSchema = z.enum([
   "memory_write",
   "handoff_store",
   "replay_write",
+  "session_create",
   "session_event",
 ]);
 

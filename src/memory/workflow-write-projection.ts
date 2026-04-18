@@ -73,6 +73,7 @@ type WorkflowProjectionAssessment =
       packet: ExecutionPacketV1 | null;
       workflowSignature: string;
       projectionClientId: string;
+      projectionObservationId: string;
       ownerAgentId: string | null;
       ownerTeamId: string | null;
     };
@@ -241,6 +242,20 @@ function resolveWorkflowProjectionDistillationSourceKind(
   return "execution_projection";
 }
 
+function deriveWorkflowProjectionObservationId(
+  source: WriteProjectionSourceNode,
+  state: ExecutionStateV1 | null,
+  packet: ExecutionPacketV1 | null,
+): string {
+  const sourceKind = resolveWorkflowProjectionDistillationSourceKind(source);
+  if (sourceKind === "session_carrier") {
+    return firstString(state?.state_id ?? null, packet?.state_id ?? null)
+      ?? firstString(source.client_id)
+      ?? source.id;
+  }
+  return firstString(source.client_id) ?? source.id;
+}
+
 function deriveCandidateTitle(
   source: WriteProjectionSourceNode,
   state: ExecutionStateV1 | null,
@@ -292,7 +307,9 @@ function sourceAlreadyCarriesWorkflowMemory(node: WriteProjectionSourceNode): bo
 }
 
 export function assessWorkflowProjectionSourceNode(source: WriteProjectionSourceNode): WorkflowProjectionAssessment {
-  if (source.type !== "event") {
+  const systemKind = firstString(asRecord(source.slots)?.system_kind);
+  const isSessionTopicCarrier = source.type === "topic" && systemKind === "session";
+  if (source.type !== "event" && !isSessionTopicCarrier) {
     return { eligible: false, reason: "non_event" };
   }
   if (sourceAlreadyCarriesWorkflowMemory(source)) {
@@ -319,12 +336,14 @@ export function assessWorkflowProjectionSourceNode(source: WriteProjectionSource
   }
 
   const workflowSignature = deriveWorkflowSignatureFromInputs(state, packet);
+  const projectionObservationId = deriveWorkflowProjectionObservationId(source, state, packet);
   return {
     eligible: true,
     state,
     packet,
     workflowSignature,
-    projectionClientId: buildProjectionClientId(source.id, workflowSignature),
+    projectionClientId: buildProjectionClientId(projectionObservationId, workflowSignature),
+    projectionObservationId,
     ownerAgentId: source.owner_agent_id ?? source.producer_agent_id ?? null,
     ownerTeamId: source.owner_team_id ?? null,
   };
@@ -340,7 +359,8 @@ function deriveWorkflowObservationIdentity(row: {
   slots?: Record<string, unknown> | null;
 }): string {
   const projection = asRecord(asRecord(row.slots)?.workflow_write_projection);
-  return firstString(projection?.source_client_id)
+  return firstString(projection?.source_observation_id)
+    ?? firstString(projection?.source_client_id)
     ?? firstString(projection?.source_node_id)
     ?? firstString(row.client_id)
     ?? row.id;
@@ -350,22 +370,30 @@ async function findLinkedWorkflowProjection(args: {
   liteWriteStore: LiteWorkflowProjectionStore;
   scope: string;
   source: WriteProjectionSourceNode;
+  projectionObservationId: string;
   consumerAgentId?: string | null;
   consumerTeamId?: string | null;
 }): Promise<boolean> {
+  const defaultObservationId = firstString(args.source.client_id) ?? args.source.id;
   const queries: Array<Record<string, unknown>> = [];
-  if (args.source.client_id) {
+  if (args.projectionObservationId !== defaultObservationId) {
+    queries.push({
+      workflow_write_projection: {
+        source_observation_id: args.projectionObservationId,
+      },
+    });
+  } else if (args.source.client_id) {
     queries.push({
       workflow_write_projection: {
         source_client_id: args.source.client_id,
       },
     });
+    queries.push({
+      workflow_write_projection: {
+        source_node_id: args.source.id,
+      },
+    });
   }
-  queries.push({
-    workflow_write_projection: {
-      source_node_id: args.source.id,
-    },
-  });
 
   for (const type of ["event", "procedure"] as const) {
     for (const slotsContains of queries) {
@@ -409,7 +437,7 @@ export async function explainWorkflowProjectionForSourceNode(args: {
     };
   }
 
-  const { workflowSignature, projectionClientId, ownerAgentId, ownerTeamId } = assessment;
+  const { workflowSignature, projectionClientId, projectionObservationId, ownerAgentId, ownerTeamId } = assessment;
   const existingStable = await args.liteWriteStore.findExecutionNativeNodes({
     scope: args.scope,
     consumerAgentId: ownerAgentId,
@@ -424,6 +452,7 @@ export async function explainWorkflowProjectionForSourceNode(args: {
     liteWriteStore: args.liteWriteStore,
     scope: args.scope,
     source: args.source,
+    projectionObservationId,
     consumerAgentId: ownerAgentId,
     consumerTeamId: ownerTeamId,
   });
@@ -553,7 +582,15 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
     const assessment = assessWorkflowProjectionSourceNode(source);
     if (!assessment.eligible) continue;
 
-    const { state, packet, workflowSignature, projectionClientId, ownerAgentId, ownerTeamId } = assessment;
+    const {
+      state,
+      packet,
+      workflowSignature,
+      projectionClientId,
+      projectionObservationId,
+      ownerAgentId,
+      ownerTeamId,
+    } = assessment;
     if (seenSignatures.has(workflowSignature)) continue;
     seenSignatures.add(workflowSignature);
 
@@ -574,6 +611,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
       liteWriteStore: args.liteWriteStore,
       scope: args.scope,
       source,
+      projectionObservationId,
       consumerAgentId: ownerAgentId,
       consumerTeamId: ownerTeamId,
     });
@@ -684,6 +722,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
           generated_by: "execution_write_projection_v1",
           source_node_id: source.id,
           source_client_id: source.client_id ?? null,
+          source_observation_id: projectionObservationId,
           generated_at: now,
           workflow_signature: workflowSignature,
           ...(governancePreview ? {
@@ -766,6 +805,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
             generated_by: "execution_write_projection_v1",
             source_node_id: source.id,
             source_client_id: source.client_id ?? null,
+            source_observation_id: projectionObservationId,
             generated_at: now,
             workflow_signature: workflowSignature,
             auto_promoted: true,

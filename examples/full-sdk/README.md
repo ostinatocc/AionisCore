@@ -34,6 +34,7 @@ npm run example:sdk:task-start-proof
 npm run example:sdk:policy-memory
 npm run example:sdk:policy-governance
 npm run example:sdk:continuity-provenance
+npm run example:sdk:session-continuity
 ```
 
 The same SDK client can also call Lite lifecycle mutations directly:
@@ -69,3 +70,5 @@ Examples:
   materializes policy memory, retires it, reactivates it, and confirms the governance loop through the public SDK
 - `11-continuity-provenance-proof.ts`
   proves that handoff and session-event continuity carriers keep their `distillation_origin` through candidate and stable workflow promotion
+- `12-session-continuity-proof.ts`
+  proves that repeated `memory.sessions.create(...)` calls can promote stable workflow guidance through `session_continuity_carrier`, not only through session events

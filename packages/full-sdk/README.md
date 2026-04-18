@@ -128,6 +128,7 @@ npm run example:sdk:policy-memory
 npm run example:sdk:policy-governance
 WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED=true npm run lite:start
 npm run example:sdk:continuity-provenance
+npm run example:sdk:session-continuity
 ```
 
 Agent-memory façade example:

@@ -215,22 +215,26 @@ function collectPatternSignals(recall: any): PatternSignal[] {
 function collectWorkflowSignals(packet: ReturnType<typeof normalizeActionRecallPacket>) {
   const stable = packet.recommended_workflows
     .filter((entry: any) => !!entry && typeof entry === "object")
-    .map((entry: any) => ({
-      anchor_id: String(entry?.anchor_id || "").trim(),
-      anchor_level: String(entry?.anchor_level || "").trim() || null,
-      title: String(entry?.title || "").trim() || null,
-      summary: String(entry?.summary || "").trim() || null,
-      promotion_state: "stable" as const,
-      promotion_ready: false,
-      observed_count: null,
-      required_observations: null,
-      source_kind: String(entry?.source_kind || "").trim() || null,
-      promotion_origin: String(entry?.promotion_origin || "").trim() || null,
-      last_transition: String(entry?.last_transition || "").trim() || null,
-      maintenance_state: String(entry?.maintenance_state || "").trim() || null,
-      offline_priority: String(entry?.offline_priority || "").trim() || null,
-      last_maintenance_at: String(entry?.last_maintenance_at || "").trim() || null,
-    }))
+    .map((entry: any) => {
+      const observedCount = firstFiniteNumber(entry?.observed_count);
+      const requiredObservations = firstFiniteNumber(entry?.required_observations);
+      return {
+        anchor_id: String(entry?.anchor_id || "").trim(),
+        anchor_level: String(entry?.anchor_level || "").trim() || null,
+        title: String(entry?.title || "").trim() || null,
+        summary: String(entry?.summary || "").trim() || null,
+        promotion_state: "stable" as const,
+        promotion_ready: false,
+        observed_count: observedCount,
+        required_observations: requiredObservations,
+        source_kind: String(entry?.source_kind || "").trim() || null,
+        promotion_origin: String(entry?.promotion_origin || "").trim() || null,
+        last_transition: String(entry?.last_transition || "").trim() || null,
+        maintenance_state: String(entry?.maintenance_state || "").trim() || null,
+        offline_priority: String(entry?.offline_priority || "").trim() || null,
+        last_maintenance_at: String(entry?.last_maintenance_at || "").trim() || null,
+      };
+    })
     .filter((entry: any) => entry.anchor_id);
   const candidate = packet.candidate_workflows
     .filter((entry: any) => !!entry && typeof entry === "object")
