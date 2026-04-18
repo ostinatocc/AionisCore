@@ -4,6 +4,7 @@ import { sha256Hex } from "../util/crypto.js";
 import { normalizeText } from "../util/normalize.js";
 import { redactPII } from "../util/redaction.js";
 import { badRequest } from "../util/http.js";
+import { MEMORY_TIER_RANK, type MemoryTierName } from "./evolution-operators.js";
 import { MemoryArchiveRehydrateRequest } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
 
@@ -14,14 +15,7 @@ type RehydrateOptions = {
 
 type NodeTierRow = {
   id: string;
-  tier: "hot" | "warm" | "cold" | "archive";
-};
-
-const TIER_RANK: Record<"archive" | "cold" | "warm" | "hot", number> = {
-  archive: 0,
-  cold: 1,
-  warm: 2,
-  hot: 3,
+  tier: MemoryTierName;
 };
 
 function uniqStrings(xs: string[]): string[] {
@@ -105,8 +99,8 @@ export async function rehydrateArchiveNodes(
   for (const id of resolvedNodeIds) {
     const row = foundMap.get(id);
     if (!row) continue;
-    const fromRank = TIER_RANK[row.tier];
-    const toRank = TIER_RANK[parsed.target_tier];
+    const fromRank = MEMORY_TIER_RANK[row.tier];
+    const toRank = MEMORY_TIER_RANK[parsed.target_tier];
     if (fromRank < toRank) movableIds.push(id);
     else noopIds.push(id);
   }
@@ -225,7 +219,7 @@ export async function rehydrateArchiveNodes(
         END
       ) < $8::int
     `,
-    [scope, parsed.target_tier, startedAt, commitId, movableIds, reason, inputSha, TIER_RANK[parsed.target_tier]],
+    [scope, parsed.target_tier, startedAt, commitId, movableIds, reason, inputSha, MEMORY_TIER_RANK[parsed.target_tier]],
   );
 
   return {

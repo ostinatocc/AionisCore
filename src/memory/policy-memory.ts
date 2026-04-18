@@ -17,6 +17,7 @@ import {
   type PolicyGovernanceContract,
 } from "./schemas.js";
 import { resolveNodePriorityProfile } from "./importance-dynamics.js";
+import { resolveSemanticForgettingDecision } from "./semantic-forgetting.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
@@ -559,6 +560,17 @@ async function applyPolicyMemoryFeedbackToNodes(args: {
       taskSignature: firstString(nextSlots.task_signature),
       errorSignature: firstString(nextSlots.error_signature),
     });
+    nextSlots.semantic_forgetting_v1 = resolveSemanticForgettingDecision({
+      type: "concept",
+      tier: node.tier,
+      title: node.title,
+      text_summary: nextSummary,
+      slots: nextSlots,
+      salience: nextState.salience,
+      importance: nextState.importance,
+      confidence: nextState.confidence,
+      reference_time: args.feedbackAt,
+    });
     await args.updateNode(node, {
       slots: nextSlots,
       textSummary: nextSummary,
@@ -829,6 +841,17 @@ async function applyPolicyMemoryGovernanceToNode(args: {
     slots: nextSlots,
     reference_time: args.appliedAt,
   });
+  nextSlots.semantic_forgetting_v1 = resolveSemanticForgettingDecision({
+    type: "concept",
+    tier: args.node.tier,
+    title: args.node.title,
+    text_summary: nextSummary,
+    slots: nextSlots,
+    salience: nextPriority.salience,
+    importance: nextPriority.importance,
+    confidence: nextPriority.confidence,
+    reference_time: args.appliedAt,
+  });
   await args.updateNode(args.node, {
     slots: nextSlots,
     textSummary: nextSummary,
@@ -947,6 +970,13 @@ export async function writePolicyMemorySnapshot(
         ...slots,
       }
     : slots;
+  mergedSlots.semantic_forgetting_v1 = resolveSemanticForgettingDecision({
+    type: "concept",
+    tier: existingNode?.tier ?? "warm",
+    title,
+    text_summary: summary,
+    slots: mergedSlots,
+  });
   const profile = resolveNodePriorityProfile({
     type: "concept",
     title,

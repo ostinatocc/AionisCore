@@ -17,8 +17,10 @@ function tmpDbPath(name: string): string {
 async function seedAnchorFixture() {
   const store = createLiteWriteStore(tmpDbPath("rehydrate"));
   const payloadNodeId = randomUUID();
+  const secondaryPayloadNodeId = randomUUID();
   const anchorNodeId = randomUUID();
   const decisionId = randomUUID();
+  const secondaryDecisionId = randomUUID();
   const runId = "run-anchor-1";
 
   const prepared = await prepareMemoryWrite({
@@ -42,6 +44,23 @@ async function seedAnchorFixture() {
           step_index: 3,
           status: "succeeded",
           tool_input: { file: "src/index.ts" },
+        },
+      },
+      {
+        id: secondaryPayloadNodeId,
+        type: "procedure",
+        tier: "cold",
+        memory_lane: "private",
+        owner_agent_id: "local-user",
+        title: "Rollback migration after failed checksum",
+        text_summary: "Inspect migration checksum failure, revert change, rerun migration",
+        slots: {
+          replay_kind: "step",
+          replay_kind_phase: "after",
+          tool_name: "bash",
+          step_index: 4,
+          status: "succeeded",
+          tool_input: { command: "pnpm db:migrate:down" },
         },
       },
       {
@@ -79,8 +98,8 @@ async function seedAnchorFixture() {
               commit_id: null,
             },
             payload_refs: {
-              node_ids: [payloadNodeId],
-              decision_ids: [decisionId],
+              node_ids: [payloadNodeId, secondaryPayloadNodeId],
+              decision_ids: [decisionId, secondaryDecisionId],
               run_ids: [runId],
               step_ids: [],
               commit_ids: [],
@@ -128,7 +147,24 @@ async function seedAnchorFixture() {
     commitId: null,
   });
 
-  return { store, payloadNodeId, anchorNodeId, decisionId, runId };
+  await store.insertExecutionDecision({
+    id: secondaryDecisionId,
+    scope: "default",
+    decisionKind: "tools_select",
+    runId,
+    selectedTool: "bash",
+    candidatesJson: ["bash", "edit"],
+    contextSha256: "e".repeat(64),
+    policySha256: "f".repeat(64),
+    sourceRuleIds: [],
+    metadataJson: {
+      execution_stage: "rollback",
+      matched_rules: 1,
+    },
+    commitId: null,
+  });
+
+  return { store, payloadNodeId, secondaryPayloadNodeId, anchorNodeId, decisionId, secondaryDecisionId, runId };
 }
 
 test("rehydrateAnchorPayloadLite returns anchor-only result in summary_only mode", async () => {
@@ -150,7 +186,7 @@ test("rehydrateAnchorPayloadLite returns anchor-only result in summary_only mode
 });
 
 test("rehydrateAnchorPayloadLite returns linked node and decision summaries in partial mode", async () => {
-  const { store, anchorNodeId, payloadNodeId, decisionId } = await seedAnchorFixture();
+  const { store, anchorNodeId, payloadNodeId, decisionId, secondaryPayloadNodeId, secondaryDecisionId } = await seedAnchorFixture();
   try {
     const out = await rehydrateAnchorPayloadLite(store, {
       anchor_id: anchorNodeId,
@@ -158,11 +194,11 @@ test("rehydrateAnchorPayloadLite returns linked node and decision summaries in p
       mode: "partial",
     }, "default", "default");
 
-    assert.equal(out.rehydrated.summary.resolved_nodes, 1);
-    assert.equal(out.rehydrated.summary.resolved_decisions, 1);
-    assert.equal(out.rehydrated.nodes[0]?.id, payloadNodeId);
-    assert.equal(out.rehydrated.decisions[0]?.decision_id, decisionId);
-    assert.equal(out.rehydrated.decisions[0]?.selected_tool, "edit");
+    assert.equal(out.rehydrated.summary.resolved_nodes, 2);
+    assert.equal(out.rehydrated.summary.resolved_decisions, 2);
+    assert.deepEqual(out.rehydrated.nodes.map((row) => row.id).sort(), [payloadNodeId, secondaryPayloadNodeId].sort());
+    assert.deepEqual(out.rehydrated.decisions.map((row) => row.decision_id).sort(), [decisionId, secondaryDecisionId].sort());
+    assert.ok(out.rehydrated.decisions.some((row) => row.selected_tool === "edit"));
     assert.equal("slots" in (out.rehydrated.nodes[0] ?? {}), false);
   } finally {
     await store.close();
@@ -177,10 +213,10 @@ test("rehydrateAnchorPayloadLite falls back to the Lite local actor when actor i
       mode: "partial",
     }, "default", "default", "local-user");
 
-    assert.equal(out.rehydrated.summary.resolved_nodes, 1);
-    assert.equal(out.rehydrated.summary.resolved_decisions, 1);
-    assert.equal(out.rehydrated.nodes[0]?.id, payloadNodeId);
-    assert.equal(out.rehydrated.decisions[0]?.decision_id, decisionId);
+    assert.equal(out.rehydrated.summary.resolved_nodes, 2);
+    assert.equal(out.rehydrated.summary.resolved_decisions, 2);
+    assert.ok(out.rehydrated.nodes.some((row) => row.id === payloadNodeId));
+    assert.ok(out.rehydrated.decisions.some((row) => row.decision_id === decisionId));
   } finally {
     await store.close();
   }
@@ -204,6 +240,39 @@ test("rehydrateAnchorPayloadLite supports anchor_uri and returns fuller payload 
     assert.equal(typeof out.rehydrated.nodes[0]?.slots, "object");
     assert.equal(typeof out.rehydrated.decisions[0]?.metadata, "object");
     assert.ok(out.rehydrated.commits.length >= 1);
+  } finally {
+    await store.close();
+  }
+});
+
+test("rehydrateAnchorPayloadLite supports differential mode with adjudicated selection", async () => {
+  const { store, anchorNodeId, payloadNodeId, decisionId } = await seedAnchorFixture();
+  try {
+    const out = await rehydrateAnchorPayloadLite(store, {
+      anchor_id: anchorNodeId,
+      actor: "local-user",
+      mode: "differential",
+      reason: "Need the export patch path, not the migration rollback",
+      adjudication: {
+        disposition: "recommend",
+        operation: "rehydrate_payload",
+        target_kind: "workflow",
+        target_level: "L2",
+        reason: "Only restore the payload directly tied to the export mismatch fix.",
+        confidence: 0.92,
+        keep_details: ["export", "patch"],
+        drop_details: ["migration", "rollback"],
+        related_memory_ids: [payloadNodeId],
+        related_decision_ids: [decisionId],
+      },
+    }, "default", "default");
+
+    assert.equal(out.mode, "differential");
+    assert.equal(out.rehydrated.summary.resolved_nodes, 1);
+    assert.equal(out.rehydrated.summary.resolved_decisions, 1);
+    assert.deepEqual((out.rehydrated.summary as any).differential_selected_node_ids, [payloadNodeId]);
+    assert.deepEqual((out.rehydrated.summary as any).differential_selected_decision_ids, [decisionId]);
+    assert.ok(Array.isArray((out.rehydrated.summary as any).differential_rationale));
   } finally {
     await store.close();
   }

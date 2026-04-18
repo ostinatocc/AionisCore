@@ -37,7 +37,7 @@ export type RuntimeToolHint = {
   invocation: {
     anchor_id: string;
     anchor_uri: string;
-    mode: "summary_only" | "partial" | "full";
+    mode: "summary_only" | "partial" | "full" | "differential";
     example_call: string;
   };
   payload_cost_hint: "low" | "medium" | "high" | null;
@@ -103,7 +103,7 @@ export function buildRuntimeToolHintsFromAnchorNodes(args: {
       if (!anchorKind || !anchorLevel) return null;
       const rehydration = asRecord(anchor.rehydration);
       const defaultModeRaw = firstString(rehydration?.default_mode);
-      const mode = defaultModeRaw === "summary_only" || defaultModeRaw === "full" || defaultModeRaw === "partial"
+      const mode = defaultModeRaw === "summary_only" || defaultModeRaw === "full" || defaultModeRaw === "partial" || defaultModeRaw === "differential"
         ? defaultModeRaw
         : "partial";
       const payloadCostHintRaw = firstString(rehydration?.payload_cost_hint);

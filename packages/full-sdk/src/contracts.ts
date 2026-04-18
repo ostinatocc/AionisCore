@@ -903,7 +903,7 @@ export type AionisAnchorRehydratePayloadRequest = {
   tenant_id?: string;
   scope?: string;
   anchor_id: string;
-  mode?: "summary_only" | "partial" | "full";
+  mode?: "summary_only" | "partial" | "full" | "differential";
 } & AionisRequestPayload;
 
 export type AionisSessionCreateRequest = {

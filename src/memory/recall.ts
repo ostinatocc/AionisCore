@@ -170,7 +170,7 @@ type ActionRecallWorkflow = {
   workflow_signature: string | null;
   last_transition: "candidate_observed" | "promoted_to_stable" | "normalized_latest_stable" | null;
   last_transition_at: string | null;
-  rehydration_default_mode: "summary_only" | "partial" | "full" | null;
+  rehydration_default_mode: "summary_only" | "partial" | "full" | "differential" | null;
   tool_set: string[];
   maintenance_state: "observe" | "retain" | "review" | null;
   offline_priority: "none" | "promote_candidate" | "review_counter_evidence" | "retain_trusted" | "retain_workflow" | null;
@@ -207,7 +207,7 @@ type ActionRecallRehydrationCandidate = {
   anchor_level: string;
   title: string | null;
   summary: string | null;
-  mode: "summary_only" | "partial" | "full";
+  mode: "summary_only" | "partial" | "full" | "differential";
   payload_cost_hint: "low" | "medium" | "high" | null;
   recommended_when: string[];
   trusted: boolean;

@@ -5,6 +5,7 @@ import {
   MemoryPayloadRehydrateToolRequest,
   type MemoryPayloadRehydrateToolInput,
 } from "./schemas.js";
+import { buildDifferentialRehydrationPlan } from "./differential-rehydration.js";
 import { resolveTenantScope } from "./tenant.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
 
@@ -123,6 +124,10 @@ function summarizeCommit(row: LiteResolveCommitRow, tenancy: { tenant_id: string
       decisions: row.decision_count,
     },
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
 export async function rehydrateAnchorPayloadLite(
@@ -255,6 +260,35 @@ export async function rehydrateAnchorPayloadLite(
       continue;
     }
     out.rehydrated.decisions.push(summarizeDecision(row, tenancy, full));
+  }
+
+  if (parsed.mode === "differential") {
+    const plan = buildDifferentialRehydrationPlan({
+      nodes: out.rehydrated.nodes.map((row) => ({
+        id: row.id,
+        title: row.title,
+        summary: row.text_summary,
+      })),
+      decisions: out.rehydrated.decisions.map((row) => ({
+        id: row.decision_id,
+        title: row.decision_kind,
+        summary: row.selected_tool,
+        selected_tool: row.selected_tool,
+        run_id: row.run_id,
+        metadata: null,
+      })),
+      reason: parsed.reason ?? null,
+      adjudication: asRecord(parsed.adjudication),
+    });
+    const selectedNodeIds = new Set(plan.node_ids);
+    const selectedDecisionIds = new Set(plan.decision_ids);
+    out.rehydrated.nodes = out.rehydrated.nodes.filter((row) => selectedNodeIds.has(row.id));
+    out.rehydrated.decisions = out.rehydrated.decisions.filter((row) => selectedDecisionIds.has(row.decision_id));
+    Object.assign(out.rehydrated.summary, {
+      differential_selected_node_ids: plan.node_ids,
+      differential_selected_decision_ids: plan.decision_ids,
+      differential_rationale: plan.rationale,
+    });
   }
 
   for (const commitId of uniqueStrings([

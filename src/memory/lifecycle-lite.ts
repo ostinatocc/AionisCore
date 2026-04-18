@@ -4,7 +4,9 @@ import { normalizeText } from "../util/normalize.js";
 import { redactPII } from "../util/redaction.js";
 import { badRequest } from "../util/http.js";
 import { computeFeedbackUpdatedNodeState } from "./node-feedback-state.js";
+import { MEMORY_TIER_RANK, type MemoryTierName } from "./evolution-operators.js";
 import { MemoryArchiveRehydrateRequest, MemoryNodesActivateRequest } from "./schemas.js";
+import { resolveSemanticForgettingDecision } from "./semantic-forgetting.js";
 import { resolveTenantScope } from "./tenant.js";
 import type { LiteFindNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
 
@@ -14,15 +16,6 @@ type LifecycleOptions = {
   maxTextLen: number;
   piiRedaction: boolean;
   defaultActor: string;
-};
-
-type Tier = "archive" | "cold" | "warm" | "hot";
-
-const TIER_RANK: Record<Tier, number> = {
-  archive: 0,
-  cold: 1,
-  warm: 2,
-  hot: 3,
 };
 
 function uniqStrings(values: string[]): string[] {
@@ -130,8 +123,8 @@ export async function rehydrateArchiveNodesLite(
   const movableRows: LiteFindNodeRow[] = [];
   const noopIds: string[] = [];
   for (const row of foundRows) {
-    const fromRank = TIER_RANK[row.tier as Tier] ?? TIER_RANK.archive;
-    const toRank = TIER_RANK[parsed.target_tier];
+    const fromRank = MEMORY_TIER_RANK[(row.tier as MemoryTierName) ?? "archive"] ?? MEMORY_TIER_RANK.archive;
+    const toRank = MEMORY_TIER_RANK[parsed.target_tier];
     if (fromRank < toRank) movableRows.push(row);
     else noopIds.push(row.id);
   }
@@ -198,6 +191,17 @@ export async function rehydrateArchiveNodesLite(
   });
 
   for (const row of movableRows) {
+    const semanticForgetting = resolveSemanticForgettingDecision({
+      type: row.type,
+      tier: parsed.target_tier,
+      title: row.title,
+      text_summary: row.text_summary,
+      slots: row.slots,
+      salience: row.salience,
+      importance: row.importance,
+      confidence: row.confidence,
+      reference_time: startedAt,
+    });
     const nextSlots = {
       ...row.slots,
       last_rehydrated_at: startedAt,
@@ -206,6 +210,7 @@ export async function rehydrateArchiveNodesLite(
       last_rehydrated_to_tier: parsed.target_tier,
       last_rehydrated_reason: reason,
       last_rehydrated_input_sha256: inputSha,
+      semantic_forgetting_v1: semanticForgetting,
     };
     await liteWriteStore.updateNodeAnchorState({
       scope,
@@ -348,6 +353,17 @@ export async function activateMemoryNodesLite(
     const nextSlots: Record<string, unknown> = {
       ...nextState.slots,
     };
+    nextSlots.semantic_forgetting_v1 = resolveSemanticForgettingDecision({
+      type: row.type,
+      tier: row.tier,
+      title: row.title,
+      text_summary: row.text_summary,
+      slots: nextSlots,
+      salience: nextState.salience,
+      importance: nextState.importance,
+      confidence: nextState.confidence,
+      reference_time: startedAt,
+    });
     if (parsed.activate) {
       nextSlots.last_activated_at = startedAt;
     }

@@ -226,7 +226,7 @@ export const MemoryAnchorSourceKind = z.enum([
   "workflow_cluster",
   "execution_write",
 ]);
-export const MemoryAnchorRehydrationMode = z.enum(["summary_only", "partial", "full"]);
+export const MemoryAnchorRehydrationMode = z.enum(["summary_only", "partial", "full", "differential"]);
 export const MemoryAnchorPayloadCostHint = z.enum(["low", "medium", "high"]);
 export const MemoryAnchorOutcomeStatus = z.enum(["success", "failure", "partial", "mixed", "unknown"]);
 
