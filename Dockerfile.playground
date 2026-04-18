@@ -1,0 +1,66 @@
+# syntax=docker/dockerfile:1.7
+#
+# Aionis Playground container — runs Aionis Lite + a public Fastify adapter
+# in a single Fly.io VM. Designed for `flyctl deploy`.
+#
+# Layout inside the image:
+#   /app                       — cloned workspace
+#   /app/node_modules          — workspace deps (fastify, tsx, zod, …)
+#   /app/apps/lite             — Lite launcher
+#   /app/apps/playground-adapter — public Fastify proxy
+#   /app/src                   — Aionis Core runtime (executed via tsx)
+#   /data                      — persistent Fly volume (SQLite + seed marker)
+
+FROM node:22-bookworm-slim AS base
+
+ENV NODE_ENV=production \
+    NPM_CONFIG_UPDATE_NOTIFIER=false \
+    NPM_CONFIG_FUND=false \
+    NPM_CONFIG_AUDIT=false
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates tini \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# --- deps layer ---
+# Copy only the manifests first so Docker can cache `npm ci`.
+COPY package.json package-lock.json ./
+COPY apps/lite/package.json apps/lite/package.json
+COPY apps/playground-adapter/package.json apps/playground-adapter/package.json
+
+# The workspace root install hoists fastify, zod, tsx into /app/node_modules,
+# which is what the entrypoint and adapter both use.
+# --include=dev pulls `tsx` (which Lite spawns to run src/index.ts).
+# --omit=optional skips @fastify/static (Inspector static hosting is off in prod
+# anyway) and trims the image.
+RUN npm ci --include=dev --omit=optional --ignore-scripts --no-audit --no-fund
+
+# --- source layer ---
+COPY tsconfig.json ./
+COPY src ./src
+COPY apps/lite ./apps/lite
+COPY apps/playground-adapter ./apps/playground-adapter
+COPY apps/playground/scripts ./apps/playground/scripts
+COPY apps/playground/public/seed-pack.json ./apps/playground/public/seed-pack.json
+COPY scripts/playground-container-entrypoint.sh ./scripts/playground-container-entrypoint.sh
+
+RUN chmod +x ./scripts/playground-container-entrypoint.sh
+
+# --- runtime config ---
+# PORT is Lite's internal port; ADAPTER_PORT is what Fly routes to.
+ENV PORT=3001 \
+    ADAPTER_PORT=8080 \
+    ADAPTER_HOST=0.0.0.0 \
+    LITE_UPSTREAM=http://127.0.0.1:3001 \
+    LITE_INSPECTOR_ENABLED=false \
+    DATA_DIR=/data \
+    SEED_PACK_PATH=/app/apps/playground/public/seed-pack.json
+
+EXPOSE 8080
+
+# tini handles signal forwarding so Fly's graceful shutdown actually stops
+# both Lite and the adapter.
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["bash", "/app/scripts/playground-container-entrypoint.sh"]

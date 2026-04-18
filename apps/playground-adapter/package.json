@@ -1,0 +1,15 @@
+{
+  "name": "aionis-playground-adapter",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Public Fastify adapter in front of Aionis Lite for the hosted Playground demo. Whitelists a tiny read-only surface and rate-limits by IP.",
+  "main": "src/server.mjs",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "dev": "node src/server.mjs"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

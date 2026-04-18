@@ -1,0 +1,28 @@
+{
+  "name": "aionis-inspector",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Local read-only observation UI for Aionis Lite runtime",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "seed:generate": "node scripts/generate-seed.mjs"
+  },
+  "dependencies": {
+    "preact": "^10.25.4"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

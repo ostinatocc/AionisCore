@@ -15,6 +15,7 @@ import {
   registerHostErrorHandler,
   registerHostRequestHooks,
 } from "./host/http-host.js";
+import { registerInspectorStaticRoutes } from "./host/inspector-static.js";
 import { createRecallPolicy } from "./app/recall-policy.js";
 import { createRecallTextEmbedRuntime } from "./app/recall-text-embed.js";
 import { createReplayRepairReviewPolicy } from "./app/replay-repair-review-policy.js";
@@ -246,6 +247,8 @@ export async function startAionisRuntime(): Promise<void> {
     runTopicClusterForEventIds,
   };
   registerApplicationRoutes(applicationRouteArgs);
+
+  await registerInspectorStaticRoutes(app, env);
 
   registerBootstrapLifecycle({
     app,

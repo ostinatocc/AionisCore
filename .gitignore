@@ -24,6 +24,10 @@ pgdata
 _site
 .vitepress/cache
 **/.vitepress/cache
+.vitepress/.temp
+**/.vitepress/.temp
+.vercel
+**/.vercel
 *.vsix
 packages/sdk/*.tgz
 packages/aionis-doc/*.tgz

@@ -83,6 +83,35 @@ Or prove the core path locally in one command from this repository:
 npm run example:sdk:core-path
 ```
 
+To see what the runtime is doing through a UI, build and open the Inspector:
+
+```bash
+npm run inspector:build      # once after each pull
+npm run lite:start           # then open http://127.0.0.1:3001/inspector
+```
+
+The Inspector is a local, read-only observation surface bundled with Lite. It
+ships disabled-by-missing-bundle, so Lite continues to run normally if you
+never build it. Set `LITE_INSPECTOR_ENABLED=false` to opt out explicitly.
+
+First time using Inspector? The Live tab has a `Load seed pack` button that
+imports a sample scope in one click, so every tab has something to look at
+without running the core-path example first.
+
+Want to show the runtime to somebody who has not installed anything? The
+Playground is a public, read-only demo page that hits a hosted Aionis Lite
+and shows the structured kickoff output. Run it locally against your own
+Lite first:
+
+```bash
+npm run lite:start          # one terminal
+npm run playground:seed     # seed default/playground:demo once
+npm run playground:dev      # → http://127.0.0.1:5190
+```
+
+See [`apps/playground/README.md`](apps/playground/README.md) for Vercel
+deployment instructions.
+
 Then call the learned kickoff surface:
 
 ```ts

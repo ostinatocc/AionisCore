@@ -24,6 +24,7 @@ export function buildLiteRouteMatrix() {
       "memory-sandbox",
       "memory-replay-governed-partial",
       "automations-lite-kernel",
+      "inspector-static",
     ],
     server_only_route_groups: Object.entries(LITE_SERVER_ONLY_ROUTE_GROUPS).map(([group, value]) => ({
       group,

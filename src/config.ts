@@ -193,6 +193,13 @@ const EnvSchema = z.object({
   LITE_REPLAY_SQLITE_PATH: z.string().default(".tmp/aionis-lite-replay.sqlite"),
   LITE_WRITE_SQLITE_PATH: z.string().default(".tmp/aionis-lite-write.sqlite"),
   LITE_LOCAL_ACTOR_ID: z.string().min(1).default("local-user"),
+  LITE_INSPECTOR_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "true").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  LITE_INSPECTOR_DIST_PATH: z.string().default("apps/inspector/dist"),
   DB_POOL_MAX: z.coerce.number().int().positive().max(200).default(30),
   DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   DB_POOL_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
