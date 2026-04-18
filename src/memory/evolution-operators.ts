@@ -129,3 +129,119 @@ export function buildWorkflowPromotionMetadata(args: {
   }
   return out;
 }
+
+export type PatternCredibilityState = "candidate" | "trusted" | "contested";
+
+export type PatternTransitionKind =
+  | "candidate_observed"
+  | "promoted_to_trusted"
+  | "counter_evidence_opened"
+  | "revalidated_to_trusted";
+
+export type PatternMaintenanceMetadata = {
+  model: "lazy_online_v1";
+  maintenance_state: "observe" | "retain" | "review";
+  offline_priority: "none" | "promote_candidate" | "retain_trusted" | "review_counter_evidence";
+  lazy_update_fields: Array<"usage_count" | "last_used_at" | "reuse_success_count" | "reuse_failure_count">;
+  last_maintenance_at: string;
+};
+
+export type PatternPromotionMetadata = {
+  required_distinct_runs: number;
+  distinct_run_count: number;
+  observed_run_ids: string[];
+  counter_evidence_count: number;
+  counter_evidence_open: boolean;
+  credibility_state: PatternCredibilityState;
+  previous_credibility_state: PatternCredibilityState | null;
+  last_transition: PatternTransitionKind;
+  last_transition_at: string;
+  stable_at: string | null;
+  last_validated_at: string | null;
+  last_counter_evidence_at: string | null;
+};
+
+export function buildPatternMaintenanceMetadata(args: {
+  credibility_state: PatternCredibilityState;
+  distinct_run_count: number;
+  required_distinct_runs: number;
+  counter_evidence_open: boolean;
+  at: string;
+}): PatternMaintenanceMetadata {
+  const maintenanceState =
+    args.credibility_state === "contested"
+      ? "review"
+      : args.credibility_state === "trusted"
+        ? "retain"
+        : "observe";
+  const offlinePriority =
+    args.credibility_state === "contested"
+      ? "review_counter_evidence"
+      : args.credibility_state === "trusted"
+        ? "retain_trusted"
+        : args.distinct_run_count >= Math.max(0, args.required_distinct_runs - 1)
+          ? "promote_candidate"
+          : "none";
+  return {
+    model: "lazy_online_v1",
+    maintenance_state: maintenanceState,
+    offline_priority: offlinePriority,
+    lazy_update_fields: [
+      "usage_count",
+      "last_used_at",
+      "reuse_success_count",
+      "reuse_failure_count",
+    ],
+    last_maintenance_at: args.at,
+  };
+}
+
+export function resolvePatternTransition(args: {
+  credibility_state: PatternCredibilityState;
+  previous_credibility_state: PatternCredibilityState | null;
+  fallback_transition?: PatternTransitionKind | null;
+}): PatternTransitionKind {
+  if (args.credibility_state === "contested") return "counter_evidence_opened";
+  if (args.credibility_state === "trusted") {
+    if (args.previous_credibility_state === "contested") return "revalidated_to_trusted";
+    if (args.previous_credibility_state === "trusted") {
+      return args.fallback_transition ?? "promoted_to_trusted";
+    }
+    return "promoted_to_trusted";
+  }
+  return "candidate_observed";
+}
+
+export function buildPatternPromotionMetadata(args: {
+  required_distinct_runs: number;
+  distinct_run_count: number;
+  observed_run_ids: string[];
+  counter_evidence_count: number;
+  counter_evidence_open: boolean;
+  credibility_state: PatternCredibilityState;
+  previous_credibility_state: PatternCredibilityState | null;
+  at: string;
+  stable_at?: string | null;
+  last_validated_at?: string | null;
+  last_counter_evidence_at?: string | null;
+  fallback_transition?: PatternTransitionKind | null;
+}): PatternPromotionMetadata {
+  return {
+    required_distinct_runs: Math.max(1, Math.trunc(args.required_distinct_runs)),
+    distinct_run_count: Math.max(0, Math.trunc(args.distinct_run_count)),
+    observed_run_ids: args.observed_run_ids,
+    counter_evidence_count: Math.max(0, Math.trunc(args.counter_evidence_count)),
+    counter_evidence_open: args.counter_evidence_open,
+    credibility_state: args.credibility_state,
+    previous_credibility_state: args.previous_credibility_state,
+    last_transition: resolvePatternTransition({
+      credibility_state: args.credibility_state,
+      previous_credibility_state: args.previous_credibility_state,
+      fallback_transition: args.fallback_transition ?? null,
+    }),
+    last_transition_at: args.at,
+    stable_at: args.stable_at ?? null,
+    last_validated_at: args.last_validated_at ?? null,
+    last_counter_evidence_at: args.last_counter_evidence_at ?? null,
+  };
+}

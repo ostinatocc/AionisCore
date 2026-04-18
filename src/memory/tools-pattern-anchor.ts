@@ -5,6 +5,12 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import type { LiteFindNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
 import { createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
 import { sha256Hex } from "../util/crypto.js";
+import {
+  buildPatternMaintenanceMetadata,
+  buildPatternPromotionMetadata,
+  type PatternCredibilityState,
+  type PatternTransitionKind,
+} from "./evolution-operators.js";
 import { resolveNodePriorityProfile } from "./importance-dynamics.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema, type MemoryAnchorV1 } from "./schemas.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
@@ -76,44 +82,6 @@ type ExistingPatternAnchorNode = {
   importance: number;
   confidence: number;
 };
-
-type PatternCredibilityState = "candidate" | "trusted" | "contested";
-type PatternTransitionKind = "candidate_observed" | "promoted_to_trusted" | "counter_evidence_opened" | "revalidated_to_trusted";
-
-function buildPatternMaintenance(args: {
-  credibilityState: PatternCredibilityState;
-  distinctRunCount: number;
-  requiredDistinctRuns: number;
-  counterEvidenceOpen: boolean;
-  timestamp: string;
-}) {
-  const maintenanceState =
-    args.credibilityState === "contested"
-      ? "review"
-      : args.credibilityState === "trusted"
-        ? "retain"
-        : "observe";
-  const offlinePriority =
-    args.credibilityState === "contested"
-      ? "review_counter_evidence"
-      : args.credibilityState === "trusted"
-        ? "retain_trusted"
-        : args.distinctRunCount >= Math.max(0, args.requiredDistinctRuns - 1)
-          ? "promote_candidate"
-          : "none";
-  return {
-    model: "lazy_online_v1" as const,
-    maintenance_state: maintenanceState,
-    offline_priority: offlinePriority,
-    lazy_update_fields: [
-      "usage_count",
-      "last_used_at",
-      "reuse_success_count",
-      "reuse_failure_count",
-    ],
-    last_maintenance_at: args.timestamp,
-  };
-}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -305,16 +273,6 @@ function buildPatternAnchor(args: {
       : patternState === "stable"
         ? "trusted"
         : "candidate";
-  const lastTransition: PatternTransitionKind =
-    credibilityState === "contested"
-      ? "counter_evidence_opened"
-      : credibilityState === "trusted"
-        ? existingCredibilityState === "contested"
-          ? "revalidated_to_trusted"
-          : existingCredibilityState === "trusted"
-            ? (existing?.promotion?.last_transition as PatternTransitionKind | null) ?? "promoted_to_trusted"
-            : "promoted_to_trusted"
-        : "candidate_observed";
   const taskSignature = buildTaskSignature({
     taskCue: args.taskCue,
   });
@@ -333,12 +291,12 @@ function buildPatternAnchor(args: {
     ...args.candidates,
     ...args.sourceRuleIds,
   ], 16);
-  const maintenance = buildPatternMaintenance({
-    credibilityState,
-    distinctRunCount,
-    requiredDistinctRuns,
-    counterEvidenceOpen,
-    timestamp: args.decision.created_at,
+  const maintenance = buildPatternMaintenanceMetadata({
+    credibility_state: credibilityState,
+    distinct_run_count: distinctRunCount,
+    required_distinct_runs: requiredDistinctRuns,
+    counter_evidence_open: counterEvidenceOpen,
+    at: args.decision.created_at,
   });
   const promotionGateSatisfied = distinctRunCount >= requiredDistinctRuns;
   const baseAnchor = MemoryAnchorV1Schema.parse({
@@ -418,7 +376,7 @@ function buildPatternAnchor(args: {
       last_used_at: args.decision.created_at,
     },
     maintenance,
-    promotion: {
+    promotion: buildPatternPromotionMetadata({
       required_distinct_runs: requiredDistinctRuns,
       distinct_run_count: distinctRunCount,
       observed_run_ids: nextObservedRunIds,
@@ -426,8 +384,7 @@ function buildPatternAnchor(args: {
       counter_evidence_open: counterEvidenceOpen,
       credibility_state: credibilityState,
       previous_credibility_state: existing ? existingCredibilityState : null,
-      last_transition: lastTransition,
-      last_transition_at: args.decision.created_at,
+      at: args.decision.created_at,
       stable_at: patternState === "stable"
         ? existing?.pattern_state === "stable"
           ? existing?.promotion?.stable_at ?? args.decision.created_at
@@ -439,7 +396,10 @@ function buildPatternAnchor(args: {
       last_counter_evidence_at: args.feedbackOutcome === "negative"
         ? args.decision.created_at
         : existing?.promotion?.last_counter_evidence_at ?? null,
-    },
+      fallback_transition: existingCredibilityState === "trusted"
+        ? (existing?.promotion?.last_transition as PatternTransitionKind | null) ?? "promoted_to_trusted"
+        : null,
+    }),
     trust_hardening: {
       task_family: args.taskFamily,
       error_family: args.errorFamily,
@@ -479,21 +439,30 @@ function buildPatternAnchor(args: {
       feedbackOutcome: args.feedbackOutcome,
       ruleBacked: args.sourceRuleIds.length > 0,
     }),
-    maintenance: buildPatternMaintenance({
-      credibilityState: "trusted",
-      distinctRunCount,
-      requiredDistinctRuns,
-      counterEvidenceOpen: false,
-      timestamp: args.decision.created_at,
+    maintenance: buildPatternMaintenanceMetadata({
+      credibility_state: "trusted",
+      distinct_run_count: distinctRunCount,
+      required_distinct_runs: requiredDistinctRuns,
+      counter_evidence_open: false,
+      at: args.decision.created_at,
     }),
     promotion: {
       ...baseAnchor.promotion,
-      counter_evidence_open: false,
-      credibility_state: "trusted",
-      previous_credibility_state: baseAnchor.credibility_state ?? baseAnchor.promotion?.credibility_state ?? "candidate",
-      last_transition: baseAnchor.credibility_state === "contested" ? "revalidated_to_trusted" : "promoted_to_trusted",
-      last_transition_at: args.decision.created_at,
-      stable_at: baseAnchor.promotion?.stable_at ?? args.decision.created_at,
+      ...buildPatternPromotionMetadata({
+        required_distinct_runs: Number(baseAnchor.promotion?.required_distinct_runs ?? requiredDistinctRuns),
+        distinct_run_count: Number(baseAnchor.promotion?.distinct_run_count ?? distinctRunCount),
+        observed_run_ids: Array.isArray(baseAnchor.promotion?.observed_run_ids)
+          ? baseAnchor.promotion.observed_run_ids.filter((value): value is string => typeof value === "string")
+          : [],
+        counter_evidence_count: Number(baseAnchor.promotion?.counter_evidence_count ?? nextCounterEvidenceCount),
+        counter_evidence_open: false,
+        credibility_state: "trusted",
+        previous_credibility_state: (baseAnchor.credibility_state ?? baseAnchor.promotion?.credibility_state ?? "candidate") as PatternCredibilityState,
+        at: args.decision.created_at,
+        stable_at: baseAnchor.promotion?.stable_at ?? args.decision.created_at,
+        last_validated_at: args.decision.created_at,
+        last_counter_evidence_at: baseAnchor.promotion?.last_counter_evidence_at ?? null,
+      }),
     },
     trust_hardening: {
       ...baseAnchor.trust_hardening,
