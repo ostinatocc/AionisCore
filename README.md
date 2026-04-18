@@ -1,6 +1,6 @@
 # Aionis Runtime
 
-`Aionis Runtime` is a local continuity runtime for coding agents.
+`Aionis Runtime` is a self-evolving continuity runtime for agent systems.
 
 `Aionis Core` is the kernel inside this repository.  
 `Lite` is the public runtime shape that ships today.
@@ -18,7 +18,7 @@ Most agents can reason inside one session. They break when work spans retries, h
 
 ## Who It's For
 
-- teams building coding agents, CLI agents, or local agent runtimes
+- teams building coding agents, ops agents, CLI agents, or local agent runtimes
 - developers validating continuity loops before building a hosted product
 - infrastructure teams that want typed SDK and route contracts instead of opaque agent state
 

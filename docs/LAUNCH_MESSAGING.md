@@ -6,11 +6,11 @@ Document status: living public launch messaging baseline
 
 This document is the external messaging baseline for the current `Aionis Runtime` release phase.
 
-Current recommendation: launch `Aionis Runtime` as a technical beta for developers building coding agents, local runtimes, and agent infrastructure.
+Current recommendation: launch `Aionis Runtime` as a technical beta for teams building agent systems, especially coding agents, local runtimes, and agent infrastructure.
 
 ## One-Line Positioning
 
-`Aionis Runtime` is a local continuity runtime that helps coding agents start better, resume cleanly, and reuse successful work.
+`Aionis Runtime` is a self-evolving continuity runtime for agent systems that helps agents start better, resume cleanly, and reuse successful work.
 
 ## Short Pitch
 
@@ -122,7 +122,7 @@ This is the strongest proof that Aionis is not just storage. It is trying to tur
 
 Headline:
 
-`Execution-memory kernel for coding agents`
+`Self-evolving continuity runtime for agent systems`
 
 Subhead:
 
@@ -136,7 +136,7 @@ Supporting line:
 
 Use this when posting the repo in a launch thread:
 
-`Aionis Runtime is a local continuity runtime for coding agents. Instead of treating continuity as prompt glue, it gives you explicit runtime surfaces for learned kickoff, structured handoff, replay, playbooks, and local automation. The current release is a local-first technical beta with a typed SDK and contract-tested Lite runtime.`
+`Aionis Runtime is a self-evolving continuity runtime for agent systems. Instead of treating continuity as prompt glue, it gives you explicit runtime surfaces for learned kickoff, structured handoff, replay, playbooks, and local automation. The current release is a local-first technical beta with a typed SDK and contract-tested Lite runtime.`
 
 ## Suggested "What It Is Not" Copy
 

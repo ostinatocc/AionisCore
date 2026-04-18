@@ -6,7 +6,7 @@ Document status: living public product definition
 
 ## One-Line Definition
 
-Aionis Runtime is the local continuity runtime for coding agents.
+Aionis Runtime is the self-evolving continuity runtime for agent systems.
 
 It is built from the Aionis Core kernel in this repository and owns the runtime primitives that let an agent system start better, resume cleanly, and reuse prior execution.
 

@@ -1505,7 +1505,7 @@ function buildExecutionForgettingSummary(args: {
   return {
     summary_version: "execution_forgetting_summary_v1",
     substrate_mode:
-      forgettingSignals.forgottenItems > 0 || semanticForgettingActiveCount > 0 || relocationSignalCount > 0
+      forgettingSignals.forgottenItems > 0
         ? "forgetting_active"
         : suppressedPatternSignals.suppressedPatternCount > 0
           ? "suppression_present"
@@ -1525,11 +1525,11 @@ function buildExecutionForgettingSummary(args: {
     rehydration_mode_counts: forgettingSurfaceSignals.rehydrationModeCounts,
     differential_rehydration_candidate_count: forgettingSurfaceSignals.differentialRehydrationCandidateCount,
     primary_savings_levers: forgettingSignals.primarySavingsLevers,
+    // Keep stale_signal_count compatible with the long-lived public summary contract.
+    // Richer forgetting/relocation activity is exposed via the dedicated summary fields above.
     stale_signal_count:
       forgettingSignals.forgottenItems
-      + suppressedPatternSignals.suppressedPatternCount
-      + semanticForgettingActiveCount
-      + relocationSignalCount,
+      + suppressedPatternSignals.suppressedPatternCount,
     recommended_action: deriveExecutionMaintenanceAction({
       forgottenItems: forgettingSignals.forgottenItems,
       suppressedPatternCount: suppressedPatternSignals.suppressedPatternCount,

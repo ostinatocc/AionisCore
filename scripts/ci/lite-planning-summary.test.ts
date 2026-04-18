@@ -549,7 +549,7 @@ test("buildAssemblySummary surfaces semantic forgetting, relocation, and rehydra
     differential: 1,
   });
   assert.equal(summary.forgetting_summary.differential_rehydration_candidate_count, 1);
-  assert.equal(summary.forgetting_summary.stale_signal_count, 4);
+  assert.equal(summary.forgetting_summary.stale_signal_count, 2);
   assert.equal(
     summary.forgetting_summary.recommended_action,
     "rehydrate archived execution memory only when the task proves it still needs the colder payload",

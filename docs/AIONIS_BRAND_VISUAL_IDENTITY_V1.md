@@ -32,9 +32,9 @@ This document is canonical. When the docs site, marketing material, or product U
 
 ### The one line
 
-> Aionis Runtime is the **local continuity runtime for coding agents**.
+> Aionis Runtime is the **self-evolving continuity runtime for agent systems**.
 
-This is the only sentence that appears unchanged across docs, README, npm, and the Open Graph card. Do not shorten, rephrase, or decorate it.
+This is the primary sentence that should stay aligned across docs, README, npm, and the Open Graph card. If launch material needs a narrower wedge, frame it as a target audience decision rather than changing the product definition.
 
 ### Product character
 
@@ -48,10 +48,11 @@ Aionis reads like a quiet, literate engineering magazine:
 
 ### We are
 
-- A local continuity runtime for coding agents
+- A self-evolving continuity runtime for agent systems
 - A typed SDK and a stable route surface
 - A runtime that runs locally today (Lite), inspectable through SQLite stores and HTTP routes
 - Evidence-backed: 15 / 15 benchmark scenarios, smoke validation, contract tests
+- The initial go-to-market wedge is coding and ops workflows
 
 ### We are not
 
@@ -86,7 +87,7 @@ Aionis reads like a quiet, literate engineering magazine:
 - Quotation marks: curly for body prose (`"like this"`), straight for code (`"like this"`)
 - Never use an Oxford comma unless ambiguity demands it
 - `ostinato/aionis` and `@ostinato/aionis` — lowercase always
-- Version numbers are not decorated: `v0.1.0`, not `V0.1.0` or `0.1.0-beta`
+- Version labels are factual and surface-specific: `SDK v0.2.0`, `Lite Runtime`, not frozen product-version badges unless that exact artifact is versioned
 
 ---
 
@@ -625,13 +626,13 @@ Composition:
 - Right: Newsreader title (72px, wght 500) + subtitle (26px text-2)
 - Horizontal rule: 72px × 1px in `rgba(ink, 0.20)`
 - Supporting lines: JB Mono 18px in text-2
-- Bottom: four state-dotted pills (`Lite ships today`, `v0.1.0`, `MIT`, `15 / 15 benchmarks`)
+- Bottom: four state-dotted pills (`Lite ships today`, `SDK v0.2.0`, `MIT`, `15 / 15 benchmarks`)
 
 Don't add gradients, glows, decorative type, or promotional badges.
 
 ### README
 
-- First 100 characters must repeat the one line: "Local continuity runtime for coding agents"
+- First 100 characters should repeat the one line: "Self-evolving continuity runtime for agent systems"
 - No badge wall at the top. At most: npm version + MIT license, both in flat-square, color `7a6fa4`
 - Use `##` for top-level README sections, not `#`
 - Use fenced code blocks with `bash` or `ts`, never plain fences
@@ -656,7 +657,7 @@ Avoid:
 ```
 —
 [Name], [Role]
-Aionis Runtime · Local continuity runtime for coding agents
+Aionis Runtime · Self-evolving continuity runtime for agent systems
 github.com/ostinatocc/AionisCore
 ```
 

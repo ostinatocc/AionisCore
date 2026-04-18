@@ -234,7 +234,9 @@ function resolveWorkflowProjectionDistillationSourceKind(
 ): "execution_projection" | "handoff_carrier" | "session_event_carrier" | "session_carrier" {
   const slots = asRecord(source.slots);
   const summaryKind = firstString(slots?.summary_kind);
-  if (summaryKind === "handoff") return "handoff_carrier";
+  // Only treat explicit handoff surfaces as handoff carriers. Generic execution-native
+  // writes may use summary_kind=handoff without coming from the handoff route.
+  if (summaryKind === "handoff" && firstString(slots?.handoff_kind)) return "handoff_carrier";
 
   const systemKind = firstString(slots?.system_kind);
   if (systemKind === "session_event") return "session_event_carrier";
