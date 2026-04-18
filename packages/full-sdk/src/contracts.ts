@@ -207,6 +207,7 @@ export type AionisKickoffRecommendationResponse = {
   scope: string;
   query_text: string;
   kickoff_recommendation: AionisKickoffRecommendation | null;
+  policy_contract?: AionisPolicyContract | null;
   rationale: {
     summary: string;
   } & AionisPassthroughObject;
@@ -225,6 +226,155 @@ export type AionisDelegationLearningProjection = {
   summary_version: "delegation_learning_projection_v1";
   learning_summary: AionisDelegationLearningSummary;
   learning_recommendations: AionisDelegationRecordsLearningRecommendation[];
+} & AionisPassthroughObject;
+
+export type AionisPolicyHintEntry = {
+  hint_id: string;
+  source_kind: "trusted_pattern" | "contested_pattern" | "stable_workflow" | "rehydration_candidate";
+  hint_kind: "tool_preference" | "tool_avoidance" | "workflow_reuse" | "payload_rehydration";
+  action: "prefer" | "avoid" | "reuse" | "rehydrate";
+  source_anchor_id: string;
+  source_anchor_level: string | null;
+  selected_tool: string | null;
+  workflow_signature: string | null;
+  file_path: string | null;
+  target_files: string[];
+  rehydration_mode: string | null;
+  confidence: number | null;
+  priority: number;
+  reason: string;
+} & AionisPassthroughObject;
+
+export type AionisPolicyHintPack = {
+  summary_version: "policy_hint_pack_v1";
+  total_hints: number;
+  tool_preference_count: number;
+  tool_avoidance_count: number;
+  workflow_reuse_count: number;
+  payload_rehydration_count: number;
+  hints: AionisPolicyHintEntry[];
+} & AionisPassthroughObject;
+
+export type AionisDerivedPolicySurface = {
+  summary_version: "derived_policy_v1";
+  policy_kind: "tool_preference";
+  source_kind: "trusted_pattern" | "stable_workflow" | "blended";
+  policy_state: "candidate" | "stable";
+  selected_tool: string;
+  workflow_signature: string | null;
+  file_path: string | null;
+  target_files: string[];
+  confidence: number;
+  supporting_anchor_ids: string[];
+  reason: string;
+  evidence: {
+    trusted_pattern_count: number;
+    stable_workflow_count: number;
+    usage_count: number;
+    reuse_success_count: number;
+    reuse_failure_count: number;
+    feedback_quality: number | null;
+  } & AionisPassthroughObject;
+} & AionisPassthroughObject;
+
+export type AionisPolicyContract = {
+  summary_version: "policy_contract_v1";
+  policy_kind: "tool_preference";
+  source_kind: "trusted_pattern" | "stable_workflow" | "blended";
+  policy_state: "candidate" | "stable";
+  policy_memory_state: "active" | "contested" | "retired";
+  activation_mode: "hint" | "default";
+  materialization_state: "computed" | "persisted";
+  history_applied: boolean;
+  selected_tool: string;
+  avoid_tools: string[];
+  workflow_signature: string | null;
+  file_path: string | null;
+  target_files: string[];
+  next_action: string | null;
+  rehydration_mode: string | null;
+  confidence: number;
+  source_anchor_ids: string[];
+  policy_memory_id: string | null;
+  reason: string;
+} & AionisPassthroughObject;
+
+export type AionisPersistedPolicyMemory = {
+  node_id: string;
+  node_uri: string;
+  client_id: string;
+  policy_memory_signature: string;
+  selected_tool: string;
+  policy_state: "candidate" | "stable";
+  policy_memory_state: "active" | "contested" | "retired";
+  activation_mode: "hint" | "default";
+  policy_contract: AionisPolicyContract;
+} & AionisPassthroughObject;
+
+export type AionisPolicyReviewSummary = {
+  summary_version: "policy_review_summary_v1";
+  persisted_policy_count: number;
+  active_policy_count: number;
+  contested_policy_count: number;
+  retired_policy_count: number;
+  review_recommended: boolean;
+  selected_policy_memory_id: string | null;
+  selected_policy_memory_state: "active" | "contested" | "retired" | null;
+  attention_policy: ({
+    node_id: string;
+    policy_memory_state: "active" | "contested" | "retired";
+    selected_tool: string | null;
+    file_path: string | null;
+    workflow_signature: string | null;
+    summary: string | null;
+    feedback_quality: number | null;
+    last_feedback_at: string | null;
+    last_materialized_at: string | null;
+    review_reason: string;
+  } & AionisPassthroughObject) | null;
+} & AionisPassthroughObject;
+
+export type AionisPolicyGovernanceContract = {
+  contract_version: "policy_governance_contract_v1";
+  action: "none" | "monitor" | "refresh" | "retire" | "reactivate";
+  applies: boolean;
+  review_required: boolean;
+  policy_memory_id: string | null;
+  current_state: "active" | "contested" | "retired" | null;
+  target_state: "active" | "contested" | "retired" | null;
+  selected_tool: string | null;
+  file_path: string | null;
+  workflow_signature: string | null;
+  rationale: string;
+  next_action: string | null;
+} & AionisPassthroughObject;
+
+export type AionisPolicyGovernanceApplyPayload = {
+  payload_version: "policy_governance_apply_payload_v1";
+  route: string;
+  method: "POST";
+  action: "refresh" | "retire" | "reactivate";
+  policy_memory_id: string;
+  selected_tool: string | null;
+  current_state: "active" | "contested" | "retired" | null;
+  target_state: "active" | "contested" | "retired" | null;
+  requires_live_context: boolean;
+  request_body: Record<string, unknown>;
+  rationale: string;
+} & AionisPassthroughObject;
+
+export type AionisPolicyGovernanceApplyResult = {
+  ok: boolean;
+  auto_applied: boolean;
+  attempted: boolean;
+  trigger: string;
+  surface: string;
+  action: "refresh" | "retire" | "reactivate";
+  policy_memory_id: string;
+  previous_state?: "active" | "contested" | "retired";
+  next_state?: "active" | "contested" | "retired";
+  policy_memory?: AionisPersistedPolicyMemory | null;
+  error?: { code: string; message: string } | null;
 } & AionisPassthroughObject;
 
 export type AionisContextOperatorProjection = {
@@ -261,6 +411,9 @@ export type AionisExperienceIntelligenceResponse = {
     } & AionisPassthroughObject;
     combined_next_action: string | null;
   } & AionisPassthroughObject;
+  policy_hints: AionisPolicyHintPack;
+  derived_policy: AionisDerivedPolicySurface | null;
+  policy_contract: AionisPolicyContract | null;
   learning_summary: AionisDelegationLearningSummary;
   learning_recommendations: AionisDelegationRecordsLearningRecommendation[];
   rationale: {
@@ -539,6 +692,7 @@ export type AionisExecutionIntrospectResponse = {
   trusted_patterns: AionisPassthroughObject[];
   contested_patterns: AionisPassthroughObject[];
   rehydration_candidates: AionisPassthroughObject[];
+  supporting_knowledge: AionisPassthroughObject[];
   pattern_signals: AionisPassthroughObject[];
   workflow_signals: AionisPassthroughObject[];
   action_packet_summary: AionisPassthroughObject;
@@ -685,6 +839,47 @@ export type AionisToolsFeedbackRequest = {
   input_sha256?: string;
   governance_review?: Record<string, unknown>;
 } & AionisRequestPayload;
+
+export type AionisToolsFeedbackResponse = {
+  ok: true;
+  scope: string;
+  tenant_id: string;
+  updated_rules: number;
+  rule_node_ids: string[];
+  commit_id: string | null;
+  commit_uri?: string | null;
+  commit_hash?: string | null;
+  decision_id: string;
+  decision_uri: string;
+  decision_link_mode: "provided" | "inferred" | "created_from_feedback";
+  decision_policy_sha256: string;
+  pattern_anchor?: AionisPassthroughObject | null;
+  policy_memory?: AionisPersistedPolicyMemory | null;
+  governance_preview?: AionisPassthroughObject | null;
+} & AionisRuntimeResponse;
+
+export type AionisPolicyGovernanceApplyRequest = AionisKickoffRecommendationRequest & {
+  actor?: string;
+  policy_memory_id: string;
+  action: "refresh" | "retire" | "reactivate";
+  reason?: string;
+};
+
+export type AionisPolicyGovernanceApplyResponse = {
+  ok: true;
+  tenant_id: string;
+  scope: string;
+  action: "refresh" | "retire" | "reactivate";
+  applied: boolean;
+  actor: string | null;
+  reason: string | null;
+  policy_memory_id: string;
+  previous_state: "active" | "contested" | "retired";
+  next_state: "active" | "contested" | "retired";
+  governance_contract: AionisPolicyGovernanceContract;
+  live_policy_contract: AionisPolicyContract | null;
+  policy_memory: AionisPersistedPolicyMemory;
+} & AionisRuntimeResponse;
 
 export type AionisPatternSuppressRequest = {
   tenant_id?: string;
@@ -1174,7 +1369,15 @@ export type AionisEvolutionInspectResponse = {
   tenant_id: string;
   scope: string;
   query_text: string;
-  experience_intelligence: AionisPassthroughObject;
+  experience_intelligence: AionisExperienceIntelligenceResponse;
+  policy_hints?: AionisPolicyHintPack;
+  derived_policy: AionisDerivedPolicySurface | null;
+  policy_contract: AionisPolicyContract | null;
+  policy_review: AionisPolicyReviewSummary;
+  policy_governance_contract: AionisPolicyGovernanceContract;
+  policy_governance_apply_payload: AionisPolicyGovernanceApplyPayload | null;
+  policy_governance_apply_result: AionisPolicyGovernanceApplyResult | null;
+  kickoff_recommendation: AionisKickoffRecommendationResponse;
   execution_introspection: AionisExecutionIntrospectResponse;
   evolution_summary: AionisEvolutionInspectSummary;
 } & AionisPassthroughObject;
@@ -1199,6 +1402,12 @@ export type AionisEvolutionReviewPackSummary = {
   promotion_ready_workflow: AionisPassthroughObject | null;
   trusted_pattern: AionisPassthroughObject | null;
   contested_pattern: AionisPassthroughObject | null;
+  derived_policy: AionisDerivedPolicySurface | null;
+  policy_contract: AionisPolicyContract | null;
+  policy_review: AionisPolicyReviewSummary;
+  policy_governance_contract: AionisPolicyGovernanceContract;
+  policy_governance_apply_payload: AionisPolicyGovernanceApplyPayload | null;
+  policy_governance_apply_result: AionisPolicyGovernanceApplyResult | null;
   review_contract: AionisEvolutionReviewContract;
   learning_summary: AionisEvolutionDelegationLearningSummary;
   learning_recommendations: AionisDelegationRecordsLearningRecommendation[];

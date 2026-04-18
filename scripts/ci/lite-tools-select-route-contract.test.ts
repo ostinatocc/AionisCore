@@ -11,6 +11,7 @@ import { registerHostErrorHandler } from "../../src/host/http-host.ts";
 import {
   MemoryAnchorV1Schema,
   PatternSuppressResponseSchema,
+  PolicyGovernanceApplyResponseSchema,
   ToolsFeedbackResponseSchema,
   ToolsSelectRouteContractSchema,
 } from "../../src/memory/schemas.ts";
@@ -336,6 +337,163 @@ async function seedToolsSelectFixture(dbPath: string) {
   return { liteWriteStore, liteRecallStore };
 }
 
+async function seedPolicyMemoryGovernanceFixture(dbPath: string) {
+  const { liteWriteStore, ruleNodeIds } = await seedActiveRules(dbPath, ["edit", "edit"]);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  const [sharedEmbedding] = await FakeEmbeddingProvider.embed(["repair export failure in node tests"]);
+  const stablePattern = MemoryAnchorV1Schema.parse({
+    anchor_kind: "pattern",
+    anchor_level: "L3",
+    pattern_state: "stable",
+    credibility_state: "trusted",
+    task_signature: "tools_select:repair-export",
+    task_class: "tools_select_pattern",
+    task_family: "task:repair_export",
+    error_family: "error:node-export-mismatch",
+    pattern_signature: "policy-governance-edit-pattern",
+    summary: "Stable pattern: prefer edit for repair_export after repeated successful runs.",
+    tool_set: ["bash", "edit", "test"],
+    selected_tool: "edit",
+    file_path: "src/routes/export.ts",
+    target_files: ["src/routes/export.ts"],
+    next_action: "Patch src/routes/export.ts and rerun export tests.",
+    outcome: {
+      status: "success",
+      result_class: "tool_selection_pattern_stable",
+      success_score: 0.94,
+    },
+    source: {
+      source_kind: "tool_decision",
+      decision_id: randomUUID(),
+    },
+    payload_refs: {
+      node_ids: [],
+      decision_ids: [],
+      run_ids: [randomUUID(), randomUUID(), randomUUID()],
+      step_ids: [],
+      commit_ids: [],
+    },
+    metrics: {
+      usage_count: 0,
+      reuse_success_count: 3,
+      reuse_failure_count: 0,
+      distinct_run_count: 3,
+      last_used_at: null,
+    },
+    promotion: {
+      required_distinct_runs: 3,
+      distinct_run_count: 3,
+      observed_run_ids: [randomUUID(), randomUUID(), randomUUID()],
+      counter_evidence_count: 0,
+      counter_evidence_open: false,
+      credibility_state: "trusted",
+      previous_credibility_state: "candidate",
+      last_transition: "promoted_to_trusted",
+      last_transition_at: new Date().toISOString(),
+      stable_at: new Date().toISOString(),
+      last_validated_at: new Date().toISOString(),
+      last_counter_evidence_at: null,
+    },
+    trust_hardening: {
+      task_family: "task:repair_export",
+      error_family: "error:node-export-mismatch",
+      observed_task_families: ["task:repair_export"],
+      observed_error_families: ["error:node-export-mismatch"],
+      distinct_task_family_count: 1,
+      distinct_error_family_count: 1,
+      post_contest_observed_run_ids: [],
+      post_contest_distinct_run_count: 0,
+      promotion_gate_kind: "current_distinct_runs_v1",
+      promotion_gate_satisfied: true,
+      revalidation_floor_kind: "post_contest_two_fresh_runs_v1",
+      revalidation_floor_satisfied: true,
+      task_affinity_weighting_enabled: true,
+    },
+    maintenance: {
+      model: "lazy_online_v1",
+      maintenance_state: "retain",
+      offline_priority: "retain_trusted",
+      lazy_update_fields: ["usage_count", "last_used_at"],
+      last_maintenance_at: "2026-03-20T00:00:00Z",
+    },
+    schema_version: "anchor_v1",
+  });
+
+  const prepared = await prepareMemoryWrite(
+    {
+      tenant_id: "default",
+      scope: "default",
+      actor: "local-user",
+      input_text: "seed policy governance fixture",
+      auto_embed: false,
+      memory_lane: "shared",
+      nodes: [
+        {
+          id: randomUUID(),
+          type: "concept",
+          title: "Policy governance stable edit pattern",
+          text_summary: stablePattern.summary,
+          slots: {
+            summary_kind: "pattern_anchor",
+            compression_layer: "L3",
+            anchor_v1: stablePattern,
+            execution_native_v1: {
+              schema_version: "execution_native_v1",
+              execution_kind: "pattern_anchor",
+              summary_kind: "pattern_anchor",
+              compression_layer: "L3",
+              task_signature: stablePattern.task_signature,
+              task_family: stablePattern.task_family,
+              error_family: stablePattern.error_family,
+              pattern_signature: stablePattern.pattern_signature,
+              anchor_kind: "pattern",
+              anchor_level: "L3",
+              tool_set: stablePattern.tool_set,
+              selected_tool: stablePattern.selected_tool,
+              pattern_state: "stable",
+              credibility_state: "trusted",
+              file_path: stablePattern.file_path,
+              target_files: stablePattern.target_files,
+              next_action: stablePattern.next_action,
+              promotion: stablePattern.promotion,
+              trust_hardening: stablePattern.trust_hardening,
+              maintenance: stablePattern.maintenance,
+            },
+          },
+          embedding: sharedEmbedding,
+          embedding_model: FakeEmbeddingProvider.name,
+          salience: 0.8,
+          importance: 0.9,
+          confidence: 0.9,
+        },
+      ],
+      edges: [],
+    },
+    "default",
+    "default",
+    {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+    },
+    null,
+  );
+
+  await liteWriteStore.withTx(() =>
+    applyMemoryWrite({} as any, prepared, {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+      shadowDualWriteEnabled: false,
+      shadowDualWriteStrict: false,
+      associativeLinkOrigin: "memory_write",
+      write_access: liteWriteStore,
+    }),
+  );
+
+  return { liteWriteStore, liteRecallStore, ruleNodeIds };
+}
+
 test("tools_select route returns the stable execution-memory contract surface", async () => {
   const app = Fastify();
   const { liteWriteStore, liteRecallStore } = await seedToolsSelectFixture(tmpDbPath("route"));
@@ -602,6 +760,131 @@ test("tools feedback route can use internal static form_pattern provider without
     assert.equal(parsed.governance_preview?.form_pattern.admissibility?.admissible, true);
     assert.equal(parsed.governance_preview?.form_pattern.policy_effect?.applies, true);
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.runtime_apply_changed_pattern_state, true);
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("policy governance apply route can retire and reactivate persisted policy memory", async () => {
+  const app = Fastify();
+  const dbPath = tmpDbPath("policy-governance-route");
+  const { liteWriteStore, liteRecallStore } = await seedPolicyMemoryGovernanceFixture(dbPath);
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryFeedbackToolRoutes({
+      app,
+      env: buildLiteEnv(),
+      embedder: FakeEmbeddingProvider,
+      embeddedRuntime: null,
+      liteRecallAccess: liteRecallStore.createRecallAccess(),
+      liteWriteStore,
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const runId = randomUUID();
+    const context = {
+      task_kind: "repair_export",
+      goal: "repair export failure in node tests",
+      error: {
+        signature: "node-export-mismatch",
+      },
+    };
+
+    const selectionResponse = await app.inject({
+      method: "POST",
+      url: "/v1/memory/tools/select",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        run_id: runId,
+        context,
+        candidates: ["bash", "edit", "test"],
+        include_shadow: false,
+        rules_limit: 20,
+        strict: true,
+        reorder_candidates: false,
+      },
+    });
+    assert.equal(selectionResponse.statusCode, 200);
+    const selection = ToolsSelectRouteContractSchema.parse(selectionResponse.json());
+
+    const feedbackResponse = await app.inject({
+      method: "POST",
+      url: "/v1/memory/tools/feedback",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        run_id: runId,
+        decision_id: selection.decision.decision_id,
+        outcome: "positive",
+        context,
+        candidates: ["bash", "edit", "test"],
+        selected_tool: "edit",
+        target: "tool",
+        note: "Edit produced the successful repair path and should become persisted policy memory.",
+        input_text: "repair export failure in node tests",
+      },
+    });
+    assert.equal(feedbackResponse.statusCode, 200, feedbackResponse.body);
+    const feedback = ToolsFeedbackResponseSchema.parse(feedbackResponse.json());
+    assert.equal(feedback.policy_memory?.selected_tool, "edit");
+    assert.equal(feedback.policy_memory?.policy_memory_state, "active");
+    assert.equal(feedback.policy_memory?.policy_contract.materialization_state, "persisted");
+    const policyMemoryId = feedback.policy_memory?.node_id;
+    assert.ok(policyMemoryId);
+
+    const retireResponse = await app.inject({
+      method: "POST",
+      url: "/v1/memory/policies/governance/apply",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        policy_memory_id: policyMemoryId,
+        action: "retire",
+        reason: "manual review retired this persisted policy memory",
+      },
+    });
+    assert.equal(retireResponse.statusCode, 200, retireResponse.body);
+    const retired = PolicyGovernanceApplyResponseSchema.parse(retireResponse.json());
+    assert.equal(retired.applied, true);
+    assert.equal(retired.action, "retire");
+    assert.equal(retired.previous_state, "active");
+    assert.equal(retired.next_state, "retired");
+    assert.equal(retired.policy_memory.policy_memory_state, "retired");
+
+    const reactivateResponse = await app.inject({
+      method: "POST",
+      url: "/v1/memory/policies/governance/apply",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        policy_memory_id: policyMemoryId,
+        action: "reactivate",
+        reason: "fresh live evidence supports reactivating the retired policy memory",
+        query_text: "repair export failure in node tests",
+        context,
+        candidates: ["bash", "edit", "test"],
+      },
+    });
+    assert.equal(reactivateResponse.statusCode, 200, reactivateResponse.body);
+    const reactivated = PolicyGovernanceApplyResponseSchema.parse(reactivateResponse.json());
+    assert.equal(reactivated.applied, true);
+    assert.equal(reactivated.action, "reactivate");
+    assert.equal(reactivated.previous_state, "retired");
+    assert.equal(reactivated.next_state, "active");
+    assert.equal(reactivated.policy_memory.policy_memory_state, "active");
+    assert.equal(reactivated.live_policy_contract?.selected_tool, "edit");
   } finally {
     await app.close();
     await liteRecallStore.close();

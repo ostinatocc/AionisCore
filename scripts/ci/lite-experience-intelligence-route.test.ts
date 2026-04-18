@@ -340,6 +340,10 @@ test("experience intelligence route combines trusted tool memory with learned wo
     assert.equal(body.recommendation.path.file_path, "src/routes/export.ts");
     assert.deepEqual(body.recommendation.path.target_files, ["src/routes/export.ts"]);
     assert.match(body.recommendation.combined_next_action ?? "", /src\/routes\/export\.ts/);
+    assert.equal(body.policy_hints.total_hints >= 2, true);
+    assert.equal(body.derived_policy?.selected_tool, "edit");
+    assert.equal(body.policy_contract?.selected_tool, "edit");
+    assert.equal(body.policy_contract?.materialization_state, "computed");
     assert.deepEqual(body.learning_summary, {
       task_family: "task:repair_export",
       matched_records: 0,
@@ -351,6 +355,7 @@ test("experience intelligence route combines trusted tool memory with learned wo
     assert.deepEqual(body.learning_recommendations, []);
     assert.match(body.rationale.summary, /trusted_patterns=1/);
     assert.match(body.rationale.summary, /stable_workflows=1/);
+    assert.match(body.rationale.summary, /policy_contract=default:edit/);
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -734,6 +739,8 @@ test("kickoff recommendation can recover file-level workflow guidance from host-
     assert.equal(body.kickoff_recommendation?.source_kind, "experience_intelligence");
     assert.equal(body.kickoff_recommendation?.file_path, "src/routes/export.ts");
     assert.match(body.kickoff_recommendation?.next_action ?? "", /src\/routes\/export\.ts/);
+    assert.equal(body.policy_contract?.selected_tool, "edit");
+    assert.equal(body.policy_contract?.materialization_state, "persisted");
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -896,6 +903,11 @@ test("experience intelligence route learns a stronger next recommendation after 
     assert.equal(after.recommendation.tool.selected_tool, "edit");
     assert.equal(after.recommendation.history_applied, true);
     assert.ok(after.recommendation.tool.trusted_pattern_anchor_ids.length > 0);
+    assert.equal(after.policy_contract?.selected_tool, "edit");
+    assert.equal(after.policy_contract?.materialization_state, "persisted");
+    assert.equal(after.policy_contract?.policy_memory_state, "active");
+    assert.ok(typeof after.policy_contract?.policy_memory_id === "string" && after.policy_contract.policy_memory_id.length > 0);
+    assert.match(after.rationale.summary, /persisted_policy_memory=/);
     assert.match(after.rationale.summary, /trusted pattern support/i);
   } finally {
     await app.close();
@@ -965,6 +977,8 @@ test("kickoff recommendation route returns a host-consumable file-level kickoff 
       file_path: "src/routes/export.ts",
       next_action: "Patch src/routes/export.ts and rerun export tests.",
     });
+    assert.equal(body.policy_contract?.selected_tool, "edit");
+    assert.equal(body.policy_contract?.materialization_state, "computed");
     assert.match(body.rationale.summary, /stable_workflows=1/);
   } finally {
     await app.close();

@@ -47,6 +47,8 @@ import type {
   AionisPatternUnsuppressRequest,
   AionisPlanningContextResponse,
   AionisPlanningContextRequest,
+  AionisPolicyGovernanceApplyRequest,
+  AionisPolicyGovernanceApplyResponse,
   AionisReplayPlaybookCandidateRequest,
   AionisReplayPlaybookCompileFromRunRequest,
   AionisReplayPlaybookDispatchRequest,
@@ -75,6 +77,7 @@ import type {
   AionisSessionListQuery,
   AionisToolsDecisionRequest,
   AionisToolsFeedbackRequest,
+  AionisToolsFeedbackResponse,
   AionisToolsRunRequest,
   AionisToolsRunsListRequest,
   AionisToolsSelectRequest,
@@ -231,12 +234,18 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
         state: createPostMethod<AionisRuleStateRequest>(http, "/v1/memory/rules/state"),
         evaluate: createPostMethod<AionisRulesEvaluateRequest>(http, "/v1/memory/rules/evaluate"),
       },
+      policies: {
+        governanceApply: createPostMethod<AionisPolicyGovernanceApplyRequest, AionisPolicyGovernanceApplyResponse>(
+          http,
+          "/v1/memory/policies/governance/apply",
+        ),
+      },
       tools: {
         select: createPostMethod<AionisToolsSelectRequest>(http, "/v1/memory/tools/select"),
         decision: createPostMethod<AionisToolsDecisionRequest>(http, "/v1/memory/tools/decision"),
         run: createPostMethod<AionisToolsRunRequest>(http, "/v1/memory/tools/run"),
         runsList: createPostMethod<AionisToolsRunsListRequest>(http, "/v1/memory/tools/runs/list"),
-        feedback: createPostMethod<AionisToolsFeedbackRequest>(http, "/v1/memory/tools/feedback"),
+        feedback: createPostMethod<AionisToolsFeedbackRequest, AionisToolsFeedbackResponse>(http, "/v1/memory/tools/feedback"),
         rehydratePayload: createPostMethod<AionisAnchorRehydratePayloadRequest>(http, "/v1/memory/tools/rehydrate_payload"),
       },
       patterns: {

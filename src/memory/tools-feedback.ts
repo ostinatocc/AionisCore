@@ -12,21 +12,26 @@ import {
   uniqueRuleIds,
 } from "./execution-provenance.js";
 import {
+  ExperienceIntelligenceRequest,
   MemoryFormPatternRequest,
   ToolsFeedbackRequest,
   ToolsFeedbackResponseSchema,
   type MemoryFormPatternSemanticReviewResult,
   type MemoryAnchorV1,
+  type ToolsFeedbackInput,
   type ToolsFeedbackGovernanceInput,
   type ToolsFeedbackFormPatternGovernanceDecisionTrace,
   type ToolsFeedbackGovernancePreview,
   type ToolsFeedbackResponse,
 } from "./schemas.js";
 import type { FormPatternGovernanceReviewProvider } from "./governance-provider-types.js";
+import { buildExperienceIntelligenceResponse } from "./experience-intelligence.js";
+import { buildExecutionMemoryIntrospectionLite } from "./execution-introspection.js";
 import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
 import { writeToolsDecisionPatternAnchor } from "./tools-pattern-anchor.js";
+import { applyPolicyMemoryFeedbackLite, writePolicyMemorySnapshot } from "./policy-memory.js";
 import {
   buildGovernedStateDecisionTrace,
   buildGovernanceDecisionTraceBase,
@@ -46,6 +51,7 @@ import type {
 } from "../store/embedded-memory-runtime.js";
 import type { LiteRuleCandidateRow, LiteWriteStore } from "../store/lite-write-store.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
+import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { WriteStoreAccess } from "../store/write-access.js";
 
 type FeedbackOptions = {
@@ -56,6 +62,7 @@ type FeedbackOptions = {
   governanceReviewProviders?: {
     form_pattern?: FormPatternGovernanceReviewProvider | null;
   };
+  recallAccess?: RecallStoreAccess | null;
   liteWriteStore?: Pick<
     LiteWriteStore,
     | "findExecutionDecisionForFeedback"
@@ -102,6 +109,243 @@ function nullableString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+type WorkflowFeedbackTarget = {
+  taskSignature: string | null;
+  errorSignature: string | null;
+  workflowSignature: string | null;
+};
+
+function extractWorkflowFeedbackTarget(context: unknown): WorkflowFeedbackTarget {
+  const ctx = asRecord(context);
+  const task = asRecord(ctx?.task);
+  const error = asRecord(ctx?.error);
+  const workflow = asRecord(ctx?.workflow);
+  const execution = asRecord(ctx?.execution);
+  return {
+    taskSignature:
+      nullableString(ctx?.task_signature)
+      ?? nullableString(task?.signature)
+      ?? nullableString(execution?.task_signature),
+    errorSignature:
+      nullableString(ctx?.error_signature)
+      ?? nullableString(error?.signature)
+      ?? nullableString(error?.code)
+      ?? nullableString(execution?.error_signature),
+    workflowSignature:
+      nullableString(ctx?.workflow_signature)
+      ?? nullableString(workflow?.signature)
+      ?? nullableString(execution?.workflow_signature),
+  };
+}
+
+function extractContextConsumerAgentId(context: unknown): string | null {
+  const ctx = asRecord(context);
+  const agent = asRecord(ctx?.agent);
+  return nullableString(ctx?.agent_id) ?? nullableString(agent?.id);
+}
+
+function extractContextConsumerTeamId(context: unknown): string | null {
+  const ctx = asRecord(context);
+  const agent = asRecord(ctx?.agent);
+  return nullableString(ctx?.team_id) ?? nullableString(agent?.team_id);
+}
+
+function buildExperienceQueryTextFromFeedback(args: {
+  context: unknown;
+  inputText: string | null;
+  note: string | null;
+  selectedTool: string;
+}): string {
+  const ctx = asRecord(args.context);
+  const task = asRecord(ctx?.task);
+  const error = asRecord(ctx?.error);
+  const values = [
+    nullableString(ctx?.goal),
+    nullableString(task?.goal),
+    nullableString(ctx?.objective),
+    nullableString(task?.objective),
+    nullableString(ctx?.task_signature),
+    nullableString(task?.signature),
+    nullableString(ctx?.workflow_signature),
+    nullableString(error?.signature),
+    nullableString(error?.code),
+    args.note,
+    args.inputText,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0);
+  if (values.length === 0) return `feedback policy snapshot for ${args.selectedTool}`;
+  return values.slice(0, 4).join(" | ");
+}
+
+async function materializeLitePolicyMemoryFromFeedback(args: {
+  parsed: ToolsFeedbackInput;
+  tenancy: { tenant_id: string; scope: string };
+  actor: string;
+  inputText: string | null;
+  note: string | null;
+  inputSha: string;
+  selectedTool: string;
+  normalizedCandidates: string[];
+  workflowFeedbackTarget: WorkflowFeedbackTarget;
+  commitId: string;
+  defaultScope: string;
+  defaultTenantId: string;
+  opts: FeedbackOptions;
+}): Promise<ToolsFeedbackResponse["policy_memory"] | null> {
+  if (!args.opts.liteWriteStore) return null;
+
+  const consumerAgentId = extractContextConsumerAgentId(args.parsed.context) ?? args.actor;
+  const consumerTeamId = extractContextConsumerTeamId(args.parsed.context);
+  const queryText = buildExperienceQueryTextFromFeedback({
+    context: args.parsed.context,
+    inputText: args.inputText,
+    note: args.note,
+    selectedTool: args.selectedTool,
+  });
+  const experienceParsed = ExperienceIntelligenceRequest.parse({
+    tenant_id: args.tenancy.tenant_id,
+    scope: args.tenancy.scope,
+    consumer_agent_id: consumerAgentId ?? undefined,
+    consumer_team_id: consumerTeamId ?? undefined,
+    run_id: args.parsed.run_id,
+    query_text: queryText,
+    context: args.parsed.context,
+    candidates: args.normalizedCandidates,
+    include_shadow: args.parsed.include_shadow,
+    rules_limit: args.parsed.rules_limit,
+    strict: true,
+    reorder_candidates: true,
+    workflow_limit: 8,
+  });
+  const introspection = await buildExecutionMemoryIntrospectionLite(
+    args.opts.liteWriteStore as LiteWriteStore,
+    {
+      tenant_id: args.tenancy.tenant_id,
+      scope: args.tenancy.scope,
+      consumer_agent_id: consumerAgentId ?? undefined,
+      consumer_team_id: consumerTeamId ?? undefined,
+      limit: experienceParsed.workflow_limit,
+    },
+    args.defaultScope,
+    args.defaultTenantId,
+    consumerAgentId ?? null,
+  );
+  const trustedPatternAnchorIds = (Array.isArray(introspection.trusted_patterns) ? introspection.trusted_patterns : [])
+    .filter((entry) => nullableString((entry as Record<string, unknown>)?.selected_tool) === args.selectedTool)
+    .map((entry) => nullableString((entry as Record<string, unknown>)?.anchor_id))
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  const contestedPatternAnchorIds = (Array.isArray(introspection.contested_patterns) ? introspection.contested_patterns : [])
+    .filter((entry) => nullableString((entry as Record<string, unknown>)?.selected_tool) === args.selectedTool)
+    .map((entry) => nullableString((entry as Record<string, unknown>)?.anchor_id))
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  const tools = {
+    tenant_id: args.tenancy.tenant_id,
+    scope: args.tenancy.scope,
+    candidates: args.normalizedCandidates,
+    selection: {
+      selected: args.selectedTool,
+      ordered: args.normalizedCandidates,
+      preferred: [args.selectedTool],
+      allowed: args.normalizedCandidates,
+      denied: [],
+    },
+    execution_kernel: {},
+    rules: {
+      considered: 0,
+      matched: 0,
+    },
+    pattern_matches: {
+      matched: trustedPatternAnchorIds.length + contestedPatternAnchorIds.length,
+      trusted: trustedPatternAnchorIds.length,
+      preferred_tools: trustedPatternAnchorIds.length > 0 ? [args.selectedTool] : [],
+      anchors: [],
+    },
+    decision: {
+      decision_id: args.commitId,
+      decision_uri: buildAionisUri({
+        tenant_id: args.tenancy.tenant_id,
+        scope: args.tenancy.scope,
+        type: "decision",
+        id: args.commitId,
+      }),
+      run_id: args.parsed.run_id ?? null,
+      selected_tool: args.selectedTool,
+      source_rule_ids: [],
+      pattern_summary: {
+        matched_pattern_count: trustedPatternAnchorIds.length + contestedPatternAnchorIds.length,
+        trusted_pattern_count: trustedPatternAnchorIds.length,
+        contested_pattern_count: contestedPatternAnchorIds.length,
+        used_trusted_pattern_anchor_ids: trustedPatternAnchorIds,
+        skipped_contested_pattern_anchor_ids: contestedPatternAnchorIds,
+        skipped_suppressed_pattern_anchor_ids: [],
+      },
+    },
+    selection_summary: {
+      selected_tool: args.selectedTool,
+      ordered_candidates: args.normalizedCandidates,
+      allowed_candidates: args.normalizedCandidates,
+      denied_candidates: [],
+      preferred_candidates: trustedPatternAnchorIds.length > 0 ? [args.selectedTool] : [],
+      strict_mode_applied: true,
+      selection_source: trustedPatternAnchorIds.length > 0 ? "trusted_pattern" : "feedback_materialization",
+      provenance_explanation: trustedPatternAnchorIds.length > 0
+        ? `selected tool: ${args.selectedTool}; trusted pattern support available during policy-memory materialization`
+        : `selected tool: ${args.selectedTool}; feedback-confirmed materialization path`,
+    },
+  };
+  const experience = buildExperienceIntelligenceResponse({
+    parsed: experienceParsed,
+    tools: tools as any,
+    introspection,
+  });
+  if (!experience.policy_contract || !experience.derived_policy) return null;
+  if (experience.policy_contract.selected_tool !== args.selectedTool) return null;
+  if (experience.policy_contract.policy_state !== "stable") return null;
+
+  const persisted = await writePolicyMemorySnapshot({
+    tenant_id: args.tenancy.tenant_id,
+    scope: args.tenancy.scope,
+    actor: args.actor,
+    input_text: queryText,
+    input_sha256: args.inputSha,
+    task_signature: args.workflowFeedbackTarget.taskSignature,
+    error_signature: args.workflowFeedbackTarget.errorSignature,
+    workflow_signature: args.workflowFeedbackTarget.workflowSignature,
+    policy_contract: experience.policy_contract,
+    derived_policy: experience.derived_policy,
+    feedback_commit_id: args.commitId,
+  }, {
+    defaultScope: args.defaultScope,
+    defaultTenantId: args.defaultTenantId,
+    maxTextLen: args.opts.maxTextLen,
+    piiRedaction: args.opts.piiRedaction,
+    embedder: args.opts.embedder ?? null,
+    embeddedRuntime: args.opts.embeddedRuntime ?? null,
+    writeAccess: args.opts.liteWriteStore as unknown as WriteStoreAccess,
+    liteWriteStore: args.opts.liteWriteStore,
+  });
+
+  return {
+    node_id: persisted.node_id,
+    node_uri: buildAionisUri({
+      tenant_id: args.tenancy.tenant_id,
+      scope: args.tenancy.scope,
+      type: "concept",
+      id: persisted.node_id,
+    }),
+    client_id: persisted.client_id,
+    policy_memory_signature: persisted.policy_memory_signature,
+    selected_tool: persisted.policy_contract.selected_tool,
+    policy_state: persisted.policy_contract.policy_state,
+    policy_memory_state: persisted.policy_contract.policy_memory_state,
+    activation_mode: persisted.policy_contract.activation_mode,
+    policy_contract: persisted.policy_contract,
+  };
 }
 
 async function lookupLiteNodeExample(
@@ -411,6 +655,7 @@ export async function toolSelectionFeedback(
 
   const noteNorm = parsed.note ? normalizeText(parsed.note, opts.maxTextLen) : undefined;
   const note = opts.piiRedaction && noteNorm ? redactPII(noteNorm).text : noteNorm;
+  const workflowFeedbackTarget = extractWorkflowFeedbackTarget(parsed.context);
 
   // Re-evaluate rules for attribution to avoid trusting client-provided sources.
   const rules = await evaluateRulesAppliedOnly((client ?? ({} as pg.PoolClient)), {
@@ -456,6 +701,7 @@ export async function toolSelectionFeedback(
     maintenance?: Record<string, unknown>;
     promotion?: Record<string, unknown>;
   } | null = null;
+  let policyMemory: ToolsFeedbackResponse["policy_memory"] | null = null;
   let governancePreview: ToolsFeedbackGovernancePreview | null = null;
 
   if (opts.liteWriteStore) {
@@ -686,6 +932,53 @@ export async function toolSelectionFeedback(
       }
     }
 
+    if (parsed.outcome === "positive") {
+      const materializedPolicyMemory = await materializeLitePolicyMemoryFromFeedback({
+        parsed,
+        tenancy,
+        actor,
+        inputText: redactedInput ?? null,
+        note: note ?? null,
+        inputSha,
+        selectedTool,
+        normalizedCandidates,
+        workflowFeedbackTarget,
+        commitId: commit_id,
+        defaultScope,
+        defaultTenantId,
+        opts,
+      });
+      policyMemory = await applyPolicyMemoryFeedbackLite(opts.liteWriteStore, {
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        selected_tool: selectedTool,
+        task_signature: workflowFeedbackTarget.taskSignature,
+        error_signature: workflowFeedbackTarget.errorSignature,
+        workflow_signature: workflowFeedbackTarget.workflowSignature,
+        outcome: parsed.outcome,
+        run_id: parsed.run_id ?? null,
+        reason: note ?? null,
+        input_sha256: inputSha,
+        commit_id,
+        feedback_at: feedbackCreatedAt,
+      }) ?? materializedPolicyMemory;
+    } else if (parsed.outcome === "negative") {
+      policyMemory = await applyPolicyMemoryFeedbackLite(opts.liteWriteStore, {
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        selected_tool: selectedTool,
+        task_signature: workflowFeedbackTarget.taskSignature,
+        error_signature: workflowFeedbackTarget.errorSignature,
+        workflow_signature: workflowFeedbackTarget.workflowSignature,
+        outcome: parsed.outcome,
+        run_id: parsed.run_id ?? null,
+        reason: note ?? null,
+        input_sha256: inputSha,
+        commit_id,
+        feedback_at: feedbackCreatedAt,
+      });
+    }
+
     return ToolsFeedbackResponseSchema.parse({
       ok: true,
       scope: tenancy.scope,
@@ -710,6 +1003,7 @@ export async function toolSelectionFeedback(
       decision_link_mode,
       decision_policy_sha256: decision!.policy_sha256,
       pattern_anchor: patternAnchor,
+      policy_memory: policyMemory,
       governance_preview: governancePreview,
     } satisfies ToolsFeedbackResponse);
   }

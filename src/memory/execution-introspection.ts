@@ -248,6 +248,39 @@ function toWorkflowSignal(entry: ReturnType<typeof toWorkflowEntry>) {
   };
 }
 
+function toPolicyMemoryEntry(
+  row: Awaited<ReturnType<LiteWriteStore["findNodes"]>>["rows"][number],
+  tenantId: string,
+  scope: string,
+) {
+  const slots = asRecord(row.slots);
+  const contract = asRecord(slots.policy_contract_v1);
+  return {
+    kind: "policy_memory",
+    summary_kind: "policy_memory",
+    anchor_id: row.id,
+    node_id: row.id,
+    uri: toNodeUri(tenantId, scope, row.type, row.id),
+    title: firstString(row.title),
+    summary: firstString(row.text_summary),
+    selected_tool: firstString(slots.selected_tool, contract?.selected_tool),
+    workflow_signature: firstString(slots.workflow_signature, contract?.workflow_signature),
+    file_path: firstString(slots.file_path, contract?.file_path),
+    target_files: stringList(slots.target_files, 24),
+    task_signature: firstString(slots.task_signature),
+    error_signature: firstString(slots.error_signature),
+    feedback_positive: Number.isFinite(Number(slots.feedback_positive)) ? Number(slots.feedback_positive) : null,
+    feedback_negative: Number.isFinite(Number(slots.feedback_negative)) ? Number(slots.feedback_negative) : null,
+    feedback_quality: Number.isFinite(Number(slots.feedback_quality)) ? Number(slots.feedback_quality) : null,
+    last_feedback_at: firstString(slots.last_feedback_at),
+    last_materialized_at: firstString(slots.last_materialized_at),
+    policy_memory_state: firstString(slots.policy_memory_state, contract?.policy_memory_state),
+    policy_contract_v1: contract ?? null,
+    derived_policy_v1: asRecord(slots.derived_policy_v1) ?? null,
+    confidence: row.confidence,
+  };
+}
+
 function buildDemoSurface(args: {
   workflowSignalSummary: ReturnType<typeof summarizeWorkflowSignalSurface>;
   patternSignalSummary: ReturnType<typeof summarizePatternSignalSurface>;
@@ -332,7 +365,7 @@ export async function buildExecutionMemoryIntrospectionLite(
   const consumerTeamId = parsed.consumer_team_id ?? null;
   const limit = parsed.limit;
 
-  const [workflowAnchors, workflowCandidates, patternAnchors, recentSourceEvents, delegationRecordRows] = await Promise.all([
+  const [workflowAnchors, workflowCandidates, patternAnchors, recentSourceEvents, delegationRecordRows, policyMemoryNodes] = await Promise.all([
     liteWriteStore.findExecutionNativeNodes({
       scope,
       executionKind: "workflow_anchor",
@@ -371,6 +404,17 @@ export async function buildExecutionMemoryIntrospectionLite(
       consumerAgentId,
       consumerTeamId,
       limit: Math.max(limit, 4),
+    }),
+    liteWriteStore.findNodes({
+      scope,
+      type: "concept",
+      consumerAgentId,
+      consumerTeamId,
+      limit: Math.max(limit, 8),
+      offset: 0,
+      slotsContains: {
+        summary_kind: "policy_memory",
+      },
     }),
   ]);
 
@@ -424,6 +468,7 @@ export async function buildExecutionMemoryIntrospectionLite(
     ...recommendedWorkflows.map((entry) => toWorkflowSignal(entry)),
     ...candidateWorkflows.map((entry) => toWorkflowSignal(entry)),
   ];
+  const supportingKnowledge = policyMemoryNodes.rows.map((row) => toPolicyMemoryEntry(row, tenantId, scope));
   const surface = {
     action_recall_packet: {
       packet_version: "action_recall_v1" as const,
@@ -433,7 +478,7 @@ export async function buildExecutionMemoryIntrospectionLite(
       trusted_patterns: trustedPatterns,
       contested_patterns: contestedPatterns,
       rehydration_candidates: rehydrationCandidates,
-      supporting_knowledge: [],
+      supporting_knowledge: supportingKnowledge,
     },
     recommended_workflows: recommendedWorkflows,
     candidate_workflows: candidateWorkflows,
@@ -441,7 +486,7 @@ export async function buildExecutionMemoryIntrospectionLite(
     trusted_patterns: trustedPatterns,
     contested_patterns: contestedPatterns,
     rehydration_candidates: rehydrationCandidates,
-    supporting_knowledge: [],
+    supporting_knowledge: supportingKnowledge,
     pattern_signals: patternSignals,
     workflow_signals: workflowSignals,
   };
@@ -531,6 +576,7 @@ export async function buildExecutionMemoryIntrospectionLite(
     trusted_patterns: trustedPatterns,
     contested_patterns: contestedPatterns,
     rehydration_candidates: rehydrationCandidates,
+    supporting_knowledge: supportingKnowledge,
     pattern_signals: patternSignals,
     workflow_signals: workflowSignals,
     ...summaryBundle,

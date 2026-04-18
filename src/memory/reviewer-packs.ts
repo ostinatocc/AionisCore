@@ -1,7 +1,5 @@
-import { buildExecutionMemoryIntrospectionLite } from "./execution-introspection.js";
-import { buildDelegationLearningSliceLite } from "./delegation-learning.js";
-import { buildExperienceIntelligenceLite } from "./experience-intelligence.js";
 import { recoverHandoff } from "./handoff.js";
+import { buildEvolutionInspectStateLite } from "./evolution-inspect.js";
 import {
   ContinuityReviewPackResponseSchema,
   EvolutionReviewPackResponseSchema,
@@ -127,14 +125,7 @@ export async function buildEvolutionReviewPackLite(args: {
   defaultTenantId: string;
   defaultActorId?: string | null;
 }) {
-  const introspection = await buildExecutionMemoryIntrospectionLite(
-    args.liteWriteStore,
-    args.body,
-    args.defaultScope,
-    args.defaultTenantId,
-    args.defaultActorId ?? null,
-  );
-  const experience = await buildExperienceIntelligenceLite({
+  const { artifacts, computed, evolutionInspect } = await buildEvolutionInspectStateLite({
     liteWriteStore: args.liteWriteStore,
     liteRecallAccess: args.liteRecallAccess,
     embedder: args.embedder,
@@ -142,8 +133,9 @@ export async function buildEvolutionReviewPackLite(args: {
     defaultScope: args.defaultScope,
     defaultTenantId: args.defaultTenantId,
     defaultActorId: args.defaultActorId ?? null,
+    surface: "evolution_review_pack",
   });
-
+  const { experience, introspection } = artifacts;
   const recommendedWorkflows = Array.isArray(introspection.recommended_workflows) ? introspection.recommended_workflows : [];
   const candidateWorkflows = Array.isArray(introspection.candidate_workflows) ? introspection.candidate_workflows : [];
   const trustedPatterns = Array.isArray(introspection.trusted_patterns) ? introspection.trusted_patterns : [];
@@ -159,52 +151,12 @@ export async function buildEvolutionReviewPackLite(args: {
     .filter((entry) => asRecord(entry).promotion_ready === true)
     .map((entry) => firstString(asRecord(entry).anchor_id))
     .filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
-
   const selectedTool = firstString(experience.recommendation?.tool?.selected_tool);
   const recommendedFilePath = firstString(experience.recommendation?.path?.file_path);
   const recommendedNextAction = firstString(experience.recommendation?.combined_next_action, experience.recommendation?.path?.next_action);
   const targetFiles = Array.isArray(experience.recommendation?.path?.target_files)
     ? experience.recommendation.path.target_files.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
     : [];
-  const delegationLearning = await buildDelegationLearningSliceLite({
-    liteWriteStore: args.liteWriteStore,
-    body: args.body,
-    tenantId: experience.tenant_id,
-    scope: experience.scope,
-    defaultScope: args.defaultScope,
-    defaultTenantId: args.defaultTenantId,
-    defaultActorId: args.defaultActorId ?? null,
-    taskFamilies: [
-      trustedPattern?.task_family,
-      contestedPattern?.task_family,
-      promotionReadyWorkflow?.task_family,
-      stableWorkflow?.task_family,
-    ],
-    limitCandidates: [asRecord(args.body).limit],
-  });
-
-  const evolutionInspect = {
-    summary_version: "evolution_inspect_v1",
-    tenant_id: experience.tenant_id,
-    scope: experience.scope,
-    query_text: experience.query_text,
-    experience_intelligence: experience,
-    execution_introspection: introspection,
-    evolution_summary: {
-      summary_version: "evolution_inspect_summary_v1",
-      history_applied: experience.recommendation?.history_applied === true,
-      selected_tool: selectedTool,
-      recommended_file_path: recommendedFilePath,
-      recommended_next_action: recommendedNextAction,
-      stable_workflow_count: recommendedWorkflows.length,
-      promotion_ready_workflow_count: [...recommendedWorkflows, ...candidateWorkflows].filter((entry) => asRecord(entry).promotion_ready === true).length,
-      trusted_pattern_count: trustedPatterns.length,
-      contested_pattern_count: contestedPatterns.length,
-      suppressed_pattern_count: Array.isArray(experience.recommendation?.tool?.suppressed_pattern_anchor_ids)
-        ? experience.recommendation.tool.suppressed_pattern_anchor_ids.length
-        : 0,
-    },
-  };
 
   return EvolutionReviewPackResponseSchema.parse({
     summary_version: "evolution_review_pack_v1",
@@ -218,6 +170,12 @@ export async function buildEvolutionReviewPackLite(args: {
       promotion_ready_workflow: promotionReadyWorkflow,
       trusted_pattern: trustedPattern,
       contested_pattern: contestedPattern,
+      derived_policy: experience.derived_policy ?? null,
+      policy_contract: experience.policy_contract ?? null,
+      policy_review: computed.policyReview,
+      policy_governance_contract: computed.policyGovernanceContract,
+      policy_governance_apply_payload: computed.policyGovernanceApplyPayload,
+      policy_governance_apply_result: computed.policyGovernanceApplyResult,
       review_contract: {
         selected_tool: selectedTool,
         file_path: recommendedFilePath,
@@ -235,15 +193,8 @@ export async function buildEvolutionReviewPackLite(args: {
           ? experience.recommendation.tool.suppressed_pattern_anchor_ids
           : [],
       },
-      learning_summary: {
-        task_family: delegationLearning.task_family,
-        matched_records: delegationLearning.matched_records,
-        truncated: delegationLearning.truncated,
-        route_role_counts: delegationLearning.route_role_counts,
-        record_outcome_counts: delegationLearning.record_outcome_counts,
-        recommendation_count: delegationLearning.recommendation_count,
-      },
-      learning_recommendations: delegationLearning.learning_recommendations,
+      learning_summary: experience.learning_summary,
+      learning_recommendations: experience.learning_recommendations,
     },
   });
 }

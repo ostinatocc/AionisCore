@@ -434,6 +434,10 @@ test("memory evolution review-pack route exposes stable workflow and reviewer-fr
     assert.equal(parsed.evolution_review_pack.review_contract.selected_tool, "edit");
     assert.equal(parsed.evolution_review_pack.review_contract.file_path, "src/routes/export.ts");
     assert.ok(parsed.evolution_review_pack.stable_workflow);
+    assert.equal(parsed.evolution_review_pack.derived_policy?.selected_tool, "edit");
+    assert.equal(parsed.evolution_review_pack.policy_contract?.selected_tool, "edit");
+    assert.equal(parsed.evolution_review_pack.policy_governance_contract.action, "none");
+    assert.equal(parsed.evolution_review_pack.policy_review.persisted_policy_count, 0);
     assert.ok(parsed.evolution_review_pack.review_contract.trusted_pattern_anchor_ids.length >= 1);
     assert.deepEqual(parsed.evolution_review_pack.learning_summary, {
       task_family: "task:repair_export",

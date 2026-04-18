@@ -824,6 +824,7 @@ export const ExperienceIntelligenceRequest = z.object({
   execution_artifacts: z.array(z.record(z.unknown())).optional(),
   execution_evidence: z.array(z.record(z.unknown())).optional(),
   execution_state_v1: ExecutionStateV1Schema.optional(),
+  policy_governance_apply_mode: z.enum(["manual", "auto_apply"]).optional(),
   workflow_limit: z.number().int().positive().max(32).default(8),
 });
 
@@ -919,6 +920,173 @@ export const ExperienceIntelligenceToolRecommendationSchema = z.object({
   suppressed_pattern_anchor_ids: z.array(z.string()),
 }).passthrough();
 
+export const PolicyHintEntrySchema = z.object({
+  hint_id: z.string(),
+  source_kind: z.enum(["trusted_pattern", "contested_pattern", "stable_workflow", "rehydration_candidate"]),
+  hint_kind: z.enum(["tool_preference", "tool_avoidance", "workflow_reuse", "payload_rehydration"]),
+  action: z.enum(["prefer", "avoid", "reuse", "rehydrate"]),
+  source_anchor_id: z.string(),
+  source_anchor_level: z.string().nullable(),
+  selected_tool: z.string().nullable(),
+  workflow_signature: z.string().nullable(),
+  file_path: z.string().nullable(),
+  target_files: z.array(z.string()),
+  rehydration_mode: z.string().nullable(),
+  confidence: z.number().nullable(),
+  priority: z.number().int().min(0),
+  reason: z.string(),
+}).passthrough();
+export type PolicyHintEntry = z.infer<typeof PolicyHintEntrySchema>;
+
+export const PolicyHintPackSchema = z.object({
+  summary_version: z.literal("policy_hint_pack_v1"),
+  total_hints: z.number().int().min(0),
+  tool_preference_count: z.number().int().min(0),
+  tool_avoidance_count: z.number().int().min(0),
+  workflow_reuse_count: z.number().int().min(0),
+  payload_rehydration_count: z.number().int().min(0),
+  hints: z.array(PolicyHintEntrySchema),
+});
+export type PolicyHintPack = z.infer<typeof PolicyHintPackSchema>;
+
+export const DerivedPolicySurfaceSchema = z.object({
+  summary_version: z.literal("derived_policy_v1"),
+  policy_kind: z.literal("tool_preference"),
+  source_kind: z.enum(["trusted_pattern", "stable_workflow", "blended"]),
+  policy_state: z.enum(["candidate", "stable"]),
+  selected_tool: z.string(),
+  workflow_signature: z.string().nullable(),
+  file_path: z.string().nullable(),
+  target_files: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+  supporting_anchor_ids: z.array(z.string()),
+  reason: z.string(),
+  evidence: z.object({
+    trusted_pattern_count: z.number().int().min(0),
+    stable_workflow_count: z.number().int().min(0),
+    usage_count: z.number().int().min(0),
+    reuse_success_count: z.number().int().min(0),
+    reuse_failure_count: z.number().int().min(0),
+    feedback_quality: z.number().nullable(),
+  }),
+}).passthrough();
+export type DerivedPolicySurface = z.infer<typeof DerivedPolicySurfaceSchema>;
+
+export const PolicyContractSchema = z.object({
+  summary_version: z.literal("policy_contract_v1"),
+  policy_kind: z.literal("tool_preference"),
+  source_kind: z.enum(["trusted_pattern", "stable_workflow", "blended"]),
+  policy_state: z.enum(["candidate", "stable"]),
+  policy_memory_state: z.enum(["active", "contested", "retired"]).default("active"),
+  activation_mode: z.enum(["hint", "default"]),
+  materialization_state: z.enum(["computed", "persisted"]).default("computed"),
+  history_applied: z.boolean(),
+  selected_tool: z.string(),
+  avoid_tools: z.array(z.string()),
+  workflow_signature: z.string().nullable(),
+  file_path: z.string().nullable(),
+  target_files: z.array(z.string()),
+  next_action: z.string().nullable(),
+  rehydration_mode: z.string().nullable(),
+  confidence: z.number().min(0).max(1),
+  source_anchor_ids: z.array(z.string()),
+  policy_memory_id: z.string().nullable().default(null),
+  reason: z.string(),
+}).passthrough();
+export type PolicyContract = z.infer<typeof PolicyContractSchema>;
+
+export const PolicyReviewAttentionSchema = z.object({
+  node_id: z.string(),
+  policy_memory_state: z.enum(["active", "contested", "retired"]),
+  selected_tool: z.string().nullable(),
+  file_path: z.string().nullable(),
+  workflow_signature: z.string().nullable(),
+  summary: z.string().nullable(),
+  feedback_quality: z.number().nullable(),
+  last_feedback_at: z.string().nullable(),
+  last_materialized_at: z.string().nullable(),
+  review_reason: z.string(),
+}).passthrough();
+export type PolicyReviewAttention = z.infer<typeof PolicyReviewAttentionSchema>;
+
+export const PolicyReviewSummarySchema = z.object({
+  summary_version: z.literal("policy_review_summary_v1"),
+  persisted_policy_count: z.number().int().min(0),
+  active_policy_count: z.number().int().min(0),
+  contested_policy_count: z.number().int().min(0),
+  retired_policy_count: z.number().int().min(0),
+  review_recommended: z.boolean(),
+  selected_policy_memory_id: z.string().nullable(),
+  selected_policy_memory_state: z.enum(["active", "contested", "retired"]).nullable(),
+  attention_policy: PolicyReviewAttentionSchema.nullable(),
+}).passthrough();
+export type PolicyReviewSummary = z.infer<typeof PolicyReviewSummarySchema>;
+
+export const PolicyGovernanceApplyActionSchema = z.enum(["refresh", "retire", "reactivate"]);
+export type PolicyGovernanceApplyAction = z.infer<typeof PolicyGovernanceApplyActionSchema>;
+
+export const PolicyGovernanceContractSchema = z.object({
+  contract_version: z.literal("policy_governance_contract_v1"),
+  action: z.enum(["none", "monitor", "refresh", "retire", "reactivate"]),
+  applies: z.boolean(),
+  review_required: z.boolean(),
+  policy_memory_id: z.string().nullable(),
+  current_state: z.enum(["active", "contested", "retired"]).nullable(),
+  target_state: z.enum(["active", "contested", "retired"]).nullable(),
+  selected_tool: z.string().nullable(),
+  file_path: z.string().nullable(),
+  workflow_signature: z.string().nullable(),
+  rationale: z.string(),
+  next_action: z.string().nullable(),
+}).passthrough();
+export type PolicyGovernanceContract = z.infer<typeof PolicyGovernanceContractSchema>;
+
+export const PolicyGovernanceApplyPayloadSchema = z.object({
+  payload_version: z.literal("policy_governance_apply_payload_v1"),
+  route: z.literal("/v1/memory/policies/governance/apply"),
+  method: z.literal("POST"),
+  action: PolicyGovernanceApplyActionSchema,
+  policy_memory_id: z.string(),
+  selected_tool: z.string().nullable(),
+  current_state: z.enum(["active", "contested", "retired"]).nullable(),
+  target_state: z.enum(["active", "contested", "retired"]).nullable(),
+  requires_live_context: z.boolean(),
+  request_body: z.record(z.unknown()),
+  rationale: z.string(),
+}).passthrough();
+export type PolicyGovernanceApplyPayload = z.infer<typeof PolicyGovernanceApplyPayloadSchema>;
+
+export const PersistedPolicyMemorySchema = z.object({
+  node_id: z.string(),
+  node_uri: z.string(),
+  client_id: z.string(),
+  policy_memory_signature: z.string(),
+  selected_tool: z.string(),
+  policy_state: z.enum(["candidate", "stable"]),
+  policy_memory_state: z.enum(["active", "contested", "retired"]),
+  activation_mode: z.enum(["hint", "default"]),
+  policy_contract: PolicyContractSchema,
+}).passthrough();
+export type PersistedPolicyMemory = z.infer<typeof PersistedPolicyMemorySchema>;
+
+export const PolicyGovernanceApplyResultSchema = z.object({
+  ok: z.boolean(),
+  auto_applied: z.boolean(),
+  attempted: z.boolean().default(false),
+  trigger: z.string(),
+  surface: z.string(),
+  action: PolicyGovernanceApplyActionSchema.nullable().default(null),
+  policy_memory_id: z.string().nullable().default(null),
+  previous_state: z.enum(["active", "contested", "retired"]).nullable().default(null),
+  next_state: z.enum(["active", "contested", "retired"]).nullable().default(null),
+  policy_memory: PersistedPolicyMemorySchema.nullable().default(null),
+  error: z.object({
+    code: z.string(),
+    message: z.string(),
+  }).nullable().default(null),
+}).passthrough();
+export type PolicyGovernanceApplyResult = z.infer<typeof PolicyGovernanceApplyResultSchema>;
+
 export const DelegationLearningSummarySchema = z.object({
   task_family: z.string().nullable(),
   matched_records: z.number().int().min(0),
@@ -945,6 +1113,9 @@ export const ExperienceIntelligenceResponseSchema = z.object({
     path: ExperienceIntelligencePathRecommendationSchema,
     combined_next_action: z.string().nullable(),
   }).passthrough(),
+  policy_hints: PolicyHintPackSchema,
+  derived_policy: DerivedPolicySurfaceSchema.nullable(),
+  policy_contract: PolicyContractSchema.nullable().default(null),
   learning_summary: DelegationLearningSummarySchema,
   learning_recommendations: z.array(z.lazy(() => DelegationRecordsLearningRecommendationSchema)),
   rationale: z.object({
@@ -960,6 +1131,7 @@ export const KickoffRecommendationResponseSchema = z.object({
   scope: z.string(),
   query_text: z.string(),
   kickoff_recommendation: z.lazy(() => KickoffRecommendationSchema).nullable(),
+  policy_contract: PolicyContractSchema.nullable().default(null),
   rationale: z.object({
     summary: z.string(),
   }).passthrough(),
@@ -1374,6 +1546,7 @@ export const ExecutionMemoryIntrospectionResponseSchema = z.object({
   trusted_patterns: z.array(PlannerPacketEntrySchema),
   contested_patterns: z.array(PlannerPacketEntrySchema),
   rehydration_candidates: z.array(PlannerPacketEntrySchema),
+  supporting_knowledge: z.array(PlannerPacketEntrySchema),
   pattern_signals: z.array(PlannerPacketEntrySchema),
   workflow_signals: z.array(PlannerPacketEntrySchema),
   action_packet_summary: ActionPacketSummarySchema,
@@ -1386,6 +1559,9 @@ export const ExecutionMemoryIntrospectionResponseSchema = z.object({
 });
 
 export type ExecutionMemoryIntrospectionResponse = z.infer<typeof ExecutionMemoryIntrospectionResponseSchema>;
+
+export const EvolutionInspectRequest = ExperienceIntelligenceRequest;
+export type EvolutionInspectInput = z.infer<typeof EvolutionInspectRequest>;
 
 export const EvolutionInspectSummarySchema = z.object({
   summary_version: z.literal("evolution_inspect_summary_v1"),
@@ -1406,6 +1582,14 @@ export const EvolutionInspectResponseSchema = z.object({
   scope: z.string(),
   query_text: z.string(),
   experience_intelligence: ExperienceIntelligenceResponseSchema,
+  policy_hints: PolicyHintPackSchema.optional(),
+  derived_policy: DerivedPolicySurfaceSchema.nullable(),
+  policy_contract: PolicyContractSchema.nullable().default(null),
+  policy_review: PolicyReviewSummarySchema,
+  policy_governance_contract: PolicyGovernanceContractSchema,
+  policy_governance_apply_payload: PolicyGovernanceApplyPayloadSchema.nullable().default(null),
+  policy_governance_apply_result: PolicyGovernanceApplyResultSchema.nullable().default(null),
+  kickoff_recommendation: KickoffRecommendationResponseSchema,
   execution_introspection: ExecutionMemoryIntrospectionResponseSchema,
   evolution_summary: EvolutionInspectSummarySchema,
 }).passthrough();
@@ -1428,6 +1612,12 @@ export const EvolutionReviewPackSummarySchema = z.object({
   promotion_ready_workflow: z.record(z.unknown()).nullable(),
   trusted_pattern: z.record(z.unknown()).nullable(),
   contested_pattern: z.record(z.unknown()).nullable(),
+  derived_policy: DerivedPolicySurfaceSchema.nullable(),
+  policy_contract: PolicyContractSchema.nullable().default(null),
+  policy_review: PolicyReviewSummarySchema,
+  policy_governance_contract: PolicyGovernanceContractSchema,
+  policy_governance_apply_payload: PolicyGovernanceApplyPayloadSchema.nullable().default(null),
+  policy_governance_apply_result: PolicyGovernanceApplyResultSchema.nullable().default(null),
   review_contract: EvolutionReviewContractSchema,
   learning_summary: DelegationLearningSummarySchema,
   learning_recommendations: z.array(z.lazy(() => DelegationRecordsLearningRecommendationSchema)),
@@ -1443,6 +1633,60 @@ export const EvolutionReviewPackResponseSchema = z.object({
 }).passthrough();
 
 export type EvolutionReviewPackResponse = z.infer<typeof EvolutionReviewPackResponseSchema>;
+
+export const PolicyGovernanceApplyRequestSchema = ExperienceIntelligenceRequest.partial()
+  .extend({
+    tenant_id: z.string().min(1).optional(),
+    scope: z.string().min(1).optional(),
+    actor: z.string().min(1).optional(),
+    policy_memory_id: z.string().uuid(),
+    action: PolicyGovernanceApplyActionSchema,
+    reason: z.string().min(1).max(1000).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.action !== "refresh" && value.action !== "reactivate") return;
+    if (typeof value.query_text !== "string" || !value.query_text.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["query_text"],
+        message: "must set query_text for refresh/reactivate",
+      });
+    }
+    if (value.context === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["context"],
+        message: "must set context for refresh/reactivate",
+      });
+    }
+    if (!Array.isArray(value.candidates) || value.candidates.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["candidates"],
+        message: "must set candidates for refresh/reactivate",
+      });
+    }
+  });
+
+export type PolicyGovernanceApplyInput = z.infer<typeof PolicyGovernanceApplyRequestSchema>;
+
+export const PolicyGovernanceApplyResponseSchema = z.object({
+  ok: z.literal(true),
+  tenant_id: z.string(),
+  scope: z.string(),
+  action: PolicyGovernanceApplyActionSchema,
+  applied: z.boolean(),
+  actor: z.string().nullable(),
+  reason: z.string().nullable(),
+  policy_memory_id: z.string(),
+  previous_state: z.enum(["active", "contested", "retired"]),
+  next_state: z.enum(["active", "contested", "retired"]),
+  governance_contract: PolicyGovernanceContractSchema,
+  live_policy_contract: PolicyContractSchema.nullable(),
+  policy_memory: PersistedPolicyMemorySchema,
+}).passthrough();
+
+export type PolicyGovernanceApplyResponse = z.infer<typeof PolicyGovernanceApplyResponseSchema>;
 
 export const PlanningSummaryContractSchema = z.object({
   summary_version: z.literal("planning_summary_v1"),
@@ -1836,6 +2080,7 @@ export const ToolsFeedbackResponseSchema = z.object({
   decision_link_mode: z.enum(["provided", "inferred", "created_from_feedback"]),
   decision_policy_sha256: z.string(),
   pattern_anchor: ToolsFeedbackPatternAnchorSchema.nullable().optional(),
+  policy_memory: PersistedPolicyMemorySchema.nullable().optional(),
   governance_preview: ToolsFeedbackGovernancePreviewSchema.nullable().optional(),
 }).passthrough();
 
