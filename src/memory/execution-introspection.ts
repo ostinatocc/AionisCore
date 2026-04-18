@@ -325,6 +325,30 @@ function toDistillationEntry(
   };
 }
 
+function toContinuityEntry(
+  row: Awaited<ReturnType<LiteWriteStore["findNodes"]>>["rows"][number],
+  tenantId: string,
+  scope: string,
+) {
+  const slots = asRecord(row.slots);
+  const execution = asRecord(slots.execution_native_v1);
+  const summaryKind = firstString(execution.summary_kind, slots.summary_kind);
+  return {
+    kind: "continuity_carrier",
+    summary_kind: summaryKind,
+    execution_kind: firstString(execution.execution_kind),
+    node_id: row.id,
+    uri: toNodeUri(tenantId, scope, row.type, row.id),
+    title: firstString(row.title),
+    summary: firstString(row.text_summary),
+    compression_layer: firstString(execution.compression_layer, slots.compression_layer),
+    file_path: firstString(execution.file_path, slots.file_path),
+    target_files: stringList(execution.target_files, 24),
+    next_action: firstString(execution.next_action, slots.next_action),
+    confidence: row.confidence,
+  };
+}
+
 function buildDemoSurface(args: {
   workflowSignalSummary: ReturnType<typeof summarizeWorkflowSignalSurface>;
   patternSignalSummary: ReturnType<typeof summarizePatternSignalSurface>;
@@ -547,7 +571,14 @@ export async function buildExecutionMemoryIntrospectionLite(
     ...distilledEvidenceNodes.rows.map((row) => toDistillationEntry(row, tenantId, scope)),
     ...distilledFactNodes.rows.map((row) => toDistillationEntry(row, tenantId, scope)),
   ];
+  const continuitySourceEvents = recentSourceEvents.rows
+    .filter((row) => !hasWorkflowProjectionMarker(asRecord(row.slots)))
+    .slice(0, Math.max(limit, 8));
+  const continuityKnowledge = continuitySourceEvents
+    .map((row) => toContinuityEntry(row, tenantId, scope))
+    .filter((entry) => entry.summary_kind === "handoff" || entry.summary_kind === "session_event" || entry.summary_kind === "session");
   const supportingKnowledge = [
+    ...continuityKnowledge,
     ...policyMemoryNodes.rows.map((row) => toPolicyMemoryEntry(row, tenantId, scope)),
     ...distillationKnowledge,
   ];
@@ -573,9 +604,6 @@ export async function buildExecutionMemoryIntrospectionLite(
     workflow_signals: workflowSignals,
   };
   const summaryBundle = buildExecutionMemorySummaryBundle(surface);
-  const continuitySourceEvents = recentSourceEvents.rows
-    .filter((row) => !hasWorkflowProjectionMarker(asRecord(row.slots)))
-    .slice(0, Math.max(limit, 8));
   const continuityProjectionSamples = await Promise.all(
     continuitySourceEvents.map(async (row) => {
       const explained = await explainWorkflowProjectionForSourceNode({

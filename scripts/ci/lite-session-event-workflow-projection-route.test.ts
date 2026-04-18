@@ -333,6 +333,8 @@ test("memory/events projects execution continuity session events into workflow g
     const introspectBody = ExecutionMemoryIntrospectionResponseSchema.parse(introspect.json());
     assert.equal(introspectBody.recommended_workflows.length, 1);
     assert.equal(introspectBody.candidate_workflows.length, 0);
+    assert.equal(introspectBody.continuity_carrier_summary.handoff_count, 0);
+    assert.equal(introspectBody.continuity_carrier_summary.session_event_count, 2);
     assert.match(introspectBody.demo_surface.merged_text, /Fix export failure/i);
   } finally {
     await app.close();

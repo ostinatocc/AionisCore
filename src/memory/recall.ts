@@ -221,6 +221,8 @@ type ActionRecallSupportingKnowledge = {
   uri: string | null;
   title: string | null;
   summary: string | null;
+  summary_kind?: string | null;
+  execution_kind?: string | null;
   compression_layer: string | null;
   tier: string | null;
   salience: number | null;
@@ -520,6 +522,8 @@ function buildActionRecallPacket(args: {
       uri: firstString(item?.uri),
       title: firstString(item?.title),
       summary: firstString(item?.summary),
+      summary_kind: firstString(item?.summary_kind),
+      execution_kind: firstString(item?.execution_kind),
       compression_layer: firstString(item?.compression_layer),
       tier: firstString(item?.tier),
       salience: firstFinite(item?.salience),

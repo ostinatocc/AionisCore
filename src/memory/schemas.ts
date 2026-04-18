@@ -1350,6 +1350,15 @@ export const PolicyMaintenanceSummarySchema = z.object({
 
 export type PolicyMaintenanceSummary = z.infer<typeof PolicyMaintenanceSummarySchema>;
 
+export const ContinuityCarrierSummarySchema = z.object({
+  total_count: z.number().int().min(0),
+  handoff_count: z.number().int().min(0),
+  session_event_count: z.number().int().min(0),
+  session_count: z.number().int().min(0),
+});
+
+export type ContinuityCarrierSummary = z.infer<typeof ContinuityCarrierSummarySchema>;
+
 export const ActionPacketSummarySchema = z.object({
   recommended_workflow_count: z.number().int().min(0),
   candidate_workflow_count: z.number().int().min(0),
@@ -1411,6 +1420,7 @@ export const ExecutionKernelPacketSummarySchema = z.object({
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
   policy_lifecycle_summary: PolicyLifecycleSummarySchema,
   policy_maintenance_summary: PolicyMaintenanceSummarySchema,
+  continuity_carrier_summary: ContinuityCarrierSummarySchema,
   action_packet_summary: ActionPacketSummarySchema,
 });
 
@@ -1627,6 +1637,7 @@ export const ExecutionSummaryV1Schema = z.object({
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
   policy_lifecycle_summary: PolicyLifecycleSummarySchema,
   policy_maintenance_summary: PolicyMaintenanceSummarySchema,
+  continuity_carrier_summary: ContinuityCarrierSummarySchema,
   action_packet_summary: ActionPacketSummarySchema,
 }).passthrough();
 
@@ -1687,6 +1698,7 @@ export const ExecutionMemoryIntrospectionResponseSchema = z.object({
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
   policy_lifecycle_summary: PolicyLifecycleSummarySchema,
   policy_maintenance_summary: PolicyMaintenanceSummarySchema,
+  continuity_carrier_summary: ContinuityCarrierSummarySchema,
 });
 
 export type ExecutionMemoryIntrospectionResponse = z.infer<typeof ExecutionMemoryIntrospectionResponseSchema>;
@@ -2033,6 +2045,7 @@ export const PlanningSummaryContractSchema = z.object({
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
   policy_lifecycle_summary: PolicyLifecycleSummarySchema,
   policy_maintenance_summary: PolicyMaintenanceSummarySchema,
+  continuity_carrier_summary: ContinuityCarrierSummarySchema,
   trusted_pattern_count: z.number().int().min(0),
   contested_pattern_count: z.number().int().min(0),
   trusted_pattern_tools: z.array(z.string()),
@@ -2054,6 +2067,7 @@ export const AssemblySummaryContractSchema = z.object({
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
   policy_lifecycle_summary: PolicyLifecycleSummarySchema,
   policy_maintenance_summary: PolicyMaintenanceSummarySchema,
+  continuity_carrier_summary: ContinuityCarrierSummarySchema,
   trusted_pattern_count: z.number().int().min(0),
   contested_pattern_count: z.number().int().min(0),
   trusted_pattern_tools: z.array(z.string()),

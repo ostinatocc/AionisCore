@@ -712,6 +712,9 @@ test("execution introspection route exposes demo-friendly workflow and pattern s
     assert.equal(body.distillation_signal_summary.origin_counts.write_distillation_input_text, 4);
     assert.equal(body.distillation_signal_summary.origin_counts.execution_write_projection, 0);
     assert.equal(body.distillation_signal_summary.promotion_target_counts.workflow, 4);
+    assert.equal(body.continuity_carrier_summary.total_count, 0);
+    assert.equal(body.continuity_carrier_summary.handoff_count, 0);
+    assert.equal(body.continuity_carrier_summary.session_event_count, 0);
     assert.equal(body.continuity_projection_report.sampled_source_event_count, 4);
     assert.equal(body.continuity_projection_report.decision_counts.projected, 2);
     assert.equal(body.continuity_projection_report.decision_counts.skipped_stable_exists, 1);

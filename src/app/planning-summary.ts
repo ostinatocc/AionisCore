@@ -29,6 +29,7 @@ export type PlanningSummary = {
   pattern_maintenance_summary: PatternMaintenanceSummary;
   policy_lifecycle_summary: PolicyLifecycleSummary;
   policy_maintenance_summary: PolicyMaintenanceSummary;
+  continuity_carrier_summary: ContinuityCarrierSummary;
   primary_savings_levers: string[];
 };
 
@@ -62,6 +63,7 @@ export type AssemblySummary = {
   pattern_maintenance_summary: PatternMaintenanceSummary;
   policy_lifecycle_summary: PolicyLifecycleSummary;
   policy_maintenance_summary: PolicyMaintenanceSummary;
+  continuity_carrier_summary: ContinuityCarrierSummary;
   primary_savings_levers: string[];
 };
 
@@ -213,6 +215,13 @@ export type PolicyMaintenanceSummary = {
   reactivate_policy_count: number;
 };
 
+export type ContinuityCarrierSummary = {
+  total_count: number;
+  handoff_count: number;
+  session_event_count: number;
+  session_count: number;
+};
+
 export type ActionPacketSummary = {
   recommended_workflow_count: number;
   candidate_workflow_count: number;
@@ -239,6 +248,7 @@ export type ExecutionMemorySummaryBundle = {
   pattern_maintenance_summary: PatternMaintenanceSummary;
   policy_lifecycle_summary: PolicyLifecycleSummary;
   policy_maintenance_summary: PolicyMaintenanceSummary;
+  continuity_carrier_summary: ContinuityCarrierSummary;
   action_packet_summary: ActionPacketSummary;
 };
 
@@ -2039,6 +2049,24 @@ function collectPolicyEntriesFromSurface(surface: PlannerPacketSummarySurface) {
   });
 }
 
+function collectContinuityEntriesFromSurface(surface: PlannerPacketSummarySurface) {
+  const packet =
+    surface.action_recall_packet && typeof surface.action_recall_packet === "object"
+      ? (surface.action_recall_packet as Record<string, unknown>)
+      : {};
+  const supportingKnowledge = Array.isArray(surface.supporting_knowledge)
+    ? surface.supporting_knowledge
+    : Array.isArray(packet.supporting_knowledge)
+      ? packet.supporting_knowledge
+      : [];
+  return safeRecordArray(supportingKnowledge).filter((entry) => {
+    const executionKind = typeof entry.execution_kind === "string" ? entry.execution_kind.trim() : "";
+    const summaryKind = typeof entry.summary_kind === "string" ? entry.summary_kind.trim() : "";
+    return executionKind === "execution_native"
+      && (summaryKind === "handoff" || summaryKind === "session_event" || summaryKind === "session");
+  });
+}
+
 export function summarizePolicyLifecycleSurface(surface: PlannerPacketSummarySurface): PolicyLifecycleSummary {
   const entries = collectPolicyEntriesFromSurface(surface);
   const summary: PolicyLifecycleSummary = {
@@ -2106,6 +2134,23 @@ export function summarizePolicyMaintenanceSurface(surface: PlannerPacketSummaryS
   return summary;
 }
 
+export function summarizeContinuityCarrierSurface(surface: PlannerPacketSummarySurface): ContinuityCarrierSummary {
+  const entries = collectContinuityEntriesFromSurface(surface);
+  const summary: ContinuityCarrierSummary = {
+    total_count: entries.length,
+    handoff_count: 0,
+    session_event_count: 0,
+    session_count: 0,
+  };
+  for (const entry of entries) {
+    const summaryKind = typeof entry.summary_kind === "string" ? entry.summary_kind.trim() : "";
+    if (summaryKind === "handoff") summary.handoff_count += 1;
+    if (summaryKind === "session_event") summary.session_event_count += 1;
+    if (summaryKind === "session") summary.session_count += 1;
+  }
+  return summary;
+}
+
 export function buildExecutionMemorySummaryBundle(surface: PlannerPacketSummarySurface): ExecutionMemorySummaryBundle {
   return {
     pattern_signal_summary: summarizePatternSignalSurface(surface),
@@ -2117,6 +2162,7 @@ export function buildExecutionMemorySummaryBundle(surface: PlannerPacketSummaryS
     pattern_maintenance_summary: summarizePatternMaintenanceSurface(surface),
     policy_lifecycle_summary: summarizePolicyLifecycleSurface(surface),
     policy_maintenance_summary: summarizePolicyMaintenanceSurface(surface),
+    continuity_carrier_summary: summarizeContinuityCarrierSurface(surface),
     action_packet_summary: summarizeActionRecallPacketSurface(surface),
   };
 }
@@ -2271,6 +2317,7 @@ export function buildPlanningSummary(args: {
   const patternMaintenanceSummary = summaryBundle.pattern_maintenance_summary;
   const policyLifecycleSummary = summaryBundle.policy_lifecycle_summary;
   const policyMaintenanceSummary = summaryBundle.policy_maintenance_summary;
+  const continuityCarrierSummary = summaryBundle.continuity_carrier_summary;
   const experienceRecommendation =
     args.experience_intelligence && typeof args.experience_intelligence === "object"
       ? ((args.experience_intelligence as Record<string, unknown>).recommendation as Record<string, unknown> | undefined)
@@ -2343,6 +2390,7 @@ export function buildPlanningSummary(args: {
     pattern_maintenance_summary: patternMaintenanceSummary,
     policy_lifecycle_summary: policyLifecycleSummary,
     policy_maintenance_summary: policyMaintenanceSummary,
+    continuity_carrier_summary: continuityCarrierSummary,
     primary_savings_levers: Array.isArray(costSignals.primary_savings_levers)
       ? costSignals.primary_savings_levers.filter((entry): entry is string => typeof entry === "string")
       : [],
@@ -2404,6 +2452,7 @@ export function buildAssemblySummary(args: {
     pattern_maintenance_summary: planning.pattern_maintenance_summary,
     policy_lifecycle_summary: planning.policy_lifecycle_summary,
     policy_maintenance_summary: planning.policy_maintenance_summary,
+    continuity_carrier_summary: planning.continuity_carrier_summary,
     primary_savings_levers: planning.primary_savings_levers,
   };
 }
