@@ -862,6 +862,10 @@ body {
   font-family: var(--vp-font-family-mono);
   font-size: 12px;
   letter-spacing: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .reference-tile p + .reference-route,
@@ -1016,6 +1020,12 @@ body {
 }
 
 /* -------- Responsive -------- */
+
+@media (max-width: 1280px) {
+  .reference-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 
 @media (max-width: 960px) {
   .VPHero {
