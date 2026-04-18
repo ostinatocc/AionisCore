@@ -494,6 +494,8 @@ test("memory/write keeps workflow candidates promotion-ready until governance ad
     assert.equal(introspectBody.workflow_signal_summary.promotion_ready_workflow_count, 1);
     assert.equal(introspectBody.inventory.raw_workflow_candidate_count, 2);
     assert.equal(introspectBody.inventory.suppressed_candidate_workflow_count, 1);
+    assert.equal((introspectBody.candidate_workflows[0] as any)?.distillation_origin, "execution_write_projection");
+    assert.equal((introspectBody.candidate_workflows[0] as any)?.preferred_promotion_target, "workflow");
 
     const fixedSourcePayload = buildExecutionWritePayload({
       eventId: "fixed-source-event",
@@ -536,6 +538,7 @@ test("memory/write keeps workflow candidates promotion-ready until governance ad
     assert.equal(retryBody.workflow_signal_summary.promotion_ready_workflow_count, 1);
     assert.equal(retryBody.inventory.raw_workflow_candidate_count, 3);
     assert.equal(retryBody.inventory.suppressed_candidate_workflow_count, 2);
+    assert.equal((retryBody.candidate_workflows[0] as any)?.distillation_origin, "execution_write_projection");
   } finally {
     await app.close();
     await liteWriteStore.close();

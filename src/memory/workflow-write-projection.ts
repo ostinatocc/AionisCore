@@ -1,7 +1,11 @@
 import stableStringify from "fast-json-stable-stringify";
 import { ExecutionPacketV1Schema, ExecutionStateV1Schema, type ExecutionPacketV1, type ExecutionStateV1 } from "../execution/types.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema } from "./schemas.js";
-import { buildWorkflowMaintenanceMetadata, buildWorkflowPromotionMetadata } from "./evolution-operators.js";
+import {
+  buildDistillationMetadata,
+  buildWorkflowMaintenanceMetadata,
+  buildWorkflowPromotionMetadata,
+} from "./evolution-operators.js";
 import { sha256Hex } from "../util/crypto.js";
 import { stableUuid } from "../util/uuid.js";
 import type { PromoteMemoryGovernanceReviewProvider } from "./governance-provider-types.js";
@@ -603,6 +607,12 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
       maintenance: buildWorkflowMaintenanceMetadata({
         promotion_state: "candidate",
         at: now,
+      }),
+      distillation: buildDistillationMetadata({
+        source_kind: "execution_projection",
+        distillation_kind: "workflow_candidate",
+        at: now,
+        source_node_id: source.id,
       }),
       file_path: filePath,
       target_files: targetFiles,

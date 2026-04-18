@@ -83,6 +83,8 @@ test("replay-learning projection artifacts produce candidate workflow before pro
   assert.equal(episode?.slots?.execution_native_v1?.execution_kind, "workflow_candidate");
   assert.equal(episode?.slots?.execution_native_v1?.workflow_promotion?.promotion_state, "candidate");
   assert.equal(episode?.slots?.execution_native_v1?.workflow_promotion?.observed_count, 1);
+  assert.equal(episode?.slots?.execution_native_v1?.distillation?.distillation_origin, "replay_learning_episode");
+  assert.equal(episode?.slots?.execution_native_v1?.distillation?.preferred_promotion_target, "workflow");
   assert.equal(workflow, undefined);
 });
 

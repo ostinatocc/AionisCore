@@ -164,12 +164,16 @@ export type PatternPromotionMetadata = {
 export type DistillationOrigin =
   | "write_distillation_input_text"
   | "write_distillation_event_node"
-  | "write_distillation_evidence_node";
+  | "write_distillation_evidence_node"
+  | "execution_write_projection"
+  | "replay_learning_episode";
 
 export type DistillationTransitionKind =
   | "distilled_from_input_text"
   | "distilled_from_event_node"
-  | "distilled_from_evidence_node";
+  | "distilled_from_evidence_node"
+  | "projected_from_execution_write"
+  | "projected_from_replay_learning";
 
 export type DistillationPromotionTarget = "workflow" | "pattern" | "policy";
 
@@ -283,23 +287,31 @@ export function buildPatternPromotionMetadata(args: {
   };
 }
 
-export function resolveDistillationOrigin(sourceKind: "input_text" | "event_nodes" | "evidence_nodes"): DistillationOrigin {
+export function resolveDistillationOrigin(
+  sourceKind: "input_text" | "event_nodes" | "evidence_nodes" | "execution_projection" | "replay_learning",
+): DistillationOrigin {
+  if (sourceKind === "execution_projection") return "execution_write_projection";
+  if (sourceKind === "replay_learning") return "replay_learning_episode";
   if (sourceKind === "event_nodes") return "write_distillation_event_node";
   if (sourceKind === "evidence_nodes") return "write_distillation_evidence_node";
   return "write_distillation_input_text";
 }
 
-export function resolveDistillationTransition(sourceKind: "input_text" | "event_nodes" | "evidence_nodes"): DistillationTransitionKind {
+export function resolveDistillationTransition(
+  sourceKind: "input_text" | "event_nodes" | "evidence_nodes" | "execution_projection" | "replay_learning",
+): DistillationTransitionKind {
+  if (sourceKind === "execution_projection") return "projected_from_execution_write";
+  if (sourceKind === "replay_learning") return "projected_from_replay_learning";
   if (sourceKind === "event_nodes") return "distilled_from_event_node";
   if (sourceKind === "evidence_nodes") return "distilled_from_evidence_node";
   return "distilled_from_input_text";
 }
 
 export function resolveDistillationPromotionTarget(args: {
-  distillation_kind: "write_distillation_evidence" | "write_distillation_fact";
+  distillation_kind: "write_distillation_evidence" | "write_distillation_fact" | "workflow_candidate";
   has_execution_signature: boolean;
 }): DistillationPromotionTarget {
-  if (args.distillation_kind === "write_distillation_evidence") return "workflow";
+  if (args.distillation_kind === "write_distillation_evidence" || args.distillation_kind === "workflow_candidate") return "workflow";
   return args.has_execution_signature ? "workflow" : "pattern";
 }
 
@@ -326,8 +338,8 @@ export function buildDistillationMaintenanceMetadata(args: {
 }
 
 export function buildDistillationMetadata(args: {
-  source_kind: "input_text" | "event_nodes" | "evidence_nodes";
-  distillation_kind: "write_distillation_evidence" | "write_distillation_fact";
+  source_kind: "input_text" | "event_nodes" | "evidence_nodes" | "execution_projection" | "replay_learning";
+  distillation_kind: "write_distillation_evidence" | "write_distillation_fact" | "workflow_candidate";
   at: string;
   extraction_pattern?: string | null;
   source_node_id?: string | null;

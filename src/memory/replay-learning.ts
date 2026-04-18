@@ -7,7 +7,11 @@ import { createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/
 import { sha256Hex } from "../util/crypto.js";
 import { HttpError } from "../util/http.js";
 import { stableUuid } from "../util/uuid.js";
-import { buildWorkflowMaintenanceMetadata, buildWorkflowPromotionMetadata } from "./evolution-operators.js";
+import {
+  buildDistillationMetadata,
+  buildWorkflowMaintenanceMetadata,
+  buildWorkflowPromotionMetadata,
+} from "./evolution-operators.js";
 import { MemoryAnchorV1Schema } from "./schemas.js";
 import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 import { updateRuleState } from "./rules.js";
@@ -399,6 +403,12 @@ export function buildReplayLearningProjectionArtifacts(args: {
                 maintenance: buildWorkflowMaintenanceMetadata({
                   promotion_state: "candidate",
                   at: args.projectedAt,
+                }),
+                distillation: buildDistillationMetadata({
+                  source_kind: "replay_learning",
+                  distillation_kind: "workflow_candidate",
+                  at: args.projectedAt,
+                  source_node_id: args.source.playbook_node_id,
                 }),
               },
             }

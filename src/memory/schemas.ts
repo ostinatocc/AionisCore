@@ -362,12 +362,16 @@ export const MemoryDistillationOrigin = z.enum([
   "write_distillation_input_text",
   "write_distillation_event_node",
   "write_distillation_evidence_node",
+  "execution_write_projection",
+  "replay_learning_episode",
 ]);
 
 export const MemoryDistillationTransitionKind = z.enum([
   "distilled_from_input_text",
   "distilled_from_event_node",
   "distilled_from_evidence_node",
+  "projected_from_execution_write",
+  "projected_from_replay_learning",
 ]);
 
 export const MemoryDistillationPromotionTarget = z.enum(["workflow", "pattern", "policy"]);

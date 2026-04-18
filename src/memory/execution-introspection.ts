@@ -104,6 +104,7 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
   const workflowPromotion = asRecord(execution.workflow_promotion ?? anchor.workflow_promotion);
   const maintenance = asRecord(execution.maintenance ?? anchor.maintenance);
   const rehydration = asRecord(execution.rehydration ?? anchor.rehydration);
+  const distillation = asRecord(execution.distillation);
   const projectionMeta = deriveWorkflowProjectionMeta(slots);
   const slotTargetFiles = stringList(slots.target_files, 24);
   const executionTargetFiles = stringList(execution.target_files, 24);
@@ -154,6 +155,8 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     projection_source_client_id: projectionMeta?.source_client_id ?? null,
     projection_generated_at: projectionMeta?.generated_at ?? null,
     projection_auto_promoted: projectionMeta?.auto_promoted ?? false,
+    distillation_origin: firstString(distillation.distillation_origin),
+    preferred_promotion_target: firstString(distillation.preferred_promotion_target),
     confidence: row.confidence,
   };
 }

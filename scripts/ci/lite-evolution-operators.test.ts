@@ -181,3 +181,26 @@ test("distillation operators route L1 artifacts toward workflow or pattern evolu
   assert.equal(fact.has_execution_signature, true);
   assert.equal(factMaintenance.offline_priority, "promote_to_workflow");
 });
+
+test("distillation operators map projected workflow candidates to workflow promotion path", () => {
+  const at = "2026-04-18T12:00:00.000Z";
+  const projection = buildDistillationMetadata({
+    source_kind: "execution_projection",
+    distillation_kind: "workflow_candidate",
+    at,
+    source_node_id: "event-1",
+  });
+  const replay = buildDistillationMetadata({
+    source_kind: "replay_learning",
+    distillation_kind: "workflow_candidate",
+    at,
+    source_node_id: "playbook-1",
+  });
+
+  assert.equal(projection.distillation_origin, "execution_write_projection");
+  assert.equal(projection.last_transition, "projected_from_execution_write");
+  assert.equal(projection.preferred_promotion_target, "workflow");
+  assert.equal(replay.distillation_origin, "replay_learning_episode");
+  assert.equal(replay.last_transition, "projected_from_replay_learning");
+  assert.equal(replay.preferred_promotion_target, "workflow");
+});
