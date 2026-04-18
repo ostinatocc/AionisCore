@@ -15,8 +15,8 @@ hero:
       text: Run Lite locally
       link: /docs/getting-started
     - theme: alt
-      text: Read the intro
-      link: /docs/intro
+      text: See self-evolving proof
+      link: /docs/evidence/self-evolving-demos
     - theme: alt
       text: View on GitHub
       link: https://github.com/ostinatocc/AionisCore
@@ -45,6 +45,33 @@ features:
   <span>v0.1.0</span>
   <span>MIT licensed</span>
   <span>15 / 15 benchmark scenarios</span>
+</div>
+
+<div class="home-proof-section">
+  <span class="home-demo-caption">Observed proof from live Lite runs on 2026-04-18</span>
+  <div class="home-proof-runbook">
+    <a class="home-proof-runbook-card" href="/docs/evidence/self-evolving-demos">
+      <span class="home-proof-runbook-label">Demo 1</span>
+      <h3>Better second task start</h3>
+      <p>The same task moved from a generic cold start to a learned file-aware startup.</p>
+      <div class="home-proof-metric">cold: <code>tool_selection</code> → warm: <code>experience_intelligence</code></div>
+      <div class="home-proof-code"><code>src/services/billing.ts</code></div>
+    </a>
+    <a class="home-proof-runbook-card" href="/docs/evidence/self-evolving-demos">
+      <span class="home-proof-runbook-label">Demo 2</span>
+      <h3>Policy memory materialized</h3>
+      <p>Repeated positive execution feedback became persisted policy memory instead of staying as loose hints.</p>
+      <div class="home-proof-metric"><code>materialization_state = "persisted"</code></div>
+      <div class="home-proof-code"><code>selected_policy_memory_state = "active"</code></div>
+    </a>
+    <a class="home-proof-runbook-card" href="/docs/evidence/self-evolving-demos">
+      <span class="home-proof-runbook-label">Demo 3</span>
+      <h3>Governance loop proved</h3>
+      <p>The runtime retired policy memory and reactivated it with fresh live evidence through the public route.</p>
+      <div class="home-proof-metric"><code>active → retired → active</code></div>
+      <div class="home-proof-code"><code>live_policy_selected_tool = "bash"</code></div>
+    </a>
+  </div>
 </div>
 
 <div class="home-demo">
@@ -111,6 +138,16 @@ Most agent systems break on continuity before they break on raw reasoning qualit
 3. successful repairs do not become reusable operating knowledge
 
 Aionis turns continuity into runtime infrastructure instead of leaving it inside prompts and chat transcripts.
+
+<div class="section-frame">
+  <span class="section-label">Why the new proof path matters</span>
+  <p>Many systems can run a long task. That is not the same as proving that the next task starts better, that stable execution becomes inspectable policy memory, and that the resulting policy can be governed instead of silently drifting. The new evidence path is meant to prove those three claims directly.</p>
+  <div class="doc-chip-row">
+    <span class="doc-chip">task-start-proof</span>
+    <span class="doc-chip">policy-memory</span>
+    <span class="doc-chip">policy-governance</span>
+  </div>
+</div>
 
 ## How continuity improves over time
 

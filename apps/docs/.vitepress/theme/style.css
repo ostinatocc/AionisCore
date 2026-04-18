@@ -930,6 +930,77 @@ body {
   margin-bottom: 12px;
 }
 
+.home-proof-section {
+  margin: 28px 0 44px;
+}
+
+.home-proof-runbook {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.home-proof-runbook-card {
+  background: var(--vp-c-bg);
+  border: 1px solid var(--vp-c-border);
+  border-radius: 10px;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100%;
+  padding: 22px;
+  text-decoration: none !important;
+  transition: background-color 0.22s ease, border-color 0.22s ease, transform 0.22s ease;
+}
+
+.home-proof-runbook-card:hover {
+  background: color-mix(in srgb, var(--vp-c-bg) 94%, var(--vp-c-brand-soft));
+  border-color: color-mix(in srgb, var(--aionis-signal) 30%, var(--vp-c-border));
+  transform: translateY(-1px);
+}
+
+.home-proof-runbook-label {
+  color: var(--vp-c-text-3);
+  display: block;
+  font-family: var(--vp-font-family-mono);
+  font-size: 11px;
+}
+
+.home-proof-runbook-card h3 {
+  color: var(--vp-c-text-1);
+  font-family: var(--vp-font-family-base);
+  font-size: 1.16rem;
+  font-variation-settings: "opsz" 32, "wght" 500;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.home-proof-runbook-card p {
+  color: var(--vp-c-text-2);
+  font-size: 0.96rem;
+  line-height: 1.65;
+  margin: 0;
+  max-width: none;
+}
+
+.home-proof-metric,
+.home-proof-code {
+  color: var(--vp-c-text-1);
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+}
+
+.home-proof-code code,
+.home-proof-metric code {
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-border);
+  border-radius: 999px;
+  color: var(--vp-c-text-1);
+  display: inline-block;
+  padding: 7px 10px;
+}
+
 /* -------- Footer -------- */
 
 .VPFooter {
@@ -957,6 +1028,7 @@ body {
 
   .home-proof-grid,
   .home-path-grid,
+  .home-proof-runbook,
   .doc-grid,
   .comparison-grid,
   .stack-grid,
