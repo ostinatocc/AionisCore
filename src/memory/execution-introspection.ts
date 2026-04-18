@@ -101,6 +101,8 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
   const slots = asRecord(row.slots);
   const execution = asRecord(slots.execution_native_v1);
   const anchor = asRecord(slots.anchor_v1);
+  const semanticForgetting = asRecord(slots.semantic_forgetting_v1);
+  const archiveRelocation = asRecord(slots.archive_relocation_v1);
   const workflowPromotion = asRecord(execution.workflow_promotion ?? anchor.workflow_promotion);
   const maintenance = asRecord(execution.maintenance ?? anchor.maintenance);
   const rehydration = asRecord(execution.rehydration ?? anchor.rehydration);
@@ -140,6 +142,11 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     promotion_ready: promotionReady,
     last_transition: firstString(workflowPromotion.last_transition),
     last_transition_at: firstString(workflowPromotion.last_transition_at),
+    lifecycle_state: firstString(semanticForgetting.lifecycle_state, slots.lifecycle_state),
+    semantic_forgetting_action: firstString(semanticForgetting.action),
+    archive_relocation_state: firstString(archiveRelocation.relocation_state),
+    archive_relocation_target: firstString(archiveRelocation.relocation_target),
+    archive_payload_scope: firstString(archiveRelocation.payload_scope),
     rehydration_default_mode: firstString(rehydration.default_mode),
     tool_set: stringList(execution.tool_set, 16).length > 0 ? stringList(execution.tool_set, 16) : stringList(anchor.tool_set, 16),
     maintenance_state: firstString(maintenance.maintenance_state),

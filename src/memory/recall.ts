@@ -178,6 +178,11 @@ type ActionRecallWorkflow = {
   offline_priority: "none" | "promote_candidate" | "review_counter_evidence" | "retain_trusted" | "retain_workflow" | null;
   last_maintenance_at: string | null;
   confidence: number | null;
+  lifecycle_state?: string | null;
+  semantic_forgetting_action?: "retain" | "demote" | "archive" | "review" | null;
+  archive_relocation_state?: "none" | "candidate" | "cold_archive" | null;
+  archive_relocation_target?: "none" | "local_cold_store" | "external_object_store" | null;
+  archive_payload_scope?: "none" | "anchor_payload" | "node" | null;
 };
 
 type ActionRecallPattern = {
@@ -228,6 +233,12 @@ type ActionRecallSupportingKnowledge = {
   compression_layer: string | null;
   tier: string | null;
   salience: number | null;
+  lifecycle_state?: string | null;
+  semantic_forgetting_action?: "retain" | "demote" | "archive" | "review" | null;
+  archive_relocation_state?: "none" | "candidate" | "cold_archive" | null;
+  archive_relocation_target?: "none" | "local_cold_store" | "external_object_store" | null;
+  archive_payload_scope?: "none" | "anchor_payload" | "node" | null;
+  rehydration_default_mode?: "summary_only" | "partial" | "full" | "differential" | null;
 };
 
 type ActionRecallPacket = {
@@ -404,6 +415,8 @@ function buildActionRecallPacket(args: {
     actionAnchorIds.add(node.id);
     if (anchorKind === "workflow") {
       const distillation = asRecord(meta.executionNative?.distillation ?? anchor?.distillation);
+      const semanticForgetting = asRecord(node.slots?.semantic_forgetting_v1);
+      const archiveRelocation = asRecord(node.slots?.archive_relocation_v1);
       const workflowEntry: ActionRecallWorkflow = {
         anchor_id: node.id,
         uri,
@@ -434,6 +447,11 @@ function buildActionRecallPacket(args: {
         offline_priority: firstString(meta.maintenance?.offline_priority) as any,
         last_maintenance_at: firstString(meta.maintenance?.last_maintenance_at),
         confidence: firstFinite(node.confidence),
+        lifecycle_state: firstString(node.slots?.lifecycle_state),
+        semantic_forgetting_action: firstString(semanticForgetting?.action) as any,
+        archive_relocation_state: firstString(archiveRelocation?.relocation_state) as any,
+        archive_relocation_target: firstString(archiveRelocation?.relocation_target) as any,
+        archive_payload_scope: firstString(archiveRelocation?.payload_scope) as any,
       };
       if (meta.executionKind === "workflow_candidate" || firstString(meta.workflowPromotion?.promotion_state) === "candidate") {
         deferredCandidateWorkflows.push(workflowEntry);
@@ -532,6 +550,17 @@ function buildActionRecallPacket(args: {
       compression_layer: firstString(item?.compression_layer),
       tier: firstString(item?.tier),
       salience: firstFinite(item?.salience),
+      lifecycle_state: firstString(item?.lifecycle_state),
+      semantic_forgetting_action:
+        firstString(item?.semantic_forgetting_action) as "retain" | "demote" | "archive" | "review" | null,
+      archive_relocation_state:
+        firstString(item?.archive_relocation_state) as "none" | "candidate" | "cold_archive" | null,
+      archive_relocation_target:
+        firstString(item?.archive_relocation_target) as "none" | "local_cold_store" | "external_object_store" | null,
+      archive_payload_scope:
+        firstString(item?.archive_payload_scope) as "none" | "anchor_payload" | "node" | null,
+      rehydration_default_mode:
+        firstString(item?.rehydration_default_mode) as "summary_only" | "partial" | "full" | "differential" | null,
     });
     if (supportingKnowledge.length >= 16) break;
   }

@@ -155,13 +155,14 @@ Aionis turns continuity into runtime infrastructure instead of leaving it inside
 
 <div class="section-frame">
   <span class="section-label">Why the new proof path matters</span>
-  <p>Many systems can run a long task. That is not the same as proving that the next task starts better, that stable execution becomes inspectable policy memory, that the resulting policy can be governed instead of silently drifting, that continuity provenance survives workflow promotion, and that repeated session state can itself promote stable workflow guidance. The new evidence path is meant to prove those five claims directly.</p>
+  <p>Many systems can run a long task. That is not the same as proving that the next task starts better, that stable execution becomes inspectable policy memory, that the resulting policy can be governed instead of silently drifting, that continuity provenance survives workflow promotion, that repeated session state can itself promote stable workflow guidance, and that colder execution memory can be archived and selectively rehydrated instead of deleted. The new evidence path is meant to prove those six claims directly.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">task-start-proof</span>
     <span class="doc-chip">policy-memory</span>
     <span class="doc-chip">policy-governance</span>
     <span class="doc-chip">continuity-provenance</span>
     <span class="doc-chip">session-continuity</span>
+    <span class="doc-chip">semantic-forgetting</span>
   </div>
 </div>
 

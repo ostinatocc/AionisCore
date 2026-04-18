@@ -266,6 +266,18 @@ async function seedExecutionIntrospectionFixture(dbPath: string) {
           slots: {
             summary_kind: "workflow_anchor",
             compression_layer: "L2",
+            semantic_forgetting_v1: {
+              action: "archive",
+              current_tier: "cold",
+              target_tier: "archive",
+              lifecycle_state: "active",
+            },
+            archive_relocation_v1: {
+              relocation_state: "cold_archive",
+              relocation_target: "local_cold_store",
+              payload_scope: "anchor_payload",
+              should_relocate: true,
+            },
             anchor_v1: workflowAnchor,
           },
         },
@@ -692,6 +704,9 @@ test("execution introspection route exposes demo-friendly workflow and pattern s
     const body = ExecutionMemoryIntrospectionResponseSchema.parse(response.json());
     assert.equal(body.summary_version, "execution_memory_introspection_v1");
     assert.equal(body.recommended_workflows.length, 1);
+    assert.equal(typeof body.recommended_workflows[0]?.semantic_forgetting_action, "string");
+    assert.equal(typeof body.recommended_workflows[0]?.archive_relocation_state, "string");
+    assert.equal(typeof body.recommended_workflows[0]?.archive_relocation_target, "string");
     assert.equal(body.candidate_workflows.length, 1);
     assert.equal(body.rehydration_candidates.length, 1);
     assert.equal(body.trusted_patterns.length, 1);
@@ -792,6 +807,42 @@ test("execution introspection route exposes demo-friendly workflow and pattern s
     );
     assert.deepEqual(body.execution_summary.forgetting_summary.suppressed_pattern_sources, ["trusted_patterns"]);
     assert.deepEqual(body.execution_summary.forgetting_summary.selected_memory_layers, []);
+    assert.equal(typeof body.execution_summary.forgetting_summary.semantic_action_counts.retain, "number");
+    assert.equal(
+      body.execution_summary.forgetting_summary.semantic_action_counts.archive
+        + body.execution_summary.forgetting_summary.semantic_action_counts.demote
+        + body.execution_summary.forgetting_summary.semantic_action_counts.retain
+        + body.execution_summary.forgetting_summary.semantic_action_counts.review
+        >= 1,
+      true,
+    );
+    assert.equal(typeof body.execution_summary.forgetting_summary.lifecycle_state_counts.active, "number");
+    assert.equal(
+      body.execution_summary.forgetting_summary.archive_relocation_state_counts.none
+        + body.execution_summary.forgetting_summary.archive_relocation_state_counts.candidate
+        + body.execution_summary.forgetting_summary.archive_relocation_state_counts.cold_archive
+        >= 1,
+      true,
+    );
+    assert.equal(
+      body.execution_summary.forgetting_summary.archive_relocation_target_counts.none
+        + body.execution_summary.forgetting_summary.archive_relocation_target_counts.local_cold_store
+        + body.execution_summary.forgetting_summary.archive_relocation_target_counts.external_object_store
+        >= 1,
+      true,
+    );
+    assert.equal(
+      body.execution_summary.forgetting_summary.archive_payload_scope_counts.none
+        + body.execution_summary.forgetting_summary.archive_payload_scope_counts.anchor_payload
+        + body.execution_summary.forgetting_summary.archive_payload_scope_counts.node
+        >= 1,
+      true,
+    );
+    assert.equal(body.execution_summary.forgetting_summary.rehydration_mode_counts.partial >= 1, true);
+    assert.equal(
+      body.execution_summary.forgetting_summary.differential_rehydration_candidate_count,
+      body.execution_summary.forgetting_summary.rehydration_mode_counts.differential,
+    );
     assert.deepEqual(body.execution_summary.forgetting_summary.primary_savings_levers, []);
     assert.equal(body.execution_summary.forgetting_summary.stale_signal_count, 1);
     assert.equal(

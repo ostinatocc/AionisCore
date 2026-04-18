@@ -9,7 +9,7 @@ This page exists for a narrow question:
 
 `Does Aionis actually improve execution over time, or does it only describe that idea well?`
 
-The answer here is based on five live Lite runs through the public SDK on `2026-04-18`, not on hypothetical product language.
+The answer here is based on six live Lite runs through the public SDK on `2026-04-18`, not on hypothetical product language.
 
 <div class="doc-lead">
   <span class="doc-kicker">What this page is for</span>
@@ -27,10 +27,11 @@ The answer here is based on five live Lite runs through the public SDK on `2026-
   <span class="state-badge state-candidate">policy memory</span>
   <span class="state-badge state-governed">governance loop</span>
   <span class="state-badge state-shadow">provenance</span>
+  <span class="state-badge state-contested">forgetting</span>
   <span class="state-note">These proofs were produced from real Lite runs, not hand-written example output.</span>
 </div>
 
-## What the five proofs show
+## What the six proofs show
 
 <div class="doc-grid">
   <div class="doc-card">
@@ -57,6 +58,11 @@ The answer here is based on five live Lite runs through the public SDK on `2026-
     <span class="doc-kicker">Proof 5</span>
     <h3>Session state alone can promote workflows</h3>
     <p>Repeated session continuity writes now count as distinct observations and can promote stable workflow guidance without needing an append-only event path.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Proof 6</span>
+    <h3>Forgetting cools memory without deleting it</h3>
+    <p>Archived workflow memory now surfaces semantic forgetting, archive relocation, and differential rehydration instead of silently disappearing.</p>
   </div>
 </div>
 
@@ -242,7 +248,43 @@ Why this matters:
 - it proves updated session state can count as distinct workflow observations
 - it makes the continuity model broader than event-only carrier streams
 
-## What these five proofs mean together
+## Proof 6: Semantic forgetting archives and rehydrates execution memory
+
+The sixth claim is about memory quality rather than raw accumulation:
+
+`a self-evolving runtime should cool down execution memory instead of either keeping everything hot or deleting it`
+
+<div class="doc-grid">
+  <div class="doc-card">
+    <span class="doc-kicker">Before</span>
+    <h3>Cold memory was harder to explain</h3>
+    <p>Archived or colder workflow guidance existed, but it was harder to prove why it should stay cold, where its payload should live, and how much should be rehydrated when a task needed it again.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">After</span>
+    <h3>Forgetting becomes a visible runtime surface</h3>
+    <p>The runtime now exposes semantic forgetting, archive relocation, and differential rehydration through direct node state, planning summaries, and execution introspection summaries.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Proof</span>
+    <h3>Observed signal</h3>
+    <p>The demo produced <code>semantic_forgetting.action = "archive"</code>, <code>archive_relocation.relocation_state = "cold_archive"</code>, <code>execution_archive_count = 1</code>, and a differential payload restore that selected only the archived payload node the task needed.</p>
+  </div>
+</div>
+
+Run it yourself:
+
+```bash
+npm run example:sdk:semantic-forgetting
+```
+
+Why this matters:
+
+- it proves forgetting is lifecycle control, not deletion
+- it proves the runtime can explain colder-memory decisions in public summary surfaces
+- it makes selective rehydration part of the product story instead of an internal helper
+
+## What these six proofs mean together
 
 | Claim | What the evidence shows |
 | --- | --- |
@@ -251,6 +293,7 @@ Why this matters:
 | Aionis governs its learned policy | Policy memory moved through retire/reactivate cleanly |
 | Aionis preserves learned provenance | Stable workflow guidance still shows whether it came from handoff or session-event continuity |
 | Aionis learns directly from session state | Stable workflow guidance can now be promoted from repeated session continuity writes |
+| Aionis manages colder execution memory | Archived workflow memory can be cooled down, relocated, and selectively rehydrated without deletion |
 
 That combination is the real point of the product:
 
@@ -258,7 +301,7 @@ That combination is the real point of the product:
 - not just long tasks
 - not just replay
 
-It is a continuity runtime that can improve startup, materialize execution policy, govern what it learned, preserve the provenance of how that learning happened, and lift repeated session state into stable workflow guidance.
+It is a continuity runtime that can improve startup, materialize execution policy, govern what it learned, preserve the provenance of how that learning happened, lift repeated session state into stable workflow guidance, and cool down execution memory without losing the ability to restore it selectively.
 
 ## Next steps
 
@@ -269,5 +312,6 @@ If you want the raw runnable commands, go to:
 If you want the underlying route families, go to:
 
 - [Policy Memory and Evolution](../reference/policy-memory.md)
+- [Semantic Forgetting](../reference/semantic-forgetting.md)
 - [Review Runtime](../reference/review-runtime.md)
 - [SDK Quickstart](../sdk/quickstart.md)

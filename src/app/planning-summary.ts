@@ -30,6 +30,7 @@ export type PlanningSummary = {
   policy_lifecycle_summary: PolicyLifecycleSummary;
   policy_maintenance_summary: PolicyMaintenanceSummary;
   continuity_carrier_summary: ContinuityCarrierSummary;
+  forgetting_summary: ExecutionForgettingSummary;
   primary_savings_levers: string[];
 };
 
@@ -64,6 +65,7 @@ export type AssemblySummary = {
   policy_lifecycle_summary: PolicyLifecycleSummary;
   policy_maintenance_summary: PolicyMaintenanceSummary;
   continuity_carrier_summary: ContinuityCarrierSummary;
+  forgetting_summary: ExecutionForgettingSummary;
   primary_savings_levers: string[];
 };
 
@@ -336,6 +338,40 @@ export type ExecutionForgettingSummary = {
   suppressed_pattern_anchor_ids: string[];
   suppressed_pattern_sources: string[];
   selected_memory_layers: string[];
+  semantic_action_counts: {
+    retain: number;
+    demote: number;
+    archive: number;
+    review: number;
+  };
+  lifecycle_state_counts: {
+    active: number;
+    contested: number;
+    retired: number;
+    archived: number;
+  };
+  archive_relocation_state_counts: {
+    none: number;
+    candidate: number;
+    cold_archive: number;
+  };
+  archive_relocation_target_counts: {
+    none: number;
+    local_cold_store: number;
+    external_object_store: number;
+  };
+  archive_payload_scope_counts: {
+    none: number;
+    anchor_payload: number;
+    node: number;
+  };
+  rehydration_mode_counts: {
+    summary_only: number;
+    partial: number;
+    full: number;
+    differential: number;
+  };
+  differential_rehydration_candidate_count: number;
   primary_savings_levers: string[];
   stale_signal_count: number;
   recommended_action: string;
@@ -499,6 +535,36 @@ function safeRecordArray(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value)
     ? value.filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === "object" && !Array.isArray(entry))
     : [];
+}
+
+function countKnownValue<T extends string>(counts: Record<T, number>, value: string | null | undefined): boolean {
+  if (!value || !(value in counts)) return false;
+  counts[value as T] += 1;
+  return true;
+}
+
+function zeroSemanticActionCounts(): ExecutionForgettingSummary["semantic_action_counts"] {
+  return { retain: 0, demote: 0, archive: 0, review: 0 };
+}
+
+function zeroLifecycleStateCounts(): ExecutionForgettingSummary["lifecycle_state_counts"] {
+  return { active: 0, contested: 0, retired: 0, archived: 0 };
+}
+
+function zeroArchiveRelocationStateCounts(): ExecutionForgettingSummary["archive_relocation_state_counts"] {
+  return { none: 0, candidate: 0, cold_archive: 0 };
+}
+
+function zeroArchiveRelocationTargetCounts(): ExecutionForgettingSummary["archive_relocation_target_counts"] {
+  return { none: 0, local_cold_store: 0, external_object_store: 0 };
+}
+
+function zeroArchivePayloadScopeCounts(): ExecutionForgettingSummary["archive_payload_scope_counts"] {
+  return { none: 0, anchor_payload: 0, node: 0 };
+}
+
+function zeroRehydrationModeCounts(): ExecutionForgettingSummary["rehydration_mode_counts"] {
+  return { summary_only: 0, partial: 0, full: 0, differential: 0 };
 }
 
 function summarizePacketEntryLabels(entries: Array<Record<string, unknown>>, field: "title" | "summary", limit = 3): string[] {
@@ -1200,13 +1266,94 @@ function collectSuppressedPatternSignals(args: {
   };
 }
 
+function collectForgettingSurfaceSignals(surface: PlannerPacketSummarySurface) {
+  const semanticActionCounts = zeroSemanticActionCounts();
+  const lifecycleStateCounts = zeroLifecycleStateCounts();
+  const archiveRelocationStateCounts = zeroArchiveRelocationStateCounts();
+  const archiveRelocationTargetCounts = zeroArchiveRelocationTargetCounts();
+  const archivePayloadScopeCounts = zeroArchivePayloadScopeCounts();
+  const rehydrationModeCounts = zeroRehydrationModeCounts();
+
+  for (const entry of [
+    ...safeRecordArray(surface.recommended_workflows),
+    ...safeRecordArray(surface.candidate_workflows),
+  ]) {
+    countKnownValue(
+      semanticActionCounts,
+      typeof entry.semantic_forgetting_action === "string" ? entry.semantic_forgetting_action.trim() : null,
+    );
+    countKnownValue(lifecycleStateCounts, typeof entry.lifecycle_state === "string" ? entry.lifecycle_state.trim() : null);
+    countKnownValue(
+      archiveRelocationStateCounts,
+      typeof entry.archive_relocation_state === "string" ? entry.archive_relocation_state.trim() : null,
+    );
+    countKnownValue(
+      archiveRelocationTargetCounts,
+      typeof entry.archive_relocation_target === "string" ? entry.archive_relocation_target.trim() : null,
+    );
+    countKnownValue(
+      archivePayloadScopeCounts,
+      typeof entry.archive_payload_scope === "string" ? entry.archive_payload_scope.trim() : null,
+    );
+    countKnownValue(
+      rehydrationModeCounts,
+      typeof entry.rehydration_default_mode === "string" ? entry.rehydration_default_mode.trim() : null,
+    );
+  }
+
+  for (const entry of safeRecordArray(surface.supporting_knowledge)) {
+    countKnownValue(semanticActionCounts, typeof entry.semantic_forgetting_action === "string" ? entry.semantic_forgetting_action.trim() : null);
+    countKnownValue(lifecycleStateCounts, typeof entry.lifecycle_state === "string" ? entry.lifecycle_state.trim() : null);
+    countKnownValue(
+      archiveRelocationStateCounts,
+      typeof entry.archive_relocation_state === "string" ? entry.archive_relocation_state.trim() : null,
+    );
+    countKnownValue(
+      archiveRelocationTargetCounts,
+      typeof entry.archive_relocation_target === "string" ? entry.archive_relocation_target.trim() : null,
+    );
+    countKnownValue(
+      archivePayloadScopeCounts,
+      typeof entry.archive_payload_scope === "string" ? entry.archive_payload_scope.trim() : null,
+    );
+    countKnownValue(
+      rehydrationModeCounts,
+      typeof entry.rehydration_default_mode === "string" ? entry.rehydration_default_mode.trim() : null,
+    );
+  }
+
+  for (const entry of safeRecordArray(surface.rehydration_candidates)) {
+    countKnownValue(rehydrationModeCounts, typeof entry.mode === "string" ? entry.mode.trim() : null);
+  }
+
+  return {
+    semanticActionCounts,
+    lifecycleStateCounts,
+    archiveRelocationStateCounts,
+    archiveRelocationTargetCounts,
+    archivePayloadScopeCounts,
+    rehydrationModeCounts,
+    differentialRehydrationCandidateCount: rehydrationModeCounts.differential,
+  };
+}
+
 function deriveExecutionMaintenanceAction(args: {
   forgottenItems: number;
   suppressedPatternCount: number;
+  archiveCount: number;
+  demoteCount: number;
+  reviewCount: number;
+  differentialRehydrationCandidateCount: number;
   summaryBundle: ExecutionMemorySummaryBundle;
 }): string {
   let recommendedAction = "continue observing new executions and keep the current context shape stable";
-  if (args.forgottenItems > 0) {
+  if (args.archiveCount > 0) {
+    recommendedAction = "rehydrate archived execution memory only when the task proves it still needs the colder payload";
+  } else if (args.demoteCount > 0 || args.reviewCount > 0) {
+    recommendedAction = "reuse hotter workflow memory first and only widen recall when demoted or review-needed memory becomes necessary";
+  } else if (args.differentialRehydrationCandidateCount > 0) {
+    recommendedAction = "prefer differential rehydration before paying for a full payload restore";
+  } else if (args.forgottenItems > 0) {
     recommendedAction = "avoid reseeding forgotten context and keep the working set narrow";
   } else if (args.summaryBundle.policy_lifecycle_summary.retired_count > 0) {
     recommendedAction = "refresh or replace retired policy memory before trusting default tool selection";
@@ -1313,9 +1460,14 @@ function buildExecutionMaintenanceSummary(args: {
     surface: args.surface,
     tools: args.tools,
   });
+  const forgettingSurfaceSignals = collectForgettingSurfaceSignals(args.surface);
   const recommendedAction = deriveExecutionMaintenanceAction({
     forgottenItems: forgettingSignals.forgottenItems,
     suppressedPatternCount: suppressedPatternSignals.suppressedPatternCount,
+    archiveCount: forgettingSurfaceSignals.semanticActionCounts.archive,
+    demoteCount: forgettingSurfaceSignals.semanticActionCounts.demote,
+    reviewCount: forgettingSurfaceSignals.semanticActionCounts.review,
+    differentialRehydrationCandidateCount: forgettingSurfaceSignals.differentialRehydrationCandidateCount,
     summaryBundle: args.summaryBundle,
   });
   return {
@@ -1342,10 +1494,18 @@ function buildExecutionForgettingSummary(args: {
     surface: args.surface,
     tools: args.tools,
   });
+  const forgettingSurfaceSignals = collectForgettingSurfaceSignals(args.surface);
+  const semanticForgettingActiveCount =
+    forgettingSurfaceSignals.semanticActionCounts.demote
+    + forgettingSurfaceSignals.semanticActionCounts.archive
+    + forgettingSurfaceSignals.semanticActionCounts.review;
+  const relocationSignalCount =
+    forgettingSurfaceSignals.archiveRelocationStateCounts.candidate
+    + forgettingSurfaceSignals.archiveRelocationStateCounts.cold_archive;
   return {
     summary_version: "execution_forgetting_summary_v1",
     substrate_mode:
-      forgettingSignals.forgottenItems > 0
+      forgettingSignals.forgottenItems > 0 || semanticForgettingActiveCount > 0 || relocationSignalCount > 0
         ? "forgetting_active"
         : suppressedPatternSignals.suppressedPatternCount > 0
           ? "suppression_present"
@@ -1357,11 +1517,26 @@ function buildExecutionForgettingSummary(args: {
     suppressed_pattern_anchor_ids: suppressedPatternSignals.suppressedPatternAnchorIds,
     suppressed_pattern_sources: suppressedPatternSignals.suppressedPatternSources,
     selected_memory_layers: forgettingSignals.selectedMemoryLayers,
+    semantic_action_counts: forgettingSurfaceSignals.semanticActionCounts,
+    lifecycle_state_counts: forgettingSurfaceSignals.lifecycleStateCounts,
+    archive_relocation_state_counts: forgettingSurfaceSignals.archiveRelocationStateCounts,
+    archive_relocation_target_counts: forgettingSurfaceSignals.archiveRelocationTargetCounts,
+    archive_payload_scope_counts: forgettingSurfaceSignals.archivePayloadScopeCounts,
+    rehydration_mode_counts: forgettingSurfaceSignals.rehydrationModeCounts,
+    differential_rehydration_candidate_count: forgettingSurfaceSignals.differentialRehydrationCandidateCount,
     primary_savings_levers: forgettingSignals.primarySavingsLevers,
-    stale_signal_count: forgettingSignals.forgottenItems + suppressedPatternSignals.suppressedPatternCount,
+    stale_signal_count:
+      forgettingSignals.forgottenItems
+      + suppressedPatternSignals.suppressedPatternCount
+      + semanticForgettingActiveCount
+      + relocationSignalCount,
     recommended_action: deriveExecutionMaintenanceAction({
       forgottenItems: forgettingSignals.forgottenItems,
       suppressedPatternCount: suppressedPatternSignals.suppressedPatternCount,
+      archiveCount: forgettingSurfaceSignals.semanticActionCounts.archive,
+      demoteCount: forgettingSurfaceSignals.semanticActionCounts.demote,
+      reviewCount: forgettingSurfaceSignals.semanticActionCounts.review,
+      differentialRehydrationCandidateCount: forgettingSurfaceSignals.differentialRehydrationCandidateCount,
       summaryBundle: args.summaryBundle,
     }),
   };
@@ -2317,17 +2492,21 @@ export function buildPlanningSummary(args: {
       : {};
   const costSignals =
     args.cost_signals && typeof args.cost_signals === "object" ? (args.cost_signals as Record<string, unknown>) : {};
+  const actionRecallPacket =
+    layeredContext.action_recall_packet && typeof layeredContext.action_recall_packet === "object"
+      ? (layeredContext.action_recall_packet as Record<string, unknown>)
+      : {};
   const plannerSurface = args.planner_surface ?? {
     action_recall_packet: layeredContext.action_recall_packet,
     pattern_signals: layeredContext.pattern_signals,
     workflow_signals: layeredContext.workflow_signals,
-    recommended_workflows: layeredContext.recommended_workflows,
-    candidate_workflows: layeredContext.candidate_workflows,
-    candidate_patterns: layeredContext.candidate_patterns,
-    trusted_patterns: layeredContext.trusted_patterns,
-    contested_patterns: layeredContext.contested_patterns,
-    rehydration_candidates: layeredContext.rehydration_candidates,
-    supporting_knowledge: layeredContext.supporting_knowledge,
+    recommended_workflows: layeredContext.recommended_workflows ?? actionRecallPacket.recommended_workflows,
+    candidate_workflows: layeredContext.candidate_workflows ?? actionRecallPacket.candidate_workflows,
+    candidate_patterns: layeredContext.candidate_patterns ?? actionRecallPacket.candidate_patterns,
+    trusted_patterns: layeredContext.trusted_patterns ?? actionRecallPacket.trusted_patterns,
+    contested_patterns: layeredContext.contested_patterns ?? actionRecallPacket.contested_patterns,
+    rehydration_candidates: layeredContext.rehydration_candidates ?? actionRecallPacket.rehydration_candidates,
+    supporting_knowledge: layeredContext.supporting_knowledge ?? actionRecallPacket.supporting_knowledge,
   };
   const summaryBundle = buildExecutionMemorySummaryBundle(plannerSurface);
   const patternSignalSummary = summaryBundle.pattern_signal_summary;
@@ -2341,6 +2520,12 @@ export function buildPlanningSummary(args: {
   const policyLifecycleSummary = summaryBundle.policy_lifecycle_summary;
   const policyMaintenanceSummary = summaryBundle.policy_maintenance_summary;
   const continuityCarrierSummary = summaryBundle.continuity_carrier_summary;
+  const forgettingSummary = buildExecutionForgettingSummary({
+    surface: plannerSurface,
+    summaryBundle,
+    costSignals,
+    tools,
+  });
   const experienceRecommendation =
     args.experience_intelligence && typeof args.experience_intelligence === "object"
       ? ((args.experience_intelligence as Record<string, unknown>).recommendation as Record<string, unknown> | undefined)
@@ -2414,6 +2599,7 @@ export function buildPlanningSummary(args: {
     policy_lifecycle_summary: policyLifecycleSummary,
     policy_maintenance_summary: policyMaintenanceSummary,
     continuity_carrier_summary: continuityCarrierSummary,
+    forgetting_summary: forgettingSummary,
     primary_savings_levers: Array.isArray(costSignals.primary_savings_levers)
       ? costSignals.primary_savings_levers.filter((entry): entry is string => typeof entry === "string")
       : [],
@@ -2476,6 +2662,7 @@ export function buildAssemblySummary(args: {
     policy_lifecycle_summary: planning.policy_lifecycle_summary,
     policy_maintenance_summary: planning.policy_maintenance_summary,
     continuity_carrier_summary: planning.continuity_carrier_summary,
+    forgetting_summary: planning.forgetting_summary,
     primary_savings_levers: planning.primary_savings_levers,
   };
 }

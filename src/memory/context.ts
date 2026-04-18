@@ -88,6 +88,51 @@ function resolveCompressionLayer(n: NodeRow): MemoryLayerId | null {
   return null;
 }
 
+function semanticForgettingRecord(n: NodeRow): Record<string, unknown> | null {
+  const value = n.slots?.semantic_forgetting_v1;
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function archiveRelocationRecord(n: NodeRow): Record<string, unknown> | null {
+  const value = n.slots?.archive_relocation_v1;
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function resolveSemanticForgettingAction(n: NodeRow): "retain" | "demote" | "archive" | "review" | null {
+  const value = semanticForgettingRecord(n)?.action;
+  return value === "retain" || value === "demote" || value === "archive" || value === "review" ? value : null;
+}
+
+function resolveArchiveRelocationState(n: NodeRow): "none" | "candidate" | "cold_archive" | null {
+  const value = archiveRelocationRecord(n)?.relocation_state;
+  return value === "none" || value === "candidate" || value === "cold_archive" ? value : null;
+}
+
+function resolveArchiveRelocationTarget(n: NodeRow): "none" | "local_cold_store" | "external_object_store" | null {
+  const value = archiveRelocationRecord(n)?.relocation_target;
+  return value === "none" || value === "local_cold_store" || value === "external_object_store" ? value : null;
+}
+
+function resolveArchivePayloadScope(n: NodeRow): "none" | "anchor_payload" | "node" | null {
+  const value = archiveRelocationRecord(n)?.payload_scope;
+  return value === "none" || value === "anchor_payload" || value === "node" ? value : null;
+}
+
+function resolveRehydrationDefaultMode(n: NodeRow): "summary_only" | "partial" | "full" | "differential" | null {
+  const executionMode = typeof n.slots?.execution_native_v1?.rehydration_default_mode === "string"
+    ? n.slots.execution_native_v1.rehydration_default_mode.trim()
+    : "";
+  if (executionMode === "summary_only" || executionMode === "partial" || executionMode === "full" || executionMode === "differential") {
+    return executionMode;
+  }
+  const anchorMode = typeof n.slots?.anchor_v1?.rehydration?.default_mode === "string"
+    ? n.slots.anchor_v1.rehydration.default_mode.trim()
+    : "";
+  return anchorMode === "summary_only" || anchorMode === "partial" || anchorMode === "full" || anchorMode === "differential"
+    ? anchorMode
+    : null;
+}
+
 type RuleDefRow = {
   rule_node_id: string;
   state: string;
@@ -116,6 +161,11 @@ export type ContextItem =
       summary_kind?: string | null;
       execution_kind?: string | null;
       anchor_kind?: string | null;
+      semantic_forgetting_action?: "retain" | "demote" | "archive" | "review" | null;
+      archive_relocation_state?: "none" | "candidate" | "cold_archive" | null;
+      archive_relocation_target?: "none" | "local_cold_store" | "external_object_store" | null;
+      archive_payload_scope?: "none" | "anchor_payload" | "node" | null;
+      rehydration_default_mode?: "summary_only" | "partial" | "full" | "differential" | null;
     }
   | {
       kind: "entity";
@@ -131,6 +181,11 @@ export type ContextItem =
       summary_kind?: string | null;
       execution_kind?: string | null;
       anchor_kind?: string | null;
+      semantic_forgetting_action?: "retain" | "demote" | "archive" | "review" | null;
+      archive_relocation_state?: "none" | "candidate" | "cold_archive" | null;
+      archive_relocation_target?: "none" | "local_cold_store" | "external_object_store" | null;
+      archive_payload_scope?: "none" | "anchor_payload" | "node" | null;
+      rehydration_default_mode?: "summary_only" | "partial" | "full" | "differential" | null;
     }
   | {
       kind: "event" | "evidence";
@@ -147,6 +202,11 @@ export type ContextItem =
       summary_kind?: string | null;
       execution_kind?: string | null;
       anchor_kind?: string | null;
+      semantic_forgetting_action?: "retain" | "demote" | "archive" | "review" | null;
+      archive_relocation_state?: "none" | "candidate" | "cold_archive" | null;
+      archive_relocation_target?: "none" | "local_cold_store" | "external_object_store" | null;
+      archive_payload_scope?: "none" | "anchor_payload" | "node" | null;
+      rehydration_default_mode?: "summary_only" | "partial" | "full" | "differential" | null;
     }
   | {
       kind: "rule";
@@ -169,6 +229,11 @@ export type ContextItem =
       summary_kind?: string | null;
       execution_kind?: string | null;
       anchor_kind?: string | null;
+      semantic_forgetting_action?: "retain" | "demote" | "archive" | "review" | null;
+      archive_relocation_state?: "none" | "candidate" | "cold_archive" | null;
+      archive_relocation_target?: "none" | "local_cold_store" | "external_object_store" | null;
+      archive_payload_scope?: "none" | "anchor_payload" | "node" | null;
+      rehydration_default_mode?: "summary_only" | "partial" | "full" | "differential" | null;
     };
 
 export type ContextBuildOptions = {
@@ -195,6 +260,11 @@ type ContextCitation = {
   summary_kind?: string | null;
   execution_kind?: string | null;
   anchor_kind?: string | null;
+  semantic_forgetting_action?: "retain" | "demote" | "archive" | "review" | null;
+  archive_relocation_state?: "none" | "candidate" | "cold_archive" | null;
+  archive_relocation_target?: "none" | "local_cold_store" | "external_object_store" | null;
+  archive_payload_scope?: "none" | "anchor_payload" | "node" | null;
+  rehydration_default_mode?: "summary_only" | "partial" | "full" | "differential" | null;
 };
 
 type SectionId = "topics" | "entities" | "events" | "rules";
@@ -467,6 +537,11 @@ export function buildContext(
       summary_kind: resolveSummaryKind(n),
       execution_kind: resolveExecutionKind(n),
       anchor_kind: resolveAnchorKind(n),
+      semantic_forgetting_action: resolveSemanticForgettingAction(n),
+      archive_relocation_state: resolveArchiveRelocationState(n),
+      archive_relocation_target: resolveArchiveRelocationTarget(n),
+      archive_payload_scope: resolveArchivePayloadScope(n),
+      rehydration_default_mode: resolveRehydrationDefaultMode(n),
     });
   };
 
@@ -492,6 +567,11 @@ export function buildContext(
       summary_kind: resolveSummaryKind(n),
       execution_kind: resolveExecutionKind(n),
       anchor_kind: resolveAnchorKind(n),
+      semantic_forgetting_action: resolveSemanticForgettingAction(n),
+      archive_relocation_state: resolveArchiveRelocationState(n),
+      archive_relocation_target: resolveArchiveRelocationTarget(n),
+      archive_payload_scope: resolveArchivePayloadScope(n),
+      rehydration_default_mode: resolveRehydrationDefaultMode(n),
     });
     pushCitation(n);
   }
@@ -513,6 +593,11 @@ export function buildContext(
       summary_kind: resolveSummaryKind(n),
       execution_kind: resolveExecutionKind(n),
       anchor_kind: resolveAnchorKind(n),
+      semantic_forgetting_action: resolveSemanticForgettingAction(n),
+      archive_relocation_state: resolveArchiveRelocationState(n),
+      archive_relocation_target: resolveArchiveRelocationTarget(n),
+      archive_payload_scope: resolveArchivePayloadScope(n),
+      rehydration_default_mode: resolveRehydrationDefaultMode(n),
     });
     pushCitation(n);
   }
@@ -556,6 +641,11 @@ export function buildContext(
       summary_kind: resolveSummaryKind(n),
       execution_kind: resolveExecutionKind(n),
       anchor_kind: resolveAnchorKind(n),
+      semantic_forgetting_action: resolveSemanticForgettingAction(n),
+      archive_relocation_state: resolveArchiveRelocationState(n),
+      archive_relocation_target: resolveArchiveRelocationTarget(n),
+      archive_payload_scope: resolveArchivePayloadScope(n),
+      rehydration_default_mode: resolveRehydrationDefaultMode(n),
     });
     pushCitation(n);
   }
@@ -585,6 +675,11 @@ export function buildContext(
       summary_kind: resolveSummaryKind(n),
       execution_kind: resolveExecutionKind(n),
       anchor_kind: resolveAnchorKind(n),
+      semantic_forgetting_action: resolveSemanticForgettingAction(n),
+      archive_relocation_state: resolveArchiveRelocationState(n),
+      archive_relocation_target: resolveArchiveRelocationTarget(n),
+      archive_payload_scope: resolveArchivePayloadScope(n),
+      rehydration_default_mode: resolveRehydrationDefaultMode(n),
     });
     pushCitation(n);
   }

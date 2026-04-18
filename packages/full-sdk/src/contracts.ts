@@ -529,6 +529,40 @@ export type AionisExecutionForgettingSummary = {
   suppressed_pattern_anchor_ids: string[];
   suppressed_pattern_sources: string[];
   selected_memory_layers: string[];
+  semantic_action_counts: {
+    retain: number;
+    demote: number;
+    archive: number;
+    review: number;
+  };
+  lifecycle_state_counts: {
+    active: number;
+    contested: number;
+    retired: number;
+    archived: number;
+  };
+  archive_relocation_state_counts: {
+    none: number;
+    candidate: number;
+    cold_archive: number;
+  };
+  archive_relocation_target_counts: {
+    none: number;
+    local_cold_store: number;
+    external_object_store: number;
+  };
+  archive_payload_scope_counts: {
+    none: number;
+    anchor_payload: number;
+    node: number;
+  };
+  rehydration_mode_counts: {
+    summary_only: number;
+    partial: number;
+    full: number;
+    differential: number;
+  };
+  differential_rehydration_candidate_count: number;
   primary_savings_levers: string[];
   stale_signal_count: number;
   recommended_action: string;
@@ -756,7 +790,11 @@ export type AionisMemoryFindRequest = {
 export type AionisMemoryResolveRequest = {
   tenant_id?: string;
   scope?: string;
-  ref: string;
+  uri: string;
+  include_meta?: boolean;
+  include_slots?: boolean;
+  include_slots_preview?: boolean;
+  slots_preview_keys?: number;
 } & AionisRequestPayload;
 
 export type AionisMemoryFeedbackRequest = {
@@ -902,8 +940,13 @@ export type AionisPatternUnsuppressRequest = {
 export type AionisAnchorRehydratePayloadRequest = {
   tenant_id?: string;
   scope?: string;
-  anchor_id: string;
+  actor?: string;
+  anchor_id?: string;
+  anchor_uri?: string;
   mode?: "summary_only" | "partial" | "full" | "differential";
+  include_linked_decisions?: boolean;
+  reason?: string;
+  adjudication?: Record<string, unknown>;
 } & AionisRequestPayload;
 
 export type AionisSessionCreateRequest = {

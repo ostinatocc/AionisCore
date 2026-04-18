@@ -118,11 +118,17 @@ const layeredContextFixture = {
     ],
     supporting_knowledge: [
       {
-        id: "k_123",
+        node_id: "k_123",
         uri: "aionis://default/default/concept/k_123",
-        type: "concept",
+        kind: "concept",
         title: "Exports often break on stale default export wiring",
         summary: "Generic export debugging note",
+        lifecycle_state: "retired",
+        semantic_forgetting_action: "archive",
+        archive_relocation_state: "cold_archive",
+        archive_relocation_target: "local_cold_store",
+        archive_payload_scope: "anchor_payload",
+        rehydration_default_mode: "differential",
         confidence: 0.42,
       },
     ],
@@ -449,9 +455,104 @@ test("buildPlanningSummary includes pattern trust totals and tool lists", () => 
   assert.deepEqual(summary.action_packet_summary.workflow_anchor_ids, ["wf_123"]);
   assert.deepEqual(summary.action_packet_summary.candidate_workflow_anchor_ids, ["wf_candidate_1"]);
   assert.deepEqual(summary.action_packet_summary.trusted_pattern_anchor_ids, ["p_stable"]);
+  assert.deepEqual(summary.selected_memory_layers, ["L2", "L3"]);
+  assert.deepEqual(summary.primary_savings_levers, ["anchor_first_recall"]);
+  assert.deepEqual(summary.continuity_carrier_summary, {
+    total_count: 0,
+    handoff_count: 0,
+    session_event_count: 0,
+    session_count: 0,
+  });
+  assert.equal(summary.forgotten_items, 1);
+  assert.equal(summary.static_blocks_selected, 2);
+  assert.equal(summary.recall_mode, "tool_first");
+  assert.deepEqual(summary.forgetting_summary.semantic_action_counts, {
+    retain: 0,
+    demote: 0,
+    archive: 1,
+    review: 0,
+  });
+  assert.deepEqual(summary.forgetting_summary.rehydration_mode_counts, {
+    summary_only: 0,
+    partial: 2,
+    full: 0,
+    differential: 1,
+  });
   assert.equal(
     summary.planner_explanation,
     "workflow guidance: Fix export failure; candidate workflows visible but not yet promoted: Replay Episode: Fix export failure; selected tool: edit; trusted pattern support: edit; contested patterns visible but not trusted: bash; rehydration available: Fix export failure; supporting knowledge appended: 1",
+  );
+});
+
+test("buildAssemblySummary surfaces semantic forgetting, relocation, and rehydration counts", () => {
+  const summary = buildAssemblySummary({
+    rules: { considered: 2, matched: 1 },
+    tools: {
+      selection: { selected: "edit" },
+      decision: {
+        decision_id: "d_123",
+        pattern_summary: {
+          skipped_suppressed_pattern_anchor_ids: ["p_stable"],
+        },
+      },
+    },
+    layered_context: layeredContextFixture,
+    cost_signals: {
+      forgotten_items: 1,
+      forgotten_by_reason: {
+        "stale_context": 1,
+      },
+      selected_memory_layers: ["L2", "L3"],
+      primary_savings_levers: ["anchor_first_recall"],
+    },
+    context_est_tokens: 320,
+    context_compaction_profile: "balanced",
+    optimization_profile: "balanced",
+    recall_mode: "tool_first",
+  });
+
+  assert.equal(summary.forgetting_summary.substrate_mode, "forgetting_active");
+  assert.equal(summary.forgetting_summary.forgotten_items, 1);
+  assert.deepEqual(summary.forgetting_summary.forgotten_by_reason, { stale_context: 1 });
+  assert.equal(summary.forgetting_summary.primary_forgetting_reason, "stale_context");
+  assert.deepEqual(summary.forgetting_summary.semantic_action_counts, {
+    retain: 0,
+    demote: 0,
+    archive: 1,
+    review: 0,
+  });
+  assert.deepEqual(summary.forgetting_summary.lifecycle_state_counts, {
+    active: 0,
+    contested: 0,
+    retired: 1,
+    archived: 0,
+  });
+  assert.deepEqual(summary.forgetting_summary.archive_relocation_state_counts, {
+    none: 0,
+    candidate: 0,
+    cold_archive: 1,
+  });
+  assert.deepEqual(summary.forgetting_summary.archive_relocation_target_counts, {
+    none: 0,
+    local_cold_store: 1,
+    external_object_store: 0,
+  });
+  assert.deepEqual(summary.forgetting_summary.archive_payload_scope_counts, {
+    none: 0,
+    anchor_payload: 1,
+    node: 0,
+  });
+  assert.deepEqual(summary.forgetting_summary.rehydration_mode_counts, {
+    summary_only: 0,
+    partial: 2,
+    full: 0,
+    differential: 1,
+  });
+  assert.equal(summary.forgetting_summary.differential_rehydration_candidate_count, 1);
+  assert.equal(summary.forgetting_summary.stale_signal_count, 4);
+  assert.equal(
+    summary.forgetting_summary.recommended_action,
+    "rehydrate archived execution memory only when the task proves it still needs the colder payload",
   );
 });
 

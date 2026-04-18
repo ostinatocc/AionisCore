@@ -45,6 +45,12 @@ The memory surface is the widest part of the public SDK. It covers write, recall
     <code class="reference-route">/v1/memory/archive/*</code>
   </div>
   <div class="reference-tile">
+    <span class="reference-kicker">Forgetting</span>
+    <h3>Cold-memory control</h3>
+    <p>Track semantic forgetting, archive relocation, and differential rehydration instead of treating forgetting as deletion.</p>
+    <code class="reference-route">semantic_forgetting_v1 + archive_relocation_v1</code>
+  </div>
+  <div class="reference-tile">
     <span class="reference-kicker">Review</span>
     <h3>Review-ready packs</h3>
     <p>Package continuity and evolution state into structures a human or host can inspect without reading raw stores.</p>
@@ -108,6 +114,8 @@ The public memory surface breaks down into eight practical groups:
 7. policy memory, evolution review, and governance
 8. review packs and delegation-learning support
 
+If you specifically care about lifecycle decay, archive planning, and selective restoration, read [Semantic Forgetting](./semantic-forgetting.md) after this page.
+
 <div class="section-frame">
   <span class="doc-kicker">Decision frame</span>
   <p>Memory is not the place to force full orchestration. Its job is narrower and more important: hold execution evidence, assemble better startup context, track reuse signals, and expose review-ready continuity state. Shell execution, hosted governance, and model capability still live elsewhere.</p>
@@ -133,6 +141,7 @@ The public memory surface breaks down into eight practical groups:
 | `memory.write(...)` | `POST /v1/memory/write` | Persist execution evidence into Lite |
 | `memory.archive.rehydrate(...)` | `POST /v1/memory/archive/rehydrate` | Bring archived nodes back into `warm` or `hot` in Lite |
 | `memory.nodes.activate(...)` | `POST /v1/memory/nodes/activate` | Record reuse outcome and activation feedback on Lite nodes |
+| `memory.anchors.rehydratePayload(...)` | `POST /v1/memory/anchor/payload/rehydrate` | Restore only the anchor payload detail that is currently needed |
 | `memory.recallText(...)` | `POST /v1/memory/recall_text` | Ask recall using natural language |
 | `memory.planningContext(...)` | `POST /v1/memory/planning/context` | Get planner-facing recall and kickoff context |
 | `memory.contextAssemble(...)` | `POST /v1/memory/context/assemble` | Build final context runtime payload |
@@ -238,6 +247,19 @@ These lifecycle calls matter because they let Lite distinguish between:
 - memory that exists
 - memory that should be active again
 - memory that proved useful when reused
+
+They now also feed the runtime's forgetting and relocation summaries, which means the public surfaces can explain why colder memory stayed out of the active set and how it should be restored later.
+
+## Semantic forgetting and selective rehydration
+
+The newer forgetting path sits one layer under the lifecycle endpoints:
+
+1. importance and feedback update lifecycle signals
+2. semantic forgetting decides whether memory should be retained, demoted, archived, or reviewed
+3. archive relocation decides whether payload should move toward colder storage
+4. rehydration surfaces decide whether summary, partial, full, or differential restoration is enough
+
+Use this page for the broad memory model. Use [Semantic Forgetting](./semantic-forgetting.md) for the dedicated forgetting and rehydration contract.
 
 That is one of the main reasons the runtime can plausibly claim self-evolving continuity rather than static storage.
 

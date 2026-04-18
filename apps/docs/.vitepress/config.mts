@@ -93,6 +93,7 @@ export default withMermaid(defineConfig({
           items: [
             { text: "Contracts and Routes", link: "/docs/reference/contracts-and-routes" },
             { text: "Memory", link: "/docs/reference/memory" },
+            { text: "Semantic Forgetting", link: "/docs/reference/semantic-forgetting" },
             { text: "Policy Memory and Evolution", link: "/docs/reference/policy-memory" },
             { text: "Handoff", link: "/docs/reference/handoff" },
             { text: "Replay and Playbooks", link: "/docs/reference/replay-and-playbooks" },

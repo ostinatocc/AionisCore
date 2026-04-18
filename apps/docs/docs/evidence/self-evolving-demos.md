@@ -7,22 +7,24 @@ slug: /evidence/self-evolving-demos
 
 This page is the runnable companion to the higher-level [Proof by Evidence](./proof-by-evidence.md) page.
 
-The goal is not to show every route. The goal is to show five concrete loops:
+The goal is not to show every route. The goal is to show six concrete loops:
 
 1. the second task start gets better
 2. positive execution feedback becomes persisted policy memory
 3. that policy memory can be governed instead of silently drifting forever
 4. continuity provenance survives workflow promotion instead of being erased
 5. session continuity alone can promote stable workflow guidance
+6. semantic forgetting archives and rehydrates execution memory without deleting it
 
 <div class="doc-lead">
   <span class="doc-kicker">Proof path</span>
-  <p>If these five demos work, Aionis is doing more than storing transcripts. It is improving startup, materializing execution policy, governing what it learns, and turning continuity carriers into stable workflow memory with preserved provenance.</p>
+  <p>If these six demos work, Aionis is doing more than storing transcripts. It is improving startup, materializing execution policy, governing what it learns, preserving continuity provenance, and managing colder execution memory through semantic forgetting and rehydration.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">Task start</span>
     <span class="doc-chip">Policy memory</span>
     <span class="doc-chip">Governance</span>
     <span class="doc-chip">Continuity provenance</span>
+    <span class="doc-chip">Semantic forgetting</span>
     <span class="doc-chip">Public SDK</span>
   </div>
 </div>
@@ -37,7 +39,7 @@ npm run sdk:build
 npm run lite:start
 ```
 
-All five demos use the public SDK against the Lite runtime at:
+All six demos use the public SDK against the Lite runtime at:
 
 `http://127.0.0.1:3001`
 
@@ -210,7 +212,47 @@ Why this matters:
 - repeated session snapshots now count as distinct workflow observations
 - Aionis can preserve continuity provenance even when the carrier is an updated topic node instead of an append-only event stream
 
-## Why these five matter together
+## Demo 6: Semantic forgetting archives and rehydrates execution memory
+
+Run:
+
+```bash
+npm run example:sdk:semantic-forgetting
+```
+
+What it proves:
+
+1. a cold workflow anchor can move into semantic-forgetting archive state without being deleted
+2. planning can still prefer hotter evidence first and explain that colder memory should only be widened on demand
+3. execution introspection can expose archive and relocation state directly on the workflow surface
+4. differential payload rehydration can restore only the archived payload detail that is required
+5. archive rehydration can move the workflow back into the active tier without erasing its colder-memory recommendation
+
+What to inspect in the output:
+
+- `before_action`
+- `before_relocation_state`
+- `planning_recommended_action`
+- `execution_archive_count`
+- `execution_cold_archive_count`
+- `execution_differential_count`
+- `differential_selected_node_ids`
+- `after_current_tier`
+
+The strongest signals are:
+
+- `semantic_forgetting.action = "archive"`
+- `archive_relocation.relocation_state = "cold_archive"`
+- `execution_summary.forgetting_summary.rehydration_mode_counts.differential >= 1`
+- `differential_selected_node_ids` includes only the archived payload node you actually needed
+
+Why this matters:
+
+- forgetting becomes lifecycle control instead of deletion
+- archived workflow memory stays explainable through public summary surfaces
+- Aionis can keep colder execution memory out of the default working set while still restoring it selectively
+
+## Why these six matter together
 
 Each demo proves a different layer of the self-evolving claim:
 
@@ -221,6 +263,7 @@ Each demo proves a different layer of the self-evolving claim:
 | Governance loop | Aionis exposes reviewable, reversible policy evolution instead of silent drift |
 | Continuity provenance survives promotion | Aionis preserves where learned workflow guidance came from even after promotion |
 | Session continuity promotes stable workflows | Aionis can lift repeated session state into stable workflow guidance without needing an event-only path |
+| Semantic forgetting archives and rehydrates execution memory | Aionis can cool down, relocate, and selectively restore execution memory instead of only accumulating it |
 
 Taken together, they show that the runtime is not just:
 
