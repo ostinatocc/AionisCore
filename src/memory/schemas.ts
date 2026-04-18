@@ -1266,6 +1266,26 @@ export const WorkflowMaintenanceSummarySchema = z.object({
 
 export type WorkflowMaintenanceSummary = z.infer<typeof WorkflowMaintenanceSummarySchema>;
 
+export const DistillationSignalSummarySchema = z.object({
+  distilled_evidence_count: z.number().int().min(0),
+  distilled_fact_count: z.number().int().min(0),
+  projected_workflow_candidate_count: z.number().int().min(0),
+  origin_counts: z.object({
+    write_distillation_input_text: z.number().int().min(0),
+    write_distillation_event_node: z.number().int().min(0),
+    write_distillation_evidence_node: z.number().int().min(0),
+    execution_write_projection: z.number().int().min(0),
+    replay_learning_episode: z.number().int().min(0),
+  }),
+  promotion_target_counts: z.object({
+    workflow: z.number().int().min(0),
+    pattern: z.number().int().min(0),
+    policy: z.number().int().min(0),
+  }),
+});
+
+export type DistillationSignalSummary = z.infer<typeof DistillationSignalSummarySchema>;
+
 export const ActionPacketSummarySchema = z.object({
   recommended_workflow_count: z.number().int().min(0),
   candidate_workflow_count: z.number().int().min(0),
@@ -1322,6 +1342,7 @@ export const ExecutionKernelPacketSummarySchema = z.object({
   workflow_signal_summary: WorkflowSignalSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
   workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
   action_packet_summary: ActionPacketSummarySchema,
@@ -1535,6 +1556,7 @@ export const ExecutionSummaryV1Schema = z.object({
   workflow_signal_summary: WorkflowSignalSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
   workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
   action_packet_summary: ActionPacketSummarySchema,
@@ -1592,6 +1614,7 @@ export const ExecutionMemoryIntrospectionResponseSchema = z.object({
   workflow_signal_summary: WorkflowSignalSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
   workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
 });

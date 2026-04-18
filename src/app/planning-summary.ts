@@ -159,6 +159,24 @@ export type WorkflowMaintenanceSummary = {
   retain_workflow_count: number;
 };
 
+export type DistillationSignalSummary = {
+  distilled_evidence_count: number;
+  distilled_fact_count: number;
+  projected_workflow_candidate_count: number;
+  origin_counts: {
+    write_distillation_input_text: number;
+    write_distillation_event_node: number;
+    write_distillation_evidence_node: number;
+    execution_write_projection: number;
+    replay_learning_episode: number;
+  };
+  promotion_target_counts: {
+    workflow: number;
+    pattern: number;
+    policy: number;
+  };
+};
+
 export type ActionPacketSummary = {
   recommended_workflow_count: number;
   candidate_workflow_count: number;
@@ -180,6 +198,7 @@ export type ExecutionMemorySummaryBundle = {
   workflow_signal_summary: WorkflowSignalSummary;
   workflow_lifecycle_summary: WorkflowLifecycleSummary;
   workflow_maintenance_summary: WorkflowMaintenanceSummary;
+  distillation_signal_summary: DistillationSignalSummary;
   pattern_lifecycle_summary: PatternLifecycleSummary;
   pattern_maintenance_summary: PatternMaintenanceSummary;
   action_packet_summary: ActionPacketSummary;
@@ -1906,12 +1925,68 @@ export function summarizeActionRecallPacketSurface(surface: PlannerPacketSummary
   };
 }
 
+export function summarizeDistillationSignalSurface(surface: PlannerPacketSummarySurface): DistillationSignalSummary {
+  const packet =
+    surface.action_recall_packet && typeof surface.action_recall_packet === "object"
+      ? (surface.action_recall_packet as Record<string, unknown>)
+      : {};
+  const candidateWorkflows = Array.isArray(surface.candidate_workflows)
+    ? surface.candidate_workflows
+    : Array.isArray(packet.candidate_workflows)
+      ? packet.candidate_workflows
+      : [];
+  const supportingKnowledge = Array.isArray(surface.supporting_knowledge)
+    ? surface.supporting_knowledge
+    : Array.isArray(packet.supporting_knowledge)
+      ? packet.supporting_knowledge
+      : [];
+
+  const evidenceEntries = safeRecordArray(supportingKnowledge).filter((entry) => entry.summary_kind === "write_distillation_evidence");
+  const factEntries = safeRecordArray(supportingKnowledge).filter((entry) => entry.summary_kind === "write_distillation_fact");
+  const projectedCandidates = safeRecordArray(candidateWorkflows).filter((entry) => {
+    const origin = typeof entry.distillation_origin === "string" ? entry.distillation_origin.trim() : "";
+    return origin === "execution_write_projection" || origin === "replay_learning_episode";
+  });
+  const allEntries = [...evidenceEntries, ...factEntries, ...projectedCandidates];
+
+  const originCounts: DistillationSignalSummary["origin_counts"] = {
+    write_distillation_input_text: 0,
+    write_distillation_event_node: 0,
+    write_distillation_evidence_node: 0,
+    execution_write_projection: 0,
+    replay_learning_episode: 0,
+  };
+  const promotionTargetCounts: DistillationSignalSummary["promotion_target_counts"] = {
+    workflow: 0,
+    pattern: 0,
+    policy: 0,
+  };
+
+  for (const entry of allEntries) {
+    const origin = typeof entry.distillation_origin === "string" ? entry.distillation_origin.trim() : "";
+    if (origin in originCounts) originCounts[origin as keyof typeof originCounts] += 1;
+    const target = typeof entry.preferred_promotion_target === "string" ? entry.preferred_promotion_target.trim() : "";
+    if (target === "workflow" || target === "pattern" || target === "policy") {
+      promotionTargetCounts[target] += 1;
+    }
+  }
+
+  return {
+    distilled_evidence_count: evidenceEntries.length,
+    distilled_fact_count: factEntries.length,
+    projected_workflow_candidate_count: projectedCandidates.length,
+    origin_counts: originCounts,
+    promotion_target_counts: promotionTargetCounts,
+  };
+}
+
 export function buildExecutionMemorySummaryBundle(surface: PlannerPacketSummarySurface): ExecutionMemorySummaryBundle {
   return {
     pattern_signal_summary: summarizePatternSignalSurface(surface),
     workflow_signal_summary: summarizeWorkflowSignalSurface(surface),
     workflow_lifecycle_summary: summarizeWorkflowLifecycleSurface(surface),
     workflow_maintenance_summary: summarizeWorkflowMaintenanceSurface(surface),
+    distillation_signal_summary: summarizeDistillationSignalSurface(surface),
     pattern_lifecycle_summary: summarizePatternLifecycleSurface(surface),
     pattern_maintenance_summary: summarizePatternMaintenanceSurface(surface),
     action_packet_summary: summarizeActionRecallPacketSurface(surface),
