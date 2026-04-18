@@ -205,6 +205,7 @@ async function buildAgentMemoryInspectLiteInner(
       derived_policy_state: derivedPolicy?.policy_state ?? null,
       policy_activation_mode: policyContract?.activation_mode ?? null,
       policy_review_recommended: policyReview.review_recommended,
+      active_policy_count: policyReview.active_policy_count,
       contested_policy_count: policyReview.contested_policy_count,
       retired_policy_count: policyReview.retired_policy_count,
       selected_policy_memory_state: policyReview.selected_policy_memory_state,

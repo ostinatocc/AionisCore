@@ -393,6 +393,9 @@ test("agent memory inspect facade composes continuity and evolution into review/
   assert.equal(inspect.agent_memory_summary.selected_tool, "edit");
   assert.equal(inspect.agent_memory_summary.distilled_evidence_count, 1);
   assert.equal(inspect.agent_memory_summary.distilled_fact_count, 3);
+  assert.equal(inspect.agent_memory_summary.active_policy_count, 0);
+  assert.equal(inspect.agent_memory_summary.contested_policy_count, 0);
+  assert.equal(inspect.agent_memory_summary.retired_policy_count, 0);
 
   assert.equal(reviewPack.agent_memory_review_pack.rollback_required, true);
   assert.deepEqual(reviewPack.agent_memory_review_pack.must_remove, ["legacy export fallback"]);

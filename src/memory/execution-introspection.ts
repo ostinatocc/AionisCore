@@ -258,6 +258,9 @@ function toPolicyMemoryEntry(
 ) {
   const slots = asRecord(row.slots);
   const contract = asRecord(slots.policy_contract_v1);
+  const execution = asRecord(slots.execution_native_v1);
+  const maintenance = asRecord(execution?.maintenance);
+  const policyEvolution = asRecord(execution?.policy_evolution);
   return {
     kind: "policy_memory",
     summary_kind: "policy_memory",
@@ -277,7 +280,15 @@ function toPolicyMemoryEntry(
     feedback_quality: Number.isFinite(Number(slots.feedback_quality)) ? Number(slots.feedback_quality) : null,
     last_feedback_at: firstString(slots.last_feedback_at),
     last_materialized_at: firstString(slots.last_materialized_at),
-    policy_memory_state: firstString(slots.policy_memory_state, contract?.policy_memory_state),
+    policy_memory_state: firstString(slots.policy_memory_state, policyEvolution?.policy_memory_state, contract?.policy_memory_state),
+    policy_state: firstString(policyEvolution?.policy_state, contract?.policy_state),
+    policy_source_kind: firstString(policyEvolution?.policy_source_kind, contract?.source_kind),
+    activation_mode: firstString(policyEvolution?.activation_mode, contract?.activation_mode),
+    materialization_state: firstString(policyEvolution?.materialization_state, slots.materialization_state, contract?.materialization_state),
+    maintenance_state: firstString(maintenance?.maintenance_state),
+    offline_priority: firstString(maintenance?.offline_priority),
+    last_maintenance_at: firstString(maintenance?.last_maintenance_at),
+    last_transition: firstString(policyEvolution?.last_transition),
     policy_contract_v1: contract ?? null,
     derived_policy_v1: asRecord(slots.derived_policy_v1) ?? null,
     confidence: row.confidence,

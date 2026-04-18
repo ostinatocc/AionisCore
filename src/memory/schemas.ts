@@ -285,10 +285,15 @@ export const MemoryAnchorMaintenancePriority = z.enum([
   "promote_to_workflow",
   "promote_to_pattern",
   "promote_to_policy",
+  "promote_to_default",
   "review_counter_evidence",
+  "review_contested_policy",
   "retain_distillation",
+  "retain_active_policy",
   "retain_trusted",
   "retain_workflow",
+  "retire_policy",
+  "reactivate_policy",
 ]);
 
 export const MemoryAnchorMaintenanceSchema = z.object({
@@ -389,6 +394,30 @@ export const MemoryDistillationSchema = z.object({
   last_transition_at: z.string().min(1).nullable().default(null),
 });
 
+export const MemoryPolicySourceKind = z.enum(["trusted_pattern", "stable_workflow", "blended"]);
+export const MemoryPolicyState = z.enum(["candidate", "stable"]);
+export const MemoryPolicyMemoryState = z.enum(["active", "contested", "retired"]);
+export const MemoryPolicyTransitionKind = z.enum([
+  "materialized",
+  "refreshed",
+  "contested_by_feedback",
+  "retired_by_feedback",
+  "retired_by_governance",
+  "reactivated_by_governance",
+]);
+
+export const MemoryPolicyEvolutionSchema = z.object({
+  policy_kind: z.literal("tool_preference").default("tool_preference"),
+  policy_source_kind: MemoryPolicySourceKind,
+  policy_state: MemoryPolicyState,
+  policy_memory_state: MemoryPolicyMemoryState,
+  activation_mode: z.enum(["hint", "default"]),
+  materialization_state: z.enum(["computed", "persisted"]).default("persisted"),
+  source_anchor_count: z.number().int().min(0).default(0),
+  last_transition: MemoryPolicyTransitionKind,
+  last_transition_at: z.string().min(1).nullable().default(null),
+});
+
 export const MemoryAnchorV1Schema = z.object({
   anchor_kind: MemoryAnchorKind,
   anchor_level: MemoryAnchorLevel,
@@ -458,6 +487,7 @@ export const ExecutionNativeV1Schema = z.object({
   maintenance: MemoryAnchorMaintenanceSchema.optional(),
   rehydration: MemoryAnchorRehydrationHintSchema.optional(),
   distillation: MemoryDistillationSchema.optional(),
+  policy_evolution: MemoryPolicyEvolutionSchema.optional(),
 });
 
 export type ExecutionNativeV1 = z.infer<typeof ExecutionNativeV1Schema>;
@@ -1286,6 +1316,40 @@ export const DistillationSignalSummarySchema = z.object({
 
 export type DistillationSignalSummary = z.infer<typeof DistillationSignalSummarySchema>;
 
+export const PolicyLifecycleSummarySchema = z.object({
+  persisted_count: z.number().int().min(0),
+  active_count: z.number().int().min(0),
+  contested_count: z.number().int().min(0),
+  retired_count: z.number().int().min(0),
+  default_mode_count: z.number().int().min(0),
+  hint_mode_count: z.number().int().min(0),
+  stable_policy_count: z.number().int().min(0),
+  transition_counts: z.object({
+    materialized: z.number().int().min(0),
+    refreshed: z.number().int().min(0),
+    contested_by_feedback: z.number().int().min(0),
+    retired_by_feedback: z.number().int().min(0),
+    retired_by_governance: z.number().int().min(0),
+    reactivated_by_governance: z.number().int().min(0),
+  }),
+});
+
+export type PolicyLifecycleSummary = z.infer<typeof PolicyLifecycleSummarySchema>;
+
+export const PolicyMaintenanceSummarySchema = z.object({
+  model: z.literal("lazy_online_v1"),
+  observe_count: z.number().int().min(0),
+  retain_count: z.number().int().min(0),
+  review_count: z.number().int().min(0),
+  promote_to_default_count: z.number().int().min(0),
+  retain_active_policy_count: z.number().int().min(0),
+  review_contested_policy_count: z.number().int().min(0),
+  retire_policy_count: z.number().int().min(0),
+  reactivate_policy_count: z.number().int().min(0),
+});
+
+export type PolicyMaintenanceSummary = z.infer<typeof PolicyMaintenanceSummarySchema>;
+
 export const ActionPacketSummarySchema = z.object({
   recommended_workflow_count: z.number().int().min(0),
   candidate_workflow_count: z.number().int().min(0),
@@ -1345,6 +1409,8 @@ export const ExecutionKernelPacketSummarySchema = z.object({
   distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
+  policy_lifecycle_summary: PolicyLifecycleSummarySchema,
+  policy_maintenance_summary: PolicyMaintenanceSummarySchema,
   action_packet_summary: ActionPacketSummarySchema,
 });
 
@@ -1559,6 +1625,8 @@ export const ExecutionSummaryV1Schema = z.object({
   distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
+  policy_lifecycle_summary: PolicyLifecycleSummarySchema,
+  policy_maintenance_summary: PolicyMaintenanceSummarySchema,
   action_packet_summary: ActionPacketSummarySchema,
 }).passthrough();
 
@@ -1617,6 +1685,8 @@ export const ExecutionMemoryIntrospectionResponseSchema = z.object({
   distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
+  policy_lifecycle_summary: PolicyLifecycleSummarySchema,
+  policy_maintenance_summary: PolicyMaintenanceSummarySchema,
 });
 
 export type ExecutionMemoryIntrospectionResponse = z.infer<typeof ExecutionMemoryIntrospectionResponseSchema>;
@@ -1637,6 +1707,10 @@ export const EvolutionInspectSummarySchema = z.object({
   suppressed_pattern_count: z.number().int().min(0),
   distilled_evidence_count: z.number().int().min(0).default(0),
   distilled_fact_count: z.number().int().min(0).default(0),
+  persisted_policy_count: z.number().int().min(0).default(0),
+  active_policy_count: z.number().int().min(0).default(0),
+  contested_policy_count: z.number().int().min(0).default(0),
+  retired_policy_count: z.number().int().min(0).default(0),
 }).passthrough();
 
 export const EvolutionInspectResponseSchema = z.object({
@@ -1740,6 +1814,7 @@ export const AgentMemoryInspectSummarySchema = z.object({
   derived_policy_state: z.enum(["candidate", "stable"]).nullable().default(null),
   policy_activation_mode: z.enum(["hint", "default"]).nullable().default(null),
   policy_review_recommended: z.boolean().default(false),
+  active_policy_count: z.number().int().min(0).default(0),
   contested_policy_count: z.number().int().min(0).default(0),
   retired_policy_count: z.number().int().min(0).default(0),
   selected_policy_memory_state: z.enum(["active", "contested", "retired"]).nullable().default(null),
@@ -1953,8 +2028,11 @@ export const PlanningSummaryContractSchema = z.object({
   action_packet_summary: ActionPacketSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
   workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
+  policy_lifecycle_summary: PolicyLifecycleSummarySchema,
+  policy_maintenance_summary: PolicyMaintenanceSummarySchema,
   trusted_pattern_count: z.number().int().min(0),
   contested_pattern_count: z.number().int().min(0),
   trusted_pattern_tools: z.array(z.string()),
@@ -1971,8 +2049,11 @@ export const AssemblySummaryContractSchema = z.object({
   action_packet_summary: ActionPacketSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
   workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
+  policy_lifecycle_summary: PolicyLifecycleSummarySchema,
+  policy_maintenance_summary: PolicyMaintenanceSummarySchema,
   trusted_pattern_count: z.number().int().min(0),
   contested_pattern_count: z.number().int().min(0),
   trusted_pattern_tools: z.array(z.string()),

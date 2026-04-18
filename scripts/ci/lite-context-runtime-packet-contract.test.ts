@@ -95,8 +95,11 @@ function assertExecutionKernelBundle(body: {
     workflow_signal_summary: unknown;
     workflow_lifecycle_summary: unknown;
     workflow_maintenance_summary: unknown;
+    distillation_signal_summary: unknown;
     pattern_lifecycle_summary: unknown;
     pattern_maintenance_summary: unknown;
+    policy_lifecycle_summary: unknown;
+    policy_maintenance_summary: unknown;
   };
   execution_summary: {
     action_packet_summary: unknown;
@@ -104,8 +107,11 @@ function assertExecutionKernelBundle(body: {
     workflow_signal_summary: unknown;
     workflow_lifecycle_summary: unknown;
     workflow_maintenance_summary: unknown;
+    distillation_signal_summary: unknown;
     pattern_lifecycle_summary: unknown;
     pattern_maintenance_summary: unknown;
+    policy_lifecycle_summary: unknown;
+    policy_maintenance_summary: unknown;
   };
 }) {
   const layered = body.layered_context;
@@ -126,15 +132,21 @@ function assertExecutionKernelBundle(body: {
   assert.deepEqual(body.execution_kernel.workflow_signal_summary, expected.workflow_signal_summary);
   assert.deepEqual(body.execution_kernel.workflow_lifecycle_summary, expected.workflow_lifecycle_summary);
   assert.deepEqual(body.execution_kernel.workflow_maintenance_summary, expected.workflow_maintenance_summary);
+  assert.deepEqual(body.execution_kernel.distillation_signal_summary, expected.distillation_signal_summary);
   assert.deepEqual(body.execution_kernel.pattern_lifecycle_summary, expected.pattern_lifecycle_summary);
   assert.deepEqual(body.execution_kernel.pattern_maintenance_summary, expected.pattern_maintenance_summary);
+  assert.deepEqual(body.execution_kernel.policy_lifecycle_summary, expected.policy_lifecycle_summary);
+  assert.deepEqual(body.execution_kernel.policy_maintenance_summary, expected.policy_maintenance_summary);
   assert.deepEqual(body.execution_summary.action_packet_summary, expected.action_packet_summary);
   assert.deepEqual(body.execution_summary.pattern_signal_summary, expected.pattern_signal_summary);
   assert.deepEqual(body.execution_summary.workflow_signal_summary, expected.workflow_signal_summary);
   assert.deepEqual(body.execution_summary.workflow_lifecycle_summary, expected.workflow_lifecycle_summary);
   assert.deepEqual(body.execution_summary.workflow_maintenance_summary, expected.workflow_maintenance_summary);
+  assert.deepEqual(body.execution_summary.distillation_signal_summary, expected.distillation_signal_summary);
   assert.deepEqual(body.execution_summary.pattern_lifecycle_summary, expected.pattern_lifecycle_summary);
   assert.deepEqual(body.execution_summary.pattern_maintenance_summary, expected.pattern_maintenance_summary);
+  assert.deepEqual(body.execution_summary.policy_lifecycle_summary, expected.policy_lifecycle_summary);
+  assert.deepEqual(body.execution_summary.policy_maintenance_summary, expected.policy_maintenance_summary);
 }
 
 function assertKernelMatchesRouteSurface(body: {

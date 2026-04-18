@@ -24,8 +24,11 @@ export type PlanningSummary = {
   action_packet_summary: ActionPacketSummary;
   workflow_lifecycle_summary: WorkflowLifecycleSummary;
   workflow_maintenance_summary: WorkflowMaintenanceSummary;
+  distillation_signal_summary: DistillationSignalSummary;
   pattern_lifecycle_summary: PatternLifecycleSummary;
   pattern_maintenance_summary: PatternMaintenanceSummary;
+  policy_lifecycle_summary: PolicyLifecycleSummary;
+  policy_maintenance_summary: PolicyMaintenanceSummary;
   primary_savings_levers: string[];
 };
 
@@ -54,8 +57,11 @@ export type AssemblySummary = {
   action_packet_summary: ActionPacketSummary;
   workflow_lifecycle_summary: WorkflowLifecycleSummary;
   workflow_maintenance_summary: WorkflowMaintenanceSummary;
+  distillation_signal_summary: DistillationSignalSummary;
   pattern_lifecycle_summary: PatternLifecycleSummary;
   pattern_maintenance_summary: PatternMaintenanceSummary;
+  policy_lifecycle_summary: PolicyLifecycleSummary;
+  policy_maintenance_summary: PolicyMaintenanceSummary;
   primary_savings_levers: string[];
 };
 
@@ -177,6 +183,36 @@ export type DistillationSignalSummary = {
   };
 };
 
+export type PolicyLifecycleSummary = {
+  persisted_count: number;
+  active_count: number;
+  contested_count: number;
+  retired_count: number;
+  default_mode_count: number;
+  hint_mode_count: number;
+  stable_policy_count: number;
+  transition_counts: {
+    materialized: number;
+    refreshed: number;
+    contested_by_feedback: number;
+    retired_by_feedback: number;
+    retired_by_governance: number;
+    reactivated_by_governance: number;
+  };
+};
+
+export type PolicyMaintenanceSummary = {
+  model: "lazy_online_v1";
+  observe_count: number;
+  retain_count: number;
+  review_count: number;
+  promote_to_default_count: number;
+  retain_active_policy_count: number;
+  review_contested_policy_count: number;
+  retire_policy_count: number;
+  reactivate_policy_count: number;
+};
+
 export type ActionPacketSummary = {
   recommended_workflow_count: number;
   candidate_workflow_count: number;
@@ -201,6 +237,8 @@ export type ExecutionMemorySummaryBundle = {
   distillation_signal_summary: DistillationSignalSummary;
   pattern_lifecycle_summary: PatternLifecycleSummary;
   pattern_maintenance_summary: PatternMaintenanceSummary;
+  policy_lifecycle_summary: PolicyLifecycleSummary;
+  policy_maintenance_summary: PolicyMaintenanceSummary;
   action_packet_summary: ActionPacketSummary;
 };
 
@@ -1157,6 +1195,10 @@ function deriveExecutionMaintenanceAction(args: {
   let recommendedAction = "continue observing new executions and keep the current context shape stable";
   if (args.forgottenItems > 0) {
     recommendedAction = "avoid reseeding forgotten context and keep the working set narrow";
+  } else if (args.summaryBundle.policy_lifecycle_summary.retired_count > 0) {
+    recommendedAction = "refresh or replace retired policy memory before trusting default tool selection";
+  } else if (args.summaryBundle.policy_lifecycle_summary.contested_count > 0) {
+    recommendedAction = "re-validate contested policy memory before defaulting to the prior tool path";
   } else if (args.suppressedPatternCount > 0) {
     recommendedAction = "prefer trusted workflows before reintroducing suppressed patterns";
   } else if (args.summaryBundle.workflow_signal_summary.promotion_ready_workflow_count > 0) {
@@ -1980,6 +2022,90 @@ export function summarizeDistillationSignalSurface(surface: PlannerPacketSummary
   };
 }
 
+function collectPolicyEntriesFromSurface(surface: PlannerPacketSummarySurface) {
+  const packet =
+    surface.action_recall_packet && typeof surface.action_recall_packet === "object"
+      ? (surface.action_recall_packet as Record<string, unknown>)
+      : {};
+  const supportingKnowledge = Array.isArray(surface.supporting_knowledge)
+    ? surface.supporting_knowledge
+    : Array.isArray(packet.supporting_knowledge)
+      ? packet.supporting_knowledge
+      : [];
+  return safeRecordArray(supportingKnowledge).filter((entry) => {
+    const kind = typeof entry.kind === "string" ? entry.kind.trim() : "";
+    const summaryKind = typeof entry.summary_kind === "string" ? entry.summary_kind.trim() : "";
+    return kind === "policy_memory" || summaryKind === "policy_memory";
+  });
+}
+
+export function summarizePolicyLifecycleSurface(surface: PlannerPacketSummarySurface): PolicyLifecycleSummary {
+  const entries = collectPolicyEntriesFromSurface(surface);
+  const summary: PolicyLifecycleSummary = {
+    persisted_count: 0,
+    active_count: 0,
+    contested_count: 0,
+    retired_count: 0,
+    default_mode_count: 0,
+    hint_mode_count: 0,
+    stable_policy_count: 0,
+    transition_counts: {
+      materialized: 0,
+      refreshed: 0,
+      contested_by_feedback: 0,
+      retired_by_feedback: 0,
+      retired_by_governance: 0,
+      reactivated_by_governance: 0,
+    },
+  };
+  for (const entry of entries) {
+    const materializationState = typeof entry.materialization_state === "string" ? entry.materialization_state.trim() : "";
+    const policyMemoryState = typeof entry.policy_memory_state === "string" ? entry.policy_memory_state.trim() : "";
+    const activationMode = typeof entry.activation_mode === "string" ? entry.activation_mode.trim() : "";
+    const policyState = typeof entry.policy_state === "string" ? entry.policy_state.trim() : "";
+    const transition = typeof entry.last_transition === "string" ? entry.last_transition.trim() : "";
+    if (materializationState === "persisted") summary.persisted_count += 1;
+    if (policyMemoryState === "active") summary.active_count += 1;
+    if (policyMemoryState === "contested") summary.contested_count += 1;
+    if (policyMemoryState === "retired") summary.retired_count += 1;
+    if (activationMode === "default") summary.default_mode_count += 1;
+    if (activationMode === "hint") summary.hint_mode_count += 1;
+    if (policyState === "stable") summary.stable_policy_count += 1;
+    if (transition in summary.transition_counts) {
+      summary.transition_counts[transition as keyof PolicyLifecycleSummary["transition_counts"]] += 1;
+    }
+  }
+  return summary;
+}
+
+export function summarizePolicyMaintenanceSurface(surface: PlannerPacketSummarySurface): PolicyMaintenanceSummary {
+  const entries = collectPolicyEntriesFromSurface(surface);
+  const summary: PolicyMaintenanceSummary = {
+    model: "lazy_online_v1",
+    observe_count: 0,
+    retain_count: 0,
+    review_count: 0,
+    promote_to_default_count: 0,
+    retain_active_policy_count: 0,
+    review_contested_policy_count: 0,
+    retire_policy_count: 0,
+    reactivate_policy_count: 0,
+  };
+  for (const entry of entries) {
+    const maintenanceState = typeof entry.maintenance_state === "string" ? entry.maintenance_state.trim() : "";
+    const offlinePriority = typeof entry.offline_priority === "string" ? entry.offline_priority.trim() : "";
+    if (maintenanceState === "observe") summary.observe_count += 1;
+    if (maintenanceState === "retain") summary.retain_count += 1;
+    if (maintenanceState === "review") summary.review_count += 1;
+    if (offlinePriority === "promote_to_default") summary.promote_to_default_count += 1;
+    if (offlinePriority === "retain_active_policy") summary.retain_active_policy_count += 1;
+    if (offlinePriority === "review_contested_policy") summary.review_contested_policy_count += 1;
+    if (offlinePriority === "retire_policy") summary.retire_policy_count += 1;
+    if (offlinePriority === "reactivate_policy") summary.reactivate_policy_count += 1;
+  }
+  return summary;
+}
+
 export function buildExecutionMemorySummaryBundle(surface: PlannerPacketSummarySurface): ExecutionMemorySummaryBundle {
   return {
     pattern_signal_summary: summarizePatternSignalSurface(surface),
@@ -1989,6 +2115,8 @@ export function buildExecutionMemorySummaryBundle(surface: PlannerPacketSummaryS
     distillation_signal_summary: summarizeDistillationSignalSurface(surface),
     pattern_lifecycle_summary: summarizePatternLifecycleSurface(surface),
     pattern_maintenance_summary: summarizePatternMaintenanceSurface(surface),
+    policy_lifecycle_summary: summarizePolicyLifecycleSurface(surface),
+    policy_maintenance_summary: summarizePolicyMaintenanceSurface(surface),
     action_packet_summary: summarizeActionRecallPacketSurface(surface),
   };
 }
@@ -2138,8 +2266,11 @@ export function buildPlanningSummary(args: {
   const actionPacketSummary = summaryBundle.action_packet_summary;
   const workflowLifecycleSummary = summaryBundle.workflow_lifecycle_summary;
   const workflowMaintenanceSummary = summaryBundle.workflow_maintenance_summary;
+  const distillationSignalSummary = summaryBundle.distillation_signal_summary;
   const patternLifecycleSummary = summaryBundle.pattern_lifecycle_summary;
   const patternMaintenanceSummary = summaryBundle.pattern_maintenance_summary;
+  const policyLifecycleSummary = summaryBundle.policy_lifecycle_summary;
+  const policyMaintenanceSummary = summaryBundle.policy_maintenance_summary;
   const experienceRecommendation =
     args.experience_intelligence && typeof args.experience_intelligence === "object"
       ? ((args.experience_intelligence as Record<string, unknown>).recommendation as Record<string, unknown> | undefined)
@@ -2207,8 +2338,11 @@ export function buildPlanningSummary(args: {
     action_packet_summary: actionPacketSummary,
     workflow_lifecycle_summary: workflowLifecycleSummary,
     workflow_maintenance_summary: workflowMaintenanceSummary,
+    distillation_signal_summary: distillationSignalSummary,
     pattern_lifecycle_summary: patternLifecycleSummary,
     pattern_maintenance_summary: patternMaintenanceSummary,
+    policy_lifecycle_summary: policyLifecycleSummary,
+    policy_maintenance_summary: policyMaintenanceSummary,
     primary_savings_levers: Array.isArray(costSignals.primary_savings_levers)
       ? costSignals.primary_savings_levers.filter((entry): entry is string => typeof entry === "string")
       : [],
@@ -2265,8 +2399,11 @@ export function buildAssemblySummary(args: {
     action_packet_summary: planning.action_packet_summary,
     workflow_lifecycle_summary: planning.workflow_lifecycle_summary,
     workflow_maintenance_summary: planning.workflow_maintenance_summary,
+    distillation_signal_summary: planning.distillation_signal_summary,
     pattern_lifecycle_summary: planning.pattern_lifecycle_summary,
     pattern_maintenance_summary: planning.pattern_maintenance_summary,
+    policy_lifecycle_summary: planning.policy_lifecycle_summary,
+    policy_maintenance_summary: planning.policy_maintenance_summary,
     primary_savings_levers: planning.primary_savings_levers,
   };
 }

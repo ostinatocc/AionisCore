@@ -5,6 +5,9 @@ import {
   buildAssemblySummary,
   buildPlanningSummary,
   summarizeActionRecallPacket,
+  summarizeDistillationSignalSurface,
+  summarizePolicyLifecycleSurface,
+  summarizePolicyMaintenanceSurface,
   summarizeWorkflowSignalSurface,
   summarizeWorkflowLifecycleSurface,
   summarizeWorkflowMaintenanceSurface,
@@ -286,6 +289,82 @@ test("workflow signal summary separates stable, promotion-ready, and observing w
     promotion_ready_workflow_titles: [],
     observing_workflow_titles: ["Replay Episode: Fix export failure"],
   });
+});
+
+test("policy lifecycle and maintenance summaries reflect persisted policy memory state", () => {
+  const policyFixture = structuredClone(layeredContextFixture);
+  (policyFixture.action_recall_packet.supporting_knowledge as any[]).push(
+    {
+      kind: "policy_memory",
+      summary_kind: "policy_memory",
+      node_id: "pm_active_default",
+      selected_tool: "edit",
+      policy_state: "stable",
+      policy_memory_state: "active",
+      activation_mode: "default",
+      materialization_state: "persisted",
+      maintenance_state: "retain",
+      offline_priority: "retain_active_policy",
+      last_transition: "materialized",
+    },
+    {
+      kind: "policy_memory",
+      summary_kind: "policy_memory",
+      node_id: "pm_contested_hint",
+      selected_tool: "bash",
+      policy_state: "candidate",
+      policy_memory_state: "contested",
+      activation_mode: "hint",
+      materialization_state: "persisted",
+      maintenance_state: "review",
+      offline_priority: "review_contested_policy",
+      last_transition: "contested_by_feedback",
+    },
+  );
+
+  assert.deepEqual(summarizePolicyLifecycleSurface(policyFixture), {
+    persisted_count: 2,
+    active_count: 1,
+    contested_count: 1,
+    retired_count: 0,
+    default_mode_count: 1,
+    hint_mode_count: 1,
+    stable_policy_count: 1,
+    transition_counts: {
+      materialized: 1,
+      refreshed: 0,
+      contested_by_feedback: 1,
+      retired_by_feedback: 0,
+      retired_by_governance: 0,
+      reactivated_by_governance: 0,
+    },
+  });
+  assert.deepEqual(summarizePolicyMaintenanceSurface(policyFixture), {
+    model: "lazy_online_v1",
+    observe_count: 0,
+    retain_count: 1,
+    review_count: 1,
+    promote_to_default_count: 0,
+    retain_active_policy_count: 1,
+    review_contested_policy_count: 1,
+    retire_policy_count: 0,
+    reactivate_policy_count: 0,
+  });
+});
+
+test("distillation summary counts workflow and policy promotion targets", () => {
+  const distillationFixture = structuredClone(layeredContextFixture);
+  (distillationFixture.action_recall_packet.supporting_knowledge as any[]).push(
+    {
+      kind: "distilled_fact",
+      summary_kind: "write_distillation_fact",
+      distillation_origin: "write_distillation_input_text",
+      preferred_promotion_target: "policy",
+    },
+  );
+  const summary = summarizeDistillationSignalSurface(distillationFixture);
+  assert.equal(summary.distilled_fact_count, 1);
+  assert.equal(summary.promotion_target_counts.policy, 1);
 });
 
 test("buildPlanningSummary includes pattern trust totals and tool lists", () => {

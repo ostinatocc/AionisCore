@@ -202,6 +202,43 @@ export type DistillationMetadata = {
   last_transition_at: string;
 };
 
+export type PolicyMemoryState = "active" | "contested" | "retired";
+export type PolicyActivationMode = "hint" | "default";
+export type PolicySourceKind = "trusted_pattern" | "stable_workflow" | "blended";
+export type PolicyState = "candidate" | "stable";
+export type PolicyTransitionKind =
+  | "materialized"
+  | "refreshed"
+  | "contested_by_feedback"
+  | "retired_by_feedback"
+  | "retired_by_governance"
+  | "reactivated_by_governance";
+
+export type PolicyMaintenanceMetadata = {
+  model: "lazy_online_v1";
+  maintenance_state: "observe" | "retain" | "review";
+  offline_priority:
+    | "promote_to_default"
+    | "retain_active_policy"
+    | "review_contested_policy"
+    | "retire_policy"
+    | "reactivate_policy";
+  lazy_update_fields: Array<"usage_count" | "last_used_at" | "reuse_success_count" | "reuse_failure_count">;
+  last_maintenance_at: string;
+};
+
+export type PolicyEvolutionMetadata = {
+  policy_kind: "tool_preference";
+  policy_source_kind: PolicySourceKind;
+  policy_state: PolicyState;
+  policy_memory_state: PolicyMemoryState;
+  activation_mode: PolicyActivationMode;
+  materialization_state: "computed" | "persisted";
+  source_anchor_count: number;
+  last_transition: PolicyTransitionKind;
+  last_transition_at: string;
+};
+
 export function buildPatternMaintenanceMetadata(args: {
   credibility_state: PatternCredibilityState;
   distinct_run_count: number;
@@ -362,6 +399,83 @@ export function buildDistillationMetadata(args: {
     source_evidence_node_id: args.source_evidence_node_id ?? null,
     has_execution_signature: args.has_execution_signature === true,
     last_transition: resolveDistillationTransition(args.source_kind),
+    last_transition_at: args.at,
+  };
+}
+
+export function resolvePolicyTransition(args: {
+  policy_memory_state: PolicyMemoryState;
+  source: "materialization" | "feedback" | "governance";
+  governance_action?: "refresh" | "retire" | "reactivate" | null;
+}): PolicyTransitionKind {
+  if (args.source === "governance") {
+    if (args.governance_action === "retire") return "retired_by_governance";
+    if (args.governance_action === "reactivate") return "reactivated_by_governance";
+    return "refreshed";
+  }
+  if (args.source === "feedback") {
+    if (args.policy_memory_state === "retired") return "retired_by_feedback";
+    if (args.policy_memory_state === "contested") return "contested_by_feedback";
+    return "refreshed";
+  }
+  return "materialized";
+}
+
+export function buildPolicyMaintenanceMetadata(args: {
+  policy_memory_state: PolicyMemoryState;
+  activation_mode: PolicyActivationMode;
+  at: string;
+  governance_action?: "refresh" | "retire" | "reactivate" | null;
+}): PolicyMaintenanceMetadata {
+  const offlinePriority =
+    args.governance_action === "reactivate"
+      ? "reactivate_policy"
+      : args.policy_memory_state === "retired"
+        ? "retire_policy"
+        : args.policy_memory_state === "contested"
+          ? "review_contested_policy"
+          : args.activation_mode === "default"
+            ? "retain_active_policy"
+            : "promote_to_default";
+  const maintenanceState =
+    offlinePriority === "retain_active_policy"
+      ? "retain"
+      : offlinePriority === "promote_to_default"
+        ? "observe"
+        : "review";
+  return {
+    model: "lazy_online_v1",
+    maintenance_state: maintenanceState,
+    offline_priority: offlinePriority,
+    lazy_update_fields: ["usage_count", "last_used_at", "reuse_success_count", "reuse_failure_count"],
+    last_maintenance_at: args.at,
+  };
+}
+
+export function buildPolicyEvolutionMetadata(args: {
+  policy_source_kind: PolicySourceKind;
+  policy_state: PolicyState;
+  policy_memory_state: PolicyMemoryState;
+  activation_mode: PolicyActivationMode;
+  materialization_state?: "computed" | "persisted";
+  source_anchor_count: number;
+  at: string;
+  source: "materialization" | "feedback" | "governance";
+  governance_action?: "refresh" | "retire" | "reactivate" | null;
+}): PolicyEvolutionMetadata {
+  return {
+    policy_kind: "tool_preference",
+    policy_source_kind: args.policy_source_kind,
+    policy_state: args.policy_state,
+    policy_memory_state: args.policy_memory_state,
+    activation_mode: args.activation_mode,
+    materialization_state: args.materialization_state ?? "persisted",
+    source_anchor_count: Math.max(0, Math.trunc(args.source_anchor_count)),
+    last_transition: resolvePolicyTransition({
+      policy_memory_state: args.policy_memory_state,
+      source: args.source,
+      governance_action: args.governance_action ?? null,
+    }),
     last_transition_at: args.at,
   };
 }

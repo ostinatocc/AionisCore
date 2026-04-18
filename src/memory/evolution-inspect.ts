@@ -576,6 +576,10 @@ function buildEvolutionInspectResponse(
       suppressed_pattern_count: experience.recommendation.tool.suppressed_pattern_anchor_ids.length,
       distilled_evidence_count: introspection.inventory.raw_distilled_evidence_count,
       distilled_fact_count: introspection.inventory.raw_distilled_fact_count,
+      persisted_policy_count: computed.policyReview.persisted_policy_count,
+      active_policy_count: computed.policyReview.active_policy_count,
+      contested_policy_count: computed.policyReview.contested_policy_count,
+      retired_policy_count: computed.policyReview.retired_policy_count,
     },
   });
 }
