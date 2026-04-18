@@ -235,6 +235,32 @@ successful execution -> replay run -> playbook -> stable workflow guidance -> be
 
 That is why replay is foundational to the "self-evolving" claim. Replay is how successful behavior becomes an asset instead of a finished event.
 
+## Replay provenance and stable workflow anchors
+
+Replay now does a better job of preserving learning provenance when playbooks stabilize.
+
+Two details matter:
+
+1. replay-learning episodes already project candidate workflows with explicit `distillation_origin = "replay_learning_episode"`
+2. stable replay workflow anchors now preserve that provenance through promotion and later normalization instead of dropping it
+
+That means a replay-derived stable workflow is no longer just:
+
+- a stable anchor
+- a promoted playbook
+
+It is also an inspectable answer to:
+
+`what kind of learning signal created this workflow?`
+
+In practice, that provenance now stays visible through:
+
+- `execution_native_v1.distillation`
+- `memory.executionIntrospect(...)`
+- `planner packet` and demo workflow lines
+
+This matters because replay is not only creating reusable structure. It is now preserving where that reusable structure came from.
+
 ## How replay interacts with the rest of the runtime
 
 Replay is tightly connected to the other public surfaces:

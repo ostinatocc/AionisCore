@@ -173,6 +173,38 @@ That combination is the real point of the product:
 
 It is a continuity runtime that can improve startup, materialize execution policy, and govern what it learned.
 
+## Supporting proof: continuity provenance survives promotion
+
+The new question after the first three proofs is:
+
+`can Aionis still explain where a learned workflow came from after it has been promoted?`
+
+That matters because a self-evolving runtime should not only learn. It should preserve the reason it learned something.
+
+<div class="doc-grid">
+  <div class="doc-card">
+    <span class="doc-kicker">Carrier</span>
+    <h3>Raw continuity input</h3>
+    <p>Lite now treats <code>handoff</code>, <code>session_event</code>, and <code>session</code> as explicit continuity carriers rather than just generic stored events.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Promotion</span>
+    <h3>Workflow keeps provenance</h3>
+    <p>When those carriers project into <code>workflow_candidate</code> and later stabilize into <code>workflow_anchor</code>, the runtime now preserves <code>distillation_origin</code>.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Visible proof</span>
+    <h3>Public surfaces expose it</h3>
+    <p><code>planningContext(...)</code> and <code>executionIntrospect(...)</code> now expose lines such as <code>distillation=handoff_continuity_carrier</code> and <code>distillation=session_event_continuity_carrier</code>.</p>
+  </div>
+</div>
+
+Why this matters:
+
+- it proves continuity memory is not only accumulated, but traceable
+- it proves workflow promotion does not erase where the learning signal came from
+- it makes replay, handoff, and session-driven learning easier to inspect and trust
+
 ## Next steps
 
 If you want the raw runnable commands, go to:

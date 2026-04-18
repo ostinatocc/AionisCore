@@ -62,6 +62,16 @@ What to inspect in the output:
 
 The strongest signal is that the second run produces a file-aware, task-aware first action that the first run did not already have.
 
+There is now a second thing to inspect:
+
+- `planningContext(...).planner_packet.sections.candidate_workflows`
+- `executionIntrospect(...).demo_surface.sections.workflows`
+
+For continuity-driven startup, those surfaces now carry explicit provenance such as:
+
+- `distillation=handoff_continuity_carrier`
+- `distillation=session_event_continuity_carrier`
+
 ## Demo 2: Policy memory materializes from positive feedback
 
 Run:
@@ -110,6 +120,31 @@ What to inspect in the output:
 - `selected_policy_memory_state`
 
 The strongest signal is a real `retire -> reactivate` loop with a live policy contract still visible afterward.
+
+## Supporting inspection: provenance survives workflow promotion
+
+The three demos above prove startup improvement, policy materialization, and governance.
+
+There is a fourth supporting inspection path worth checking while you run them:
+
+1. store a `handoff`
+2. or write two `session_event` records for the same task
+3. call `memory.planningContext(...)`
+4. call `memory.executionIntrospect(...)`
+
+What to inspect:
+
+- `planning_summary.continuity_carrier_summary`
+- `distillation_signal_summary.origin_counts`
+- workflow lines containing:
+  - `distillation=handoff_continuity_carrier`
+  - `distillation=session_event_continuity_carrier`
+
+Why this matters:
+
+- continuity carriers are now first-class learning inputs
+- projected workflows retain the source of that learning
+- stable workflows no longer have to hide the execution provenance that created them
 
 ## Why these three matter together
 

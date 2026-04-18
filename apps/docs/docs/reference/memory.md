@@ -241,6 +241,48 @@ These lifecycle calls matter because they let Lite distinguish between:
 
 That is one of the main reasons the runtime can plausibly claim self-evolving continuity rather than static storage.
 
+## Continuity carriers and provenance
+
+Lite now treats several runtime records as explicit continuity carriers:
+
+- `handoff`
+- `session_event`
+- `session`
+
+These are not only recallable records. They can now act as learning inputs that project into workflow memory.
+
+What changed in practice:
+
+1. the carrier is normalized into execution-native memory
+2. the resulting workflow candidate keeps a `distillation_origin`
+3. stable workflow promotion preserves that origin instead of erasing it
+4. planning and introspection surfaces expose that provenance directly
+
+The important public signals are:
+
+- `planning_summary.continuity_carrier_summary`
+- `planning_summary.distillation_signal_summary`
+- `planner_packet.sections.candidate_workflows`
+- `executionIntrospect(...).demo_surface.sections.workflows`
+
+The most useful origin values to recognize are:
+
+| Origin | What it means |
+| --- | --- |
+| `handoff_continuity_carrier` | This workflow was learned from structured handoff state |
+| `session_event_continuity_carrier` | This workflow was learned from repeated session events |
+| `session_continuity_carrier` | This workflow was learned from session-scoped continuity state |
+| `execution_write_projection` | This workflow was projected from execution-native write evidence |
+| `replay_learning_episode` | This workflow came from replay learning and playbook reuse |
+
+This is one of the most important recent Memory v2 upgrades, because it turns continuity learning from:
+
+- implicit
+- buried in raw slots
+- hard to trust
+
+into something visible and auditable through the default runtime summaries.
+
 ## Policy memory and evolution
 
 The newest self-evolving surface in public Lite is policy memory.
