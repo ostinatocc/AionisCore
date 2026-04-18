@@ -71,6 +71,7 @@ The current validation story is strongest when you read build checks, smoke test
 
 ## Best evidence sources
 
+- [Proof by Evidence](./proof-by-evidence.md)
 - [Self-evolving demos](./self-evolving-demos.md)
 - [Real-task benchmark report](https://github.com/ostinatocc/AionisCore/blob/main/docs/LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md)
 - [Testing strategy](https://github.com/ostinatocc/AionisCore/blob/main/docs/CORE_TESTING_STRATEGY.md)

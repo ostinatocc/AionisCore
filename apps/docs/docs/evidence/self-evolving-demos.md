@@ -5,7 +5,7 @@ slug: /evidence/self-evolving-demos
 
 # Self-evolving demos
 
-This page is the shortest proof path for the claim that Aionis is a self-evolving continuity kernel.
+This page is the runnable companion to the higher-level [Proof by Evidence](./proof-by-evidence.md) page.
 
 The goal is not to show every route. The goal is to show three concrete loops:
 

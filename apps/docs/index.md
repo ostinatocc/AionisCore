@@ -15,8 +15,8 @@ hero:
       text: Run Lite locally
       link: /docs/getting-started
     - theme: alt
-      text: See self-evolving proof
-      link: /docs/evidence/self-evolving-demos
+      text: See proof by evidence
+      link: /docs/evidence/proof-by-evidence
     - theme: alt
       text: View on GitHub
       link: https://github.com/ostinatocc/AionisCore
@@ -50,21 +50,21 @@ features:
 <div class="home-proof-section">
   <span class="home-demo-caption">Observed proof from live Lite runs on 2026-04-18</span>
   <div class="home-proof-runbook">
-    <a class="home-proof-runbook-card" href="/docs/evidence/self-evolving-demos">
+    <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
       <span class="home-proof-runbook-label">Demo 1</span>
       <h3>Better second task start</h3>
       <p>The same task moved from a generic cold start to a learned file-aware startup.</p>
       <div class="home-proof-metric">cold: <code>tool_selection</code> → warm: <code>experience_intelligence</code></div>
       <div class="home-proof-code"><code>src/services/billing.ts</code></div>
     </a>
-    <a class="home-proof-runbook-card" href="/docs/evidence/self-evolving-demos">
+    <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
       <span class="home-proof-runbook-label">Demo 2</span>
       <h3>Policy memory materialized</h3>
       <p>Repeated positive execution feedback became persisted policy memory instead of staying as loose hints.</p>
       <div class="home-proof-metric"><code>materialization_state = "persisted"</code></div>
       <div class="home-proof-code"><code>selected_policy_memory_state = "active"</code></div>
     </a>
-    <a class="home-proof-runbook-card" href="/docs/evidence/self-evolving-demos">
+    <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
       <span class="home-proof-runbook-label">Demo 3</span>
       <h3>Governance loop proved</h3>
       <p>The runtime retired policy memory and reactivated it with fresh live evidence through the public route.</p>
