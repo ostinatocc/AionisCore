@@ -95,6 +95,24 @@ test("createAionisClient exposes the v1 memory surface and routes requests to th
     tenant_id: "default",
     scope: "sdk-test-introspect",
   });
+  await client.memory.agent.inspect({
+    tenant_id: "default",
+    scope: "sdk-test-agent-inspect",
+    query_text: "repair export failure",
+    context: { goal: "repair export failure" },
+    candidates: ["bash", "edit"],
+    file_path: "src/routes/export.ts",
+    repo_root: "/repo",
+    anchor: "resume:src/routes/export.ts",
+    handoff_kind: "patch_handoff",
+  });
+  await client.memory.reviewPacks.evolution({
+    tenant_id: "default",
+    scope: "sdk-test-evolution-review",
+    query_text: "repair export failure",
+    context: { goal: "repair export failure" },
+    candidates: ["bash", "edit"],
+  });
   await client.memory.tools.select({
     tenant_id: "default",
     scope: "sdk-test-tools-select",
@@ -132,6 +150,8 @@ test("createAionisClient exposes the v1 memory surface and routes requests to th
       "http://127.0.0.1:3001/v1/memory/kickoff/recommendation",
       "http://127.0.0.1:3001/v1/memory/kickoff/recommendation",
       "http://127.0.0.1:3001/v1/memory/execution/introspect",
+      "http://127.0.0.1:3001/v1/memory/agent/inspect",
+      "http://127.0.0.1:3001/v1/memory/evolution/review-pack",
       "http://127.0.0.1:3001/v1/memory/tools/select",
       "http://127.0.0.1:3001/v1/memory/tools/feedback",
       "http://127.0.0.1:3001/v1/memory/replay/playbooks/repair/review",

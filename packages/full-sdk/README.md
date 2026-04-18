@@ -51,6 +51,7 @@ npm run example:sdk:core-path
 - automation definitions and runs
 - sandbox session, execution, and run inspection
 - sessions, packs, review packs, rule/tool operator surfaces
+- agent-memory inspect, review, resume, and handoff packs
 - host bridge integration
 
 ## Usage
@@ -115,6 +116,24 @@ npm run example:sdk:sessions
 npm run example:sdk:automation
 npm run example:sdk:sandbox
 npm run example:sdk:host-bridge
+npm run example:sdk:agent-memory
+```
+
+Agent-memory façade example:
+
+```ts
+const inspect = await aionis.memory.agent.inspect({
+  tenant_id: "default",
+  scope: "demo-sdk",
+  query_text: "repair export mismatch in src/routes/export.ts",
+  context: {
+    goal: "repair export mismatch in src/routes/export.ts",
+  },
+  candidates: ["bash", "edit", "test"],
+  file_path: "src/routes/export.ts",
+});
+
+console.log(inspect.agent_memory_summary);
 ```
 
 ## Next Reads

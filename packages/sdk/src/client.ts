@@ -1,6 +1,8 @@
+import { createAgentMemoryInspectModule } from "./modules/agent-memory-inspect.js";
 import { createAnchorsRehydratePayloadModule } from "./modules/anchors-rehydrate-payload.js";
 import { createContextAssembleModule } from "./modules/context-assemble.js";
 import { createExecutionIntrospectModule } from "./modules/execution-introspect.js";
+import { createEvolutionReviewPackModule } from "./modules/evolution-review-pack.js";
 import { createKickoffRecommendationModule } from "./modules/kickoff-recommendation.js";
 import { createMemoryWriteModule } from "./modules/memory-write.js";
 import { createPlanningContextModule } from "./modules/planning-context.js";
@@ -24,6 +26,12 @@ export function createAionisClient(options: AionisClientOptions) {
       taskStart: createTaskStartModule(http),
       taskStartPlan: createTaskStartPlanModule(http),
       executionIntrospect: createExecutionIntrospectModule(http),
+      agent: {
+        inspect: createAgentMemoryInspectModule(http),
+      },
+      reviewPacks: {
+        evolution: createEvolutionReviewPackModule(http),
+      },
       tools: {
         select: createToolsSelectModule(http),
         feedback: createToolsFeedbackModule(http),

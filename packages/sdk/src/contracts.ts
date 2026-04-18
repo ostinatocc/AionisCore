@@ -437,6 +437,56 @@ export type AionisExecutionIntrospectResponse = {
   pattern_maintenance_summary: AionisMaintenanceSummary;
 } & AionisPassthroughObject;
 
+export type AionisEvolutionReviewPackRequest = AionisKickoffRecommendationRequest & {
+  limit?: number;
+};
+
+export type AionisEvolutionReviewPackResponse = {
+  summary_version: "evolution_review_pack_v1";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  evolution_inspect: AionisPassthroughObject;
+  evolution_review_pack: AionisPassthroughObject;
+} & AionisPassthroughObject;
+
+export type AionisAgentMemoryInspectRequest = AionisKickoffRecommendationRequest & {
+  handoff_id?: string;
+  handoff_uri?: string;
+  anchor?: string;
+  repo_root?: string;
+  file_path?: string;
+  symbol?: string;
+  handoff_kind?: string;
+  memory_lane?: "private" | "shared";
+  include_payload?: boolean;
+  session_id?: string;
+  source_kind?: string;
+  continuity_kind?: string;
+  continuity_phase?: string;
+  include_meta?: boolean;
+  limit?: number;
+  offset?: number;
+};
+
+export type AionisAgentMemoryInspectResponse = {
+  summary_version: "agent_memory_inspect_v1";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  continuity_inspect: AionisPassthroughObject | null;
+  continuity_review_pack: AionisPassthroughObject | null;
+  evolution_inspect: AionisPassthroughObject;
+  evolution_review_pack: AionisPassthroughObject;
+  derived_policy: AionisPassthroughObject | null;
+  policy_contract: AionisPassthroughObject | null;
+  policy_review: AionisPassthroughObject;
+  policy_governance_contract: AionisPassthroughObject;
+  policy_governance_apply_payload: AionisPassthroughObject | null;
+  policy_governance_apply_result: AionisPassthroughObject | null;
+  agent_memory_summary: AionisPassthroughObject;
+} & AionisPassthroughObject;
+
 export type AionisToolsSelectRequest = {
   tenant_id?: string;
   scope?: string;
@@ -695,6 +745,8 @@ export type AionisKnownRequestPayload =
   | AionisPlanningContextRequest
   | AionisContextAssembleRequest
   | AionisExecutionIntrospectRequest
+  | AionisEvolutionReviewPackRequest
+  | AionisAgentMemoryInspectRequest
   | AionisToolsSelectRequest
   | AionisToolsFeedbackRequest
   | AionisReplayRepairReviewRequest
@@ -705,6 +757,8 @@ export type AionisKnownResponsePayload =
   | AionisPlanningContextResponse
   | AionisContextAssembleResponse
   | AionisExecutionIntrospectResponse
+  | AionisEvolutionReviewPackResponse
+  | AionisAgentMemoryInspectResponse
   | AionisToolsSelectResponse
   | AionisToolsFeedbackResponse
   | AionisReplayRepairReviewResponse

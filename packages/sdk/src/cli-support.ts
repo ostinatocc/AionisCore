@@ -2,7 +2,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 
-export type AionisCliCommand = "help" | "doctor" | "example" | "dev";
+export type AionisCliCommand = "help" | "doctor" | "example" | "dev" | "agent-inspect" | "evolution-review";
 
 export type AionisCliOptions = {
   repoRoot?: string;
@@ -15,6 +15,19 @@ export type AionisCliOptions = {
 export type ParsedAionisCliArgs = {
   command: AionisCliCommand;
   options: AionisCliOptions;
+};
+
+export type AionisDiagnosticsCliOptions = {
+  baseUrl: string;
+  tenantId: string;
+  scope: string;
+  queryText: string;
+  candidates: string[];
+  filePath?: string;
+  repoRoot?: string;
+  anchor?: string;
+  handoffKind?: string;
+  includeMeta: boolean;
 };
 
 export type AionisDevLaunchSpec = {
@@ -100,9 +113,129 @@ export function normalizeCommand(rawCommand?: string): AionisCliCommand {
       return "example";
     case "dev":
       return "dev";
+    case "agent-inspect":
+      return "agent-inspect";
+    case "evolution-review":
+      return "evolution-review";
     default:
       return "help";
   }
+}
+
+export function parseAionisDiagnosticsCliArgs(
+  argv: string[],
+  env: NodeJS.ProcessEnv = process.env,
+): AionisDiagnosticsCliOptions {
+  const options: AionisDiagnosticsCliOptions = {
+    baseUrl: env.AIONIS_BASE_URL ?? "http://127.0.0.1:3001",
+    tenantId: env.AIONIS_TENANT_ID ?? "default",
+    scope: env.AIONIS_SCOPE ?? "default",
+    queryText: "",
+    candidates: [],
+    filePath: undefined,
+    repoRoot: undefined,
+    anchor: undefined,
+    handoffKind: "patch_handoff",
+    includeMeta: false,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    const next = argv[index + 1];
+    if (arg === "--base-url" && next) {
+      options.baseUrl = next;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--base-url=")) {
+      options.baseUrl = arg.slice("--base-url=".length);
+      continue;
+    }
+    if (arg === "--tenant" && next) {
+      options.tenantId = next;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--tenant=")) {
+      options.tenantId = arg.slice("--tenant=".length);
+      continue;
+    }
+    if (arg === "--scope" && next) {
+      options.scope = next;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--scope=")) {
+      options.scope = arg.slice("--scope=".length);
+      continue;
+    }
+    if (arg === "--query" && next) {
+      options.queryText = next;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--query=")) {
+      options.queryText = arg.slice("--query=".length);
+      continue;
+    }
+    if (arg === "--candidate" && next) {
+      options.candidates.push(next);
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--candidate=")) {
+      options.candidates.push(arg.slice("--candidate=".length));
+      continue;
+    }
+    if (arg === "--file" && next) {
+      options.filePath = next;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--file=")) {
+      options.filePath = arg.slice("--file=".length);
+      continue;
+    }
+    if (arg === "--repo-root" && next) {
+      options.repoRoot = next;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--repo-root=")) {
+      options.repoRoot = arg.slice("--repo-root=".length);
+      continue;
+    }
+    if (arg === "--anchor" && next) {
+      options.anchor = next;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--anchor=")) {
+      options.anchor = arg.slice("--anchor=".length);
+      continue;
+    }
+    if (arg === "--handoff-kind" && next) {
+      options.handoffKind = next;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--handoff-kind=")) {
+      options.handoffKind = arg.slice("--handoff-kind=".length);
+      continue;
+    }
+    if (arg === "--include-meta") {
+      options.includeMeta = true;
+      continue;
+    }
+  }
+
+  if (options.candidates.length === 0) {
+    options.candidates = ["bash", "edit", "test"];
+  }
+  if (!options.anchor && options.filePath) {
+    options.anchor = `resume:${options.filePath}`;
+  }
+  return options;
 }
 
 export function findAionisRepoRoot(startDir: string): string | null {

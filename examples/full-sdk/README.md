@@ -29,6 +29,7 @@ npm run example:sdk:sessions
 npm run example:sdk:automation
 npm run example:sdk:sandbox
 npm run example:sdk:host-bridge
+npm run example:sdk:agent-memory
 ```
 
 The same SDK client can also call Lite lifecycle mutations directly:
@@ -54,3 +55,5 @@ Examples:
   creates a sandbox session, executes a sync command, and inspects run outputs
 - `06-host-bridge-context.ts`
   seeds delegation records, opens a stateful task session adapter, then uses `inspectTaskContext()`, `planTaskStart()`, pause/resume, and complete while printing explicit session state snapshots, `allowed_actions`, and transition guards
+- `07-agent-memory-inspect.ts`
+  seeds continuity state, then calls `memory.agent.inspect/reviewPack/resumePack/handoffPack` to show the new agent-facing public SDK façade

@@ -86,6 +86,7 @@
     "example:sdk:automation": "npx tsx examples/full-sdk/04-automation-kernel.ts",
     "example:sdk:sandbox": "npx tsx examples/full-sdk/05-sandbox-runtime.ts",
     "example:sdk:host-bridge": "npx tsx examples/full-sdk/06-host-bridge-context.ts",
+    "example:sdk:agent-memory": "npx tsx examples/full-sdk/07-agent-memory-inspect.ts",
     "example:internal-sdk:workflow": "npx tsx examples/sdk/01-workflow-guidance.ts",
     "example:internal-sdk:tools-feedback": "npx tsx examples/sdk/02-tools-feedback-pattern.ts",
     "example:internal-sdk:introspect": "npx tsx examples/sdk/03-execution-introspect-and-rehydrate.ts",
@@ -94,6 +95,7 @@
     "example:internal-sdk:task-start-plan": "npx tsx examples/sdk/06-task-start-plan.ts",
     "example:integration:host-task-start": "npx tsx examples/sdk/07-host-task-start-flow.ts",
     "example:integration:task-start-learning-loop": "npx tsx examples/sdk/08-task-start-learning-loop.ts",
+    "example:internal-sdk:agent-memory-diagnostics": "npx tsx examples/sdk/09-agent-memory-diagnostics.ts",
     "build": "npm run -s core:build",
     "core:build": "npm run -s core:build:runtime-host && npm run -s core:build:aionis-doc && npm run -s core:build:runtime-core && npm run -s core:build:sdk && npm run -s core:build:internal-sdk"
   },

@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {
+  AionisAgentMemoryInspectRequest,
   AionisAnchorsRehydratePayloadRequest,
   AionisContextAssembleRequest,
   AionisExecutionIntrospectRequest,
+  AionisEvolutionReviewPackRequest,
   AionisMemoryWriteRequest,
   AionisPlanningContextRequest,
   AionisReplayRepairReviewRequest,
@@ -47,6 +49,26 @@ test("typed SDK contract examples are assignable for the full v1 surface", () =>
     limit: 8,
   };
 
+  const agentInspectRequest: AionisAgentMemoryInspectRequest = {
+    tenant_id: "default",
+    scope: "sdk-test",
+    query_text: "repair export failure",
+    context: { goal: "repair export failure" },
+    candidates: ["bash", "edit"],
+    file_path: "src/routes/export.ts",
+    repo_root: "/repo",
+    anchor: "resume:src/routes/export.ts",
+    handoff_kind: "patch_handoff",
+  };
+
+  const evolutionReviewRequest: AionisEvolutionReviewPackRequest = {
+    tenant_id: "default",
+    scope: "sdk-test",
+    query_text: "repair export failure",
+    context: { goal: "repair export failure" },
+    candidates: ["bash", "edit"],
+  };
+
   const toolsSelectRequest: AionisToolsSelectRequest = {
     tenant_id: "default",
     scope: "sdk-test",
@@ -82,6 +104,8 @@ test("typed SDK contract examples are assignable for the full v1 surface", () =>
   assert.equal(planningRequest.query_text, "repair export failure");
   assert.equal(assembleRequest.return_layered_context, true);
   assert.equal(introspectRequest.limit, 8);
+  assert.equal(agentInspectRequest.anchor, "resume:src/routes/export.ts");
+  assert.deepEqual(evolutionReviewRequest.candidates, ["bash", "edit"]);
   assert.deepEqual(toolsSelectRequest.candidates, ["bash", "edit"]);
   assert.equal(toolsFeedbackRequest.selected_tool, "edit");
   assert.equal(replayReviewRequest.action, "approve");

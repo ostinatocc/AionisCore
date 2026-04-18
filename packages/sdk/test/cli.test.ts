@@ -6,6 +6,7 @@ import {
   findAionisRepoRoot,
   formatAionisCommand,
   looksLikeAionisRepoRoot,
+  parseAionisDiagnosticsCliArgs,
   parseAionisCliArgs,
   pickAvailablePort,
   resolveAionisRepoRoot,
@@ -32,6 +33,43 @@ test("CLI arg parsing supports repo, local-process, dry-run, and forwarded args"
   assert.equal(parsed.options.localProcess, true);
   assert.equal(parsed.options.dryRun, true);
   assert.deepEqual(parsed.options.forwardedArgs, ["--verbose"]);
+});
+
+test("CLI recognizes diagnostics commands", () => {
+  const parsed = parseAionisCliArgs([
+    "agent-inspect",
+    "--query",
+    "repair export route",
+    "--file",
+    "src/routes/export.ts",
+  ]);
+
+  assert.equal(parsed.command, "agent-inspect");
+  assert.deepEqual(parsed.options.forwardedArgs, ["--query", "repair export route", "--file", "src/routes/export.ts"]);
+});
+
+test("CLI parses diagnostics flags and derives anchor from file path", () => {
+  const parsed = parseAionisDiagnosticsCliArgs([
+    "--base-url", "http://127.0.0.1:3101",
+    "--tenant", "t1",
+    "--scope", "s1",
+    "--query", "repair export route",
+    "--candidate", "edit",
+    "--candidate", "test",
+    "--file", "src/routes/export.ts",
+    "--repo-root", "/repo",
+    "--include-meta",
+  ]);
+
+  assert.equal(parsed.baseUrl, "http://127.0.0.1:3101");
+  assert.equal(parsed.tenantId, "t1");
+  assert.equal(parsed.scope, "s1");
+  assert.equal(parsed.queryText, "repair export route");
+  assert.deepEqual(parsed.candidates, ["edit", "test"]);
+  assert.equal(parsed.filePath, "src/routes/export.ts");
+  assert.equal(parsed.repoRoot, "/repo");
+  assert.equal(parsed.anchor, "resume:src/routes/export.ts");
+  assert.equal(parsed.includeMeta, true);
 });
 
 test("CLI can detect the Aionis repo root from a nested path", () => {

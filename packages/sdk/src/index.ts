@@ -2,6 +2,8 @@ export { createAionisClient } from "./client.js";
 export type { AionisClient } from "./client.js";
 export { AionisSdkHttpError } from "./error.js";
 export type {
+  AionisAgentMemoryInspectRequest,
+  AionisAgentMemoryInspectResponse,
   AionisActionPacketSummary,
   AionisAnchorsRehydratePayloadRequest,
   AionisAnchorsRehydratePayloadResponse,
@@ -11,6 +13,8 @@ export type {
   AionisExecutionIntrospectRequest,
   AionisExecutionIntrospectResponse,
   AionisExecutionKernelSummary,
+  AionisEvolutionReviewPackRequest,
+  AionisEvolutionReviewPackResponse,
   AionisKnownRequestPayload,
   AionisKnownResponsePayload,
   AionisLifecycleSummary,

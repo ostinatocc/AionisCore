@@ -579,7 +579,19 @@ git commit -m "feat: expose agent memory surfaces in public sdk"
 
 ### Task 11: Add A Narrow Internal CLI For Evolution/Agent-Memory Diagnostics
 
-Status: not started
+Status: completed on 2026-04-18
+Implemented:
+- `packages/sdk/src/client.ts`
+- `packages/sdk/src/cli.ts`
+- `packages/sdk/src/cli-support.ts`
+- `packages/sdk/src/contracts.ts`
+- `packages/sdk/src/index.ts`
+- `packages/sdk/src/modules/agent-memory-inspect.ts`
+- `packages/sdk/src/modules/evolution-review-pack.ts`
+- `packages/sdk/test/client.test.ts`
+- `packages/sdk/test/cli.test.ts`
+- `packages/sdk/test/contracts.test.ts`
+- `examples/sdk/09-agent-memory-diagnostics.ts`
 
 **Files:**
 - Modify: `packages/sdk/src/client.ts`
@@ -618,7 +630,13 @@ git commit -m "feat: add internal diagnostics for evolution and agent memory"
 
 ### Task 12: Port A Minimal Experimental Python Client After TS Stabilizes
 
-Status: not started
+Status: completed on 2026-04-18
+Implemented:
+- `packages/python-sdk/pyproject.toml`
+- `packages/python-sdk/src/aionis_sdk/__init__.py`
+- `packages/python-sdk/src/aionis_sdk/client.py`
+- `packages/python-sdk/tests/test_agent_memory.py`
+- `packages/python-sdk/README.md`
 
 **Files:**
 - Create: `packages/python-sdk/pyproject.toml`

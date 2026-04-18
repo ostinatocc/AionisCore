@@ -5,10 +5,12 @@ import { createRequire } from "node:module";
 import {
   buildAionisDevLaunchSpec,
   formatAionisCommand,
+  parseAionisDiagnosticsCliArgs,
   parseAionisCliArgs,
   pickAvailablePort,
   resolveAionisRepoRoot,
 } from "./cli-support.js";
+import { createAionisClient } from "./client.js";
 
 const require = createRequire(import.meta.url);
 const packageJson = require("../package.json") as { name?: string; version?: string };
@@ -30,6 +32,12 @@ async function main() {
     case "dev":
       await runDev(parsed.options);
       return;
+    case "agent-inspect":
+      await runAgentInspect(parsed.options.forwardedArgs);
+      return;
+    case "evolution-review":
+      await runEvolutionReview(parsed.options.forwardedArgs);
+      return;
     case "help":
     default:
       printHelp();
@@ -43,12 +51,14 @@ function printHelp() {
     `Package: ${PACKAGE_NAME}@${PACKAGE_VERSION}`,
     "",
     "Commands:",
-    "  aionis doctor",
-    "  aionis example",
-    "  aionis dev --repo /path/to/Aionis",
-    "  aionis dev --repo /path/to/Aionis --port 3101",
-    "  aionis dev --repo /path/to/Aionis --local-process",
-    "  aionis dev --repo /path/to/Aionis --dry-run",
+    "  aionis-internal doctor",
+    "  aionis-internal example",
+    "  aionis-internal dev --repo /path/to/Aionis",
+    "  aionis-internal dev --repo /path/to/Aionis --port 3101",
+    "  aionis-internal dev --repo /path/to/Aionis --local-process",
+    "  aionis-internal dev --repo /path/to/Aionis --dry-run",
+    "  aionis-internal agent-inspect --query \"repair export route\" --file src/routes/export.ts",
+    "  aionis-internal evolution-review --query \"repair export route\" --file src/routes/export.ts",
     "",
     "Notes:",
     "  - This CLI is a thin launcher around the local Aionis Core runtime shell.",
@@ -56,6 +66,59 @@ function printHelp() {
     `  - Package page: ${PACKAGE_PAGE}`,
     `  - Repository: ${REPO_URL}`,
   ].join("\n"));
+}
+
+async function runAgentInspect(argv: string[]) {
+  const options = parseAionisDiagnosticsCliArgs(argv);
+  if (!options.queryText.trim()) {
+    console.error("agent-inspect requires --query");
+    process.exitCode = 1;
+    return;
+  }
+
+  const client = createAionisClient({ baseUrl: options.baseUrl });
+  const response = await client.memory.agent.inspect({
+    tenant_id: options.tenantId,
+    scope: options.scope,
+    query_text: options.queryText,
+    context: {
+      goal: options.queryText,
+      ...(options.repoRoot ? { repo_root: options.repoRoot } : {}),
+      ...(options.filePath ? { file_path: options.filePath } : {}),
+    },
+    candidates: options.candidates,
+    ...(options.filePath ? { file_path: options.filePath } : {}),
+    ...(options.repoRoot ? { repo_root: options.repoRoot } : {}),
+    ...(options.anchor ? { anchor: options.anchor } : {}),
+    ...(options.handoffKind ? { handoff_kind: options.handoffKind } : {}),
+    ...(options.includeMeta ? { include_meta: true } : {}),
+  });
+
+  console.log(JSON.stringify(response, null, 2));
+}
+
+async function runEvolutionReview(argv: string[]) {
+  const options = parseAionisDiagnosticsCliArgs(argv);
+  if (!options.queryText.trim()) {
+    console.error("evolution-review requires --query");
+    process.exitCode = 1;
+    return;
+  }
+
+  const client = createAionisClient({ baseUrl: options.baseUrl });
+  const response = await client.memory.reviewPacks.evolution({
+    tenant_id: options.tenantId,
+    scope: options.scope,
+    query_text: options.queryText,
+    context: {
+      goal: options.queryText,
+      ...(options.repoRoot ? { repo_root: options.repoRoot } : {}),
+      ...(options.filePath ? { file_path: options.filePath } : {}),
+    },
+    candidates: options.candidates,
+  });
+
+  console.log(JSON.stringify(response, null, 2));
 }
 
 function runDoctor(explicitRepoRoot?: string) {
@@ -77,8 +140,8 @@ function runDoctor(explicitRepoRoot?: string) {
     "",
     "## Recommended next step",
     repoRoot
-      ? `- Run \`aionis dev --repo ${repoRoot}\` to start the local Aionis Core runtime shell.`
-      : "- Clone the public Aionis repo and rerun with `aionis dev --repo /path/to/Aionis`.",
+      ? `- Run \`aionis-internal dev --repo ${repoRoot}\` to start the local Aionis Core runtime shell.`
+      : "- Clone the public Aionis repo and rerun with `aionis-internal dev --repo /path/to/Aionis`.",
   ].join("\n"));
 }
 
@@ -90,7 +153,7 @@ function runExample() {
     `   npm install ${PACKAGE_NAME}`,
     "",
     "2. Start the local Aionis Core runtime:",
-    `   npx ${PACKAGE_NAME} dev --repo /path/to/Aionis`,
+    "   aionis-internal dev --repo /path/to/Aionis",
     "",
     "3. Connect from your app:",
     "   import { createAionisClient } from \"@ostinato/aionis\";",
@@ -111,7 +174,7 @@ async function runDev(options: ReturnType<typeof parseAionisCliArgs>["options"])
   if (!repoRoot) {
     console.error("Aionis repo root not found.");
     console.error("Clone https://github.com/Cognary/Aionis and rerun with:");
-    console.error("  aionis dev --repo /path/to/Aionis");
+    console.error("  aionis-internal dev --repo /path/to/Aionis");
     process.exitCode = 1;
     return;
   }

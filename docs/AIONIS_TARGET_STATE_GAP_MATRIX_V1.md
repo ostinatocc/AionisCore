@@ -15,7 +15,7 @@ It is a practical gap matrix, not a marketing statement.
 ## Executive summary
 
 - Highest-priority desktop migration is mostly complete.
-- Second-priority desktop migration is mostly not started.
+- Second-priority desktop migration is substantially complete.
 - Relative to `Dynamic Memory Evolution / Memory v2`, the current repository now has most of the kernel, but not the full operating system.
 - Relative to `Tool-Centric AGI Framework`, the current repository is best understood as an `execution memory kernel`, not a full framework implementation.
 
@@ -27,20 +27,20 @@ It is a practical gap matrix, not a marketing statement.
 | `node-feedback-state.ts` | Implemented | [src/memory/node-feedback-state.ts](../src/memory/node-feedback-state.ts) | No major kernel gap |
 | `policy-memory.ts` | Implemented | [src/memory/policy-memory.ts](../src/memory/policy-memory.ts) | Needs broader product surfacing and more operators later |
 | `evolution-inspect.ts` | Implemented | [src/memory/evolution-inspect.ts](../src/memory/evolution-inspect.ts) | Still exposed through review flow rather than a standalone public route |
-| `agent-memory-inspect-core.ts` | Not implemented | Missing from `src/memory/` | Highest-value next façade migration |
-| agent-memory module tests | Not implemented | Missing `scripts/ci/lite-agent-memory-inspect.test.ts` | Needed before façade routes |
-| selective agent-memory routes | Not implemented | No `/v1/memory/agent/*` route family in current Lite host | Next route tranche after façade module |
-| public SDK agent-memory methods | Not implemented | No `memory.agent.*` surface in [packages/full-sdk/src/client.ts](../packages/full-sdk/src/client.ts) | Depends on façade routes |
-| internal CLI diagnostics | Not implemented | No selective evolution/agent-memory diagnostics command landed from desktop plan | Lower priority than façade routes |
-| Python client subset | Not implemented | No `packages/python-sdk/` in current repo | Explicitly deferred |
+| `agent-memory-inspect-core.ts` | Implemented | [src/memory/agent-memory-inspect-core.ts](../src/memory/agent-memory-inspect-core.ts) | Can grow into richer agent pack surfaces later |
+| agent-memory module tests | Implemented | [scripts/ci/lite-agent-memory-inspect.test.ts](../scripts/ci/lite-agent-memory-inspect.test.ts) | Add broader scenario coverage if pack surfaces expand |
+| selective agent-memory routes | Implemented | `/v1/memory/agent/*` routes in [src/routes/memory-access.ts](../src/routes/memory-access.ts) | `task-pack` / `cycle-pack` still intentionally deferred |
+| public SDK agent-memory methods | Implemented | `memory.agent.*` in [packages/full-sdk/src/client.ts](../packages/full-sdk/src/client.ts) | Add example/docs expansion as needed |
+| internal CLI diagnostics | Implemented | `agent-inspect` / `evolution-review` in [packages/sdk/src/cli.ts](../packages/sdk/src/cli.ts) | Keep the internal CLI narrow |
+| Python client subset | Implemented (experimental) | [packages/python-sdk/](../packages/python-sdk/) | Still intentionally narrow and not parity-complete |
 
 ### Migration completion estimate
 
 | Scope | Completion estimate |
 | --- | --- |
 | Highest priority | 90% |
-| Second priority | 15-20% |
-| Overall desktop migration | 55-60% |
+| Second priority | 80-85% |
+| Overall desktop migration | 80-85% |
 
 ## 2. Dynamic Memory Evolution / Memory v2 matrix
 
@@ -173,13 +173,15 @@ If the goal is to maximize leverage from current momentum, the next work should 
 
 Priority order:
 
-1. port `agent-memory-inspect-core.ts` and selective `/v1/memory/agent/*` routes
-2. expose selective `memory.agent.*` surfaces in the public SDK
-3. build 2-3 hard demos that prove:
+1. build 2-3 hard demos that prove:
    - better second task start
    - persisted policy memory after positive feedback
    - contested -> retire/reactivate governance flow
-4. continue the `Memory v2` line:
+2. deepen docs/examples around:
+   - `memory.agent.inspect`
+   - `reviewPacks.evolution`
+   - the new experimental Python client
+3. continue the `Memory v2` line:
    - broader distillation
    - promotion/demotion
    - semantic forgetting

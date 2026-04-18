@@ -16,6 +16,9 @@ packages/aionis-doc/dist/
 *.tsbuildinfo
 .eslintcache
 .pytest_cache
+__pycache__/
+*.pyc
+*.pyo
 artifacts
 .tmp
 pgdata
