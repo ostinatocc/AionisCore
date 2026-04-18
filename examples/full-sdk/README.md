@@ -30,6 +30,9 @@ npm run example:sdk:automation
 npm run example:sdk:sandbox
 npm run example:sdk:host-bridge
 npm run example:sdk:agent-memory
+npm run example:sdk:task-start-proof
+npm run example:sdk:policy-memory
+npm run example:sdk:policy-governance
 ```
 
 The same SDK client can also call Lite lifecycle mutations directly:
@@ -57,3 +60,9 @@ Examples:
   seeds delegation records, opens a stateful task session adapter, then uses `inspectTaskContext()`, `planTaskStart()`, pause/resume, and complete while printing explicit session state snapshots, `allowed_actions`, and transition guards
 - `07-agent-memory-inspect.ts`
   seeds continuity state, then calls `memory.agent.inspect/reviewPack/resumePack/handoffPack` to show the new agent-facing public SDK façade
+- `08-self-evolving-task-start.ts`
+  proves that a repeated task can get a better second `taskStart` after successful execution memory is written back
+- `09-policy-memory-materialization.ts`
+  records repeated positive tool feedback and shows persisted `policy memory` through evolution review and agent inspect
+- `10-policy-governance-loop.ts`
+  materializes policy memory, retires it, reactivates it, and confirms the governance loop through the public SDK

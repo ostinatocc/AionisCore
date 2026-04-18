@@ -102,6 +102,7 @@ export default withMermaid(defineConfig({
         {
           text: "Evidence",
           items: [
+            { text: "Self-Evolving Demos", link: "/docs/evidence/self-evolving-demos" },
             { text: "Validation and Benchmarks", link: "/docs/evidence/validation-and-benchmarks" },
           ],
         },
