@@ -67,6 +67,7 @@ import {
 } from "./schemas.js";
 import type { PromoteMemoryGovernanceReviewProvider } from "./governance-provider-types.js";
 import { runPromoteMemoryGovernancePreview } from "./promote-memory-governance-shared.js";
+import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 import { resolveTenantScope } from "./tenant.js";
 import { summarizeToolResult } from "./tool-result-summary.js";
 import { buildAionisUri } from "./uri.js";
@@ -639,14 +640,27 @@ async function ensureStablePlaybookAnchorOnLatestNode(args: {
     };
   }
 
-  const updatedNode = await liteWriteStore.updateNodeAnchorState({
-    scope: args.tenancy.scope_key,
-    id: latestNode.id,
+  const lifecycle = resolveNodeLifecycleSignals({
+    type: latestNode.type,
+    tier: latestNode.tier,
+    title: latestNode.title,
+    text_summary: desiredTextSummary,
     slots: desiredNodeFields.slots,
-    textSummary: desiredTextSummary,
     salience: latestNode.salience,
     importance: latestNode.importance,
     confidence: latestNode.confidence,
+    raw_ref: latestNode.raw_ref ?? null,
+    evidence_ref: latestNode.evidence_ref ?? null,
+  });
+
+  const updatedNode = await liteWriteStore.updateNodeAnchorState({
+    scope: args.tenancy.scope_key,
+    id: latestNode.id,
+    slots: lifecycle.slots,
+    textSummary: desiredTextSummary,
+    salience: lifecycle.salience,
+    importance: lifecycle.importance,
+    confidence: lifecycle.confidence,
     commitId: latestNode.commit_id ?? null,
   });
   if (!updatedNode) {
@@ -675,7 +689,7 @@ async function ensureStablePlaybookAnchorOnLatestNode(args: {
         node: {
           ...updatedNode,
           text_summary: desiredTextSummary,
-          slots: desiredNodeFields.slots,
+          slots: lifecycle.slots,
         },
       }),
     ]);
@@ -686,7 +700,7 @@ async function ensureStablePlaybookAnchorOnLatestNode(args: {
     node: {
       ...updatedNode,
       text_summary: desiredTextSummary,
-      slots: desiredNodeFields.slots,
+      slots: lifecycle.slots,
     },
   };
 }

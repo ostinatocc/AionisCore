@@ -5,8 +5,8 @@ import { redactPII } from "../util/redaction.js";
 import { badRequest } from "../util/http.js";
 import { computeFeedbackUpdatedNodeState } from "./node-feedback-state.js";
 import { MEMORY_TIER_RANK, type MemoryTierName } from "./evolution-operators.js";
+import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 import { MemoryArchiveRehydrateRequest, MemoryNodesActivateRequest } from "./schemas.js";
-import { resolveSemanticForgettingDecision } from "./semantic-forgetting.js";
 import { resolveTenantScope } from "./tenant.js";
 import type { LiteFindNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
 
@@ -191,36 +191,36 @@ export async function rehydrateArchiveNodesLite(
   });
 
   for (const row of movableRows) {
-    const semanticForgetting = resolveSemanticForgettingDecision({
+    const lifecycle = resolveNodeLifecycleSignals({
       type: row.type,
       tier: parsed.target_tier,
       title: row.title,
       text_summary: row.text_summary,
-      slots: row.slots,
+      slots: {
+        ...row.slots,
+        last_rehydrated_at: startedAt,
+        last_rehydrated_job: "archive_rehydrate",
+        last_rehydrated_from_tier: row.tier,
+        last_rehydrated_to_tier: parsed.target_tier,
+        last_rehydrated_reason: reason,
+        last_rehydrated_input_sha256: inputSha,
+      },
       salience: row.salience,
       importance: row.importance,
       confidence: row.confidence,
+      raw_ref: row.raw_ref ?? null,
+      evidence_ref: row.evidence_ref ?? null,
       reference_time: startedAt,
     });
-    const nextSlots = {
-      ...row.slots,
-      last_rehydrated_at: startedAt,
-      last_rehydrated_job: "archive_rehydrate",
-      last_rehydrated_from_tier: row.tier,
-      last_rehydrated_to_tier: parsed.target_tier,
-      last_rehydrated_reason: reason,
-      last_rehydrated_input_sha256: inputSha,
-      semantic_forgetting_v1: semanticForgetting,
-    };
     await liteWriteStore.updateNodeAnchorState({
       scope,
       id: row.id,
       tier: parsed.target_tier,
-      slots: nextSlots,
+      slots: lifecycle.slots,
       textSummary: row.text_summary,
-      salience: row.salience,
-      importance: row.importance,
-      confidence: row.confidence,
+      salience: lifecycle.salience,
+      importance: lifecycle.importance,
+      confidence: lifecycle.confidence,
       commitId,
     });
   }
@@ -353,7 +353,10 @@ export async function activateMemoryNodesLite(
     const nextSlots: Record<string, unknown> = {
       ...nextState.slots,
     };
-    nextSlots.semantic_forgetting_v1 = resolveSemanticForgettingDecision({
+    if (parsed.activate) {
+      nextSlots.last_activated_at = startedAt;
+    }
+    const lifecycle = resolveNodeLifecycleSignals({
       type: row.type,
       tier: row.tier,
       title: row.title,
@@ -362,19 +365,18 @@ export async function activateMemoryNodesLite(
       salience: nextState.salience,
       importance: nextState.importance,
       confidence: nextState.confidence,
+      raw_ref: row.raw_ref ?? null,
+      evidence_ref: row.evidence_ref ?? null,
       reference_time: startedAt,
     });
-    if (parsed.activate) {
-      nextSlots.last_activated_at = startedAt;
-    }
     await liteWriteStore.updateNodeAnchorState({
       scope,
       id: row.id,
-      slots: nextSlots,
+      slots: lifecycle.slots,
       textSummary: row.text_summary,
-      salience: nextState.salience,
-      importance: nextState.importance,
-      confidence: nextState.confidence,
+      salience: lifecycle.salience,
+      importance: lifecycle.importance,
+      confidence: lifecycle.confidence,
       commitId,
     });
   }

@@ -151,6 +151,7 @@ test("lite memory lifecycle routes can rehydrate archived nodes into active tier
     assert.equal(rows[0]?.slots.last_rehydrated_job, "archive_rehydrate");
     assert.equal(rows[0]?.slots.last_rehydrated_to_tier, "hot");
     assert.equal(rows[0]?.slots.semantic_forgetting_v1?.current_tier, "hot");
+    assert.equal(rows[0]?.slots.archive_relocation_v1?.relocation_state, "none");
   } finally {
     await app.close();
     await store.close();
@@ -215,6 +216,7 @@ test("lite memory lifecycle routes can record activation feedback on nodes", asy
     assert.equal(rows[0]?.slots.last_feedback_run_id, "run-lifecycle-activate-1");
     assert.ok(typeof rows[0]?.slots.last_activated_at === "string");
     assert.equal(rows[0]?.slots.semantic_forgetting_v1?.action, "retain");
+    assert.equal(rows[0]?.slots.archive_relocation_v1?.relocation_state, "none");
   } finally {
     await app.close();
     await store.close();

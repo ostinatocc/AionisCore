@@ -16,8 +16,7 @@ import {
   type PolicyGovernanceApplyAction,
   type PolicyGovernanceContract,
 } from "./schemas.js";
-import { resolveNodePriorityProfile } from "./importance-dynamics.js";
-import { resolveSemanticForgettingDecision } from "./semantic-forgetting.js";
+import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
@@ -560,7 +559,7 @@ async function applyPolicyMemoryFeedbackToNodes(args: {
       taskSignature: firstString(nextSlots.task_signature),
       errorSignature: firstString(nextSlots.error_signature),
     });
-    nextSlots.semantic_forgetting_v1 = resolveSemanticForgettingDecision({
+    const lifecycle = resolveNodeLifecycleSignals({
       type: "concept",
       tier: node.tier,
       title: node.title,
@@ -572,18 +571,18 @@ async function applyPolicyMemoryFeedbackToNodes(args: {
       reference_time: args.feedbackAt,
     });
     await args.updateNode(node, {
-      slots: nextSlots,
+      slots: lifecycle.slots,
       textSummary: nextSummary,
-      salience: nextState.salience,
-      importance: nextState.importance,
-      confidence: nextState.confidence,
+      salience: lifecycle.salience,
+      importance: lifecycle.importance,
+      confidence: lifecycle.confidence,
     });
     const formatted = formatPolicyMemoryFeedbackResult({
       tenantId: args.tenantId,
       scope: args.scope,
       node,
       contract: nextContract,
-      slots: nextSlots,
+      slots: lifecycle.slots,
     });
     if (!best || (best.policy_memory_state !== "active" && formatted.policy_memory_state === "active")) best = formatted;
   }
@@ -833,31 +832,20 @@ async function applyPolicyMemoryGovernanceToNode(args: {
     taskSignature,
     errorSignature,
   });
-  const nextPriority = resolveNodePriorityProfile({
+  const lifecycle = resolveNodeLifecycleSignals({
     type: "concept",
     tier: args.node.tier,
     title: args.node.title,
     text_summary: nextSummary,
     slots: nextSlots,
-    reference_time: args.appliedAt,
-  });
-  nextSlots.semantic_forgetting_v1 = resolveSemanticForgettingDecision({
-    type: "concept",
-    tier: args.node.tier,
-    title: args.node.title,
-    text_summary: nextSummary,
-    slots: nextSlots,
-    salience: nextPriority.salience,
-    importance: nextPriority.importance,
-    confidence: nextPriority.confidence,
     reference_time: args.appliedAt,
   });
   await args.updateNode(args.node, {
-    slots: nextSlots,
+    slots: lifecycle.slots,
     textSummary: nextSummary,
-    salience: nextPriority.salience,
-    importance: nextPriority.importance,
-    confidence: nextPriority.confidence,
+    salience: lifecycle.salience,
+    importance: lifecycle.importance,
+    confidence: lifecycle.confidence,
   });
 
   return {
@@ -868,7 +856,7 @@ async function applyPolicyMemoryGovernanceToNode(args: {
       scope: args.scope,
       node: args.node,
       contract: nextContract,
-      slots: nextSlots,
+      slots: lifecycle.slots,
     }),
   };
 }
@@ -970,15 +958,9 @@ export async function writePolicyMemorySnapshot(
         ...slots,
       }
     : slots;
-  mergedSlots.semantic_forgetting_v1 = resolveSemanticForgettingDecision({
+  const lifecycle = resolveNodeLifecycleSignals({
     type: "concept",
     tier: existingNode?.tier ?? "warm",
-    title,
-    text_summary: summary,
-    slots: mergedSlots,
-  });
-  const profile = resolveNodePriorityProfile({
-    type: "concept",
     title,
     text_summary: summary,
     slots: mergedSlots,
@@ -988,11 +970,11 @@ export async function writePolicyMemorySnapshot(
     await updateExistingPolicyMemoryLite(opts.liteWriteStore, {
       scope: args.scope,
       id: existingNode.id,
-      slots: mergedSlots,
+      slots: lifecycle.slots,
       textSummary: summary,
-      salience: profile.salience,
-      importance: profile.importance,
-      confidence: profile.confidence,
+      salience: lifecycle.salience,
+      importance: lifecycle.importance,
+      confidence: lifecycle.confidence,
       commitId: args.feedback_commit_id,
     });
     return {
@@ -1021,10 +1003,10 @@ export async function writePolicyMemorySnapshot(
           type: "concept",
           title,
           text_summary: summary,
-          slots: mergedSlots,
-          salience: profile.salience,
-          importance: profile.importance,
-          confidence: profile.confidence,
+          slots: lifecycle.slots,
+          salience: lifecycle.salience,
+          importance: lifecycle.importance,
+          confidence: lifecycle.confidence,
         },
       ],
       edges: [],

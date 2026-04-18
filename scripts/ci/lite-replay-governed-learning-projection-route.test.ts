@@ -473,6 +473,8 @@ test("lite replay repair review applies learning projection inline by default", 
     });
     assert.equal(episodeRows.length, 1);
     assert.equal(episodeRows[0]?.slots.replay_learning?.generated_by, "replay_learning_v1");
+    assert.ok(episodeRows[0]?.slots.semantic_forgetting_v1);
+    assert.ok(episodeRows[0]?.slots.archive_relocation_v1);
     assert.equal(episodeRows[0]?.owner_agent_id, "local-user");
 
     const { rows: anonymousEpisodeRows } = await liteWriteStore.findNodes({
@@ -494,6 +496,8 @@ test("lite replay repair review applies learning projection inline by default", 
       offset: 0,
     });
     assert.equal(generatedRuleRows.length, 1);
+    assert.ok(generatedRuleRows[0]?.slots.semantic_forgetting_v1);
+    assert.ok(generatedRuleRows[0]?.slots.archive_relocation_v1);
     assert.equal(generatedRuleRows[0]?.owner_agent_id, "local-user");
   } finally {
     await app.close();

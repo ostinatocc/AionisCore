@@ -8,6 +8,7 @@ import { sha256Hex } from "../util/crypto.js";
 import { HttpError } from "../util/http.js";
 import { stableUuid } from "../util/uuid.js";
 import { MemoryAnchorV1Schema } from "./schemas.js";
+import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 import { updateRuleState } from "./rules.js";
 import { buildAionisUri } from "./uri.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
@@ -1120,22 +1121,33 @@ export async function applyReplayLearningProjection(
         consumerTeamId: null,
       });
       if (episodeNode) {
-        const nextSlots = {
-          ...(asObject(episodeNode.slots) ?? {}),
-          source_rule_node_id: generatedRuleNodeId,
-          replay_learning: {
-            ...(asObject(asObject(episodeNode.slots)?.replay_learning) ?? {}),
+        const lifecycle = resolveNodeLifecycleSignals({
+          type: episodeNode.type,
+          tier: episodeNode.tier,
+          title: episodeNode.title,
+          text_summary: episodeNode.text_summary,
+          slots: {
+            ...(asObject(episodeNode.slots) ?? {}),
             source_rule_node_id: generatedRuleNodeId,
+            replay_learning: {
+              ...(asObject(asObject(episodeNode.slots)?.replay_learning) ?? {}),
+              source_rule_node_id: generatedRuleNodeId,
+            },
           },
-        };
-        await liteWriteStore.updateNodeAnchorState({
-          scope: source.scope_key,
-          id: generatedEpisodeNodeId,
-          slots: nextSlots,
-          textSummary: episodeNode.text_summary,
           salience: episodeNode.salience,
           importance: episodeNode.importance,
           confidence: episodeNode.confidence,
+          raw_ref: episodeNode.raw_ref ?? null,
+          evidence_ref: episodeNode.evidence_ref ?? null,
+        });
+        await liteWriteStore.updateNodeAnchorState({
+          scope: source.scope_key,
+          id: generatedEpisodeNodeId,
+          slots: lifecycle.slots,
+          textSummary: episodeNode.text_summary,
+          salience: lifecycle.salience,
+          importance: lifecycle.importance,
+          confidence: lifecycle.confidence,
           commitId: commitId ?? null,
         });
       }

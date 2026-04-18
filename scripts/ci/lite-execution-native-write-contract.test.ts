@@ -167,6 +167,9 @@ test("prepare/apply write normalizes execution-native metadata for anchors and d
     assert.equal(workflowPrepared?.slots.execution_native_v1.execution_kind, "workflow_anchor");
     assert.equal(workflowPrepared?.slots.execution_native_v1.task_signature, "repair-export-node-tests");
     assert.equal(workflowPrepared?.slots.execution_native_v1.error_signature, "node-export-mismatch");
+    assert.equal(workflowPrepared?.slots.semantic_forgetting_v1?.action, "retain");
+    assert.equal(workflowPrepared?.slots.archive_relocation_v1?.relocation_state, "none");
+    assert.ok(typeof workflowPrepared?.salience === "number");
     assert.equal(patternPrepared?.slots.execution_native_v1.execution_kind, "pattern_anchor");
     assert.equal(patternPrepared?.slots.execution_native_v1.pattern_state, "stable");
     assert.equal(patternPrepared?.slots.execution_native_v1.selected_tool, "edit");
@@ -210,6 +213,8 @@ test("prepare/apply write normalizes execution-native metadata for anchors and d
     assert.equal(storedWorkflow?.slots.execution_native_v1.anchor_kind, "workflow");
     assert.equal(storedPattern?.slots.execution_native_v1.anchor_kind, "pattern");
     assert.equal(storedDistilledFact?.slots.execution_native_v1.execution_kind, "distilled_fact");
+    assert.equal(storedWorkflow?.slots.semantic_forgetting_v1?.action, "retain");
+    assert.equal(storedWorkflow?.slots.archive_relocation_v1?.relocation_state, "none");
     assert.equal(storedTaskSignatureFact?.slots.execution_native_v1.task_signature, "repair-export-node-tests");
     assert.equal(storedErrorSignatureFact?.slots.execution_native_v1.error_signature, "node-export-mismatch");
     assert.equal(storedWorkflowSignatureFact?.slots.execution_native_v1.workflow_signature, "inspect-patch-rerun");

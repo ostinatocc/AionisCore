@@ -161,6 +161,9 @@ test("replayPlaybookPromote writes workflow anchor payload onto stable playbook 
     assert.deepEqual(promoted.slots.anchor_v1.tool_set, ["edit", "test"]);
     assert.deepEqual(promoted.slots.anchor_v1.payload_refs.node_ids, [sourceNodeId]);
     assert.deepEqual(promoted.slots.anchor_v1.payload_refs.run_ids, [runId]);
+    assert.equal(promoted.slots.semantic_forgetting_v1.action, "retain");
+    assert.equal(promoted.slots.archive_relocation_v1.payload_scope, "anchor_payload");
+    assert.equal(promoted.slots.archive_relocation_v1.relocation_state, "none");
   } finally {
     await liteReplayStore.close();
     await liteWriteStore.close();
@@ -973,6 +976,9 @@ test("replayPlaybookPromote normalizes latest stable playbooks onto workflow anc
     assert.equal(latestNode.slots.anchor_v1.workflow_promotion.last_transition, "normalized_latest_stable");
     assert.equal(latestNode.slots.anchor_v1.source.playbook_id, playbookId);
     assert.deepEqual(latestNode.slots.anchor_v1.payload_refs.node_ids, [sourceNodeId]);
+    assert.equal(latestNode.slots.semantic_forgetting_v1.action, "retain");
+    assert.equal(latestNode.slots.archive_relocation_v1.payload_scope, "anchor_payload");
+    assert.equal(latestNode.slots.archive_relocation_v1.relocation_state, "none");
 
     const afterVersions = await replayAccess.listReplayPlaybookVersions("default", playbookId, {
       consumerAgentId: null,

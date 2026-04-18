@@ -20,6 +20,7 @@ import { resolveTenantScope, toTenantScopeKey } from "./tenant.js";
 import { buildAionisUri } from "./uri.js";
 import { distillWriteArtifacts, type WriteDistillationSummary } from "./write-distillation.js";
 import { buildAssociativeLinkOutboxInsert } from "../jobs/associative-linking-lib.js";
+import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 
 type WriteResult = {
   tenant_id?: string;
@@ -306,6 +307,28 @@ function normalizeExecutionNativeSlots(
   return out;
 }
 
+function enrichNodeLifecycle(node: PreparedNode): PreparedNode {
+  const lifecycle = resolveNodeLifecycleSignals({
+    type: node.type,
+    tier: node.tier ?? "hot",
+    title: node.title ?? null,
+    text_summary: node.text_summary ?? null,
+    slots: node.slots ?? {},
+    salience: node.salience ?? null,
+    importance: node.importance ?? null,
+    confidence: node.confidence ?? null,
+    raw_ref: node.raw_ref ?? null,
+    evidence_ref: node.evidence_ref ?? null,
+  });
+  return {
+    ...node,
+    slots: lifecycle.slots,
+    salience: lifecycle.salience,
+    importance: lifecycle.importance,
+    confidence: lifecycle.confidence,
+  };
+}
+
 function assertSingleScopeWrite(scope: string, scopePublic: string, nodes: PreparedNode[], edges: PreparedEdge[]): void {
   const crossScopeNode = nodes.find((n) => n.scope !== scope);
   if (crossScopeNode) {
@@ -440,7 +463,7 @@ export async function prepareMemoryWrite(
     const ownerAgentId = normalizeId(n.owner_agent_id) ?? defaultOwnerAgentId ?? producerAgentId;
     const ownerTeamId = normalizeId(n.owner_team_id) ?? defaultOwnerTeamId;
 
-    nodes.push({
+    nodes.push(enrichNodeLifecycle({
       ...n,
       client_id,
       id,
@@ -453,7 +476,7 @@ export async function prepareMemoryWrite(
       text_summary,
       embedding_model,
       slots,
-    });
+    }));
   }
 
   for (const n of nodes) {
@@ -495,6 +518,7 @@ export async function prepareMemoryWrite(
     });
     for (const node of distilled.nodes) {
       node.slots = normalizeExecutionNativeSlots(node.type, node.slots ?? {}, node.title ?? null, node.text_summary ?? null);
+      const enrichedNode = enrichNodeLifecycle(node);
       const priorId = seenNodeIds.get(node.id);
       if (priorId) {
         badRequest("distillation_node_id_collision", "distillation generated duplicate node id within write batch", {
@@ -504,7 +528,7 @@ export async function prepareMemoryWrite(
         });
       }
       seenNodeIds.set(node.id, { index: nodes.length, scope: node.scope });
-      nodes.push(node);
+      nodes.push(enrichedNode);
     }
     edges.push(...distilled.edges);
     distillation = distilled.summary;
