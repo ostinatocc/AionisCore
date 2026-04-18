@@ -203,10 +203,31 @@ function restoreStableSystemSlots(original: Record<string, unknown>, redacted: R
   return out;
 }
 
-function firstString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function stringList(value: unknown, limit = 24): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    const next = firstString(entry);
+    if (!next || seen.has(next)) continue;
+    seen.add(next);
+    out.push(next);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 function normalizeExecutionNativeSignatureLabel(value: string | null | undefined): string | null {
@@ -232,6 +253,7 @@ function normalizeExecutionNativeSlots(
   const existingParsed = ExecutionNativeV1Schema.safeParse(existingExecutionNative);
   const anchorParsed = MemoryAnchorV1Schema.safeParse(out.anchor_v1);
   const summaryKind = firstString(out.summary_kind);
+  const systemKind = firstString(out.system_kind);
   const rawCompressionLayer = firstString(out.compression_layer);
   const compressionLayer =
     rawCompressionLayer === "L0" || rawCompressionLayer === "L1" || rawCompressionLayer === "L2"
@@ -289,6 +311,28 @@ function normalizeExecutionNativeSlots(
       summary_kind: summaryKind,
       compression_layer: compressionLayer ?? "L1",
       ...derivedFactSignatures,
+    };
+  } else if (summaryKind === "handoff" || systemKind === "session_event" || systemKind === "session") {
+    const executionState = asRecord(out.execution_state_v1);
+    const executionPacket = asRecord(out.execution_packet_v1);
+    const resumeAnchor = asRecord(executionState?.resume_anchor) ?? asRecord(executionPacket?.resume_anchor);
+    const targetFiles = stringList([
+      ...stringList(out.target_files, 24),
+      ...stringList(executionPacket?.target_files, 24),
+      ...stringList(executionState?.owned_files, 24),
+      ...stringList(executionState?.modified_files, 24),
+    ], 24);
+    const filePath = firstString(out.file_path, resumeAnchor?.file_path, targetFiles[0] ?? null);
+    const nextAction = firstString(out.next_action, executionPacket?.next_action, out.handoff_text);
+    executionNative = {
+      ...(executionNative ?? {}),
+      schema_version: "execution_native_v1",
+      execution_kind: "execution_native",
+      summary_kind: summaryKind ?? systemKind,
+      compression_layer: compressionLayer ?? "L0",
+      ...(filePath ? { file_path: filePath } : {}),
+      ...(targetFiles.length > 0 ? { target_files: targetFiles } : {}),
+      ...(nextAction ? { next_action: nextAction } : {}),
     };
   } else if (existingParsed.success) {
     executionNative = {

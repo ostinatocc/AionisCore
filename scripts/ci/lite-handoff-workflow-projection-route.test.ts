@@ -270,6 +270,20 @@ test("handoff/store projects workflow memory into planner guidance through the g
     });
     assert.equal(firstStore.statusCode, 200);
 
+    const continuityRows = await liteWriteStore.findExecutionNativeNodes({
+      scope: "default",
+      consumerAgentId: "local-user",
+      executionKind: "execution_native",
+      compressionLayer: "L0",
+      limit: 10,
+      offset: 0,
+    });
+    const storedHandoff = continuityRows.rows.find((row) => row.execution_native_v1.summary_kind === "handoff");
+    assert.ok(storedHandoff);
+    assert.equal(storedHandoff?.execution_native_v1.file_path, "src/routes/export.ts");
+    assert.deepEqual(storedHandoff?.execution_native_v1.target_files, ["src/routes/export.ts"]);
+    assert.equal(storedHandoff?.execution_native_v1.next_action, "Patch src/routes/export.ts and rerun export tests");
+
     const firstPlanning = await app.inject({
       method: "POST",
       url: "/v1/memory/planning/context",

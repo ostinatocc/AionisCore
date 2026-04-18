@@ -13,6 +13,32 @@ function tmpDbPath(name: string): string {
   return path.join(dir, `${name}.sqlite`);
 }
 
+function buildContinuityPayload(filePath: string) {
+  return {
+    execution_state_v1: {
+      task_brief: "Fix export failure in node tests",
+      owned_files: [],
+      modified_files: [filePath],
+      resume_anchor: {
+        anchor: `resume:${filePath}`,
+        file_path: filePath,
+        symbol: null,
+        repo_root: "/Volumes/ziel/Aionisgo",
+      },
+    },
+    execution_packet_v1: {
+      target_files: [filePath],
+      next_action: `Patch ${filePath} and rerun export tests`,
+      resume_anchor: {
+        anchor: `resume:${filePath}`,
+        file_path: filePath,
+        symbol: null,
+        repo_root: "/Volumes/ziel/Aionisgo",
+      },
+    },
+  };
+}
+
 test("prepare/apply write normalizes execution-native metadata for anchors and distillation outputs", async () => {
   const dbPath = tmpDbPath("normalize");
   const store = createLiteWriteStore(dbPath);
@@ -412,6 +438,119 @@ test("lite write store exposes execution-first query filters over execution_nati
     });
     assert.equal(signatureFactRows.rows.length, 1);
     assert.equal(signatureFactRows.rows[0]?.title, "Task Signature");
+  } finally {
+    await store.close();
+  }
+});
+
+test("prepare/apply write normalizes execution-native metadata for handoff and session continuity carriers", async () => {
+  const dbPath = tmpDbPath("continuity");
+  const store = createLiteWriteStore(dbPath);
+  const filePath = "src/routes/export.ts";
+  const continuity = buildContinuityPayload(filePath);
+  try {
+    const prepared = await prepareMemoryWrite(
+      {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        producer_agent_id: "local-user",
+        owner_agent_id: "local-user",
+        input_text: "resume export repair continuity",
+        auto_embed: false,
+        nodes: [
+          {
+            type: "event",
+            title: "Export repair handoff",
+            text_summary: "Fix export failure in node tests",
+            slots: {
+              summary_kind: "handoff",
+              handoff_kind: "patch_handoff",
+              anchor: `resume:${filePath}`,
+              file_path: filePath,
+              target_files: [filePath],
+              next_action: `Patch ${filePath} and rerun export tests`,
+              handoff_text: "Resume export repair",
+              ...continuity,
+            },
+          },
+          {
+            type: "event",
+            title: "Export session event",
+            text_summary: "Fix export failure in node tests",
+            slots: {
+              system_kind: "session_event",
+              session_id: "session-export",
+              event_id: randomUUID(),
+              ...continuity,
+            },
+          },
+          {
+            type: "topic",
+            title: "Session session-export",
+            text_summary: "Session session-export",
+            slots: {
+              system_kind: "session",
+              session_id: "session-export",
+            },
+          },
+        ],
+        edges: [],
+      },
+      "default",
+      "default",
+      {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        allowCrossScopeEdges: false,
+      },
+      null,
+    );
+
+    const preparedHandoff = prepared.nodes.find((node) => node.slots?.summary_kind === "handoff");
+    const preparedSessionEvent = prepared.nodes.find((node) => node.slots?.system_kind === "session_event");
+    const preparedSession = prepared.nodes.find((node) => node.slots?.system_kind === "session");
+    assert.ok(preparedHandoff);
+    assert.ok(preparedSessionEvent);
+    assert.ok(preparedSession);
+    assert.equal(preparedHandoff?.slots.execution_native_v1.execution_kind, "execution_native");
+    assert.equal(preparedHandoff?.slots.execution_native_v1.summary_kind, "handoff");
+    assert.equal(preparedHandoff?.slots.execution_native_v1.compression_layer, "L0");
+    assert.equal(preparedHandoff?.slots.execution_native_v1.file_path, filePath);
+    assert.deepEqual(preparedHandoff?.slots.execution_native_v1.target_files, [filePath]);
+    assert.equal(preparedHandoff?.slots.execution_native_v1.next_action, `Patch ${filePath} and rerun export tests`);
+    assert.equal(preparedSessionEvent?.slots.execution_native_v1.execution_kind, "execution_native");
+    assert.equal(preparedSessionEvent?.slots.execution_native_v1.summary_kind, "session_event");
+    assert.equal(preparedSessionEvent?.slots.execution_native_v1.compression_layer, "L0");
+    assert.equal(preparedSessionEvent?.slots.execution_native_v1.file_path, filePath);
+    assert.deepEqual(preparedSessionEvent?.slots.execution_native_v1.target_files, [filePath]);
+    assert.equal(preparedSession?.slots.execution_native_v1.execution_kind, "execution_native");
+    assert.equal(preparedSession?.slots.execution_native_v1.summary_kind, "session");
+    assert.equal(preparedSession?.slots.execution_native_v1.compression_layer, "L0");
+
+    await store.withTx(() =>
+      applyMemoryWrite({} as any, prepared, {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        allowCrossScopeEdges: false,
+        shadowDualWriteEnabled: false,
+        shadowDualWriteStrict: false,
+        associativeLinkOrigin: "memory_write",
+        write_access: store,
+      }),
+    );
+
+    const continuityRows = await store.findExecutionNativeNodes({
+      scope: "default",
+      consumerAgentId: "local-user",
+      executionKind: "execution_native",
+      compressionLayer: "L0",
+      limit: 10,
+      offset: 0,
+    });
+    assert.ok(continuityRows.rows.some((row) => row.execution_native_v1.summary_kind === "handoff" && row.execution_native_v1.file_path === filePath));
+    assert.ok(continuityRows.rows.some((row) => row.execution_native_v1.summary_kind === "session_event" && row.execution_native_v1.file_path === filePath));
+    assert.ok(continuityRows.rows.some((row) => row.execution_native_v1.summary_kind === "session"));
   } finally {
     await store.close();
   }
