@@ -281,6 +281,36 @@ function toPolicyMemoryEntry(
   };
 }
 
+function toDistillationEntry(
+  row: Awaited<ReturnType<LiteWriteStore["findNodes"]>>["rows"][number],
+  tenantId: string,
+  scope: string,
+) {
+  const slots = asRecord(row.slots);
+  const execution = asRecord(slots.execution_native_v1);
+  const distillation = asRecord(execution.distillation);
+  const maintenance = asRecord(execution.maintenance);
+  return {
+    kind: firstString(execution.execution_kind, slots.summary_kind, row.type) ?? "unknown",
+    summary_kind: firstString(slots.summary_kind),
+    node_id: row.id,
+    uri: toNodeUri(tenantId, scope, row.type, row.id),
+    title: firstString(row.title),
+    summary: firstString(row.text_summary),
+    compression_layer: firstString(execution.compression_layer, slots.compression_layer),
+    distillation_origin: firstString(distillation.distillation_origin),
+    preferred_promotion_target: firstString(distillation.preferred_promotion_target),
+    extraction_pattern: firstString(distillation.extraction_pattern),
+    source_node_id: firstString(distillation.source_node_id, slots.source_node_id),
+    source_evidence_node_id: firstString(distillation.source_evidence_node_id, slots.source_evidence_node_id),
+    has_execution_signature: distillation.has_execution_signature === true,
+    last_transition: firstString(distillation.last_transition),
+    maintenance_state: firstString(maintenance.maintenance_state),
+    offline_priority: firstString(maintenance.offline_priority),
+    confidence: row.confidence,
+  };
+}
+
 function buildDemoSurface(args: {
   workflowSignalSummary: ReturnType<typeof summarizeWorkflowSignalSurface>;
   patternSignalSummary: ReturnType<typeof summarizePatternSignalSurface>;
@@ -365,7 +395,16 @@ export async function buildExecutionMemoryIntrospectionLite(
   const consumerTeamId = parsed.consumer_team_id ?? null;
   const limit = parsed.limit;
 
-  const [workflowAnchors, workflowCandidates, patternAnchors, recentSourceEvents, delegationRecordRows, policyMemoryNodes] = await Promise.all([
+  const [
+    workflowAnchors,
+    workflowCandidates,
+    patternAnchors,
+    recentSourceEvents,
+    delegationRecordRows,
+    policyMemoryNodes,
+    distilledEvidenceNodes,
+    distilledFactNodes,
+  ] = await Promise.all([
     liteWriteStore.findExecutionNativeNodes({
       scope,
       executionKind: "workflow_anchor",
@@ -414,6 +453,28 @@ export async function buildExecutionMemoryIntrospectionLite(
       offset: 0,
       slotsContains: {
         summary_kind: "policy_memory",
+      },
+    }),
+    liteWriteStore.findNodes({
+      scope,
+      type: "evidence",
+      consumerAgentId,
+      consumerTeamId,
+      limit: Math.max(limit, 8),
+      offset: 0,
+      slotsContains: {
+        summary_kind: "write_distillation_evidence",
+      },
+    }),
+    liteWriteStore.findNodes({
+      scope,
+      type: "concept",
+      consumerAgentId,
+      consumerTeamId,
+      limit: Math.max(limit, 8),
+      offset: 0,
+      slotsContains: {
+        summary_kind: "write_distillation_fact",
       },
     }),
   ]);
@@ -468,7 +529,14 @@ export async function buildExecutionMemoryIntrospectionLite(
     ...recommendedWorkflows.map((entry) => toWorkflowSignal(entry)),
     ...candidateWorkflows.map((entry) => toWorkflowSignal(entry)),
   ];
-  const supportingKnowledge = policyMemoryNodes.rows.map((row) => toPolicyMemoryEntry(row, tenantId, scope));
+  const distillationKnowledge = [
+    ...distilledEvidenceNodes.rows.map((row) => toDistillationEntry(row, tenantId, scope)),
+    ...distilledFactNodes.rows.map((row) => toDistillationEntry(row, tenantId, scope)),
+  ];
+  const supportingKnowledge = [
+    ...policyMemoryNodes.rows.map((row) => toPolicyMemoryEntry(row, tenantId, scope)),
+    ...distillationKnowledge,
+  ];
   const surface = {
     action_recall_packet: {
       packet_version: "action_recall_v1" as const,
@@ -555,6 +623,8 @@ export async function buildExecutionMemoryIntrospectionLite(
       continuity_projected_candidate_count: continuityProjectedCandidateCount,
       continuity_auto_promoted_workflow_count: continuityAutoPromotedWorkflowCount,
       raw_pattern_anchor_count: patternAnchors.rows.length,
+      raw_distilled_evidence_count: distilledEvidenceNodes.rows.length,
+      raw_distilled_fact_count: distilledFactNodes.rows.length,
     },
     continuity_projection_report: {
       sampled_source_event_count: continuityProjectionSamples.length,

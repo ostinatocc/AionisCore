@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildDistillationMaintenanceMetadata,
+  buildDistillationMetadata,
   buildPatternMaintenanceMetadata,
   buildPatternPromotionMetadata,
   buildWorkflowMaintenanceMetadata,
@@ -139,4 +141,43 @@ test("pattern contested and trusted operators keep review and revalidation seman
   assert.equal(contestedMaintenance.offline_priority, "review_counter_evidence");
   assert.equal(contestedPromotion.last_transition, "counter_evidence_opened");
   assert.equal(trustedPromotion.last_transition, "revalidated_to_trusted");
+});
+
+test("distillation operators route L1 artifacts toward workflow or pattern evolution", () => {
+  const at = "2026-04-18T12:00:00.000Z";
+  const evidence = buildDistillationMetadata({
+    source_kind: "event_nodes",
+    distillation_kind: "write_distillation_evidence",
+    at,
+    source_node_id: "event-1",
+  });
+  const fact = buildDistillationMetadata({
+    source_kind: "input_text",
+    distillation_kind: "write_distillation_fact",
+    at,
+    extraction_pattern: "colon",
+    has_execution_signature: true,
+  });
+  const evidenceMaintenance = buildDistillationMaintenanceMetadata({
+    preferred_promotion_target: evidence.preferred_promotion_target,
+    at,
+  });
+  const factMaintenance = buildDistillationMaintenanceMetadata({
+    preferred_promotion_target: fact.preferred_promotion_target,
+    at,
+  });
+
+  assert.equal(evidence.distillation_origin, "write_distillation_event_node");
+  assert.equal(evidence.last_transition, "distilled_from_event_node");
+  assert.equal(evidence.preferred_promotion_target, "workflow");
+  assert.equal(evidence.source_node_id, "event-1");
+  assert.equal(evidenceMaintenance.maintenance_state, "observe");
+  assert.equal(evidenceMaintenance.offline_priority, "promote_to_workflow");
+
+  assert.equal(fact.distillation_origin, "write_distillation_input_text");
+  assert.equal(fact.last_transition, "distilled_from_input_text");
+  assert.equal(fact.preferred_promotion_target, "workflow");
+  assert.equal(fact.extraction_pattern, "colon");
+  assert.equal(fact.has_execution_signature, true);
+  assert.equal(factMaintenance.offline_priority, "promote_to_workflow");
 });

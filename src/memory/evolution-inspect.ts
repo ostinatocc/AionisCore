@@ -574,6 +574,8 @@ function buildEvolutionInspectResponse(
       trusted_pattern_count: introspection.pattern_signal_summary.trusted_pattern_count,
       contested_pattern_count: introspection.pattern_signal_summary.contested_pattern_count,
       suppressed_pattern_count: experience.recommendation.tool.suppressed_pattern_anchor_ids.length,
+      distilled_evidence_count: introspection.inventory.raw_distilled_evidence_count,
+      distilled_fact_count: introspection.inventory.raw_distilled_fact_count,
     },
   });
 }

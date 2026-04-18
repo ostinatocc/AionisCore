@@ -242,8 +242,21 @@ async function seedExecutionIntrospectionFixture(dbPath: string) {
       actor: "local-user",
       producer_agent_id: "local-user",
       owner_agent_id: "local-user",
-      input_text: "seed execution introspection route fixture",
+      input_text: [
+        "Task Signature: repair-export-node-tests",
+        "Error Signature: node-export-mismatch",
+        "Workflow Signature: inspect-patch-rerun",
+        "Export repair requires inspect, patch, and rerun.",
+      ].join("\n"),
       auto_embed: false,
+      distill: {
+        enabled: true,
+        sources: ["input_text"],
+        max_evidence_nodes: 2,
+        max_fact_nodes: 4,
+        min_sentence_chars: 12,
+        attach_edges: true,
+      },
       nodes: [
         {
           id: randomUUID(),
@@ -691,6 +704,8 @@ test("execution introspection route exposes demo-friendly workflow and pattern s
     assert.equal(body.inventory.continuity_projected_candidate_count, 3);
     assert.equal(body.inventory.continuity_auto_promoted_workflow_count, 0);
     assert.equal(body.inventory.raw_pattern_anchor_count, 2);
+    assert.equal(body.inventory.raw_distilled_evidence_count, 1);
+    assert.equal(body.inventory.raw_distilled_fact_count, 3);
     assert.equal(body.continuity_projection_report.sampled_source_event_count, 4);
     assert.equal(body.continuity_projection_report.decision_counts.projected, 2);
     assert.equal(body.continuity_projection_report.decision_counts.skipped_stable_exists, 1);
@@ -702,6 +717,8 @@ test("execution introspection route exposes demo-friendly workflow and pattern s
     assert.ok(body.continuity_projection_report.samples.some((sample) => sample.source_client_id === "execution-event:no-continuity" && sample.decision === "skipped_missing_execution_continuity"));
     assert.equal(body.workflow_signal_summary.stable_workflow_count, 1);
     assert.equal(body.workflow_signal_summary.promotion_ready_workflow_count, 1);
+    assert.ok(body.supporting_knowledge.some((item: any) => item.summary_kind === "write_distillation_evidence"));
+    assert.ok(body.supporting_knowledge.some((item: any) => item.summary_kind === "write_distillation_fact"));
     assert.equal(body.workflow_signal_summary.observing_workflow_count, 0);
     assert.equal(body.execution_summary.summary_version, "execution_summary_v1");
     assert.equal(body.execution_summary.planner_packet, null);

@@ -282,7 +282,11 @@ export const MemoryAnchorMaintenanceState = z.enum(["observe", "retain", "review
 export const MemoryAnchorMaintenancePriority = z.enum([
   "none",
   "promote_candidate",
+  "promote_to_workflow",
+  "promote_to_pattern",
+  "promote_to_policy",
   "review_counter_evidence",
+  "retain_distillation",
   "retain_trusted",
   "retain_workflow",
 ]);
@@ -354,6 +358,33 @@ export const MemoryPatternTrustHardeningSchema = z.object({
   semantic_review_override_reason: z.string().min(1).max(128).nullable().default(null),
 });
 
+export const MemoryDistillationOrigin = z.enum([
+  "write_distillation_input_text",
+  "write_distillation_event_node",
+  "write_distillation_evidence_node",
+]);
+
+export const MemoryDistillationTransitionKind = z.enum([
+  "distilled_from_input_text",
+  "distilled_from_event_node",
+  "distilled_from_evidence_node",
+]);
+
+export const MemoryDistillationPromotionTarget = z.enum(["workflow", "pattern", "policy"]);
+
+export const MemoryDistillationSchema = z.object({
+  abstraction_state: z.literal("distilled").default("distilled"),
+  distillation_origin: MemoryDistillationOrigin,
+  source_kind: z.string().min(1).max(64),
+  preferred_promotion_target: MemoryDistillationPromotionTarget,
+  extraction_pattern: z.string().min(1).max(64).nullable().default(null),
+  source_node_id: z.string().min(1).max(256).nullable().default(null),
+  source_evidence_node_id: z.string().min(1).max(256).nullable().default(null),
+  has_execution_signature: z.boolean().default(false),
+  last_transition: MemoryDistillationTransitionKind,
+  last_transition_at: z.string().min(1).nullable().default(null),
+});
+
 export const MemoryAnchorV1Schema = z.object({
   anchor_kind: MemoryAnchorKind,
   anchor_level: MemoryAnchorLevel,
@@ -422,6 +453,7 @@ export const ExecutionNativeV1Schema = z.object({
   trust_hardening: MemoryPatternTrustHardeningSchema.optional(),
   maintenance: MemoryAnchorMaintenanceSchema.optional(),
   rehydration: MemoryAnchorRehydrationHintSchema.optional(),
+  distillation: MemoryDistillationSchema.optional(),
 });
 
 export type ExecutionNativeV1 = z.infer<typeof ExecutionNativeV1Schema>;
@@ -1517,6 +1549,8 @@ export const ExecutionMemoryIntrospectionResponseSchema = z.object({
     continuity_projected_candidate_count: z.number().int().min(0),
     continuity_auto_promoted_workflow_count: z.number().int().min(0),
     raw_pattern_anchor_count: z.number().int().min(0),
+    raw_distilled_evidence_count: z.number().int().min(0),
+    raw_distilled_fact_count: z.number().int().min(0),
   }),
   continuity_projection_report: z.object({
     sampled_source_event_count: z.number().int().min(0),
@@ -1574,6 +1608,8 @@ export const EvolutionInspectSummarySchema = z.object({
   trusted_pattern_count: z.number().int().min(0),
   contested_pattern_count: z.number().int().min(0),
   suppressed_pattern_count: z.number().int().min(0),
+  distilled_evidence_count: z.number().int().min(0).default(0),
+  distilled_fact_count: z.number().int().min(0).default(0),
 }).passthrough();
 
 export const EvolutionInspectResponseSchema = z.object({
@@ -1668,6 +1704,8 @@ export const AgentMemoryInspectSummarySchema = z.object({
   promotion_ready_workflow_count: z.number().int().min(0),
   trusted_pattern_count: z.number().int().min(0),
   suppressed_pattern_count: z.number().int().min(0),
+  distilled_evidence_count: z.number().int().min(0).default(0),
+  distilled_fact_count: z.number().int().min(0).default(0),
   handoff_related_items: z.number().int().min(0),
   resume_related_items: z.number().int().min(0),
   derived_policy_source_kind: z.enum(["trusted_pattern", "stable_workflow", "blended"]).nullable().default(null),

@@ -196,6 +196,8 @@ async function buildAgentMemoryInspectLiteInner(
       promotion_ready_workflow_count: evolutionInspect.evolution_summary.promotion_ready_workflow_count,
       trusted_pattern_count: evolutionInspect.evolution_summary.trusted_pattern_count,
       suppressed_pattern_count: evolutionInspect.evolution_summary.suppressed_pattern_count,
+      distilled_evidence_count: evolutionInspect.evolution_summary.distilled_evidence_count,
+      distilled_fact_count: evolutionInspect.evolution_summary.distilled_fact_count,
       handoff_related_items: handoffRelatedItems,
       resume_related_items: resumeRelatedItems,
       derived_policy_source_kind: derivedPolicy?.source_kind ?? null,

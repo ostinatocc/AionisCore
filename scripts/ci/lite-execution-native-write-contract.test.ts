@@ -148,6 +148,9 @@ test("prepare/apply write normalizes execution-native metadata for anchors and d
 
     const workflowPrepared = prepared.nodes.find((node) => node.slots?.summary_kind === "workflow_anchor");
     const patternPrepared = prepared.nodes.find((node) => node.slots?.summary_kind === "pattern_anchor");
+    const distilledEvidencePrepared = prepared.nodes.find(
+      (node) => node.slots?.summary_kind === "write_distillation_evidence",
+    );
     const distilledFactPrepared = prepared.nodes.find((node) => node.slots?.summary_kind === "write_distillation_fact");
     const taskSignatureFactPrepared = prepared.nodes.find(
       (node) => node.slots?.summary_kind === "write_distillation_fact" && node.title === "Task Signature",
@@ -160,6 +163,7 @@ test("prepare/apply write normalizes execution-native metadata for anchors and d
     );
     assert.ok(workflowPrepared);
     assert.ok(patternPrepared);
+    assert.ok(distilledEvidencePrepared);
     assert.ok(distilledFactPrepared);
     assert.ok(taskSignatureFactPrepared);
     assert.ok(errorSignatureFactPrepared);
@@ -173,8 +177,14 @@ test("prepare/apply write normalizes execution-native metadata for anchors and d
     assert.equal(patternPrepared?.slots.execution_native_v1.execution_kind, "pattern_anchor");
     assert.equal(patternPrepared?.slots.execution_native_v1.pattern_state, "stable");
     assert.equal(patternPrepared?.slots.execution_native_v1.selected_tool, "edit");
+    assert.equal(distilledEvidencePrepared?.slots.execution_native_v1.execution_kind, "distilled_evidence");
+    assert.equal(distilledEvidencePrepared?.slots.execution_native_v1.distillation?.preferred_promotion_target, "workflow");
+    assert.equal(distilledEvidencePrepared?.slots.execution_native_v1.maintenance?.offline_priority, "promote_to_workflow");
     assert.equal(distilledFactPrepared?.slots.execution_native_v1.execution_kind, "distilled_fact");
     assert.equal(distilledFactPrepared?.slots.execution_native_v1.compression_layer, "L1");
+    assert.equal(distilledFactPrepared?.slots.execution_native_v1.distillation?.preferred_promotion_target, "workflow");
+    assert.equal(distilledFactPrepared?.slots.execution_native_v1.distillation?.extraction_pattern, "colon");
+    assert.equal(distilledFactPrepared?.slots.execution_native_v1.maintenance?.offline_priority, "promote_to_workflow");
     assert.equal(taskSignatureFactPrepared?.slots.execution_native_v1.task_signature, "repair-export-node-tests");
     assert.equal(errorSignatureFactPrepared?.slots.execution_native_v1.error_signature, "node-export-mismatch");
     assert.equal(workflowSignatureFactPrepared?.slots.execution_native_v1.workflow_signature, "inspect-patch-rerun");
@@ -200,6 +210,7 @@ test("prepare/apply write normalizes execution-native metadata for anchors and d
     });
     const storedWorkflow = rows.find((row) => row.slots?.summary_kind === "workflow_anchor");
     const storedPattern = rows.find((row) => row.slots?.summary_kind === "pattern_anchor");
+    const storedDistilledEvidence = rows.find((row) => row.slots?.summary_kind === "write_distillation_evidence");
     const storedDistilledFact = rows.find((row) => row.slots?.summary_kind === "write_distillation_fact");
     const storedTaskSignatureFact = rows.find(
       (row) => row.slots?.summary_kind === "write_distillation_fact" && row.title === "Task Signature",
@@ -212,7 +223,11 @@ test("prepare/apply write normalizes execution-native metadata for anchors and d
     );
     assert.equal(storedWorkflow?.slots.execution_native_v1.anchor_kind, "workflow");
     assert.equal(storedPattern?.slots.execution_native_v1.anchor_kind, "pattern");
+    assert.equal(storedDistilledEvidence?.slots.execution_native_v1.execution_kind, "distilled_evidence");
+    assert.equal(storedDistilledEvidence?.slots.execution_native_v1.distillation?.preferred_promotion_target, "workflow");
     assert.equal(storedDistilledFact?.slots.execution_native_v1.execution_kind, "distilled_fact");
+    assert.equal(storedDistilledFact?.slots.execution_native_v1.distillation?.preferred_promotion_target, "workflow");
+    assert.equal(storedDistilledFact?.slots.execution_native_v1.maintenance?.offline_priority, "promote_to_workflow");
     assert.equal(storedWorkflow?.slots.semantic_forgetting_v1?.action, "retain");
     assert.equal(storedWorkflow?.slots.archive_relocation_v1?.relocation_state, "none");
     assert.equal(storedTaskSignatureFact?.slots.execution_native_v1.task_signature, "repair-export-node-tests");

@@ -161,6 +161,43 @@ export type PatternPromotionMetadata = {
   last_counter_evidence_at: string | null;
 };
 
+export type DistillationOrigin =
+  | "write_distillation_input_text"
+  | "write_distillation_event_node"
+  | "write_distillation_evidence_node";
+
+export type DistillationTransitionKind =
+  | "distilled_from_input_text"
+  | "distilled_from_event_node"
+  | "distilled_from_evidence_node";
+
+export type DistillationPromotionTarget = "workflow" | "pattern" | "policy";
+
+export type DistillationMaintenanceMetadata = {
+  model: "lazy_online_v1";
+  maintenance_state: "observe" | "retain";
+  offline_priority:
+    | "promote_to_workflow"
+    | "promote_to_pattern"
+    | "promote_to_policy"
+    | "retain_distillation";
+  lazy_update_fields: Array<"usage_count" | "last_used_at">;
+  last_maintenance_at: string;
+};
+
+export type DistillationMetadata = {
+  abstraction_state: "distilled";
+  distillation_origin: DistillationOrigin;
+  source_kind: "input_text" | "event_nodes" | "evidence_nodes";
+  preferred_promotion_target: DistillationPromotionTarget;
+  extraction_pattern: string | null;
+  source_node_id: string | null;
+  source_evidence_node_id: string | null;
+  has_execution_signature: boolean;
+  last_transition: DistillationTransitionKind;
+  last_transition_at: string;
+};
+
 export function buildPatternMaintenanceMetadata(args: {
   credibility_state: PatternCredibilityState;
   distinct_run_count: number;
@@ -243,5 +280,76 @@ export function buildPatternPromotionMetadata(args: {
     stable_at: args.stable_at ?? null,
     last_validated_at: args.last_validated_at ?? null,
     last_counter_evidence_at: args.last_counter_evidence_at ?? null,
+  };
+}
+
+export function resolveDistillationOrigin(sourceKind: "input_text" | "event_nodes" | "evidence_nodes"): DistillationOrigin {
+  if (sourceKind === "event_nodes") return "write_distillation_event_node";
+  if (sourceKind === "evidence_nodes") return "write_distillation_evidence_node";
+  return "write_distillation_input_text";
+}
+
+export function resolveDistillationTransition(sourceKind: "input_text" | "event_nodes" | "evidence_nodes"): DistillationTransitionKind {
+  if (sourceKind === "event_nodes") return "distilled_from_event_node";
+  if (sourceKind === "evidence_nodes") return "distilled_from_evidence_node";
+  return "distilled_from_input_text";
+}
+
+export function resolveDistillationPromotionTarget(args: {
+  distillation_kind: "write_distillation_evidence" | "write_distillation_fact";
+  has_execution_signature: boolean;
+}): DistillationPromotionTarget {
+  if (args.distillation_kind === "write_distillation_evidence") return "workflow";
+  return args.has_execution_signature ? "workflow" : "pattern";
+}
+
+export function buildDistillationMaintenanceMetadata(args: {
+  preferred_promotion_target: DistillationPromotionTarget;
+  at: string;
+  retain?: boolean;
+}): DistillationMaintenanceMetadata {
+  const priority =
+    args.retain
+      ? "retain_distillation"
+      : args.preferred_promotion_target === "workflow"
+        ? "promote_to_workflow"
+        : args.preferred_promotion_target === "policy"
+          ? "promote_to_policy"
+          : "promote_to_pattern";
+  return {
+    model: "lazy_online_v1",
+    maintenance_state: args.retain ? "retain" : "observe",
+    offline_priority: priority,
+    lazy_update_fields: ["usage_count", "last_used_at"],
+    last_maintenance_at: args.at,
+  };
+}
+
+export function buildDistillationMetadata(args: {
+  source_kind: "input_text" | "event_nodes" | "evidence_nodes";
+  distillation_kind: "write_distillation_evidence" | "write_distillation_fact";
+  at: string;
+  extraction_pattern?: string | null;
+  source_node_id?: string | null;
+  source_evidence_node_id?: string | null;
+  has_execution_signature?: boolean;
+  preferred_promotion_target?: DistillationPromotionTarget | null;
+}): DistillationMetadata {
+  const preferredPromotionTarget = args.preferred_promotion_target
+    ?? resolveDistillationPromotionTarget({
+      distillation_kind: args.distillation_kind,
+      has_execution_signature: args.has_execution_signature === true,
+    });
+  return {
+    abstraction_state: "distilled",
+    distillation_origin: resolveDistillationOrigin(args.source_kind),
+    source_kind: args.source_kind,
+    preferred_promotion_target: preferredPromotionTarget,
+    extraction_pattern: args.extraction_pattern ?? null,
+    source_node_id: args.source_node_id ?? null,
+    source_evidence_node_id: args.source_evidence_node_id ?? null,
+    has_execution_signature: args.has_execution_signature === true,
+    last_transition: resolveDistillationTransition(args.source_kind),
+    last_transition_at: args.at,
   };
 }

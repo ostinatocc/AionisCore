@@ -200,8 +200,21 @@ async function seedEvolutionFixture(store: ReturnType<typeof createLiteWriteStor
     tenant_id: "default",
     scope: "default",
     actor: "local-user",
-    input_text: "seed agent memory inspect fixture",
+    input_text: [
+      "Task Signature: repair-export-node-tests",
+      "Error Signature: node-export-mismatch",
+      "Workflow Signature: inspect-patch-rerun",
+      "Export repair requires inspect, patch, and rerun.",
+    ].join("\n"),
     auto_embed: false,
+    distill: {
+      enabled: true,
+      sources: ["input_text"],
+      max_evidence_nodes: 2,
+      max_fact_nodes: 4,
+      min_sentence_chars: 12,
+      attach_edges: true,
+    },
     memory_lane: "shared",
     nodes: [
       {
@@ -378,6 +391,8 @@ test("agent memory inspect facade composes continuity and evolution into review/
   assert.ok(inspect.evolution_review_pack.review_contract.trusted_pattern_anchor_ids.length >= 1);
   assert.ok(inspect.evolution_review_pack.review_contract.stable_workflow_anchor_id);
   assert.equal(inspect.agent_memory_summary.selected_tool, "edit");
+  assert.equal(inspect.agent_memory_summary.distilled_evidence_count, 1);
+  assert.equal(inspect.agent_memory_summary.distilled_fact_count, 3);
 
   assert.equal(reviewPack.agent_memory_review_pack.rollback_required, true);
   assert.deepEqual(reviewPack.agent_memory_review_pack.must_remove, ["legacy export fallback"]);

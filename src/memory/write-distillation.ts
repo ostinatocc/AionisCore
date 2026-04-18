@@ -1,5 +1,10 @@
 import { sha256Hex } from "../util/crypto.js";
 import { stableUuid } from "../util/uuid.js";
+import { ExecutionNativeV1Schema } from "./schemas.js";
+import {
+  buildDistillationMaintenanceMetadata,
+  buildDistillationMetadata,
+} from "./evolution-operators.js";
 
 export type WriteDistillationSource = "input_text" | "event_nodes" | "evidence_nodes";
 
@@ -70,6 +75,42 @@ type FactCandidate = {
   source_excerpt: string;
   extraction_pattern: "colon" | "relation";
 };
+
+function normalizeSignatureLabel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, " ");
+  return normalized || null;
+}
+
+function extractCompactExecutionSignatureValue(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
+  const compact = normalized.match(/^([A-Za-z0-9._:/-]{1,256})(?:\s+.*)?$/);
+  return compact?.[1] ?? normalized;
+}
+
+function deriveFactExecutionSignatures(args: {
+  title: string;
+  summary: string;
+}): {
+  task_signature?: string;
+  error_signature?: string;
+  workflow_signature?: string;
+  has_execution_signature: boolean;
+} {
+  const normalizedTitle = normalizeSignatureLabel(args.title);
+  const signatureValue = extractCompactExecutionSignatureValue(args.summary);
+  const out = {
+    ...(normalizedTitle === "task signature" && signatureValue ? { task_signature: signatureValue } : {}),
+    ...(normalizedTitle === "error signature" && signatureValue ? { error_signature: signatureValue } : {}),
+    ...(normalizedTitle === "workflow signature" && signatureValue ? { workflow_signature: signatureValue } : {}),
+  };
+  return {
+    ...out,
+    has_execution_signature: "task_signature" in out || "error_signature" in out || "workflow_signature" in out,
+  };
+}
 
 function normalizeSnippet(input: string, maxLen = 280): string {
   const text = String(input || "").replace(/\s+/g, " ").trim();
@@ -242,6 +283,25 @@ export function distillWriteArtifacts(args: {
     if (evidenceSummary && evidenceCount < args.config.max_evidence_nodes) {
       evidenceNodeId = stableUuid(`${args.scope}:distill:evidence:${source.source_key}`);
       const baseNode = source.node;
+      const distillation = buildDistillationMetadata({
+        source_kind: source.source_kind,
+        distillation_kind: "write_distillation_evidence",
+        at: new Date().toISOString(),
+        source_node_id: source.node?.id ?? null,
+        source_evidence_node_id: null,
+        has_execution_signature: false,
+      });
+      const executionNative = ExecutionNativeV1Schema.parse({
+        schema_version: "execution_native_v1",
+        execution_kind: "distilled_evidence",
+        summary_kind: "write_distillation_evidence",
+        compression_layer: "L1",
+        maintenance: buildDistillationMaintenanceMetadata({
+          preferred_promotion_target: distillation.preferred_promotion_target,
+          at: distillation.last_transition_at,
+        }),
+        distillation,
+      });
       distilledNodes.push({
         id: evidenceNodeId,
         scope: args.scope,
@@ -257,6 +317,7 @@ export function distillWriteArtifacts(args: {
           compression_layer: "L1",
           summary_kind: "write_distillation_evidence",
           distillation_kind: "write_distilled_evidence",
+          execution_native_v1: executionNative,
           source_kind: source.source_kind,
           source_sha256: sha256Hex(source.text),
           source_node_id: source.node?.id ?? null,
@@ -291,6 +352,33 @@ export function distillWriteArtifacts(args: {
     for (const fact of facts) {
       const factNodeId = stableUuid(`${args.scope}:distill:fact:${source.source_key}:${fact.title}:${fact.summary}`);
       const baseNode = source.node;
+      const factExecutionSignatures = deriveFactExecutionSignatures({
+        title: fact.title,
+        summary: fact.summary,
+      });
+      const distillation = buildDistillationMetadata({
+        source_kind: source.source_kind,
+        distillation_kind: "write_distillation_fact",
+        at: new Date().toISOString(),
+        extraction_pattern: fact.extraction_pattern,
+        source_node_id: source.node?.id ?? null,
+        source_evidence_node_id: evidenceNodeId,
+        has_execution_signature: factExecutionSignatures.has_execution_signature,
+      });
+      const executionNative = ExecutionNativeV1Schema.parse({
+        schema_version: "execution_native_v1",
+        execution_kind: "distilled_fact",
+        summary_kind: "write_distillation_fact",
+        compression_layer: "L1",
+        ...(factExecutionSignatures.task_signature ? { task_signature: factExecutionSignatures.task_signature } : {}),
+        ...(factExecutionSignatures.error_signature ? { error_signature: factExecutionSignatures.error_signature } : {}),
+        ...(factExecutionSignatures.workflow_signature ? { workflow_signature: factExecutionSignatures.workflow_signature } : {}),
+        maintenance: buildDistillationMaintenanceMetadata({
+          preferred_promotion_target: distillation.preferred_promotion_target,
+          at: distillation.last_transition_at,
+        }),
+        distillation,
+      });
       distilledNodes.push({
         id: factNodeId,
         scope: args.scope,
@@ -306,6 +394,7 @@ export function distillWriteArtifacts(args: {
           compression_layer: "L1",
           summary_kind: "write_distillation_fact",
           distillation_kind: "write_distilled_fact",
+          execution_native_v1: executionNative,
           extraction_pattern: fact.extraction_pattern,
           source_kind: source.source_kind,
           source_sha256: sha256Hex(source.text),
