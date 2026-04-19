@@ -6,11 +6,7 @@ import { normalizeText } from "../util/normalize.js";
 import { HttpError, badRequest } from "../util/http.js";
 import { capabilityContract, type CapabilityFailureMode } from "../capability-contract.js";
 import { assertWriteStoreAccessContract, createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
-import {
-  AssociativeLinkTriggerPayloadSchema,
-  DeferredAssociativeLinkFollowupSchema,
-  type AssociativeLinkTriggerOrigin,
-} from "./associative-linking-types.js";
+import { type AssociativeLinkTriggerOrigin } from "./associative-linking-types.js";
 import { MemoryWriteRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { resolveTenantScope, toTenantScopeKey } from "./tenant.js";
@@ -22,11 +18,10 @@ import {
 import {
   assertSingleScopeWrite,
   nodeEmbedText,
-  selectAssociativeLinkSourceNodeIds,
 } from "./write-shared.js";
+import { enqueuePostCommitWriteArtifacts } from "./write-post-commit.js";
 import { prepareWriteBatch } from "./write-prepare-batch.js";
 import { buildWriteDiff, buildWriteResult } from "./write-serialization.js";
-import { buildAssociativeLinkOutboxInsert } from "../jobs/associative-linking-lib.js";
 
 export type WriteResult = {
   tenant_id?: string;
@@ -418,142 +413,9 @@ export async function applyMemoryWrite(
   }
 
   const result: WriteResult = buildWriteResult(prepared, commit_id, commitHash);
-
-  // Derived artifact: enqueue embedding backfill for nodes that opted into auto-embed and have embed_text.
-  let enqueuedEmbedNodes = false;
-  const associativeLinkSourceNodeIds = selectAssociativeLinkSourceNodeIds(nodes);
-  const deferredAssociativeLinkSourceIds = new Set<string>();
-  if (prepared.auto_embed_effective) {
-    const embedPlanned = nodes
-      .filter((n) => !n.embedding && !!n.embed_text)
-      .map((n) => ({ id: n.id, text: n.embed_text as string }));
-
-    // Avoid outbox noise: if a node already has a READY embedding, do not enqueue embed_nodes for it.
-    // The handler is still idempotent, but suppressing unnecessary jobs reduces outbox churn and worker load.
-    let embedNodes = embedPlanned;
-    if (!prepared.force_reembed && embedNodes.length > 0) {
-      const ids = embedNodes.map((n) => n.id);
-      const ready = await writeAccess.readyEmbeddingNodeIds(scope, ids);
-      if (ready.size > 0) embedNodes = embedNodes.filter((n) => !ready.has(n.id));
-    }
-
-    if (embedNodes.length > 0) {
-      const embedNodeIdSet = new Set(embedNodes.map((node) => node.id));
-      for (const sourceNodeId of associativeLinkSourceNodeIds) {
-        if (embedNodeIdSet.has(sourceNodeId)) deferredAssociativeLinkSourceIds.add(sourceNodeId);
-      }
-      const deferredAssociativeLink =
-        deferredAssociativeLinkSourceIds.size > 0
-          ? DeferredAssociativeLinkFollowupSchema.parse({
-              origin: opts.associativeLinkOrigin ?? "memory_write",
-              source_node_ids: Array.from(deferredAssociativeLinkSourceIds),
-              source_commit_id: commit_id,
-            })
-          : null;
-      const payload = {
-        nodes: embedNodes,
-        ...(prepared.force_reembed ? { force_reembed: true } : {}),
-        ...(deferredAssociativeLink ? { after_associative_link: deferredAssociativeLink } : {}),
-      };
-      const payloadSha = sha256Hex(stableStringify(payload));
-      const jobKey = sha256Hex(stableStringify({ v: 1, scope, commit_id, event_type: "embed_nodes", payloadSha }));
-      await writeAccess.insertOutboxEvent({
-        scope,
-        commitId: commit_id,
-        eventType: "embed_nodes",
-        jobKey,
-        payloadSha256: payloadSha,
-        payloadJson: JSON.stringify(payload),
-      });
-      enqueuedEmbedNodes = true;
-      result.embedding_backfill = { enqueued: true, pending_nodes: embedNodes.length };
-    }
-  }
-
-  const immediateAssociativeLinkSourceNodeIds = associativeLinkSourceNodeIds.filter((id) => !deferredAssociativeLinkSourceIds.has(id));
-  if (immediateAssociativeLinkSourceNodeIds.length > 0) {
-    const payload = AssociativeLinkTriggerPayloadSchema.parse({
-      origin: opts.associativeLinkOrigin ?? "memory_write",
-      scope,
-      source_node_ids: immediateAssociativeLinkSourceNodeIds,
-      source_commit_id: commit_id,
-    });
-    try {
-      await writeAccess.insertOutboxEvent(buildAssociativeLinkOutboxInsert({ scope, commitId: commit_id, payload }));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      const warnings = result.warnings ?? [];
-      warnings.push({
-        code: "associative_link_enqueue_failed",
-        message: "associative linking enqueue degraded; write succeeded without shadow candidate generation",
-        details: {
-          origin: payload.origin,
-          source_node_count: payload.source_node_ids.length,
-          error: message,
-        },
-      });
-      result.warnings = warnings;
-    }
-  }
-
-  // Optional: enqueue topic-cluster request (async mode) or run sync (handled by the caller for now).
-  // The decision for trigger/async is made by the API handler; we only honor it if the handler sets them.
-  const trigger = (prepared as any).trigger_topic_cluster === true;
-  const asyncMode = (prepared as any).topic_cluster_async === true;
-
-  if (trigger && asyncMode) {
-    const eventIds = nodes.filter((n) => n.type === "event").map((n) => n.id);
-    const embeddableEventIds = new Set(
-      nodes.filter((n) => n.type === "event" && prepared.auto_embed_effective && !!n.embed_text).map((n) => n.id),
-    );
-
-    // Detect current embedding readiness from DB (handles idempotent retries where the node already exists and is READY).
-    const readyInDb = new Set<string>();
-    if (eventIds.length > 0) {
-      const ready = await writeAccess.readyEmbeddingNodeIds(scope, eventIds);
-      for (const id of ready) readyInDb.add(id);
-    }
-
-    // If force_reembed, prefer clustering after the new embedding is computed (so we don't cluster using stale vectors).
-    const mustWaitForReembed = (id: string) => prepared.force_reembed && embeddableEventIds.has(id);
-
-    const waitForEmbed: string[] = [];
-    const runNow: string[] = [];
-    for (const id of eventIds) {
-      if (mustWaitForReembed(id)) {
-        waitForEmbed.push(id);
-        continue;
-      }
-      if (readyInDb.has(id)) {
-        runNow.push(id);
-        continue;
-      }
-      // Not ready: only cluster later if we can actually embed it.
-      if (embeddableEventIds.has(id)) waitForEmbed.push(id);
-    }
-
-    // If some events are not ready (or forced) and we enqueued embed_nodes, attach event ids so worker can enqueue clustering after backfill.
-    if (waitForEmbed.length > 0 && enqueuedEmbedNodes) {
-      await writeAccess.appendAfterTopicClusterEventIds(scope, commit_id, JSON.stringify(waitForEmbed));
-      result.topic_cluster = { enqueued: true };
-    }
-
-    // Enqueue clustering immediately for ready events.
-    if (runNow.length > 0) {
-      const payload = { event_ids: runNow };
-      const payloadSha = sha256Hex(stableStringify(payload));
-      const jobKey = sha256Hex(stableStringify({ v: 1, scope, commit_id, event_type: "topic_cluster", payloadSha }));
-      await writeAccess.insertOutboxEvent({
-        scope,
-        commitId: commit_id,
-        eventType: "topic_cluster",
-        jobKey,
-        payloadSha256: payloadSha,
-        payloadJson: JSON.stringify(payload),
-      });
-      result.topic_cluster = { enqueued: true };
-    }
-  }
+  await enqueuePostCommitWriteArtifacts(writeAccess, prepared, commit_id, result, {
+    associativeLinkOrigin: opts.associativeLinkOrigin,
+  });
 
   if (opts.shadowDualWriteEnabled) {
     const shadowMirrorSpec = capabilityContract("shadow_mirror_v2");
