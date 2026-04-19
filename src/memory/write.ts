@@ -3,9 +3,7 @@ import type pg from "pg";
 import { sha256Hex } from "../util/crypto.js";
 import { assertDim, toVectorLiteral } from "../util/pgvector.js";
 import { normalizeText } from "../util/normalize.js";
-import { redactJsonStrings, redactPII } from "../util/redaction.js";
-import { stableUuid } from "../util/uuid.js";
-import { badRequest, HttpError } from "../util/http.js";
+import { HttpError, badRequest } from "../util/http.js";
 import { capabilityContract, type CapabilityFailureMode } from "../capability-contract.js";
 import { assertWriteStoreAccessContract, createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
 import {
@@ -20,15 +18,13 @@ import { distillWriteArtifacts, type WriteDistillationSummary } from "./write-di
 import {
   enrichPreparedNodeLifecycle,
   normalizeExecutionNativeSlots,
-  restoreStableSystemSlots,
 } from "./write-execution-native.js";
 import {
   assertSingleScopeWrite,
   nodeEmbedText,
-  resolveWriteRefId,
-  resolveWriteScope,
   selectAssociativeLinkSourceNodeIds,
 } from "./write-shared.js";
+import { prepareWriteBatch } from "./write-prepare-batch.js";
 import { buildWriteDiff, buildWriteResult } from "./write-serialization.js";
 import { buildAssociativeLinkOutboxInsert } from "../jobs/associative-linking-lib.js";
 
@@ -69,12 +65,6 @@ export type WriteResult = {
   warnings?: Array<{ code: string; message: string; details?: Record<string, unknown> }>;
   distillation?: WriteDistillationSummary;
 };
-
-function stableNodeIdFromClientId(scope: string, client_id: string): string {
-  // Contract: client_id is a stable external key within a scope, so server-generated ids must
-  // depend only on (scope, client_id) to guarantee idempotency across retries/writes.
-  return stableUuid(`${scope}:node:${client_id.trim()}`);
-}
 
 type PrepareWriteOptions = {
   maxTextLen: number;
@@ -146,12 +136,6 @@ export type PreparedWrite = {
   distillation?: WriteDistillationSummary;
 };
 
-type SeenPreparedNodeRef = {
-  index: number;
-  scope: string;
-  client_id?: string;
-};
-
 export type EffectiveWritePolicy = {
   trigger_topic_cluster: boolean;
   topic_cluster_async: boolean;
@@ -182,142 +166,17 @@ export async function prepareMemoryWrite(
   );
   const scope = tenancy.scope_key;
   const actor = parsed.actor ?? "system";
-
-  const redactionMeta: Record<string, number> = {};
-  const bump = (c: Record<string, number>) => {
-    for (const [k, v] of Object.entries(c)) redactionMeta[k] = (redactionMeta[k] ?? 0) + v;
-  };
-
-  const normalizeMaybeRedact = (s: string | undefined): string | undefined => {
-    if (!s) return s;
-    const normalized = normalizeText(s, opts.maxTextLen);
-    if (!opts.piiRedaction) return normalized;
-    const r = redactPII(normalized);
-    bump(r.counts);
-    return r.text;
-  };
-  const normalizeId = (s: string | undefined): string | undefined => {
-    if (!s) return undefined;
-    const v = s.trim();
-    return v.length > 0 ? v : undefined;
-  };
-
-  const defaultLane = parsed.memory_lane ?? "private";
-  const defaultProducerAgentId = normalizeId(parsed.producer_agent_id);
-  const defaultOwnerAgentId = normalizeId(parsed.owner_agent_id);
-  const defaultOwnerTeamId = normalizeId(parsed.owner_team_id);
-
-  // Hash the normalized/redacted input by default (keeps PII out of stored hashes).
-  const inputText = normalizeMaybeRedact(parsed.input_text);
-  if (parsed.input_text && (!inputText || inputText.length === 0)) {
-    throw new Error("input_text becomes empty after normalization; provide non-whitespace content");
-  }
-
-  // Prepare ids deterministically so retries are idempotent.
-  const clientIdToId = new Map<string, string>();
-  const seenClientIds = new Map<string, SeenPreparedNodeRef>();
-  const seenNodeIds = new Map<string, SeenPreparedNodeRef>();
-  const nodes: PreparedNode[] = [];
-  for (const [index, n] of parsed.nodes.entries()) {
-    const nodeScopePublic = resolveWriteScope(n.scope, tenancy.scope);
-    const nodeScope = toTenantScopeKey(nodeScopePublic, tenancy.tenant_id, defaultTenantId);
-    const client_id = n.client_id?.trim();
-    if (n.client_id && (!client_id || client_id.length === 0)) {
-      throw new Error("client_id becomes empty after trimming; provide a non-whitespace client_id");
-    }
-    if (client_id) {
-      const prior = seenClientIds.get(client_id);
-      if (prior) {
-        badRequest("duplicate_client_id_in_batch", "write batch contains duplicate client_id", {
-          client_id,
-          first_index: prior.index,
-          duplicate_index: index,
-          first_scope_key: prior.scope,
-          duplicate_scope_key: nodeScope,
-        });
-      }
-    }
-
-    const expectedId = client_id ? stableNodeIdFromClientId(nodeScope, client_id) : null;
-    if (n.id && expectedId && n.id !== expectedId) {
-      throw new Error(`client_id/id mismatch: scope=${nodeScope} client_id=${client_id} id=${n.id} expected_id=${expectedId}`);
-    }
-
-    const id = n.id ?? (expectedId ?? stableUuid(`${nodeScope}:node:${sha256Hex(stableStringify(n))}`));
-    const priorId = seenNodeIds.get(id);
-    if (priorId) {
-      badRequest("duplicate_node_id_in_batch", "write batch contains duplicate node id", {
-        node_id: id,
-        first_index: priorId.index,
-        duplicate_index: index,
-        first_scope_key: priorId.scope,
-        duplicate_scope_key: nodeScope,
-        first_client_id: priorId.client_id ?? null,
-        duplicate_client_id: client_id ?? null,
-      });
-    }
-    if (client_id) {
-      seenClientIds.set(client_id, { index, scope: nodeScope, client_id });
-      clientIdToId.set(client_id, id);
-    }
-    seenNodeIds.set(id, { index, scope: nodeScope, client_id });
-
-    const title = normalizeMaybeRedact(n.title);
-    const text_summary = normalizeMaybeRedact(n.text_summary);
-    const embedding_model = normalizeMaybeRedact((n as any).embedding_model);
-    let slots = n.slots ?? {};
-    if (opts.piiRedaction) {
-      const r = redactJsonStrings(slots);
-      slots = restoreStableSystemSlots(slots, (r.value ?? {}) as Record<string, unknown>);
-      bump(r.counts);
-    }
-    slots = normalizeExecutionNativeSlots(n.type, slots, title ?? null, text_summary ?? null);
-
-    const lane = n.memory_lane ?? defaultLane;
-    const producerAgentId = normalizeId(n.producer_agent_id) ?? defaultProducerAgentId;
-    const ownerAgentId = normalizeId(n.owner_agent_id) ?? defaultOwnerAgentId ?? producerAgentId;
-    const ownerTeamId = normalizeId(n.owner_team_id) ?? defaultOwnerTeamId;
-
-    nodes.push(enrichPreparedNodeLifecycle({
-      ...n,
-      client_id,
-      id,
-      scope: nodeScope,
-      memory_lane: lane,
-      producer_agent_id: producerAgentId,
-      owner_agent_id: ownerAgentId,
-      owner_team_id: ownerTeamId,
-      title,
-      text_summary,
-      embedding_model,
-      slots,
-    }));
-  }
-
-  for (const n of nodes) {
-    if (n.type !== "rule") continue;
-    if (n.memory_lane !== "private") continue;
-    if (n.owner_agent_id || n.owner_team_id) continue;
-    badRequest("invalid_private_rule_owner", "private rule requires owner_agent_id or owner_team_id", {
-      node_id: n.id,
-      client_id: n.client_id ?? null,
-      memory_lane: n.memory_lane,
-      type: n.type,
-    });
-  }
-
-  const edges: PreparedEdge[] = parsed.edges.map((e) => {
-    const edgeScopePublic = resolveWriteScope(e.scope, tenancy.scope);
-    const edgeScope = toTenantScopeKey(edgeScopePublic, tenancy.tenant_id, defaultTenantId);
-    const id =
-      e.id ??
-      stableUuid(
-        `${edgeScope}:edge:${inputText ?? parsed.input_sha256 ?? "noinput"}:${e.type}:${e.src.id ?? e.src.client_id}:${e.dst.id ?? e.dst.client_id}`,
-      );
-    const src_id = resolveWriteRefId(e.src, clientIdToId);
-    const dst_id = resolveWriteRefId(e.dst, clientIdToId);
-    return { ...e, id, scope: edgeScope, src_id, dst_id };
-  });
+  const {
+    inputText,
+    redactionMeta,
+    defaultLane,
+    defaultProducerAgentId,
+    defaultOwnerAgentId,
+    defaultOwnerTeamId,
+    nodes,
+    edges,
+    seenNodeIds,
+  } = prepareWriteBatch(parsed, tenancy, defaultTenantId, opts);
 
   let distillation: WriteDistillationSummary | undefined;
   if (parsed.distill?.enabled) {
