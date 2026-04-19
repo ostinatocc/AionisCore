@@ -19,10 +19,7 @@ import {
   type ReplayLearningProjectionResult,
 } from "./replay-learning.js";
 import {
-  buildGovernedStateDecisionTrace,
   buildGovernanceDecisionTraceBase,
-  deriveGovernedStateRaiseRuntimeApply,
-  deriveGovernedStateRaisePreview,
 } from "./governance-shared.js";
 import { buildReplayCostSignals } from "./cost-signals.js";
 import {
@@ -42,8 +39,6 @@ import {
   ExecutionNativeV1Schema,
   MemoryAnchorV1Schema,
   MemoryPromoteRequest,
-  type ReplayRepairReviewGovernanceDecisionTrace,
-  type ReplayRepairReviewGovernancePolicyEffect,
   type ReplayRepairReviewGovernancePreview,
   type ReplayPlaybookDispatchInput,
   type ReplayPlaybookCandidateInput,
@@ -141,6 +136,13 @@ import {
   buildReplayPlaybookCandidateSurface,
   buildReplayPlaybookGetSurface,
 } from "./replay-playbook-read-dispatch-surfaces.js";
+import {
+  applyReplayGovernancePolicyEffect,
+  buildReplayGovernanceDecisionTrace,
+  deriveReplayGovernancePolicyEffect,
+  hasExplicitReplayLearningProjectionTargetRuleState,
+  resolveReplayLearningProjectionConfig,
+} from "./replay-governance-helpers.js";
 import {
   buildStablePlaybookNodeFields,
   ensureStablePlaybookAnchorOnLatestNode,
@@ -426,150 +428,6 @@ function asLiteReplayWriteStore(writeAccess?: WriteStoreAccess | null): LiteWrit
     return null;
   }
   return writeAccess as LiteWriteStore;
-}
-
-function resolveReplayLearningProjectionConfig(
-  requestObj: Record<string, unknown> | null,
-  defaults: ReplayLearningProjectionResolvedConfig | undefined,
-): ReplayLearningProjectionResolvedConfig {
-  const base: ReplayLearningProjectionResolvedConfig = defaults ?? {
-    enabled: false,
-    mode: "rule_and_episode",
-    delivery: "async_outbox",
-    target_rule_state: "draft",
-    min_total_steps: 1,
-    min_success_ratio: 1,
-    max_matcher_bytes: 16384,
-    max_tool_prefer: 8,
-    episode_ttl_days: 30,
-  };
-  const modeRaw = toStringOrNull(requestObj?.mode);
-  const deliveryRaw = toStringOrNull(requestObj?.delivery);
-  const stateRaw = toStringOrNull(requestObj?.target_rule_state);
-  return {
-    enabled: requestObj?.enabled === undefined ? base.enabled : requestObj.enabled === true,
-    mode:
-      modeRaw == null
-        ? base.mode
-        : modeRaw === "episode_only"
-          ? "episode_only"
-          : "rule_and_episode",
-    delivery:
-      deliveryRaw == null
-        ? base.delivery
-        : deliveryRaw === "sync_inline"
-          ? "sync_inline"
-          : "async_outbox",
-    target_rule_state:
-      stateRaw == null
-        ? base.target_rule_state
-        : stateRaw === "shadow"
-          ? "shadow"
-          : "draft",
-    min_total_steps: clampInt(Number(requestObj?.min_total_steps ?? base.min_total_steps), 0, 500),
-    min_success_ratio: Math.max(0, Math.min(1, Number(requestObj?.min_success_ratio ?? base.min_success_ratio))),
-    max_matcher_bytes: clampInt(Number(base.max_matcher_bytes), 1, 1024 * 1024),
-    max_tool_prefer: clampInt(Number(base.max_tool_prefer), 1, 64),
-    episode_ttl_days: clampInt(Number(base.episode_ttl_days), 1, 3650),
-  };
-}
-
-function hasExplicitReplayLearningProjectionTargetRuleState(requestObj: Record<string, unknown> | null): boolean {
-  return toStringOrNull(requestObj?.target_rule_state) != null;
-}
-
-function deriveReplayGovernancePolicyEffect(args: {
-  baseTargetRuleState: "draft" | "shadow";
-  explicitTargetRuleState: boolean;
-  review: ReplayRepairReviewGovernancePreview["promote_memory"]["review_result"] | null;
-  admissibility: ReplayRepairReviewGovernancePreview["promote_memory"]["admissibility"] | null;
-}): ReplayRepairReviewGovernancePolicyEffect {
-  const admissibility = args.admissibility ?? null;
-  const review = args.review ?? null;
-  const baseTargetRuleState = args.baseTargetRuleState;
-  const derived = deriveGovernedStateRaisePreview({
-    baseState: baseTargetRuleState,
-    review,
-    admissibility,
-    defaultSource: "default_learning_projection",
-    reviewSource: "promote_memory_governance_review",
-    noReviewReason: "review_not_supplied",
-    notAdmissibleReason: "review_not_admissible",
-    noRaiseReason: "review_did_not_raise_target_rule_state",
-    applyReason: "high_strategic_value_workflow_promotion",
-    noRaiseSuggestedState: null,
-    appliedState: "shadow",
-    extraNoApplyGuards: [{
-      when: args.explicitTargetRuleState,
-      reason: "explicit_target_rule_state_preserved",
-      reviewSuggestedState: null,
-    }],
-    shouldApply: (presentReview) =>
-      presentReview.adjudication.disposition === "recommend"
-      && presentReview.adjudication.target_kind === "workflow"
-      && presentReview.adjudication.target_level === "L2"
-      && presentReview.adjudication.strategic_value === "high"
-      && baseTargetRuleState === "draft",
-  });
-  return {
-    source: derived.source,
-    applies: derived.applies,
-    base_target_rule_state: derived.baseState,
-    review_suggested_target_rule_state: derived.reviewSuggestedState,
-    effective_target_rule_state: derived.effectiveState,
-    reason_code: derived.reasonCode,
-  };
-}
-
-function applyReplayGovernancePolicyEffect(args: {
-  config: ReplayLearningProjectionResolvedConfig;
-  policyEffect: ReplayRepairReviewGovernancePolicyEffect | null;
-}): ReplayLearningProjectionResolvedConfig {
-  const policyEffect = args.policyEffect ?? null;
-  const applyGate = deriveGovernedStateRaiseRuntimeApply({
-    policyEffect,
-    effectiveState: policyEffect?.effective_target_rule_state,
-    appliedState: "shadow",
-  });
-  if (!applyGate.runtimeApplyRequested || !applyGate.governedOverrideState) return args.config;
-  return {
-    ...args.config,
-    target_rule_state: applyGate.governedOverrideState,
-  };
-}
-
-function buildReplayGovernanceDecisionTrace(args: {
-  reviewResult: ReplayRepairReviewGovernancePreview["promote_memory"]["review_result"] | null;
-  admissibility: ReplayRepairReviewGovernancePreview["promote_memory"]["admissibility"] | null;
-  policyEffect: ReplayRepairReviewGovernancePreview["promote_memory"]["policy_effect"] | null;
-  effectiveConfig: ReplayLearningProjectionResolvedConfig;
-}): ReplayRepairReviewGovernanceDecisionTrace {
-  const admissibility = args.admissibility ?? null;
-  const policyEffect = args.policyEffect ?? null;
-  const baseTargetRuleState = policyEffect?.base_target_rule_state ?? args.effectiveConfig.target_rule_state;
-  const effectiveTargetRuleState = args.effectiveConfig.target_rule_state;
-  const trace = buildGovernedStateDecisionTrace({
-    reviewResult: args.reviewResult,
-    admissibility,
-    policyEffect,
-    includePolicyEffectReasonCode: true,
-    runtimePolicyApplied: true,
-    baseState: baseTargetRuleState,
-    effectiveState: effectiveTargetRuleState,
-  });
-
-  return {
-    trace_version: "replay_governance_trace_v1",
-    review_supplied: trace.review_supplied,
-    admissibility_evaluated: trace.admissibility_evaluated,
-    admissible: trace.admissible,
-    policy_effect_applies: trace.policy_effect_applies,
-    base_target_rule_state: trace.baseState,
-    effective_target_rule_state: trace.effectiveState,
-    runtime_apply_changed_target_rule_state: trace.runtimeApplyChanged,
-    stage_order: trace.stage_order as ReplayRepairReviewGovernanceDecisionTrace["stage_order"],
-    reason_codes: trace.reason_codes,
-  };
 }
 
 export async function replayRunStart(client: pg.PoolClient, body: unknown, opts: ReplayWriteOptions) {
