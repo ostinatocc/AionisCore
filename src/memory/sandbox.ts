@@ -163,10 +163,10 @@ function asFiniteIntOrNull(input: unknown): number | null {
   return Math.trunc(Number(input));
 }
 
-function sandboxRemoteHostAllowed(hostname: string, allowlist: Set<string>): boolean {
+export function sandboxRemoteHostAllowed(hostname: string, allowlist: Set<string>): boolean {
   const host = hostname.trim().toLowerCase();
   if (!host) return false;
-  if (allowlist.size === 0) return true;
+  if (allowlist.size === 0) return false;
   for (const raw of allowlist.values()) {
     const rule = raw.trim().toLowerCase();
     if (!rule) continue;
@@ -276,7 +276,7 @@ function ipToBigInt(ipRaw: string): { family: 4 | 6; value: bigint } | null {
   return null;
 }
 
-function parseCidrRule(raw: string): ParsedCidr | null {
+export function parseCidrRule(raw: string): ParsedCidr | null {
   const v = String(raw ?? "").trim();
   if (!v) return null;
   const slash = v.lastIndexOf("/");
@@ -307,6 +307,11 @@ function ipInCidrs(ip: string, cidrs: ParsedCidr[]): boolean {
     if ((parsedIp.value & cidr.mask) === cidr.network) return true;
   }
   return false;
+}
+
+export function sandboxRemoteEgressAllowed(resolvedIps: readonly string[], cidrs: readonly ParsedCidr[]): boolean {
+  if (cidrs.length === 0 || resolvedIps.length === 0) return false;
+  return resolvedIps.every((ip) => ipInCidrs(ip, cidrs as ParsedCidr[]));
 }
 
 function isPrivateOrLocalIp(ipRaw: string): boolean {
@@ -1654,6 +1659,23 @@ export class SandboxExecutor {
       });
       return;
     }
+    if (this.remoteAllowedCidrs.length === 0) {
+      await this.finalize(run.id, {
+        status: "failed",
+        stdout: "",
+        stderr: "",
+        truncated: false,
+        exitCode: null,
+        error: "remote_executor_egress_cidr_blocked",
+        result: {
+          executor: "http_remote",
+          host: parsedRemoteUrl.hostname,
+          resolved_ips: [],
+          blocked_ips: [],
+        },
+      });
+      return;
+    }
     let resolvedIps: string[] = [];
     try {
       const resolved = await lookup(parsedRemoteUrl.hostname, { all: true, verbatim: true });
@@ -1684,25 +1706,23 @@ export class SandboxExecutor {
       });
       return;
     }
-    if (this.remoteAllowedCidrs.length > 0) {
+    if (!sandboxRemoteEgressAllowed(resolvedIps, this.remoteAllowedCidrs)) {
       const blocked = resolvedIps.filter((ip) => !ipInCidrs(ip, this.remoteAllowedCidrs));
-      if (blocked.length > 0) {
-        await this.finalize(run.id, {
-          status: "failed",
-          stdout: "",
-          stderr: "",
-          truncated: false,
-          exitCode: null,
-          error: "remote_executor_egress_cidr_blocked",
-          result: {
-            executor: "http_remote",
-            host: parsedRemoteUrl.hostname,
-            resolved_ips: resolvedIps,
-            blocked_ips: blocked,
-          },
-        });
-        return;
-      }
+      await this.finalize(run.id, {
+        status: "failed",
+        stdout: "",
+        stderr: "",
+        truncated: false,
+        exitCode: null,
+        error: "remote_executor_egress_cidr_blocked",
+        result: {
+          executor: "http_remote",
+          host: parsedRemoteUrl.hostname,
+          resolved_ips: resolvedIps,
+          blocked_ips: blocked,
+        },
+      });
+      return;
     }
     if (this.config.remote.denyPrivateIps) {
       const blockedPrivate = resolvedIps.filter(

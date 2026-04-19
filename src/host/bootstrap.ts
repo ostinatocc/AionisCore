@@ -63,6 +63,12 @@ export async function assertBootstrapStoreContracts(args: {
   }
 }
 
+export function resolveListenHost(env: Pick<Env, "AIONIS_EDITION" | "AIONIS_LISTEN_HOST">) {
+  const configured = String(env.AIONIS_LISTEN_HOST ?? "").trim();
+  if (configured.length > 0) return configured;
+  return env.AIONIS_EDITION === "lite" ? "127.0.0.1" : "0.0.0.0";
+}
+
 export async function listenHttpApp(app: any, env: Env) {
-  await app.listen({ port: env.PORT, host: "0.0.0.0" });
+  await app.listen({ port: env.PORT, host: resolveListenHost(env) });
 }

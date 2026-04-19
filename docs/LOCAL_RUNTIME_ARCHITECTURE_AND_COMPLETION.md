@@ -22,6 +22,8 @@ The current public runtime story is Lite:
 
 The runtime is intentionally narrower than the broader repository capability set. Server-only and control-plane route groups remain outside Lite by design.
 
+Lite is the shipped runtime shape today. It is local-first and intended for local, dev, and CI validation rather than hardened production network exposure.
+
 ## Canonical source files
 
 When this document and the code ever disagree, the code wins. The main runtime sources are:
@@ -82,13 +84,15 @@ The Lite startup script sets the default local runtime behavior:
 
 1. `AIONIS_EDITION=lite`
 2. `AIONIS_MODE=local`
-3. `MEMORY_AUTH_MODE=off`
-4. `TENANT_QUOTA_ENABLED=false`
-5. `RATE_LIMIT_BYPASS_LOOPBACK=true`
-6. `LITE_REPLAY_SQLITE_PATH` and `LITE_WRITE_SQLITE_PATH` under `.tmp/`
-7. `LITE_LOCAL_ACTOR_ID=local-user`
-8. `SANDBOX_ENABLED=true`
-9. `SANDBOX_ADMIN_ONLY=false`
+3. `APP_ENV=dev`
+4. `AIONIS_LISTEN_HOST=127.0.0.1`
+5. `MEMORY_AUTH_MODE=off`
+6. `TENANT_QUOTA_ENABLED=false`
+7. `RATE_LIMIT_BYPASS_LOOPBACK=true`
+8. `LITE_REPLAY_SQLITE_PATH` and `LITE_WRITE_SQLITE_PATH` under `.tmp/`
+9. `LITE_LOCAL_ACTOR_ID=local-user`
+10. `SANDBOX_ENABLED=true`
+11. `SANDBOX_ADMIN_ONLY=false`
 
 The shell also supports `LITE_SANDBOX_PROFILE=local_process_echo`, which narrows the sandbox to a local-process echo profile.
 

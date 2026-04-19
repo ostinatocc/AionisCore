@@ -1,6 +1,6 @@
 # Aionis Runtime Package Publishing
 
-Last reviewed: 2026-04-17
+Last reviewed: 2026-04-19
 
 Internal status: living package release checklist
 
@@ -32,6 +32,11 @@ Each package release should prove:
 2. package-level tests pass when the package defines them
 3. the packed tarball contains the expected public files
 4. a clean consumer can install and import the tarball
+
+## Engine policy
+
+The repository root and all releaseable package manifests require Node.js `>=22.0.0`.
+The tag release workflow runs `npm run packages:release:check` after the workspace build so the release gate exercises package builds, tests, packing, and isolated consumer installs before the source artifact is archived.
 
 ## Root commands
 

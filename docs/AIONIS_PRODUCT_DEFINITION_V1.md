@@ -10,6 +10,8 @@ Aionis Runtime is the self-evolving continuity runtime for agent systems.
 
 It is built from the Aionis Core kernel in this repository and owns the runtime primitives that let an agent system start better, resume cleanly, and reuse prior execution.
 
+The shipped runtime shape today is Lite: a local-first runtime for local, dev, and CI validation. A hardened production server/control-plane shape remains future work and is not the current public product.
+
 ## Core Definition
 
 The runtime product in this repository is responsible for:

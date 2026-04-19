@@ -5,6 +5,8 @@
 `Aionis Core` is the kernel inside this repository.  
 `Lite` is the public runtime shape that ships today.
 
+`Lite` is local-first and intended for local, dev, and CI validation of continuity loops. It is not yet a hardened production network runtime.
+
 It gives agents continuity across sessions in three concrete ways:
 
 1. **Start better**

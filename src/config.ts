@@ -115,8 +115,9 @@ function parseSandboxAllowedCommandsJson(raw: string): string[] {
 
 const EnvSchema = z.object({
   AIONIS_MODE: RuntimeModeSchema.default("local"),
-  AIONIS_EDITION: EditionSchema.default("server"),
+  AIONIS_EDITION: EditionSchema.default("lite"),
   APP_ENV: z.enum(["dev", "ci", "prod"]).default("dev"),
+  AIONIS_LISTEN_HOST: z.string().default(""),
   TRUST_PROXY: z
     .string()
     .optional()
@@ -742,7 +743,7 @@ function withAbstractionPolicyDefaults(source: NodeJS.ProcessEnv): NodeJS.Proces
 
 function withEditionDefaults(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = { ...source };
-  const editionInput = String(source.AIONIS_EDITION ?? "server").trim().toLowerCase();
+  const editionInput = String(source.AIONIS_EDITION ?? "lite").trim().toLowerCase();
   const parsed = EditionSchema.safeParse(editionInput);
   if (!parsed.success) return out;
   out.AIONIS_EDITION = parsed.data;
@@ -766,6 +767,9 @@ export function loadEnv(): Env {
   }
   const trustedProxyCidrs = parseTrustedProxyCidrs(parsed.data.TRUSTED_PROXY_CIDRS);
   parsed.data.TRUSTED_PROXY_CIDRS = trustedProxyCidrs.join(",");
+  if (parsed.data.AIONIS_EDITION === "lite" && parsed.data.APP_ENV === "prod") {
+    throw new Error("Lite runtime does not currently support APP_ENV=prod; use APP_ENV=dev/ci or a future server runtime.");
+  }
   if (parsed.data.AIONIS_EDITION !== "lite" && parsed.data.DATABASE_URL.trim().length === 0) {
     throw new Error("DATABASE_URL is required unless AIONIS_EDITION=lite");
   }

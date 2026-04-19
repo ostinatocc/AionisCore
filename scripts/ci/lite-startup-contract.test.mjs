@@ -24,6 +24,8 @@ test("apps/lite owns the startup script", () => {
   assert.equal(litePkg.scripts["start:print-env"], "bash ./scripts/start-lite-app.sh --print-env");
   assert.equal(litePkg.scripts["start:local-process"], "LITE_SANDBOX_PROFILE=local_process_echo bash ./scripts/start-lite-app.sh");
   const startScript = fs.readFileSync(path.join(ROOT, "apps", "lite", "scripts", "start-lite-app.sh"), "utf8");
+  assert.match(startScript, /APP_ENV/);
+  assert.match(startScript, /AIONIS_LISTEN_HOST/);
   assert.match(startScript, /LITE_LOCAL_ACTOR_ID/);
   assert.match(startScript, /LITE_SANDBOX_PROFILE/);
   assert.match(startScript, /local_process_echo/);
@@ -33,6 +35,8 @@ test("apps/lite owns the startup script", () => {
 
 test(".env.example exposes the Lite local actor and sandbox knobs", () => {
   const envExample = fs.readFileSync(path.join(ROOT, ".env.example"), "utf8");
+  assert.match(envExample, /^APP_ENV=dev$/m);
+  assert.match(envExample, /^AIONIS_LISTEN_HOST=127\.0\.0\.1$/m);
   assert.match(envExample, /^LITE_LOCAL_ACTOR_ID=local-user$/m);
   assert.match(envExample, /^SANDBOX_ENABLED=true$/m);
   assert.match(envExample, /^SANDBOX_ADMIN_ONLY=false$/m);

@@ -8,6 +8,8 @@ This document is the external messaging baseline for the current `Aionis Runtime
 
 Current recommendation: launch `Aionis Runtime` as a technical beta for teams building agent systems, especially coding agents, local runtimes, and agent infrastructure.
 
+The shipped runtime shape is Lite. Lite is local-first and suitable for local, dev, and CI validation; it should not be positioned as a hardened production server runtime yet.
+
 ## One-Line Positioning
 
 `Aionis Runtime` is a self-evolving continuity runtime for agent systems that helps agents start better, resume cleanly, and reuse successful work.
