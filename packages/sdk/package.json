@@ -33,9 +33,11 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "contracts:sync": "node ../../scripts/sync-internal-sdk-contracts.mjs",
+    "contracts:check": "node ../../scripts/sync-internal-sdk-contracts.mjs --check",
+    "build": "npm run -s contracts:check && tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
-    "test": "node ../../node_modules/tsx/dist/cli.mjs --test test/*.test.ts",
+    "test": "npm run -s contracts:check && node ../../node_modules/tsx/dist/cli.mjs --test test/*.test.ts",
     "pack:dry-run": "npm run build && npm pack --dry-run --json --cache /tmp/aionis-npm-cache",
     "publish:dry-run": "npm run build && npm publish --dry-run"
   },

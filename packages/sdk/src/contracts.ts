@@ -1,73 +1,50 @@
 import type { AionisRequestPayload, AionisResponsePayload } from "./types.js";
+import type {
+  AionisAgentMemoryInspectRequest,
+  AionisAnchorRehydratePayloadRequest as AionisAnchorsRehydratePayloadRequest,
+  AionisContextAssembleRequest,
+  AionisEvolutionReviewPackRequest,
+  AionisExecutionIntrospectRequest,
+  AionisKickoffRecommendation,
+  AionisKickoffRecommendationRequest,
+  AionisKickoffRecommendationResponse,
+  AionisMemoryWriteRequest,
+  AionisPassthroughObject,
+  AionisPlanningContextRequest,
+  AionisReplayPlaybookRepairReviewRequest as AionisReplayRepairReviewRequest,
+  AionisTaskStartAction,
+  AionisTaskStartRequest,
+  AionisTaskStartResponse,
+  AionisToolsFeedbackRequest,
+  AionisToolsSelectRequest,
+} from "./generated/full-sdk-contracts.js";
 
-export type AionisPassthroughObject = Record<string, unknown>;
-
-export type AionisWriteNode = {
-  id?: string;
-  client_id?: string;
-  scope?: string;
-  type: "event" | "entity" | "topic" | "rule" | "evidence" | "concept" | "procedure" | "self_model";
-  tier?: "hot" | "warm" | "cold" | "archive";
-  memory_lane?: "private" | "shared";
-  producer_agent_id?: string;
-  owner_agent_id?: string;
-  owner_team_id?: string;
-  title?: string;
-  text_summary?: string;
-  slots?: Record<string, unknown>;
-  raw_ref?: string;
-  evidence_ref?: string;
-  embedding?: number[];
-  embedding_model?: string;
-  salience?: number;
-  importance?: number;
-  confidence?: number;
-} & AionisPassthroughObject;
+export type {
+  AionisAgentMemoryInspectRequest,
+  AionisAnchorRehydratePayloadRequest as AionisAnchorsRehydratePayloadRequest,
+  AionisContextAssembleRequest,
+  AionisEvolutionReviewPackRequest,
+  AionisExecutionIntrospectRequest,
+  AionisKickoffRecommendation,
+  AionisKickoffRecommendationRequest,
+  AionisKickoffRecommendationResponse,
+  AionisMemoryWriteRequest,
+  AionisPassthroughObject,
+  AionisPlanningContextRequest,
+  AionisReplayPlaybookRepairReviewRequest as AionisReplayRepairReviewRequest,
+  AionisTaskStartAction,
+  AionisTaskStartRequest,
+  AionisTaskStartResponse,
+  AionisToolsFeedbackRequest,
+  AionisToolsSelectRequest,
+  AionisWriteEdge,
+  AionisWriteNode,
+} from "./generated/full-sdk-contracts.js";
 
 export type AionisWriteEdgeEndpoint = {
   id?: string;
   client_id?: string;
 } & AionisPassthroughObject;
-
-export type AionisWriteEdge = {
-  id?: string;
-  scope?: string;
-  type: "part_of" | "related_to" | "derived_from";
-  src: AionisWriteEdgeEndpoint;
-  dst: AionisWriteEdgeEndpoint;
-  weight?: number;
-  confidence?: number;
-  decay_rate?: number;
-} & AionisPassthroughObject;
-
-export type AionisMemoryWriteRequest = {
-  tenant_id?: string;
-  scope?: string;
-  actor?: string;
-  parent_commit_id?: string;
-  input_text?: string;
-  input_sha256?: string;
-  model_version?: string;
-  prompt_version?: string;
-  auto_embed?: boolean;
-  memory_lane?: "private" | "shared";
-  producer_agent_id?: string;
-  owner_agent_id?: string;
-  owner_team_id?: string;
-  force_reembed?: boolean;
-  trigger_topic_cluster?: boolean;
-  topic_cluster_async?: boolean;
-  distill?: {
-    enabled?: boolean;
-    sources?: Array<"input_text" | "event_nodes" | "evidence_nodes">;
-    max_evidence_nodes?: number;
-    max_fact_nodes?: number;
-    min_sentence_chars?: number;
-    attach_edges?: boolean;
-  } & AionisPassthroughObject;
-  nodes?: AionisWriteNode[];
-  edges?: AionisWriteEdge[];
-} & AionisRequestPayload;
 
 export type AionisMemoryWriteResponse = {
   tenant_id?: string;
@@ -173,14 +150,6 @@ export type AionisExecutionKernelSummary = {
   action_packet_summary: AionisActionPacketSummary;
 } & AionisPassthroughObject;
 
-export type AionisKickoffRecommendation = {
-  source_kind: "experience_intelligence" | "tool_selection";
-  history_applied: boolean;
-  selected_tool: string | null;
-  file_path: string | null;
-  next_action: string | null;
-} & AionisPassthroughObject;
-
 export type AionisPlanningSummary = {
   summary_version: "planning_summary_v1";
   planner_explanation: string | null;
@@ -213,52 +182,6 @@ export type AionisAssemblySummary = {
   contested_pattern_tools: string[];
 } & AionisPassthroughObject;
 
-export type AionisPlanningContextRequest = {
-  tenant_id?: string;
-  scope?: string;
-  query_text: string;
-  recall_strategy?: "local" | "balanced" | "global";
-  recall_mode?: "dense_edge";
-  recall_class_aware?: boolean;
-  consumer_agent_id?: string;
-  consumer_team_id?: string;
-  context: unknown;
-  include_shadow?: boolean;
-  rules_limit?: number;
-  run_id?: string;
-  tool_candidates?: string[];
-  tool_strict?: boolean;
-  limit?: number;
-  neighborhood_hops?: number;
-  return_debug?: boolean;
-  include_embeddings?: boolean;
-  include_meta?: boolean;
-  include_slots?: boolean;
-  include_slots_preview?: boolean;
-  slots_preview_keys?: number;
-  max_nodes?: number;
-  max_edges?: number;
-  ranked_limit?: number;
-  min_edge_weight?: number;
-  min_edge_confidence?: number;
-  context_token_budget?: number;
-  context_char_budget?: number;
-  context_compaction_profile?: "balanced" | "aggressive";
-  context_optimization_profile?: "balanced" | "aggressive";
-  memory_layer_preference?: {
-    allowed_layers: Array<"L0" | "L1" | "L2" | "L3" | "L4" | "L5">;
-  };
-  return_layered_context?: boolean;
-  context_layers?: Record<string, unknown>;
-  static_context_blocks?: Array<Record<string, unknown>>;
-  static_injection?: Record<string, unknown>;
-  execution_result_summary?: Record<string, unknown>;
-  execution_artifacts?: Array<Record<string, unknown>>;
-  execution_evidence?: Array<Record<string, unknown>>;
-  execution_state_v1?: Record<string, unknown>;
-  execution_packet_v1?: Record<string, unknown>;
-} & AionisRequestPayload;
-
 export type AionisPlannerEntry = AionisPassthroughObject;
 
 export type AionisPlanningContextResponse = {
@@ -270,52 +193,6 @@ export type AionisPlanningContextResponse = {
   kickoff_recommendation?: AionisKickoffRecommendation | null;
 } & AionisPassthroughObject;
 
-export type AionisContextAssembleRequest = {
-  tenant_id?: string;
-  scope?: string;
-  query_text: string;
-  recall_strategy?: "local" | "balanced" | "global";
-  recall_mode?: "dense_edge";
-  recall_class_aware?: boolean;
-  consumer_agent_id?: string;
-  consumer_team_id?: string;
-  context?: unknown;
-  include_rules?: boolean;
-  include_shadow?: boolean;
-  rules_limit?: number;
-  tool_candidates?: string[];
-  tool_strict?: boolean;
-  limit?: number;
-  neighborhood_hops?: number;
-  return_debug?: boolean;
-  include_embeddings?: boolean;
-  include_meta?: boolean;
-  include_slots?: boolean;
-  include_slots_preview?: boolean;
-  slots_preview_keys?: number;
-  max_nodes?: number;
-  max_edges?: number;
-  ranked_limit?: number;
-  min_edge_weight?: number;
-  min_edge_confidence?: number;
-  context_token_budget?: number;
-  context_char_budget?: number;
-  context_compaction_profile?: "balanced" | "aggressive";
-  context_optimization_profile?: "balanced" | "aggressive";
-  memory_layer_preference?: {
-    allowed_layers: Array<"L0" | "L1" | "L2" | "L3" | "L4" | "L5">;
-  };
-  return_layered_context?: boolean;
-  context_layers?: Record<string, unknown>;
-  static_context_blocks?: Array<Record<string, unknown>>;
-  static_injection?: Record<string, unknown>;
-  execution_result_summary?: Record<string, unknown>;
-  execution_artifacts?: Array<Record<string, unknown>>;
-  execution_evidence?: Array<Record<string, unknown>>;
-  execution_state_v1?: Record<string, unknown>;
-  execution_packet_v1?: Record<string, unknown>;
-} & AionisRequestPayload;
-
 export type AionisContextAssembleResponse = {
   planner_packet: AionisPlannerPacketTextSurface;
   pattern_signals: AionisPlannerEntry[];
@@ -324,44 +201,6 @@ export type AionisContextAssembleResponse = {
   assembly_summary: AionisAssemblySummary;
   kickoff_recommendation?: AionisKickoffRecommendation | null;
 } & AionisPassthroughObject;
-
-export type AionisKickoffRecommendationRequest = {
-  tenant_id?: string;
-  scope?: string;
-  query_text: string;
-  consumer_agent_id?: string;
-  consumer_team_id?: string;
-  context?: unknown;
-  candidates?: string[];
-  workflow_limit?: number;
-} & AionisRequestPayload;
-
-export type AionisKickoffRecommendationResponse = {
-  summary_version: "kickoff_recommendation_v1";
-  tenant_id: string;
-  scope: string;
-  query_text: string;
-  kickoff_recommendation: AionisKickoffRecommendation | null;
-  rationale: {
-    summary: string;
-  } & AionisPassthroughObject;
-} & AionisPassthroughObject;
-
-export type AionisTaskStartRequest = AionisKickoffRecommendationRequest;
-
-export type AionisTaskStartAction = {
-  action_kind: "file_step" | "tool_step";
-  source_kind: "experience_intelligence" | "tool_selection";
-  history_applied: boolean;
-  selected_tool: string;
-  file_path: string | null;
-  next_action: string | null;
-} & AionisPassthroughObject;
-
-export type AionisTaskStartResponse = Omit<AionisKickoffRecommendationResponse, "summary_version"> & {
-  summary_version: "task_start_v1";
-  first_action: AionisTaskStartAction | null;
-};
 
 export type AionisTaskStartPlanRequest = {
   tenant_id?: string;
@@ -388,14 +227,6 @@ export type AionisTaskStartPlanResponse = {
     summary: string;
   } & AionisPassthroughObject;
 } & AionisPassthroughObject;
-
-export type AionisExecutionIntrospectRequest = {
-  tenant_id?: string;
-  scope?: string;
-  consumer_agent_id?: string;
-  consumer_team_id?: string;
-  limit?: number;
-} & AionisRequestPayload;
 
 export type AionisExecutionIntrospectResponse = {
   summary_version: "execution_memory_introspection_v1";
@@ -437,10 +268,6 @@ export type AionisExecutionIntrospectResponse = {
   pattern_maintenance_summary: AionisMaintenanceSummary;
 } & AionisPassthroughObject;
 
-export type AionisEvolutionReviewPackRequest = AionisKickoffRecommendationRequest & {
-  limit?: number;
-};
-
 export type AionisEvolutionReviewPackResponse = {
   summary_version: "evolution_review_pack_v1";
   tenant_id: string;
@@ -449,25 +276,6 @@ export type AionisEvolutionReviewPackResponse = {
   evolution_inspect: AionisPassthroughObject;
   evolution_review_pack: AionisPassthroughObject;
 } & AionisPassthroughObject;
-
-export type AionisAgentMemoryInspectRequest = AionisKickoffRecommendationRequest & {
-  handoff_id?: string;
-  handoff_uri?: string;
-  anchor?: string;
-  repo_root?: string;
-  file_path?: string;
-  symbol?: string;
-  handoff_kind?: string;
-  memory_lane?: "private" | "shared";
-  include_payload?: boolean;
-  session_id?: string;
-  source_kind?: string;
-  continuity_kind?: string;
-  continuity_phase?: string;
-  include_meta?: boolean;
-  limit?: number;
-  offset?: number;
-};
 
 export type AionisAgentMemoryInspectResponse = {
   summary_version: "agent_memory_inspect_v1";
@@ -486,22 +294,6 @@ export type AionisAgentMemoryInspectResponse = {
   policy_governance_apply_result: AionisPassthroughObject | null;
   agent_memory_summary: AionisPassthroughObject;
 } & AionisPassthroughObject;
-
-export type AionisToolsSelectRequest = {
-  tenant_id?: string;
-  scope?: string;
-  run_id?: string;
-  context: unknown;
-  execution_result_summary?: Record<string, unknown>;
-  execution_artifacts?: Array<Record<string, unknown>>;
-  execution_evidence?: Array<Record<string, unknown>>;
-  execution_state_v1?: Record<string, unknown>;
-  candidates: string[];
-  include_shadow?: boolean;
-  rules_limit?: number;
-  strict?: boolean;
-  reorder_candidates?: boolean;
-} & AionisRequestPayload;
 
 export type AionisToolsSelectionSummary = {
   summary_version: "tools_selection_summary_v1";
@@ -554,26 +346,6 @@ export type AionisToolsSelectResponse = {
   selection_summary: AionisToolsSelectionSummary;
 } & AionisPassthroughObject;
 
-export type AionisToolsFeedbackRequest = {
-  tenant_id?: string;
-  scope?: string;
-  actor?: string;
-  run_id?: string;
-  decision_id?: string;
-  decision_uri?: string;
-  outcome: "positive" | "negative" | "neutral";
-  context: unknown;
-  candidates: string[];
-  selected_tool: string;
-  include_shadow?: boolean;
-  rules_limit?: number;
-  target?: "tool" | "all";
-  note?: string;
-  input_text?: string;
-  input_sha256?: string;
-  governance_review?: Record<string, unknown>;
-} & AionisRequestPayload;
-
 export type AionisToolsFeedbackResponse = {
   ok: true;
   scope: string;
@@ -604,40 +376,6 @@ export type AionisToolsFeedbackResponse = {
   } & AionisPassthroughObject;
 } & AionisPassthroughObject;
 
-export type AionisReplayRepairReviewRequest = {
-  tenant_id?: string;
-  scope?: string;
-  actor?: string;
-  consumer_agent_id?: string;
-  consumer_team_id?: string;
-  memory_lane?: "private" | "shared";
-  producer_agent_id?: string;
-  owner_agent_id?: string;
-  owner_team_id?: string;
-  playbook_id: string;
-  version?: number;
-  action: "approve" | "reject";
-  note?: string;
-  auto_shadow_validate?: boolean;
-  shadow_validation_mode?: "readiness" | "execute" | "execute_sandbox";
-  shadow_validation_max_steps?: number;
-  shadow_validation_params?: Record<string, unknown>;
-  target_status_on_approve?: "draft" | "shadow" | "active" | "disabled";
-  auto_promote_on_pass?: boolean;
-  auto_promote_target_status?: "draft" | "shadow" | "active" | "disabled";
-  auto_promote_gate?: Record<string, unknown>;
-  learning_projection?: {
-    enabled?: boolean;
-    mode?: "rule_and_episode" | "episode_only";
-    delivery?: "async_outbox" | "sync_inline";
-    target_rule_state?: "draft" | "shadow";
-    min_total_steps?: number;
-    min_success_ratio?: number;
-  } & AionisPassthroughObject;
-  governance_review?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-} & AionisRequestPayload;
-
 export type AionisReplayRepairReviewResponse = {
   tenant_id: string;
   scope: string;
@@ -667,18 +405,6 @@ export type AionisReplayRepairReviewResponse = {
     promote_memory?: Record<string, unknown>;
   } & AionisPassthroughObject;
 } & AionisPassthroughObject;
-
-export type AionisAnchorsRehydratePayloadRequest = {
-  tenant_id?: string;
-  scope?: string;
-  actor?: string;
-  anchor_id?: string;
-  anchor_uri?: string;
-  mode?: "summary_only" | "partial" | "full";
-  include_linked_decisions?: boolean;
-  reason?: string;
-  adjudication?: Record<string, unknown>;
-} & AionisRequestPayload;
 
 export type AionisAnchorsRehydratePayloadResponse = {
   tenant_id: string;
