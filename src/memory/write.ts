@@ -3,8 +3,8 @@ import type pg from "pg";
 import { sha256Hex } from "../util/crypto.js";
 import { assertDim, toVectorLiteral } from "../util/pgvector.js";
 import { normalizeText } from "../util/normalize.js";
-import { HttpError, badRequest } from "../util/http.js";
-import { capabilityContract, type CapabilityFailureMode } from "../capability-contract.js";
+import { badRequest } from "../util/http.js";
+import { type CapabilityFailureMode } from "../capability-contract.js";
 import { assertWriteStoreAccessContract, createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
 import { type AssociativeLinkTriggerOrigin } from "./associative-linking-types.js";
 import { MemoryWriteRequest } from "./schemas.js";
@@ -22,6 +22,7 @@ import {
 import { enqueuePostCommitWriteArtifacts } from "./write-post-commit.js";
 import { prepareWriteBatch } from "./write-prepare-batch.js";
 import { buildWriteDiff, buildWriteResult } from "./write-serialization.js";
+import { applyShadowDualWrite } from "./write-shadow-dual.js";
 
 export type WriteResult = {
   tenant_id?: string;
@@ -416,66 +417,10 @@ export async function applyMemoryWrite(
   await enqueuePostCommitWriteArtifacts(writeAccess, prepared, commit_id, result, {
     associativeLinkOrigin: opts.associativeLinkOrigin,
   });
-
-  if (opts.shadowDualWriteEnabled) {
-    const shadowMirrorSpec = capabilityContract("shadow_mirror_v2");
-    if (!writeAccess.capabilities.shadow_mirror_v2) {
-      const msg = "shadow dual-write unsupported by backend capability: shadow_mirror_v2";
-      result.shadow_dual_write = {
-        enabled: true,
-        strict: opts.shadowDualWriteStrict,
-        mirrored: false,
-        capability: "shadow_mirror_v2",
-        failure_mode: shadowMirrorSpec.failure_mode,
-        degraded_mode: "capability_unsupported",
-        fallback_applied: true,
-        error: msg,
-      };
-      if (opts.shadowDualWriteStrict) {
-        throw new HttpError(500, "shadow_dual_write_strict_failure", msg, {
-          capability: "shadow_mirror_v2",
-          failure_mode: shadowMirrorSpec.failure_mode,
-          degraded_mode: "capability_unsupported",
-          fallback_applied: false,
-          strict: true,
-          mirrored: false,
-        });
-      }
-      return result;
-    }
-    try {
-      const copied = await writeAccess.mirrorCommitArtifactsToShadowV2(scope, commit_id);
-      result.shadow_dual_write = {
-        enabled: true,
-        strict: opts.shadowDualWriteStrict,
-        mirrored: true,
-        copied,
-      };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      result.shadow_dual_write = {
-        enabled: true,
-        strict: opts.shadowDualWriteStrict,
-        mirrored: false,
-        capability: "shadow_mirror_v2",
-        failure_mode: shadowMirrorSpec.failure_mode,
-        degraded_mode: "mirror_failed",
-        fallback_applied: true,
-        error: msg,
-      };
-      if (opts.shadowDualWriteStrict) {
-        throw new HttpError(500, "shadow_dual_write_strict_failure", `shadow dual-write failed: ${msg}`, {
-          capability: "shadow_mirror_v2",
-          failure_mode: shadowMirrorSpec.failure_mode,
-          degraded_mode: "mirror_failed",
-          fallback_applied: false,
-          strict: true,
-          mirrored: false,
-          error: msg,
-        });
-      }
-    }
-  }
+  await applyShadowDualWrite(writeAccess, scope, commit_id, result, {
+    enabled: opts.shadowDualWriteEnabled,
+    strict: opts.shadowDualWriteStrict,
+  });
 
   return result;
 }
