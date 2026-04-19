@@ -16,7 +16,6 @@ import {
 import { MemoryWriteRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { resolveTenantScope, toTenantScopeKey } from "./tenant.js";
-import { buildAionisUri } from "./uri.js";
 import { distillWriteArtifacts, type WriteDistillationSummary } from "./write-distillation.js";
 import {
   enrichPreparedNodeLifecycle,
@@ -30,9 +29,10 @@ import {
   resolveWriteScope,
   selectAssociativeLinkSourceNodeIds,
 } from "./write-shared.js";
+import { buildWriteDiff, buildWriteResult } from "./write-serialization.js";
 import { buildAssociativeLinkOutboxInsert } from "../jobs/associative-linking-lib.js";
 
-type WriteResult = {
+export type WriteResult = {
   tenant_id?: string;
   scope?: string;
   commit_id: string;
@@ -89,7 +89,7 @@ type ApplyWriteOptions = PrepareWriteOptions & {
   associativeLinkOrigin?: AssociativeLinkTriggerOrigin;
 };
 
-type PreparedNode = {
+export type PreparedNode = {
   id: string;
   client_id?: string;
   scope: string;
@@ -112,7 +112,7 @@ type PreparedNode = {
   confidence?: number;
 };
 
-type PreparedEdge = {
+export type PreparedEdge = {
   id: string;
   scope: string;
   type: string;
@@ -123,7 +123,7 @@ type PreparedEdge = {
   decay_rate?: number;
 };
 
-type PreparedWrite = {
+export type PreparedWrite = {
   tenant_id: string;
   scope_public: string;
   scope: string;
@@ -437,20 +437,7 @@ export async function applyMemoryWrite(
     }
   }
 
-  const diff = {
-    redaction: opts.piiRedaction ? prepared.redaction_meta : {},
-    nodes: nodes.map((n) => ({
-      id: n.id,
-      client_id: n.client_id,
-      type: n.type,
-      title: n.title,
-      memory_lane: n.memory_lane,
-      producer_agent_id: n.producer_agent_id ?? null,
-      owner_agent_id: n.owner_agent_id ?? null,
-      owner_team_id: n.owner_team_id ?? null,
-    })),
-    edges: edges.map((e) => ({ id: e.id, type: e.type, src_id: e.src_id, dst_id: e.dst_id })),
-  };
+  const diff = buildWriteDiff(prepared, opts.piiRedaction);
 
   // Compute commit chain.
   let parentHash = "";
@@ -571,42 +558,7 @@ export async function applyMemoryWrite(
     });
   }
 
-  const result: WriteResult = {
-    tenant_id: prepared.tenant_id,
-    scope: prepared.scope_public,
-    commit_id,
-    commit_uri: buildAionisUri({
-      tenant_id: prepared.tenant_id,
-      scope: prepared.scope_public,
-      type: "commit",
-      id: commit_id,
-    }),
-    commit_hash: commitHash,
-    nodes: nodes.map((n) => ({
-      id: n.id,
-      uri: buildAionisUri({
-        tenant_id: prepared.tenant_id,
-        scope: prepared.scope_public,
-        type: n.type,
-        id: n.id,
-      }),
-      client_id: n.client_id,
-      type: n.type,
-    })),
-    edges: edges.map((e) => ({
-      id: e.id,
-      uri: buildAionisUri({
-        tenant_id: prepared.tenant_id,
-        scope: prepared.scope_public,
-        type: "edge",
-        id: e.id,
-      }),
-      type: e.type,
-      src_id: e.src_id,
-      dst_id: e.dst_id,
-    })),
-    ...(prepared.distillation ? { distillation: prepared.distillation } : {}),
-  };
+  const result: WriteResult = buildWriteResult(prepared, commit_id, commitHash);
 
   // Derived artifact: enqueue embedding backfill for nodes that opted into auto-embed and have embed_text.
   let enqueuedEmbedNodes = false;
