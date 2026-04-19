@@ -7,6 +7,21 @@
 
 `Lite` is local-first and intended for local, dev, and CI validation of continuity loops. It is not yet a hardened production network runtime.
 
+## Current Stable Baseline
+
+Treat the current repository head as the stage-stable baseline for the local-first technical beta.
+
+- runtime posture is hardened for Lite
+- six self-evolving proofs are live through the public SDK and docs
+- SDK contract and route convergence has started
+- the first major god-file refactor tranche is already landed
+- current baseline verification is `sdk:test` passing and `lite:test` at `194/194`
+
+Baseline summary:
+
+1. [AIONIS_RUNTIME_STAGE_BASELINE_2026_04_20.md](docs/AIONIS_RUNTIME_STAGE_BASELINE_2026_04_20.md)
+2. [Proof By Evidence](apps/docs/docs/evidence/proof-by-evidence.md)
+
 It gives agents continuity across sessions in three concrete ways:
 
 1. **Start better**
@@ -202,9 +217,10 @@ Repository docs deployment is wired through:
 
 1. [SDK Quickstart](docs/SDK_QUICKSTART.md)
 2. [Launch Messaging](docs/LAUNCH_MESSAGING.md)
-3. [Docs Overview](docs/README.md)
-4. [SDK README](packages/full-sdk/README.md)
-5. [Bundled SDK Examples](examples/full-sdk/README.md)
+3. [Stage Baseline](docs/AIONIS_RUNTIME_STAGE_BASELINE_2026_04_20.md)
+4. [Docs Overview](docs/README.md)
+5. [SDK README](packages/full-sdk/README.md)
+6. [Bundled SDK Examples](examples/full-sdk/README.md)
 
 ## Public Packages
 

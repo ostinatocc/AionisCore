@@ -22,6 +22,11 @@ The answer here is based on six live Lite runs through the public SDK on `2026-0
   </div>
 </div>
 
+<div class="section-frame">
+  <span class="section-label">How this relates to the current baseline</span>
+  <p>This page proves the strongest runtime claims. If you want the broader answer to why this version is the current freeze point, read <a href="./stable-baseline.md">Stable Baseline</a>.</p>
+</div>
+
 <div class="state-strip">
   <span class="state-badge state-trusted">task start</span>
   <span class="state-badge state-candidate">policy memory</span>

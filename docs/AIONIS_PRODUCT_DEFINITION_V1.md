@@ -1,6 +1,6 @@
 # Aionis Runtime Product Definition v1
 
-Last reviewed: 2026-04-16
+Last reviewed: 2026-04-20
 
 Document status: living public product definition
 
@@ -11,6 +11,8 @@ Aionis Runtime is the self-evolving continuity runtime for agent systems.
 It is built from the Aionis Core kernel in this repository and owns the runtime primitives that let an agent system start better, resume cleanly, and reuse prior execution.
 
 The shipped runtime shape today is Lite: a local-first runtime for local, dev, and CI validation. A hardened production server/control-plane shape remains future work and is not the current public product.
+
+This v1 definition should be treated as part of the current stage-stable baseline for the local-first technical beta, not as an open product sketch. The phase summary for that baseline lives in [AIONIS_RUNTIME_STAGE_BASELINE_2026_04_20.md](AIONIS_RUNTIME_STAGE_BASELINE_2026_04_20.md).
 
 ## Core Definition
 

@@ -18,6 +18,12 @@ slug: /intro
   </div>
 </div>
 
+<div class="section-frame">
+  <span class="doc-kicker">Current stable baseline</span>
+  <p>The current repository head is the stage-stable baseline for the local-first technical beta. Lite posture is explicit, the self-evolving claim is backed by six live proofs, and the first major refactor tranche has already reduced the biggest runtime seams without breaking the contract-tested surface.</p>
+  <p><a href="./evidence/stable-baseline.md">Read the stable baseline summary</a>.</p>
+</div>
+
 `Aionis Runtime` is the public runtime in this repository.  
 `Aionis Core` is the kernel beneath it.  
 `Lite` is the runtime shape that ships publicly today.

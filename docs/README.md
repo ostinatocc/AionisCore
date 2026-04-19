@@ -1,6 +1,6 @@
 # Aionis Runtime Docs
 
-Last reviewed: 2026-04-17
+Last reviewed: 2026-04-20
 
 Document status: docs index
 
@@ -19,6 +19,7 @@ Use these documents to understand the public Aionis Runtime story.
 2. [AIONIS_PRODUCT_DEFINITION_V1.md](AIONIS_PRODUCT_DEFINITION_V1.md)
 3. [LAUNCH_MESSAGING.md](LAUNCH_MESSAGING.md)
 4. [OPEN_CORE_BOUNDARY.md](OPEN_CORE_BOUNDARY.md)
+5. [AIONIS_RUNTIME_STAGE_BASELINE_2026_04_20.md](AIONIS_RUNTIME_STAGE_BASELINE_2026_04_20.md)
 
 ## 2. Public Technical Docs
 
@@ -46,6 +47,7 @@ These are the curated VitePress pages that power the public docs site.
 5. [../apps/docs/docs/runtime/lite-runtime.md](../apps/docs/docs/runtime/lite-runtime.md)
 6. [../apps/docs/docs/sdk/client-and-bridge.md](../apps/docs/docs/sdk/client-and-bridge.md)
 7. [../apps/docs/docs/reference/contracts-and-routes.md](../apps/docs/docs/reference/contracts-and-routes.md)
+8. [../apps/docs/docs/evidence/stable-baseline.md](../apps/docs/docs/evidence/stable-baseline.md)
 
 ## 4. Internal Code-Aligned Contracts
 

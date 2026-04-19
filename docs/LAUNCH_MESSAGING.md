@@ -1,6 +1,6 @@
 # Aionis Runtime Launch Messaging
 
-Last reviewed: 2026-04-16
+Last reviewed: 2026-04-20
 
 Document status: living public launch messaging baseline
 
@@ -9,6 +9,22 @@ This document is the external messaging baseline for the current `Aionis Runtime
 Current recommendation: launch `Aionis Runtime` as a technical beta for teams building agent systems, especially coding agents, local runtimes, and agent infrastructure.
 
 The shipped runtime shape is Lite. Lite is local-first and suitable for local, dev, and CI validation; it should not be positioned as a hardened production server runtime yet.
+
+## Current stable baseline
+
+Treat the current repository head as the stable baseline for the current technical-beta phase.
+
+That means the launch story can now rely on four things being true at the same time:
+
+1. Lite posture and release assumptions are explicit rather than implied
+2. the self-evolving claim is backed by six reproducible proofs
+3. the public SDK and docs are aligned around the local-first runtime shape
+4. the first major refactor tranche has already reduced maintenance risk in the biggest runtime seams
+
+The current baseline summary is recorded in:
+
+1. [AIONIS_RUNTIME_STAGE_BASELINE_2026_04_20.md](AIONIS_RUNTIME_STAGE_BASELINE_2026_04_20.md)
+2. [../apps/docs/docs/evidence/stable-baseline.md](../apps/docs/docs/evidence/stable-baseline.md)
 
 ## One-Line Positioning
 

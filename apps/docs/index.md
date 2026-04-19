@@ -47,6 +47,18 @@ features:
   <span>15 / 15 benchmark scenarios</span>
 </div>
 
+<div class="section-frame">
+  <span class="section-label">Current stable baseline · 2026-04-20</span>
+  <p>This repository is now being treated as the stage-stable baseline for the current local-first technical beta: Lite posture is hardened, six self-evolving proofs are live, SDK convergence has started, and the first major refactor tranche has already landed without breaking the contract-tested runtime surface.</p>
+  <div class="doc-chip-row">
+    <span class="doc-chip">sdk:test green</span>
+    <span class="doc-chip">lite:test 194 / 194</span>
+    <span class="doc-chip">Lite posture hardened</span>
+    <span class="doc-chip">6 live proofs</span>
+  </div>
+  <p><a href="/docs/evidence/stable-baseline">Read the stable baseline summary</a></p>
+</div>
+
 <div class="home-proof-section">
   <span class="home-demo-caption">Observed proof from six live Lite runs on 2026-04-18</span>
   <div class="home-proof-runbook">
@@ -171,6 +183,11 @@ Aionis turns continuity into runtime infrastructure instead of leaving it inside
     <span class="doc-chip">session-continuity</span>
     <span class="doc-chip">semantic-forgetting</span>
   </div>
+</div>
+
+<div class="section-frame">
+  <span class="section-label">Why this version is a real baseline</span>
+  <p>The public story is no longer only “Aionis can do these things.” The current head is being treated as a stable evaluation baseline because the runtime posture is explicit, the evidence path is public, the SDK surface is typed, and the biggest runtime seams have already been tightened enough to stop pretending this is still only a loose prototype.</p>
 </div>
 
 ## How continuity improves over time
