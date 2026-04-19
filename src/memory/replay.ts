@@ -145,6 +145,20 @@ import {
   buildStablePlaybookNodeFields,
   ensureStablePlaybookAnchorOnLatestNode,
 } from "./replay-stable-anchor-helpers.js";
+import {
+  buildReplayRunEndResult,
+  buildReplayRunEndWriteRequest,
+  buildReplayRunStartResult,
+  buildReplayRunStartWriteRequest,
+  buildReplayStepAfterResult,
+  buildReplayStepAfterWriteRequest,
+  buildReplayStepBeforeResult,
+  buildReplayStepBeforeWriteRequest,
+  runClientId,
+  runEndClientId,
+  stepClientId,
+  stepResultClientId,
+} from "./replay-run-write-surfaces.js";
 
 type ReplayWriteOptions = {
   defaultScope: string;
@@ -252,22 +266,6 @@ type ReplayPlaybookReviewOptions = ReplayWriteOptions & {
     run_id?: string | null;
   }>;
 };
-
-function runClientId(runId: string): string {
-  return `replay:run:${runId}`;
-}
-
-function stepClientId(runId: string, stepId: string): string {
-  return `replay:step:${runId}:${stepId}`;
-}
-
-function stepResultClientId(runId: string, stepId: string | null, status: string): string {
-  return `replay:step_result:${runId}:${stepId ?? "na"}:${status}`;
-}
-
-function runEndClientId(runId: string): string {
-  return `replay:run_end:${runId}`;
-}
 
 function playbookClientId(playbookId: string, version: number): string {
   return `replay:playbook:${playbookId}:v${version}`;
@@ -584,54 +582,29 @@ export async function replayRunStart(client: pg.PoolClient, body: unknown, opts:
   const runId = parsed.run_id ?? randomUUID();
   const cid = runClientId(runId);
   const nowIso = new Date().toISOString();
-  const writeReq = {
-    tenant_id: tenancy.tenant_id,
+  const writeReq = buildReplayRunStartWriteRequest({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
     actor: parsed.actor ?? "replay_api",
-    input_text: parsed.goal,
-    auto_embed: false,
-    ...writeIdentity,
-    nodes: [
-      {
-        client_id: cid,
-        type: "event" as const,
-        title: `Replay Run ${runId.slice(0, 8)}`,
-        text_summary: parsed.goal,
-        slots: {
-          replay_kind: "run",
-          run_id: runId,
-          goal: parsed.goal,
-          status: "started",
-          started_at: nowIso,
-          context_snapshot_ref: parsed.context_snapshot_ref ?? null,
-          context_snapshot_hash: parsed.context_snapshot_hash ?? null,
-          metadata: parsed.metadata ?? {},
-        },
-      },
-    ],
-    edges: [],
-  };
+    goal: parsed.goal,
+    runId,
+    nowIso,
+    writeIdentity: writeIdentity as Record<string, unknown>,
+    metadata: (parsed.metadata ?? {}) as Record<string, unknown>,
+    contextSnapshotRef: parsed.context_snapshot_ref ?? null,
+    contextSnapshotHash: parsed.context_snapshot_hash ?? null,
+  });
   const { out } = await applyReplayMemoryWrite(client, writeReq, opts);
   const node = out.nodes.find((n) => n.client_id === cid) ?? out.nodes[0] ?? null;
-  return {
-    tenant_id: tenancy.tenant_id,
+  return buildReplayRunStartResult({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
-    run_id: runId,
-    status: "started",
-    run_node_id: node?.id ?? null,
-    run_uri:
-      node?.id != null
-        ? buildAionisUri({
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            type: "event",
-            id: node.id,
-          })
-        : null,
-    commit_id: out.commit_id,
-    commit_uri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
-    commit_hash: out.commit_hash,
-  };
+    runId,
+    runNodeId: node?.id ?? null,
+    commitId: out.commit_id,
+    commitUri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
+    commitHash: out.commit_hash,
+  });
 }
 
 export async function replayStepBefore(client: pg.PoolClient, body: unknown, opts: ReplayWriteOptions) {
@@ -653,68 +626,37 @@ export async function replayStepBefore(client: pg.PoolClient, body: unknown, opt
   }
   const stepId = parsed.step_id ?? randomUUID();
   const stepCid = stepClientId(parsed.run_id, stepId);
-  const writeReq = {
-    tenant_id: tenancy.tenant_id,
+  const writeReq = buildReplayStepBeforeWriteRequest({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
     actor: parsed.actor ?? "replay_api",
-    input_text: `step before ${parsed.tool_name}`,
-    auto_embed: false,
-    ...writeIdentity,
-    nodes: [
-      {
-        client_id: stepCid,
-        type: "procedure" as const,
-        title: `Step ${parsed.step_index}: ${parsed.tool_name}`,
-        text_summary: `Replay step ${parsed.step_index} prepared for ${parsed.tool_name}`,
-        slots: {
-          replay_kind: "step",
-          phase: "before",
-          run_id: parsed.run_id,
-          step_id: stepId,
-          decision_id: parsed.decision_id ?? null,
-          step_index: parsed.step_index,
-          tool_name: parsed.tool_name,
-          tool_input: parsed.tool_input,
-          expected_output_signature: parsed.expected_output_signature ?? null,
-          preconditions: parsed.preconditions,
-          retry_policy: parsed.retry_policy ?? null,
-          safety_level: parsed.safety_level,
-          status: "pending",
-          metadata: parsed.metadata ?? {},
-        },
-      },
-    ],
-    edges: [
-      {
-        type: "part_of" as const,
-        src: { client_id: stepCid },
-        dst: { id: runNode.id },
-      },
-    ],
-  };
+    runId: parsed.run_id,
+    stepId,
+    stepIndex: parsed.step_index,
+    decisionId: parsed.decision_id ?? null,
+    toolName: parsed.tool_name,
+    toolInput: parsed.tool_input,
+    expectedOutputSignature: parsed.expected_output_signature ?? null,
+    preconditions: parsed.preconditions,
+    retryPolicy: parsed.retry_policy ?? null,
+    safetyLevel: parsed.safety_level,
+    metadata: (parsed.metadata ?? {}) as Record<string, unknown>,
+    runNodeId: runNode.id,
+    writeIdentity: writeIdentity as Record<string, unknown>,
+  });
   const { out } = await applyReplayMemoryWrite(client, writeReq, opts);
   const stepNode = out.nodes.find((n) => n.client_id === stepCid) ?? out.nodes[0] ?? null;
-  return {
-    tenant_id: tenancy.tenant_id,
+  return buildReplayStepBeforeResult({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
-    run_id: parsed.run_id,
-    step_id: stepId,
-    step_index: parsed.step_index,
-    status: "pending",
-    step_node_id: stepNode?.id ?? null,
-    step_uri:
-      stepNode?.id != null
-        ? buildAionisUri({
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            type: "procedure",
-            id: stepNode.id,
-          })
-        : null,
-    commit_id: out.commit_id,
-    commit_uri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
-    commit_hash: out.commit_hash,
-  };
+    runId: parsed.run_id,
+    stepId,
+    stepIndex: parsed.step_index,
+    stepNodeId: stepNode?.id ?? null,
+    commitId: out.commit_id,
+    commitUri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
+    commitHash: out.commit_hash,
+  });
 }
 
 export async function replayStepAfter(client: pg.PoolClient, body: unknown, opts: ReplayWriteOptions) {
@@ -753,76 +695,39 @@ export async function replayStepAfter(client: pg.PoolClient, body: unknown, opts
     );
   }
   const resultCid = stepResultClientId(parsed.run_id, resolvedStepId, parsed.status);
-  const writeReq = {
-    tenant_id: tenancy.tenant_id,
+  const writeReq = buildReplayStepAfterWriteRequest({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
     actor: parsed.actor ?? "replay_api",
-    input_text: `step after ${parsed.status}`,
-    auto_embed: false,
-    ...writeIdentity,
-    nodes: [
-      {
-        client_id: resultCid,
-        type: "evidence" as const,
-        title: `Step ${parsed.step_index ?? "?"} ${parsed.status}`,
-        text_summary: parsed.error ?? parsed.repair_note ?? `Replay step outcome: ${parsed.status}`,
-        slots: {
-          replay_kind: "step_result",
-          phase: "after",
-          run_id: parsed.run_id,
-          step_id: resolvedStepId,
-          step_index: parsed.step_index ?? null,
-          status: parsed.status,
-          output_signature: parsed.output_signature ?? null,
-          postconditions: parsed.postconditions,
-          artifact_refs: parsed.artifact_refs,
-          repair_applied: parsed.repair_applied,
-          repair_note: parsed.repair_note ?? null,
-          error: parsed.error ?? null,
-          metadata: parsed.metadata ?? {},
-        },
-      },
-    ],
-    edges: [
-      {
-        type: "part_of" as const,
-        src: { client_id: resultCid },
-        dst: { id: runNode.id },
-      },
-      ...(stepNode
-        ? [
-            {
-              type: "related_to" as const,
-              src: { client_id: resultCid },
-              dst: { id: stepNode.id },
-            },
-          ]
-        : []),
-    ],
-  };
+    runId: parsed.run_id,
+    stepId: resolvedStepId,
+    stepIndex: parsed.step_index ?? null,
+    status: parsed.status,
+    outputSignature: parsed.output_signature ?? null,
+    postconditions: parsed.postconditions,
+    artifactRefs: parsed.artifact_refs,
+    repairApplied: parsed.repair_applied,
+    repairNote: parsed.repair_note ?? null,
+    error: parsed.error ?? null,
+    metadata: (parsed.metadata ?? {}) as Record<string, unknown>,
+    runNodeId: runNode.id,
+    stepNodeId: stepNode?.id ?? null,
+    writeIdentity: writeIdentity as Record<string, unknown>,
+  });
   const { out } = await applyReplayMemoryWrite(client, writeReq, opts);
   const resultNode = out.nodes.find((n) => n.client_id === resultCid) ?? out.nodes[0] ?? null;
-  return {
-    tenant_id: tenancy.tenant_id,
+  return buildReplayStepAfterResult({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
-    run_id: parsed.run_id,
-    step_id: resolvedStepId,
+    runId: parsed.run_id,
+    stepId: resolvedStepId,
     status: parsed.status,
-    replay_fallback_triggered: parsed.repair_applied,
-    step_result_node_id: resultNode?.id ?? null,
-    step_result_uri:
-      resultNode?.id != null
-        ? buildAionisUri({
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            type: "evidence",
-            id: resultNode.id,
-          })
-        : null,
-    commit_id: out.commit_id,
-    commit_uri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
-    commit_hash: out.commit_hash,
-  };
+    repairApplied: parsed.repair_applied,
+    resultNodeId: resultNode?.id ?? null,
+    commitId: out.commit_id,
+    commitUri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
+    commitHash: out.commit_hash,
+  });
 }
 
 export async function replayRunEnd(client: pg.PoolClient, body: unknown, opts: ReplayWriteOptions) {
@@ -843,60 +748,32 @@ export async function replayRunEnd(client: pg.PoolClient, body: unknown, opts: R
     });
   }
   const endCid = runEndClientId(parsed.run_id);
-  const writeReq = {
-    tenant_id: tenancy.tenant_id,
+  const writeReq = buildReplayRunEndWriteRequest({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
     actor: parsed.actor ?? "replay_api",
-    input_text: parsed.summary ?? `run ${parsed.status}`,
-    auto_embed: false,
-    ...writeIdentity,
-    nodes: [
-      {
-        client_id: endCid,
-        type: "event" as const,
-        title: `Replay Run End ${parsed.status}`,
-        text_summary: parsed.summary ?? `Replay run ended with status=${parsed.status}`,
-        slots: {
-          replay_kind: "run_end",
-          run_id: parsed.run_id,
-          status: parsed.status,
-          summary: parsed.summary ?? null,
-          success_criteria: parsed.success_criteria ?? {},
-          metrics: parsed.metrics ?? {},
-          metadata: parsed.metadata ?? {},
-          ended_at: new Date().toISOString(),
-        },
-      },
-    ],
-    edges: [
-      {
-        type: "part_of" as const,
-        src: { client_id: endCid },
-        dst: { id: runNode.id },
-      },
-    ],
-  };
+    runId: parsed.run_id,
+    status: parsed.status,
+    summary: parsed.summary ?? null,
+    successCriteria: (parsed.success_criteria ?? {}) as Record<string, unknown>,
+    metrics: (parsed.metrics ?? {}) as Record<string, unknown>,
+    metadata: (parsed.metadata ?? {}) as Record<string, unknown>,
+    endedAt: new Date().toISOString(),
+    runNodeId: runNode.id,
+    writeIdentity: writeIdentity as Record<string, unknown>,
+  });
   const { out } = await applyReplayMemoryWrite(client, writeReq, opts);
   const endNode = out.nodes.find((n) => n.client_id === endCid) ?? out.nodes[0] ?? null;
-  return {
-    tenant_id: tenancy.tenant_id,
+  return buildReplayRunEndResult({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
-    run_id: parsed.run_id,
+    runId: parsed.run_id,
     status: parsed.status,
-    run_end_node_id: endNode?.id ?? null,
-    run_end_uri:
-      endNode?.id != null
-        ? buildAionisUri({
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            type: "event",
-            id: endNode.id,
-          })
-        : null,
-    commit_id: out.commit_id,
-    commit_uri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
-    commit_hash: out.commit_hash,
-  };
+    endNodeId: endNode?.id ?? null,
+    commitId: out.commit_id,
+    commitUri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
+    commitHash: out.commit_hash,
+  });
 }
 
 export async function replayRunGet(client: pg.PoolClient, body: unknown, opts: ReplayReadOptions) {
