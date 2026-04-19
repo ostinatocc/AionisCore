@@ -109,6 +109,15 @@ import {
   extractShadowValidationGateMetrics,
   validatePlaybookShadowReadiness,
 } from "./replay-repair-shadow-helpers.js";
+import {
+  buildReplayAutoPromotedSlots,
+  buildReplayPlaybookNoopPromoteResult,
+  buildReplayPlaybookProcedureWriteRequest,
+  buildReplayPlaybookVersionResult,
+  buildReplayPromotedSlots,
+  buildReplayRepairedSlots,
+  buildReplayReviewedSlots,
+} from "./replay-promotion-review-helpers.js";
 
 type ReplayWriteOptions = {
   defaultScope: string;
@@ -1835,23 +1844,17 @@ export async function replayPlaybookPromote(client: pg.PoolClient, body: unknown
       playbookId: parsed.playbook_id,
       latest,
     });
-    return {
-      tenant_id: tenancy.tenant_id,
+    return buildReplayPlaybookNoopPromoteResult({
+      tenantId: tenancy.tenant_id,
       scope: tenancy.scope,
-      playbook_id: parsed.playbook_id,
-      from_version: source.version_num,
-      to_version: latest.version_num,
-      status: latest.playbook_status ?? "draft",
+      playbookId: parsed.playbook_id,
+      fromVersion: source.version_num,
+      toVersion: latest.version_num,
+      status: (latest.playbook_status ?? "draft") as "draft" | "shadow" | "active" | "disabled",
       unchanged: !normalizedStable?.mutated,
       reason: normalizedStable?.mutated ? "normalized_latest_stable_anchor" : "already_target_status_on_latest",
-      playbook_node_id: normalizedStable?.node.id ?? source.id,
-      playbook_uri: buildAionisUri({
-        tenant_id: tenancy.tenant_id,
-        scope: tenancy.scope,
-        type: source.type,
-        id: normalizedStable?.node.id ?? source.id,
-      }),
-    };
+      nodeId: normalizedStable?.node.id ?? source.id,
+    });
   }
 
   const nextVersion = latest.version_num + 1;
@@ -1859,17 +1862,16 @@ export async function replayPlaybookPromote(client: pg.PoolClient, body: unknown
   const writeIdentity = replayWriteIdentityFromInput(parsed, replayWriteIdentityFromRow(source));
   const promotedTitle = source.title ?? `replay_playbook_${parsed.playbook_id.slice(0, 8)}`;
   const promotedTextSummary = source.text_summary ?? `Replay playbook ${parsed.playbook_id}`;
-  const promotedSlots = {
-    ...sourceSlots,
-    replay_kind: "playbook",
-    playbook_id: parsed.playbook_id,
+  const promotedSlots = buildReplayPromotedSlots({
+    sourceSlots,
+    playbookId: parsed.playbook_id,
     version: nextVersion,
     status: targetStatus,
-    promoted_from_version: source.version_num,
-    promoted_at: new Date().toISOString(),
-    promotion_note: parsed.note ?? null,
-    promotion_metadata: parsed.metadata ?? {},
-  };
+    sourceVersion: source.version_num,
+    promotedAt: new Date().toISOString(),
+    note: parsed.note ?? null,
+    metadata: (parsed.metadata ?? {}) as Record<string, unknown>,
+  });
   const promotedNodeFields = await buildStablePlaybookNodeFields({
     embedder: opts.embedder,
     scopeKey: tenancy.scope_key,
@@ -1885,54 +1887,34 @@ export async function replayPlaybookPromote(client: pg.PoolClient, body: unknown
     sourceCommitId: source.commit_id ?? null,
     slots: promotedSlots,
   });
-  const writeReq = {
-    tenant_id: tenancy.tenant_id,
+  const writeReq = buildReplayPlaybookProcedureWriteRequest({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
     actor: parsed.actor ?? "replay_promoter",
-    input_text: `promote playbook ${parsed.playbook_id} to ${targetStatus}`,
-    auto_embed: false,
-    ...writeIdentity,
-    nodes: [
-      {
-        client_id: promoteCid,
-        type: "procedure" as const,
-        title: promotedTitle,
-        text_summary: promotedTextSummary,
-        slots: promotedNodeFields.slots,
-        ...(promotedNodeFields.embedding ? { embedding: promotedNodeFields.embedding, embedding_model: promotedNodeFields.embedding_model } : {}),
-      },
-    ],
-    edges: [
-      {
-        type: "derived_from" as const,
-        src: { client_id: promoteCid },
-        dst: { id: source.id },
-      },
-    ],
-  };
+    inputText: `promote playbook ${parsed.playbook_id} to ${targetStatus}`,
+    writeIdentity: writeIdentity as unknown as Record<string, unknown>,
+    clientId: promoteCid,
+    title: promotedTitle,
+    textSummary: promotedTextSummary,
+    slots: promotedNodeFields.slots,
+    embedding: promotedNodeFields.embedding,
+    embeddingModel: promotedNodeFields.embedding_model,
+    sourceNodeId: source.id,
+  });
   const { out } = await applyReplayMemoryWrite(client, writeReq, opts);
   const promoted = out.nodes.find((n) => n.client_id === promoteCid) ?? out.nodes[0] ?? null;
-  return {
-    tenant_id: tenancy.tenant_id,
+  return buildReplayPlaybookVersionResult({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
-    playbook_id: parsed.playbook_id,
-    from_version: source.version_num,
-    to_version: nextVersion,
+    playbookId: parsed.playbook_id,
+    fromVersion: source.version_num,
+    toVersion: nextVersion,
     status: targetStatus,
-    playbook_node_id: promoted?.id ?? null,
-    playbook_uri:
-      promoted?.id != null
-        ? buildAionisUri({
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            type: "procedure",
-            id: promoted.id,
-          })
-        : null,
-    commit_id: out.commit_id,
-    commit_uri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
-    commit_hash: out.commit_hash,
-  };
+    nodeId: promoted?.id ?? null,
+    commitId: out.commit_id,
+    commitUri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
+    commitHash: out.commit_hash,
+  });
 }
 
 export async function replayPlaybookRepair(client: pg.PoolClient, body: unknown, opts: ReplayWriteOptions) {
@@ -1980,76 +1962,52 @@ export async function replayPlaybookRepair(client: pg.PoolClient, body: unknown,
   const repairCid = playbookClientId(parsed.playbook_id, nextVersion);
   const writeIdentity = replayWriteIdentityFromInput(parsed, replayWriteIdentityFromRow(source));
 
-  const writeReq = {
-    tenant_id: tenancy.tenant_id,
+  const repairedSlots = buildReplayRepairedSlots({
+    nextSlots,
+    playbookId: parsed.playbook_id,
+    version: nextVersion,
+    status: emittedStatus,
+    sourceVersion: source.version_num,
+    repairedAt: new Date().toISOString(),
+    note: parsed.note ?? null,
+    patch: patchObj,
+    summary,
+    reviewRequired,
+    actor: parsed.actor ?? "replay_repair",
+    targetStatus: parsed.target_status,
+    metadata: (parsed.metadata ?? {}) as Record<string, unknown>,
+  });
+  const writeReq = buildReplayPlaybookProcedureWriteRequest({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
     actor: parsed.actor ?? "replay_repair",
-    input_text: `repair playbook ${parsed.playbook_id} v${source.version_num}->v${nextVersion}`,
-    auto_embed: false,
-    ...writeIdentity,
-    nodes: [
-      {
-        client_id: repairCid,
-        type: "procedure" as const,
-        title: source.title ?? `replay_playbook_${parsed.playbook_id.slice(0, 8)}`,
-        text_summary: source.text_summary ?? `Replay playbook ${parsed.playbook_id}`,
-        slots: {
-          ...nextSlots,
-          replay_kind: "playbook",
-          playbook_id: parsed.playbook_id,
-          version: nextVersion,
-          status: emittedStatus,
-          repaired_from_version: source.version_num,
-          repaired_at: new Date().toISOString(),
-          repair_note: parsed.note ?? null,
-          repair_patch: patchObj,
-          repair_summary: summary,
-          repair_review: {
-            state: reviewRequired ? "pending_review" : "approved",
-            review_required: reviewRequired,
-            requested_at: new Date().toISOString(),
-            requested_by: parsed.actor ?? "replay_repair",
-            requested_target_status: parsed.target_status,
-            note: parsed.note ?? null,
-          },
-          repair_metadata: parsed.metadata ?? {},
-        },
-      },
-    ],
-    edges: [
-      {
-        type: "derived_from" as const,
-        src: { client_id: repairCid },
-        dst: { id: source.id },
-      },
-    ],
-  };
+    inputText: `repair playbook ${parsed.playbook_id} v${source.version_num}->v${nextVersion}`,
+    writeIdentity: writeIdentity as unknown as Record<string, unknown>,
+    clientId: repairCid,
+    title: source.title ?? `replay_playbook_${parsed.playbook_id.slice(0, 8)}`,
+    textSummary: source.text_summary ?? `Replay playbook ${parsed.playbook_id}`,
+    slots: repairedSlots,
+    sourceNodeId: source.id,
+  });
   const { out } = await applyReplayMemoryWrite(client, writeReq, opts);
   const repaired = out.nodes.find((n) => n.client_id === repairCid) ?? out.nodes[0] ?? null;
-  return {
-    tenant_id: tenancy.tenant_id,
+  return buildReplayPlaybookVersionResult({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
-    playbook_id: parsed.playbook_id,
-    from_version: source.version_num,
-    to_version: nextVersion,
+    playbookId: parsed.playbook_id,
+    fromVersion: source.version_num,
+    toVersion: nextVersion,
     status: emittedStatus,
-    review_required: reviewRequired,
-    review_state: reviewRequired ? "pending_review" : "approved",
-    repair_summary: summary,
-    playbook_node_id: repaired?.id ?? null,
-    playbook_uri:
-      repaired?.id != null
-        ? buildAionisUri({
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            type: "procedure",
-            id: repaired.id,
-          })
-        : null,
-    commit_id: out.commit_id,
-    commit_uri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
-    commit_hash: out.commit_hash,
-  };
+    nodeId: repaired?.id ?? null,
+    commitId: out.commit_id,
+    commitUri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
+    commitHash: out.commit_hash,
+    extra: {
+      review_required: reviewRequired,
+      review_state: reviewRequired ? "pending_review" : "approved",
+      repair_summary: summary,
+    },
+  });
 }
 
 export async function replayPlaybookRepairReview(client: pg.PoolClient, body: unknown, opts: ReplayPlaybookReviewOptions) {
@@ -2416,32 +2374,28 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
   const writeIdentity = replayWriteIdentityFromInput(parsed, replayWriteIdentityFromRow(source));
   const reviewedTitle = source.title ?? `replay_playbook_${parsed.playbook_id.slice(0, 8)}`;
   const reviewedTextSummary = source.text_summary ?? `Replay playbook ${parsed.playbook_id}`;
-  const reviewedSlots = {
-    ...sourceSlots,
-    replay_kind: "playbook",
-    playbook_id: parsed.playbook_id,
+  const reviewedSlots = buildReplayReviewedSlots({
+    sourceSlots,
+    sourceReview,
+    playbookId: parsed.playbook_id,
     version: nextVersion,
     status: nextStatus,
-    reviewed_from_version: source.version_num,
-    reviewed_at: reviewedAt,
-    repair_review: {
-      ...sourceReview,
-      state: reviewState,
-      action: parsed.action,
-      reviewed_at: reviewedAt,
-      reviewed_by: parsed.actor ?? "replay_review",
-      review_note: parsed.note ?? null,
-      auto_shadow_validate: parsed.auto_shadow_validate,
-      shadow_validation_mode: parsed.shadow_validation_mode,
-      shadow_validation_max_steps: parsed.shadow_validation_max_steps,
-      auto_promote_on_pass: parsed.auto_promote_on_pass,
-      auto_promote_target_status: parsed.auto_promote_target_status,
-      auto_promote_gate: parsed.auto_promote_gate,
-      target_status_on_approve: parsed.target_status_on_approve,
-      review_metadata: parsed.metadata ?? {},
-    },
-    shadow_validation_last: shadowValidation ?? sourceSlots.shadow_validation_last ?? null,
-  };
+    sourceVersion: source.version_num,
+    reviewedAt,
+    actor: parsed.actor ?? "replay_review",
+    action: parsed.action,
+    note: parsed.note ?? null,
+    autoShadowValidate: parsed.auto_shadow_validate,
+    shadowValidationMode: parsed.shadow_validation_mode,
+    shadowValidationMaxSteps: parsed.shadow_validation_max_steps,
+    autoPromoteOnPass: parsed.auto_promote_on_pass,
+    autoPromoteTargetStatus: parsed.auto_promote_target_status,
+    autoPromoteGate: (parsed.auto_promote_gate as Record<string, unknown> | null) ?? null,
+    targetStatusOnApprove: parsed.target_status_on_approve,
+    metadata: (parsed.metadata ?? {}) as Record<string, unknown>,
+    reviewState,
+    shadowValidation,
+  });
   const reviewedNodeFields = await buildStablePlaybookNodeFields({
     embedder: opts.embedder,
     scopeKey: tenancy.scope_key,
@@ -2457,31 +2411,20 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
     sourceCommitId: source.commit_id ?? null,
     slots: reviewedSlots,
   });
-  const writeReq = {
-    tenant_id: tenancy.tenant_id,
+  const writeReq = buildReplayPlaybookProcedureWriteRequest({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
     actor: parsed.actor ?? "replay_review",
-    input_text: `review playbook ${parsed.playbook_id} v${source.version_num} action=${parsed.action}`,
-    auto_embed: false,
-    ...writeIdentity,
-    nodes: [
-      {
-        client_id: reviewCid,
-        type: "procedure" as const,
-        title: reviewedTitle,
-        text_summary: reviewedTextSummary,
-        slots: reviewedNodeFields.slots,
-        ...(reviewedNodeFields.embedding ? { embedding: reviewedNodeFields.embedding, embedding_model: reviewedNodeFields.embedding_model } : {}),
-      },
-    ],
-    edges: [
-      {
-        type: "derived_from" as const,
-        src: { client_id: reviewCid },
-        dst: { id: source.id },
-      },
-    ],
-  };
+    inputText: `review playbook ${parsed.playbook_id} v${source.version_num} action=${parsed.action}`,
+    writeIdentity: writeIdentity as unknown as Record<string, unknown>,
+    clientId: reviewCid,
+    title: reviewedTitle,
+    textSummary: reviewedTextSummary,
+    slots: reviewedNodeFields.slots,
+    embedding: reviewedNodeFields.embedding,
+    embeddingModel: reviewedNodeFields.embedding_model,
+    sourceNodeId: source.id,
+  });
   const { out } = await applyReplayMemoryWrite(client, writeReq, opts);
   const reviewed = out.nodes.find((n) => n.client_id === reviewCid) ?? out.nodes[0] ?? null;
   let finalStatus: "draft" | "shadow" | "active" | "disabled" = nextStatus;
@@ -2538,20 +2481,16 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
     } else {
       const promoteVersion = nextVersion + 1;
       const promoteCid = playbookClientId(parsed.playbook_id, promoteVersion);
-      const promoteSlots = {
-        ...reviewedSlots,
+      const promoteSlots = buildReplayAutoPromotedSlots({
+        reviewedSlots,
         version: promoteVersion,
         status: parsed.auto_promote_target_status,
-        auto_promotion: {
-          triggered: true,
-          triggered_at: new Date().toISOString(),
-          from_version: nextVersion,
-          to_version: promoteVersion,
-          from_status: nextStatus,
-          to_status: parsed.auto_promote_target_status,
-          gate: gateEval,
-        },
-      };
+        triggeredAt: new Date().toISOString(),
+        fromVersion: nextVersion,
+        toVersion: promoteVersion,
+        fromStatus: nextStatus,
+        gate: gateEval as Record<string, unknown>,
+      });
       const promotedTitle = source.title ?? `replay_playbook_${parsed.playbook_id.slice(0, 8)}`;
       const promotedTextSummary = source.text_summary ?? `Replay playbook ${parsed.playbook_id}`;
       const promotedNodeFields = await buildStablePlaybookNodeFields({
@@ -2569,31 +2508,20 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
         sourceCommitId: out.commit_id ?? source.commit_id ?? null,
         slots: promoteSlots,
       });
-      const promoteReq = {
-        tenant_id: tenancy.tenant_id,
+      const promoteReq = buildReplayPlaybookProcedureWriteRequest({
+        tenantId: tenancy.tenant_id,
         scope: tenancy.scope,
         actor: parsed.actor ?? "replay_review",
-        input_text: `auto promote playbook ${parsed.playbook_id} v${nextVersion}->v${promoteVersion}`,
-        auto_embed: false,
-        ...writeIdentity,
-        nodes: [
-          {
-            client_id: promoteCid,
-            type: "procedure" as const,
-            title: promotedTitle,
-            text_summary: promotedTextSummary,
-            slots: promotedNodeFields.slots,
-            ...(promotedNodeFields.embedding ? { embedding: promotedNodeFields.embedding, embedding_model: promotedNodeFields.embedding_model } : {}),
-          },
-        ],
-        edges: [
-          {
-            type: "derived_from" as const,
-            src: { client_id: promoteCid },
-            dst: { id: reviewed?.id ?? source.id },
-          },
-        ],
-      };
+        inputText: `auto promote playbook ${parsed.playbook_id} v${nextVersion}->v${promoteVersion}`,
+        writeIdentity: writeIdentity as unknown as Record<string, unknown>,
+        clientId: promoteCid,
+        title: promotedTitle,
+        textSummary: promotedTextSummary,
+        slots: promotedNodeFields.slots,
+        embedding: promotedNodeFields.embedding,
+        embeddingModel: promotedNodeFields.embedding_model,
+        sourceNodeId: reviewed?.id ?? source.id,
+      });
       const { out: outPromote } = await applyReplayMemoryWrite(client, promoteReq, opts);
       const promotedNode = outPromote.nodes.find((n) => n.client_id === promoteCid) ?? outPromote.nodes[0] ?? null;
       finalStatus = parsed.auto_promote_target_status;
