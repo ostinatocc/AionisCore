@@ -8,7 +8,6 @@ import { stableUuid } from "../util/uuid.js";
 import { badRequest, HttpError } from "../util/http.js";
 import { capabilityContract, type CapabilityFailureMode } from "../capability-contract.js";
 import { assertWriteStoreAccessContract, createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
-import { DEFAULT_ASSOCIATIVE_LINKING_CONFIG } from "./associative-linking-config.js";
 import {
   AssociativeLinkTriggerPayloadSchema,
   DeferredAssociativeLinkFollowupSchema,
@@ -24,6 +23,13 @@ import {
   normalizeExecutionNativeSlots,
   restoreStableSystemSlots,
 } from "./write-execution-native.js";
+import {
+  assertSingleScopeWrite,
+  nodeEmbedText,
+  resolveWriteRefId,
+  resolveWriteScope,
+  selectAssociativeLinkSourceNodeIds,
+} from "./write-shared.js";
 import { buildAssociativeLinkOutboxInsert } from "../jobs/associative-linking-lib.js";
 
 type WriteResult = {
@@ -63,21 +69,6 @@ type WriteResult = {
   warnings?: Array<{ code: string; message: string; details?: Record<string, unknown> }>;
   distillation?: WriteDistillationSummary;
 };
-
-function resolveScope(reqScope: string | undefined, defaultScope: string): string {
-  return (reqScope && reqScope.trim()) || defaultScope;
-}
-
-function resolveId(v: { id?: string; client_id?: string }, clientIdToId: Map<string, string>): string {
-  if (v.id) return v.id;
-  if (v.client_id) {
-    const key = v.client_id.trim();
-    const out = clientIdToId.get(key);
-    if (!out) throw new Error(`unknown client_id reference: ${v.client_id}`);
-    return out;
-  }
-  throw new Error("missing id/client_id");
-}
 
 function stableNodeIdFromClientId(scope: string, client_id: string): string {
   // Contract: client_id is a stable external key within a scope, so server-generated ids must
@@ -166,17 +157,6 @@ export type EffectiveWritePolicy = {
   topic_cluster_async: boolean;
 };
 
-function selectAssociativeLinkSourceNodeIds(nodes: PreparedNode[]): string[] {
-  const allowed = new Set<string>(DEFAULT_ASSOCIATIVE_LINKING_CONFIG.source_node_types);
-  const ids: string[] = [];
-  for (const node of nodes) {
-    if (!allowed.has(node.type)) continue;
-    ids.push(node.id);
-    if (ids.length >= DEFAULT_ASSOCIATIVE_LINKING_CONFIG.max_source_node_ids) break;
-  }
-  return ids;
-}
-
 export function computeEffectiveWritePolicy(
   prepared: PreparedWrite,
   defaults: { autoTopicClusterOnWrite: boolean; topicClusterAsyncOnWrite: boolean },
@@ -186,39 +166,6 @@ export function computeEffectiveWritePolicy(
     (prepared.requested_trigger_topic_cluster ?? defaults.autoTopicClusterOnWrite) && hasEvents;
   const asyncMode = prepared.requested_topic_cluster_async ?? defaults.topicClusterAsyncOnWrite;
   return { trigger_topic_cluster: trigger, topic_cluster_async: asyncMode };
-}
-
-function nodeEmbedText(n: PreparedNode, fallbackEventText: string | undefined): string | null {
-  const title = n.title?.trim();
-  const summary = n.text_summary?.trim();
-  if (n.type === "event" || n.type === "evidence") return summary ?? title ?? fallbackEventText ?? null;
-  if (n.type === "entity" || n.type === "topic" || n.type === "concept") return title ?? summary ?? null;
-  if (n.type === "rule") return summary ?? title ?? null;
-  return summary ?? title ?? null;
-}
-
-function assertSingleScopeWrite(scope: string, scopePublic: string, nodes: PreparedNode[], edges: PreparedEdge[]): void {
-  const crossScopeNode = nodes.find((n) => n.scope !== scope);
-  if (crossScopeNode) {
-    badRequest("cross_scope_node_not_allowed", "write batch cannot override node scope", {
-      request_scope: scopePublic,
-      request_scope_key: scope,
-      node_id: crossScopeNode.id,
-      client_id: crossScopeNode.client_id ?? null,
-      node_scope_key: crossScopeNode.scope,
-    });
-  }
-  const crossScopeEdge = edges.find((e) => e.scope !== scope);
-  if (crossScopeEdge) {
-    badRequest("cross_scope_edge_not_allowed", "write batch cannot override edge scope", {
-      request_scope: scopePublic,
-      request_scope_key: scope,
-      edge_id: crossScopeEdge.id,
-      edge_scope_key: crossScopeEdge.scope,
-      src_id: crossScopeEdge.src_id,
-      dst_id: crossScopeEdge.dst_id,
-    });
-  }
 }
 
 export async function prepareMemoryWrite(
@@ -272,7 +219,7 @@ export async function prepareMemoryWrite(
   const seenNodeIds = new Map<string, SeenPreparedNodeRef>();
   const nodes: PreparedNode[] = [];
   for (const [index, n] of parsed.nodes.entries()) {
-    const nodeScopePublic = resolveScope(n.scope, tenancy.scope);
+    const nodeScopePublic = resolveWriteScope(n.scope, tenancy.scope);
     const nodeScope = toTenantScopeKey(nodeScopePublic, tenancy.tenant_id, defaultTenantId);
     const client_id = n.client_id?.trim();
     if (n.client_id && (!client_id || client_id.length === 0)) {
@@ -360,15 +307,15 @@ export async function prepareMemoryWrite(
   }
 
   const edges: PreparedEdge[] = parsed.edges.map((e) => {
-    const edgeScopePublic = resolveScope(e.scope, tenancy.scope);
+    const edgeScopePublic = resolveWriteScope(e.scope, tenancy.scope);
     const edgeScope = toTenantScopeKey(edgeScopePublic, tenancy.tenant_id, defaultTenantId);
     const id =
       e.id ??
       stableUuid(
         `${edgeScope}:edge:${inputText ?? parsed.input_sha256 ?? "noinput"}:${e.type}:${e.src.id ?? e.src.client_id}:${e.dst.id ?? e.dst.client_id}`,
       );
-    const src_id = resolveId(e.src, clientIdToId);
-    const dst_id = resolveId(e.dst, clientIdToId);
+    const src_id = resolveWriteRefId(e.src, clientIdToId);
+    const dst_id = resolveWriteRefId(e.dst, clientIdToId);
     return { ...e, id, scope: edgeScope, src_id, dst_id };
   });
 
