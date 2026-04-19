@@ -18,10 +18,9 @@ import { resolveTenantScope } from "./tenant.js";
 import { resolveMemoryLayerPolicy } from "./layer-policy.js";
 import {
   buildActionRecallPacket,
-  isWorkflowPromotionReady,
-  recallAnchorMeta,
   type ActionRecallPacket,
 } from "./recall-action-packet.js";
+import { prioritizeRankedForActionRecall, spreadActivation } from "./recall-ranking.js";
 import { buildRuntimeToolHintsFromAnchorNodes } from "./runtime-tool-hints.js";
 import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
 import type { MemoryLayerId, MemoryLayerPolicy } from "./layer-policy.js";
@@ -44,12 +43,6 @@ export type MemoryRecallOptions = {
 
 type NodeRow = RecallNodeRow;
 type EdgeRow = RecallEdgeRow;
-
-function edgeTypeWeight(t: string): number {
-  if (t === "derived_from") return 1.0;
-  if (t === "part_of") return 0.9;
-  return 0.6; // related_to
-}
 
 function parseVectorText(v: string, maxPreviewDims: number): { dims: number; preview: number[] } {
   const s = v.trim();
@@ -163,85 +156,6 @@ const URI_NODE_TYPES = new Set<string>(AIONIS_URI_NODE_TYPES);
 
 function isActionRecallEndpoint(endpoint: "recall" | "recall_text" | "planning_context" | "context_assemble"): boolean {
   return endpoint === "planning_context" || endpoint === "context_assemble";
-}
-
-function actionRecallPriority(node: NodeRow): number {
-  const meta = recallAnchorMeta(node);
-  if (!meta.anchorKind) {
-    if (node.type === "procedure") return 4;
-    if (node.type === "rule") return 8;
-    if (node.type === "concept" || node.type === "topic" || node.type === "entity") return 10;
-    return 12;
-  }
-  if (meta.anchorKind === "workflow") {
-    if (meta.executionKind === "workflow_candidate" || meta.workflowPromotion?.promotion_state === "candidate") {
-      return isWorkflowPromotionReady(meta.workflowPromotion) ? 1 : 2;
-    }
-    return 0;
-  }
-  if (meta.anchorKind === "pattern") {
-    if (meta.patternState === "stable" && !meta.counterEvidenceOpen) return 3;
-    return 4;
-  }
-  if (meta.anchorKind === "decision") return 5;
-  if (meta.anchorKind === "execution") return 6;
-  return 7;
-}
-
-function prioritizeRankedForActionRecall(ranked: Array<{ id: string; activation: number; score: number }>, nodes: Map<string, NodeRow>) {
-  return [...ranked].sort((a, b) => {
-    const aNode = nodes.get(a.id);
-    const bNode = nodes.get(b.id);
-    const aPriority = aNode ? actionRecallPriority(aNode) : 99;
-    const bPriority = bNode ? actionRecallPriority(bNode) : 99;
-    if (aPriority !== bPriority) return aPriority - bPriority;
-    return b.score - a.score || a.id.localeCompare(b.id);
-  });
-}
-
-// Very small spreading-activation MVP: 1-2 iterations, bounded by the neighborhood we fetched.
-function spreadActivation(seeds: RecallCandidate[], nodes: Map<string, NodeRow>, edges: EdgeRow[], hops: number) {
-  const act = new Map<string, number>();
-  for (const s of seeds) {
-    // similarity in [0,1], salience in [0,1]
-    const a = Math.max(0, Math.min(1, 0.75 * s.similarity + 0.25 * s.salience));
-    act.set(s.id, a);
-  }
-
-  const adj = new Map<string, EdgeRow[]>();
-  for (const e of edges) {
-    if (!adj.has(e.src_id)) adj.set(e.src_id, []);
-    if (!adj.has(e.dst_id)) adj.set(e.dst_id, []);
-    adj.get(e.src_id)!.push(e);
-    adj.get(e.dst_id)!.push(e);
-  }
-
-  for (let iter = 0; iter < hops; iter++) {
-    const next = new Map(act);
-    for (const [nid, a] of act.entries()) {
-      const es = adj.get(nid) ?? [];
-      for (const e of es) {
-        const other = e.src_id === nid ? e.dst_id : e.src_id;
-        const w = edgeTypeWeight(e.type) * e.weight * e.confidence;
-        const add = a * w * 0.5; // conservative
-        next.set(other, Math.max(next.get(other) ?? 0, add));
-      }
-    }
-    for (const [k, v] of next.entries()) act.set(k, Math.max(act.get(k) ?? 0, v));
-  }
-
-  const scored = Array.from(act.entries())
-    .map(([id, activation]) => {
-      const n = nodes.get(id);
-      const conf = n?.confidence ?? 0.5;
-      const sal = n?.salience ?? 0.5;
-      // Blend activation with node confidence/salience to stabilize ranking.
-      const score = 0.7 * activation + 0.15 * conf + 0.15 * sal;
-      return { id, activation, score };
-    })
-    .sort((a, b) => b.score - a.score);
-
-  return scored;
 }
 
 function enforceHardContract(parsed: MemoryRecallInput, auth: RecallAuth) {
