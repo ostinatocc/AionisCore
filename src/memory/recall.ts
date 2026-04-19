@@ -20,10 +20,16 @@ import {
   buildActionRecallPacket,
   type ActionRecallPacket,
 } from "./recall-action-packet.js";
+import {
+  allowedLayersForPolicy,
+  isDraftTopic,
+  parseVectorText,
+  pickSlotsPreview,
+  resolveCompressionLayer,
+} from "./recall-debug-layer-helpers.js";
 import { prioritizeRankedForActionRecall, spreadActivation } from "./recall-ranking.js";
 import { buildRuntimeToolHintsFromAnchorNodes } from "./runtime-tool-hints.js";
 import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
-import type { MemoryLayerId, MemoryLayerPolicy } from "./layer-policy.js";
 
 export type RecallAuth = {
   allow_debug_embeddings: boolean;
@@ -43,76 +49,6 @@ export type MemoryRecallOptions = {
 
 type NodeRow = RecallNodeRow;
 type EdgeRow = RecallEdgeRow;
-
-function parseVectorText(v: string, maxPreviewDims: number): { dims: number; preview: number[] } {
-  const s = v.trim();
-  if (!s.startsWith("[") || !s.endsWith("]")) throw new Error("unexpected vector text");
-  const body = s.slice(1, -1).trim();
-  if (!body) return { dims: 0, preview: [] };
-  const parts = body.split(",");
-  const preview: number[] = [];
-  for (let i = 0; i < parts.length && i < maxPreviewDims; i++) {
-    preview.push(Number(parts[i]));
-  }
-  return { dims: parts.length, preview };
-}
-
-function isDraftTopic(n: NodeRow): boolean {
-  return n.type === "topic" && (n.topic_state ?? "active") === "draft";
-}
-
-function resolveCompressionLayer(n: NodeRow): MemoryLayerId | null {
-  const executionLayer = typeof n.slots?.execution_native_v1?.compression_layer === "string"
-    ? n.slots.execution_native_v1.compression_layer.trim()
-    : "";
-  if (executionLayer === "L0" || executionLayer === "L1" || executionLayer === "L2" || executionLayer === "L3"
-    || executionLayer === "L4" || executionLayer === "L5") {
-    return executionLayer;
-  }
-  const anchorLevel = typeof n.slots?.execution_native_v1?.anchor_level === "string"
-    ? n.slots.execution_native_v1.anchor_level.trim()
-    : typeof n.slots?.anchor_v1?.anchor_level === "string"
-      ? n.slots.anchor_v1.anchor_level.trim()
-      : "";
-  if (anchorLevel === "L0" || anchorLevel === "L1" || anchorLevel === "L2" || anchorLevel === "L3" || anchorLevel === "L4" || anchorLevel === "L5") {
-    return anchorLevel;
-  }
-  if (n.type === "event") return "L0";
-  if (n.type === "evidence") {
-    if (n.slots?.summary_kind === "write_distillation_evidence") return "L1";
-    return "L0";
-  }
-  if (n.type === "topic") return "L2";
-  if (n.type === "concept") {
-    if (typeof n.slots?.compression_layer === "string" && n.slots.compression_layer.trim()) {
-      const layer = n.slots.compression_layer.trim();
-      if (layer === "L0" || layer === "L1" || layer === "L2" || layer === "L3" || layer === "L4" || layer === "L5") {
-        return layer;
-      }
-    }
-    if (n.slots?.summary_kind === "write_distillation_fact") return "L1";
-    if (n.slots?.summary_kind === "compression_rollup") return "L3";
-  }
-  return null;
-}
-
-function allowedLayersForPolicy(layerPolicy: MemoryLayerPolicy | null): Set<MemoryLayerId> | null {
-  if (!layerPolicy || layerPolicy.source !== "request_override") return null;
-  return new Set<MemoryLayerId>([
-    ...layerPolicy.preferred_layers,
-    ...layerPolicy.fallback_layers,
-    ...layerPolicy.trust_anchor_layers,
-  ]);
-}
-
-function pickSlotsPreview(slots: unknown, maxKeys: number): Record<string, unknown> | null {
-  if (!slots || typeof slots !== "object" || Array.isArray(slots)) return null;
-  const obj = slots as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
-  const out: Record<string, unknown> = {};
-  for (const k of keys.slice(0, maxKeys)) out[k] = obj[k];
-  return out;
-}
 
 type NodeDTO = {
   id: string;
