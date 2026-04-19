@@ -141,6 +141,11 @@ import {
   buildReplayTimelineEntry,
   collectReplayArtifactRefs,
 } from "./replay-read-compile-surfaces.js";
+import {
+  buildReplayDispatchSurface,
+  buildReplayPlaybookCandidateSurface,
+  buildReplayPlaybookGetSurface,
+} from "./replay-playbook-read-dispatch-surfaces.js";
 
 type ReplayWriteOptions = {
   defaultScope: string;
@@ -1538,37 +1543,16 @@ export async function replayPlaybookGet(client: pg.PoolClient, body: unknown, op
       tenant_id: tenancy.tenant_id,
     });
   }
-  const slotsObj = asObject(row.slots) ?? {};
   return {
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
-    playbook: {
-      playbook_id: parsed.playbook_id,
-      name: row.title,
-      text_summary: row.text_summary,
-      version: row.version_num,
-      status: row.playbook_status ?? "draft",
-      matchers: asObject(slotsObj.matchers) ?? {},
-      success_criteria: asObject(slotsObj.success_criteria) ?? {},
-      risk_profile: toStringOrNull(slotsObj.risk_profile) ?? "medium",
-      source_run_id: toStringOrNull(slotsObj.source_run_id),
-      steps_template: Array.isArray(slotsObj.steps_template) ? slotsObj.steps_template : [],
-      compile_summary: asObject(slotsObj.compile_summary) ?? {},
-      uri: buildAionisUri({
-        tenant_id: tenancy.tenant_id,
-        scope: tenancy.scope,
-        type: row.type,
-        id: row.id,
-      }),
-      node_id: row.id,
-      commit_id: row.commit_id,
-      commit_uri:
-        row.commit_id != null
-          ? buildCommitUri(tenancy.tenant_id, tenancy.scope, row.commit_id)
-          : null,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-    },
+    playbook: buildReplayPlaybookGetSurface({
+      tenantId: tenancy.tenant_id,
+      scope: tenancy.scope,
+      playbookId: parsed.playbook_id,
+      row,
+      commitUri: row.commit_id != null ? buildCommitUri(tenancy.tenant_id, tenancy.scope, row.commit_id) : null,
+    }),
   };
 }
 
@@ -1600,32 +1584,14 @@ export async function replayPlaybookCandidate(client: pg.PoolClient, body: unkno
     playbookStatus: row.playbook_status,
     playbookSlots: slotsObj,
   });
-  return {
-    tenant_id: tenancy.tenant_id,
+  return buildReplayPlaybookCandidateSurface({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
-    playbook: {
-      playbook_id: parsed.playbook_id,
-      version: row.version_num,
-      status: row.playbook_status ?? "draft",
-      name: row.title,
-      uri: buildAionisUri({
-        tenant_id: tenancy.tenant_id,
-        scope: tenancy.scope,
-        type: row.type,
-        id: row.id,
-      }),
-      node_id: row.id,
-    },
-    candidate: {
-      eligible_for_deterministic_replay: deterministicGate.matched,
-      recommended_mode: deterministicGate.effective_mode,
-      next_action: nextActionForReplayDeterministicGate(deterministicGate),
-      mismatch_reasons: deterministicGate.mismatch_reasons,
-      rejectable: deterministicGate.enabled && deterministicGate.decision === "rejected",
-    },
-    deterministic_gate: deterministicGate,
-    cost_signals: buildReplayCostSignals({ deterministic_gate: deterministicGate }),
-  };
+    playbookId: parsed.playbook_id,
+    row,
+    deterministicGate: deterministicGate as unknown as Record<string, unknown>,
+    nextAction: nextActionForReplayDeterministicGate(deterministicGate),
+  });
 }
 
 export async function replayPlaybookDispatch(client: pg.PoolClient, body: unknown, opts: ReplayPlaybookRunOptions) {
@@ -1668,38 +1634,28 @@ export async function replayPlaybookDispatch(client: pg.PoolClient, body: unknow
       },
       opts,
     );
-    return {
-      tenant_id: (candidate as any).tenant_id,
+    return buildReplayDispatchSurface({
+      tenantId: (candidate as any).tenant_id,
       scope: (candidate as any).scope,
-      dispatch: {
-        decision: "deterministic_replay_executed",
-        primary_inference_skipped: true,
-        fallback_executed: false,
-      },
+      decision: "deterministic_replay_executed",
+      primaryInferenceSkipped: true,
+      fallbackExecuted: false,
       candidate,
       replay,
-      cost_signals: buildReplayCostSignals({
-        deterministic_gate: (replay as any)?.deterministic_gate,
-        dispatch: { fallback_executed: false },
-      }),
-    };
+      deterministicGate: ((replay as any)?.deterministic_gate ?? null) as Record<string, unknown> | null,
+    });
   }
   if (parsed.execute_fallback === false) {
-    return {
-      tenant_id: (candidate as any).tenant_id,
+    return buildReplayDispatchSurface({
+      tenantId: (candidate as any).tenant_id,
       scope: (candidate as any).scope,
-      dispatch: {
-        decision: "candidate_only",
-        primary_inference_skipped: false,
-        fallback_executed: false,
-      },
+      decision: "candidate_only",
+      primaryInferenceSkipped: false,
+      fallbackExecuted: false,
       candidate,
       replay: null,
-      cost_signals: buildReplayCostSignals({
-        deterministic_gate: (candidate as any)?.deterministic_gate,
-        dispatch: { fallback_executed: false },
-      }),
-    };
+      deterministicGate: ((candidate as any)?.deterministic_gate ?? null) as Record<string, unknown> | null,
+    });
   }
   const replay = await replayPlaybookRun(
     client,
@@ -1722,21 +1678,16 @@ export async function replayPlaybookDispatch(client: pg.PoolClient, body: unknow
     },
     opts,
   );
-  return {
-    tenant_id: (candidate as any).tenant_id,
+  return buildReplayDispatchSurface({
+    tenantId: (candidate as any).tenant_id,
     scope: (candidate as any).scope,
-    dispatch: {
-      decision: "fallback_replay_executed",
-      primary_inference_skipped: false,
-      fallback_executed: true,
-    },
+    decision: "fallback_replay_executed",
+    primaryInferenceSkipped: false,
+    fallbackExecuted: true,
     candidate,
     replay,
-    cost_signals: buildReplayCostSignals({
-      deterministic_gate: (replay as any)?.deterministic_gate,
-      dispatch: { fallback_executed: true },
-    }),
-  };
+    deterministicGate: ((replay as any)?.deterministic_gate ?? null) as Record<string, unknown> | null,
+  });
 }
 
 export async function replayPlaybookPromote(client: pg.PoolClient, body: unknown, opts: ReplayWriteOptions) {
