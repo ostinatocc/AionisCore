@@ -1,0 +1,354 @@
+import { pickPreferredDelegationRecordsSummary } from "../memory/delegation-records-surface.js";
+import type {
+  AssemblySummary,
+  ExecutionPacketAssemblySummary,
+  ExecutionSummary,
+  PlannerPacketSummarySurface,
+  PlanningSummary,
+} from "./planning-summary.js";
+import {
+  buildExecutionCollaborationSummary,
+  buildExecutionContinuitySnapshotSummary,
+  buildExecutionStrategySummary,
+} from "./planning-summary-execution.js";
+import {
+  buildExecutionForgettingSummary,
+  buildExecutionMaintenanceSummary,
+} from "./planning-summary-forgetting.js";
+import {
+  buildFirstStepRecommendation,
+  buildPlannerExplanation,
+} from "./planning-summary-planner.js";
+import {
+  buildExecutionCollaborationRoutingSummary,
+  buildExecutionDelegationRecordsSummary,
+  buildExecutionInstrumentationSummary,
+  buildExecutionRoutingSignalSummary,
+} from "./planning-summary-routing.js";
+import { buildExecutionMemorySummaryBundle } from "./planning-summary-surfaces.js";
+
+type ExperienceRecommendationProjection = {
+  history_applied: boolean;
+  selected_tool: string | null;
+  path_source_kind: "recommended_workflow" | "candidate_workflow" | "none";
+  file_path: string | null;
+  combined_next_action: string | null;
+};
+
+function buildExecutionPacketAssemblySummary(
+  packetAssembly?: Partial<ExecutionPacketAssemblySummary> | null,
+): ExecutionPacketAssemblySummary {
+  return {
+    packet_source_mode:
+      packetAssembly && typeof packetAssembly.packet_source_mode === "string"
+        ? packetAssembly.packet_source_mode
+        : null,
+    state_first_assembly:
+      packetAssembly && typeof packetAssembly.state_first_assembly === "boolean"
+        ? packetAssembly.state_first_assembly
+        : null,
+    execution_packet_v1_present:
+      packetAssembly && typeof packetAssembly.execution_packet_v1_present === "boolean"
+        ? packetAssembly.execution_packet_v1_present
+        : null,
+    execution_state_v1_present:
+      packetAssembly && typeof packetAssembly.execution_state_v1_present === "boolean"
+        ? packetAssembly.execution_state_v1_present
+        : null,
+  };
+}
+
+function buildPlanningSurface(args: {
+  layeredContext: Record<string, unknown>;
+  plannerSurface?: PlannerPacketSummarySurface;
+}): PlannerPacketSummarySurface {
+  const actionRecallPacket =
+    args.layeredContext.action_recall_packet && typeof args.layeredContext.action_recall_packet === "object"
+      ? (args.layeredContext.action_recall_packet as Record<string, unknown>)
+      : {};
+  return args.plannerSurface ?? {
+    action_recall_packet: args.layeredContext.action_recall_packet,
+    pattern_signals: args.layeredContext.pattern_signals,
+    workflow_signals: args.layeredContext.workflow_signals,
+    recommended_workflows: args.layeredContext.recommended_workflows ?? actionRecallPacket.recommended_workflows,
+    candidate_workflows: args.layeredContext.candidate_workflows ?? actionRecallPacket.candidate_workflows,
+    candidate_patterns: args.layeredContext.candidate_patterns ?? actionRecallPacket.candidate_patterns,
+    trusted_patterns: args.layeredContext.trusted_patterns ?? actionRecallPacket.trusted_patterns,
+    contested_patterns: args.layeredContext.contested_patterns ?? actionRecallPacket.contested_patterns,
+    rehydration_candidates: args.layeredContext.rehydration_candidates ?? actionRecallPacket.rehydration_candidates,
+    supporting_knowledge: args.layeredContext.supporting_knowledge ?? actionRecallPacket.supporting_knowledge,
+  };
+}
+
+export function buildExecutionSummarySurface(args: {
+  planner_packet?: unknown;
+  surface: PlannerPacketSummarySurface;
+  packet_assembly?: Partial<ExecutionPacketAssemblySummary> | null;
+  tools?: unknown;
+  cost_signals?: unknown;
+  execution_packet?: unknown;
+  execution_artifacts?: unknown;
+  execution_evidence?: unknown;
+  delegation_records?: unknown;
+}): ExecutionSummary {
+  const summaryBundle = buildExecutionMemorySummaryBundle(args.surface);
+  const strategySummary = buildExecutionStrategySummary({
+    surface: args.surface,
+    summaryBundle,
+    tools: args.tools,
+    costSignals: args.cost_signals,
+  });
+  const collaborationSummary = buildExecutionCollaborationSummary({
+    executionPacket: args.execution_packet,
+    executionArtifacts: args.execution_artifacts,
+    executionEvidence: args.execution_evidence,
+  });
+  const routingSignalSummary = buildExecutionRoutingSignalSummary({
+    surface: args.surface,
+    summaryBundle,
+    tools: args.tools,
+  });
+  const maintenanceSummary = buildExecutionMaintenanceSummary({
+    surface: args.surface,
+    summaryBundle,
+    costSignals: args.cost_signals,
+    tools: args.tools,
+  });
+  const forgettingSummary = buildExecutionForgettingSummary({
+    surface: args.surface,
+    summaryBundle,
+    costSignals: args.cost_signals,
+    tools: args.tools,
+  });
+  const collaborationRoutingSummary = buildExecutionCollaborationRoutingSummary({
+    executionPacket: args.execution_packet,
+    strategySummary,
+    collaborationSummary,
+    routingSummary: routingSignalSummary,
+  });
+  const delegationRecordsSummary = buildExecutionDelegationRecordsSummary({
+    strategySummary,
+    collaborationSummary,
+    collaborationRoutingSummary,
+  });
+  const persistedDelegationRecordsSummary = pickPreferredDelegationRecordsSummary(args.delegation_records);
+  const instrumentationSummary = buildExecutionInstrumentationSummary({
+    surface: args.surface,
+    summaryBundle,
+    tools: args.tools,
+  });
+  return {
+    summary_version: "execution_summary_v1",
+    planner_packet: args.planner_packet ?? null,
+    pattern_signals: Array.isArray(args.surface.pattern_signals) ? args.surface.pattern_signals : [],
+    workflow_signals: Array.isArray(args.surface.workflow_signals) ? args.surface.workflow_signals : [],
+    packet_assembly: buildExecutionPacketAssemblySummary(args.packet_assembly),
+    strategy_summary: strategySummary,
+    collaboration_summary: collaborationSummary,
+    continuity_snapshot_summary: buildExecutionContinuitySnapshotSummary({
+      strategySummary,
+      collaborationSummary,
+      routingSummary: routingSignalSummary,
+      maintenanceSummary,
+    }),
+    routing_signal_summary: routingSignalSummary,
+    maintenance_summary: maintenanceSummary,
+    forgetting_summary: forgettingSummary,
+    collaboration_routing_summary: collaborationRoutingSummary,
+    delegation_records_summary: persistedDelegationRecordsSummary ?? delegationRecordsSummary,
+    instrumentation_summary: instrumentationSummary,
+    ...summaryBundle,
+  };
+}
+
+export function buildPlanningSummary(args: {
+  rules?: unknown;
+  tools?: unknown;
+  layered_context?: unknown;
+  planner_surface?: PlannerPacketSummarySurface;
+  cost_signals?: unknown;
+  context_est_tokens: number;
+  context_compaction_profile: "balanced" | "aggressive";
+  optimization_profile: "balanced" | "aggressive" | null;
+  recall_mode?: string | null;
+  experience_intelligence?: unknown;
+}): PlanningSummary {
+  const rules = args.rules && typeof args.rules === "object" ? (args.rules as Record<string, unknown>) : {};
+  const tools = args.tools && typeof args.tools === "object" ? (args.tools as Record<string, unknown>) : {};
+  const decision = tools.decision && typeof tools.decision === "object" ? (tools.decision as Record<string, unknown>) : {};
+  const layeredContext =
+    args.layered_context && typeof args.layered_context === "object"
+      ? (args.layered_context as Record<string, unknown>)
+      : {};
+  const layeredStats =
+    layeredContext.stats && typeof layeredContext.stats === "object"
+      ? (layeredContext.stats as Record<string, unknown>)
+      : {};
+  const staticInjection =
+    layeredContext.static_injection && typeof layeredContext.static_injection === "object"
+      ? (layeredContext.static_injection as Record<string, unknown>)
+      : {};
+  const costSignals =
+    args.cost_signals && typeof args.cost_signals === "object" ? (args.cost_signals as Record<string, unknown>) : {};
+  const plannerSurface = buildPlanningSurface({
+    layeredContext,
+    plannerSurface: args.planner_surface,
+  });
+  const summaryBundle = buildExecutionMemorySummaryBundle(plannerSurface);
+  const patternSignalSummary = summaryBundle.pattern_signal_summary;
+  const workflowSignalSummary = summaryBundle.workflow_signal_summary;
+  const actionPacketSummary = summaryBundle.action_packet_summary;
+  const workflowLifecycleSummary = summaryBundle.workflow_lifecycle_summary;
+  const workflowMaintenanceSummary = summaryBundle.workflow_maintenance_summary;
+  const distillationSignalSummary = summaryBundle.distillation_signal_summary;
+  const patternLifecycleSummary = summaryBundle.pattern_lifecycle_summary;
+  const patternMaintenanceSummary = summaryBundle.pattern_maintenance_summary;
+  const policyLifecycleSummary = summaryBundle.policy_lifecycle_summary;
+  const policyMaintenanceSummary = summaryBundle.policy_maintenance_summary;
+  const continuityCarrierSummary = summaryBundle.continuity_carrier_summary;
+  const forgettingSummary = buildExecutionForgettingSummary({
+    surface: plannerSurface,
+    summaryBundle,
+    costSignals,
+    tools,
+  });
+  const experienceRecommendation =
+    args.experience_intelligence && typeof args.experience_intelligence === "object"
+      ? ((args.experience_intelligence as Record<string, unknown>).recommendation as Record<string, unknown> | undefined)
+      : undefined;
+  const experiencePath =
+    experienceRecommendation?.path && typeof experienceRecommendation.path === "object"
+      ? (experienceRecommendation.path as Record<string, unknown>)
+      : null;
+  const experienceSummary: ExperienceRecommendationProjection | null = experienceRecommendation
+    ? {
+        history_applied: experienceRecommendation.history_applied === true,
+        selected_tool: typeof experienceRecommendation.tool === "object" && experienceRecommendation.tool && typeof (experienceRecommendation.tool as any).selected_tool === "string"
+          ? (experienceRecommendation.tool as any).selected_tool
+          : null,
+        path_source_kind:
+          experiencePath?.source_kind === "recommended_workflow" || experiencePath?.source_kind === "candidate_workflow"
+            ? experiencePath.source_kind
+            : "none",
+        file_path: typeof experiencePath?.file_path === "string" ? experiencePath.file_path : null,
+        combined_next_action:
+          typeof experienceRecommendation.combined_next_action === "string"
+            ? experienceRecommendation.combined_next_action
+            : null,
+      }
+    : null;
+  const selectedTool =
+    typeof tools.selection === "object" && tools.selection && typeof (tools.selection as any).selected === "string"
+      ? (tools.selection as any).selected
+      : null;
+  const firstStepRecommendation = buildFirstStepRecommendation({
+    selectedTool,
+    experienceSummary,
+  });
+
+  return {
+    summary_version: "planning_summary_v1",
+    first_step_recommendation: firstStepRecommendation,
+    planner_explanation: buildPlannerExplanation({
+      selectedTool,
+      decision,
+      patternSignalSummary,
+      plannerSurface,
+      actionPacketSummary,
+      workflowLifecycleSummary,
+    }),
+    selected_tool: selectedTool,
+    decision_id: typeof decision.decision_id === "string" ? decision.decision_id : null,
+    rules_considered: Number(rules.considered ?? 0),
+    rules_matched: Number(rules.matched ?? 0),
+    context_est_tokens: args.context_est_tokens,
+    layered_output: Boolean(args.layered_context),
+    forgotten_items: Number(costSignals.forgotten_items ?? layeredStats.forgotten_items ?? 0),
+    static_blocks_selected: Number(costSignals.static_blocks_selected ?? staticInjection.selected_blocks ?? 0),
+    selected_memory_layers: Array.isArray(costSignals.selected_memory_layers)
+      ? costSignals.selected_memory_layers.filter((entry): entry is string => typeof entry === "string")
+      : [],
+    optimization_profile: args.optimization_profile,
+    context_compaction_profile: args.context_compaction_profile,
+    recall_mode: args.recall_mode ?? null,
+    trusted_pattern_count: patternSignalSummary.trusted_pattern_count,
+    contested_pattern_count: patternSignalSummary.contested_pattern_count,
+    trusted_pattern_tools: patternSignalSummary.trusted_pattern_tools,
+    contested_pattern_tools: patternSignalSummary.contested_pattern_tools,
+    workflow_signal_summary: workflowSignalSummary,
+    action_packet_summary: actionPacketSummary,
+    workflow_lifecycle_summary: workflowLifecycleSummary,
+    workflow_maintenance_summary: workflowMaintenanceSummary,
+    distillation_signal_summary: distillationSignalSummary,
+    pattern_lifecycle_summary: patternLifecycleSummary,
+    pattern_maintenance_summary: patternMaintenanceSummary,
+    policy_lifecycle_summary: policyLifecycleSummary,
+    policy_maintenance_summary: policyMaintenanceSummary,
+    continuity_carrier_summary: continuityCarrierSummary,
+    forgetting_summary: forgettingSummary,
+    primary_savings_levers: Array.isArray(costSignals.primary_savings_levers)
+      ? costSignals.primary_savings_levers.filter((entry): entry is string => typeof entry === "string")
+      : [],
+  };
+}
+
+export function buildAssemblySummary(args: {
+  rules?: unknown;
+  tools?: unknown;
+  layered_context?: unknown;
+  planner_surface?: PlannerPacketSummarySurface;
+  cost_signals?: unknown;
+  context_est_tokens: number;
+  context_compaction_profile: "balanced" | "aggressive";
+  optimization_profile: "balanced" | "aggressive" | null;
+  recall_mode?: string | null;
+  include_rules: boolean;
+  experience_intelligence?: unknown;
+}): AssemblySummary {
+  const planning = buildPlanningSummary({
+    rules: args.rules,
+    tools: args.tools,
+    layered_context: args.layered_context,
+    planner_surface: args.planner_surface,
+    cost_signals: args.cost_signals,
+    context_est_tokens: args.context_est_tokens,
+    context_compaction_profile: args.context_compaction_profile,
+    optimization_profile: args.optimization_profile,
+    recall_mode: args.recall_mode,
+    experience_intelligence: args.experience_intelligence,
+  });
+  return {
+    summary_version: "assembly_summary_v1",
+    planner_explanation: planning.planner_explanation,
+    first_step_recommendation: planning.first_step_recommendation,
+    selected_tool: planning.selected_tool,
+    decision_id: planning.decision_id,
+    rules_considered: planning.rules_considered,
+    rules_matched: planning.rules_matched,
+    include_rules: args.include_rules,
+    context_est_tokens: planning.context_est_tokens,
+    layered_output: planning.layered_output,
+    forgotten_items: planning.forgotten_items,
+    static_blocks_selected: planning.static_blocks_selected,
+    selected_memory_layers: planning.selected_memory_layers,
+    optimization_profile: planning.optimization_profile,
+    context_compaction_profile: planning.context_compaction_profile,
+    recall_mode: planning.recall_mode,
+    trusted_pattern_count: planning.trusted_pattern_count,
+    contested_pattern_count: planning.contested_pattern_count,
+    trusted_pattern_tools: planning.trusted_pattern_tools,
+    contested_pattern_tools: planning.contested_pattern_tools,
+    workflow_signal_summary: planning.workflow_signal_summary,
+    action_packet_summary: planning.action_packet_summary,
+    workflow_lifecycle_summary: planning.workflow_lifecycle_summary,
+    workflow_maintenance_summary: planning.workflow_maintenance_summary,
+    distillation_signal_summary: planning.distillation_signal_summary,
+    pattern_lifecycle_summary: planning.pattern_lifecycle_summary,
+    pattern_maintenance_summary: planning.pattern_maintenance_summary,
+    policy_lifecycle_summary: planning.policy_lifecycle_summary,
+    policy_maintenance_summary: planning.policy_maintenance_summary,
+    continuity_carrier_summary: planning.continuity_carrier_summary,
+    forgetting_summary: planning.forgetting_summary,
+    primary_savings_levers: planning.primary_savings_levers,
+  };
+}
