@@ -24,12 +24,15 @@ import {
   allowedLayersForPolicy,
   isDraftTopic,
   parseVectorText,
-  pickSlotsPreview,
   resolveCompressionLayer,
 } from "./recall-debug-layer-helpers.js";
 import { prioritizeRankedForActionRecall, spreadActivation } from "./recall-ranking.js";
+import {
+  createRecallUriBuilders,
+  toRecallEdgeDto,
+  toRecallNodeDto,
+} from "./recall-serialization.js";
 import { buildRuntimeToolHintsFromAnchorNodes } from "./runtime-tool-hints.js";
-import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
 
 export type RecallAuth = {
   allow_debug_embeddings: boolean;
@@ -49,46 +52,6 @@ export type MemoryRecallOptions = {
 
 type NodeRow = RecallNodeRow;
 type EdgeRow = RecallEdgeRow;
-
-type NodeDTO = {
-  id: string;
-  uri?: string;
-  type: string;
-  title: string | null;
-  text_summary: string | null;
-  topic_state?: string | null;
-  member_count?: number | null;
-  slots?: unknown;
-  slots_preview?: Record<string, unknown> | null;
-  raw_ref?: string | null;
-  evidence_ref?: string | null;
-  embedding_status?: string;
-  embedding_model?: string | null;
-  memory_lane?: "private" | "shared";
-  producer_agent_id?: string | null;
-  owner_agent_id?: string | null;
-  owner_team_id?: string | null;
-  created_at?: string;
-  updated_at?: string;
-  last_activated?: string | null;
-  salience?: number;
-  importance?: number;
-  confidence?: number;
-  commit_id?: string | null;
-};
-
-type EdgeDTO = {
-  id: string;
-  uri: string;
-  from_id: string;
-  to_id: string;
-  type: string;
-  weight: number;
-  commit_id?: string | null;
-  commit_uri?: string | null;
-};
-
-const URI_NODE_TYPES = new Set<string>(AIONIS_URI_NODE_TYPES);
 
 function isActionRecallEndpoint(endpoint: "recall" | "recall_text" | "planning_context" | "context_assemble"): boolean {
   return endpoint === "planning_context" || endpoint === "context_assemble";
@@ -120,32 +83,10 @@ export async function memoryRecallParsed(
     { defaultScope, defaultTenantId },
   );
   const scope = tenancy.scope_key;
-  const buildNodeUri = (id: string, type: string): string | null => {
-    if (!URI_NODE_TYPES.has(type)) return null;
-    return buildAionisUri({
-      tenant_id: tenancy.tenant_id,
-      scope: tenancy.scope,
-      type,
-      id,
-    });
-  };
-  const buildEdgeUri = (id: string): string =>
-    buildAionisUri({
-      tenant_id: tenancy.tenant_id,
-      scope: tenancy.scope,
-      type: "edge",
-      id,
-    });
-  const buildCommitUri = (id: string | null | undefined): string | null => {
-    const commitId = String(id ?? "").trim();
-    if (!commitId) return null;
-    return buildAionisUri({
-      tenant_id: tenancy.tenant_id,
-      scope: tenancy.scope,
-      type: "commit",
-      id: commitId,
-    });
-  };
+  const { buildNodeUri, buildEdgeUri, buildCommitUri } = createRecallUriBuilders({
+    tenant_id: tenancy.tenant_id,
+    scope: tenancy.scope,
+  });
   const consumerAgentId = parsed.consumer_agent_id?.trim() || null;
   const consumerTeamId = parsed.consumer_team_id?.trim() || null;
   const layerPolicy = resolveMemoryLayerPolicy(endpoint, parsed.memory_layer_preference ?? null, {
@@ -494,63 +435,10 @@ export async function memoryRecallParsed(
   });
 
   // DTO serialization (B): stable, minimal by default.
-  const outNodes: NodeDTO[] = outNodeRows.map((n) => {
-    const dto: NodeDTO = {
-      id: n.id,
-      type: n.type,
-      title: n.title,
-      text_summary: n.text_summary,
-    };
-    const uri = buildNodeUri(n.id, n.type);
-    if (uri) dto.uri = uri;
-
-    if (n.type === "topic") {
-      dto.topic_state = n.topic_state;
-      dto.member_count = n.member_count;
-    }
-
-    if (parsed.include_slots) {
-      dto.slots = n.slots ?? null;
-    } else if (parsed.include_slots_preview) {
-      dto.slots_preview = pickSlotsPreview(n.slots, parsed.slots_preview_keys);
-    }
-
-    if (parsed.include_meta) {
-      dto.raw_ref = n.raw_ref;
-      dto.evidence_ref = n.evidence_ref;
-      dto.embedding_status = n.embedding_status;
-      dto.embedding_model = n.embedding_model;
-      dto.memory_lane = n.memory_lane;
-      dto.producer_agent_id = n.producer_agent_id;
-      dto.owner_agent_id = n.owner_agent_id;
-      dto.owner_team_id = n.owner_team_id;
-      dto.created_at = n.created_at;
-      dto.updated_at = n.updated_at;
-      dto.last_activated = n.last_activated;
-      dto.salience = n.salience;
-      dto.importance = n.importance;
-      dto.confidence = n.confidence;
-      dto.commit_id = n.commit_id;
-    }
-
-    return dto;
-  });
-
-  const outEdges: EdgeDTO[] = outEdgeRows.map((e) => {
-    const dto: EdgeDTO = {
-      id: e.id,
-      uri: buildEdgeUri(e.id),
-      from_id: e.src_id,
-      to_id: e.dst_id,
-      type: e.type,
-      weight: e.weight,
-    };
-    if (parsed.include_meta) {
-      dto.commit_id = e.commit_id;
-      dto.commit_uri = buildCommitUri(e.commit_id);
-    }
-    return dto;
-  });
+  const outNodes = outNodeRows.map((node) => toRecallNodeDto(node, parsed, buildNodeUri));
+  const outEdges = outEdgeRows.map((edge) =>
+    toRecallEdgeDto(edge, parsed.include_meta, buildEdgeUri, buildCommitUri),
+  );
 
   // Debug-only: include a *bounded* embedding preview for seed nodes.
   // Hard constraints:
