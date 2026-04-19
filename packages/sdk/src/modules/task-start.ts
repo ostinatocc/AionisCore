@@ -1,38 +1,20 @@
 import type {
-  AionisKickoffRecommendation,
   AionisKickoffRecommendationResponse,
-  AionisTaskStartAction,
   AionisTaskStartRequest,
   AionisTaskStartResponse,
 } from "../contracts.js";
+import { AIONIS_SHARED_ROUTE_PATHS } from "../generated/full-sdk-routes.js";
+import { toTaskStartResponse } from "../generated/full-sdk-task-start.js";
 import type { AionisHttpClient } from "../types.js";
-
-function buildTaskStartAction(
-  kickoff: AionisKickoffRecommendation | null | undefined,
-): AionisTaskStartAction | null {
-  if (!kickoff?.selected_tool) return null;
-  return {
-    action_kind: kickoff.file_path ? "file_step" : "tool_step",
-    source_kind: kickoff.source_kind,
-    history_applied: kickoff.history_applied,
-    selected_tool: kickoff.selected_tool,
-    file_path: kickoff.file_path,
-    next_action: kickoff.next_action,
-  };
-}
 
 export function createTaskStartModule(client: AionisHttpClient) {
   return async function taskStart(
     payload: AionisTaskStartRequest,
   ): Promise<AionisTaskStartResponse> {
     const response = await client.post<AionisTaskStartRequest, AionisKickoffRecommendationResponse>({
-      path: "/v1/memory/kickoff/recommendation",
+      path: AIONIS_SHARED_ROUTE_PATHS.kickoffRecommendation,
       payload,
     });
-    return {
-      ...response,
-      summary_version: "task_start_v1",
-      first_action: buildTaskStartAction(response.kickoff_recommendation),
-    };
+    return toTaskStartResponse(response);
   };
 }

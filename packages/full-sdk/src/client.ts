@@ -90,6 +90,8 @@ import type {
   AionisToolsRunsListRequest,
   AionisToolsSelectRequest,
 } from "./contracts.js";
+import { AIONIS_SHARED_ROUTE_PATHS } from "./routes.js";
+import { toTaskStartResponse } from "./task-start.js";
 import { createAionisRuntimeHttpClient } from "./transport/http.js";
 import type { AionisClientOptions, AionisHttpClient, AionisQueryPayload, AionisRequestPayload } from "./types.js";
 
@@ -124,24 +126,10 @@ function createSessionEventsMethod(client: AionisHttpClient) {
 function createTaskStartMethod(client: AionisHttpClient) {
   return async function taskStart(payload: AionisTaskStartRequest): Promise<AionisTaskStartResponse> {
     const response = await client.post<AionisTaskStartRequest, AionisKickoffRecommendationResponse>({
-      path: "/v1/memory/kickoff/recommendation",
+      path: AIONIS_SHARED_ROUTE_PATHS.kickoffRecommendation,
       payload,
     });
-    const kickoff = response.kickoff_recommendation;
-    return {
-      ...response,
-      summary_version: "task_start_v1",
-      first_action: kickoff?.selected_tool
-        ? {
-            action_kind: kickoff.file_path ? "file_step" : "tool_step",
-            source_kind: kickoff.source_kind,
-            history_applied: kickoff.history_applied,
-            selected_tool: kickoff.selected_tool,
-            file_path: kickoff.file_path,
-            next_action: kickoff.next_action,
-          }
-        : null,
-    };
+    return toTaskStartResponse(response);
   };
 }
 
@@ -171,7 +159,10 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
       },
     },
     memory: {
-      write: createPostMethod<AionisMemoryWriteRequest, AionisMemoryWriteResponse>(http, "/v1/memory/write"),
+      write: createPostMethod<AionisMemoryWriteRequest, AionisMemoryWriteResponse>(
+        http,
+        AIONIS_SHARED_ROUTE_PATHS.memoryWrite,
+      ),
       recall: createPostMethod<AionisMemoryRecallRequest>(http, "/v1/memory/recall"),
       recallText: createPostMethod<AionisMemoryRecallTextRequest>(http, "/v1/memory/recall_text"),
       find: createPostMethod<AionisMemoryFindRequest>(http, "/v1/memory/find"),
@@ -179,11 +170,11 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
       feedback: createPostMethod<AionisMemoryFeedbackRequest>(http, "/v1/memory/feedback"),
       planningContext: createPostMethod<AionisPlanningContextRequest, AionisPlanningContextResponse>(
         http,
-        "/v1/memory/planning/context",
+        AIONIS_SHARED_ROUTE_PATHS.planningContext,
       ),
       contextAssemble: createPostMethod<AionisContextAssembleRequest, AionisContextAssembleResponse>(
         http,
-        "/v1/memory/context/assemble",
+        AIONIS_SHARED_ROUTE_PATHS.contextAssemble,
       ),
       experienceIntelligence: createPostMethod<AionisExperienceIntelligenceRequest, AionisExperienceIntelligenceResponse>(
         http,
@@ -191,12 +182,12 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
       ),
       kickoffRecommendation: createPostMethod<AionisKickoffRecommendationRequest, AionisKickoffRecommendationResponse>(
         http,
-        "/v1/memory/kickoff/recommendation",
+        AIONIS_SHARED_ROUTE_PATHS.kickoffRecommendation,
       ),
       taskStart: createTaskStartMethod(http),
       executionIntrospect: createPostMethod<AionisExecutionIntrospectRequest, AionisExecutionIntrospectResponse>(
         http,
-        "/v1/memory/execution/introspect",
+        AIONIS_SHARED_ROUTE_PATHS.executionIntrospect,
       ),
       delegationRecords: {
         aggregate: createPostMethod<AionisDelegationRecordsAggregateRequest, AionisDelegationRecordsAggregateResponse>(
@@ -219,13 +210,13 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
         ),
         evolution: createPostMethod<AionisEvolutionReviewPackRequest, AionisEvolutionReviewPackResponse>(
           http,
-          "/v1/memory/evolution/review-pack",
+          AIONIS_SHARED_ROUTE_PATHS.evolutionReviewPack,
         ),
       },
       agent: {
         inspect: createPostMethod<AionisAgentMemoryInspectRequest, AionisAgentMemoryInspectResponse>(
           http,
-          "/v1/memory/agent/inspect",
+          AIONIS_SHARED_ROUTE_PATHS.agentInspect,
         ),
         reviewPack: createPostMethod<AionisAgentMemoryReviewPackRequest, AionisAgentMemoryReviewPackResponse>(
           http,
@@ -267,11 +258,14 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
         ),
       },
       tools: {
-        select: createPostMethod<AionisToolsSelectRequest>(http, "/v1/memory/tools/select"),
+        select: createPostMethod<AionisToolsSelectRequest>(http, AIONIS_SHARED_ROUTE_PATHS.toolsSelect),
         decision: createPostMethod<AionisToolsDecisionRequest>(http, "/v1/memory/tools/decision"),
         run: createPostMethod<AionisToolsRunRequest>(http, "/v1/memory/tools/run"),
         runsList: createPostMethod<AionisToolsRunsListRequest>(http, "/v1/memory/tools/runs/list"),
-        feedback: createPostMethod<AionisToolsFeedbackRequest, AionisToolsFeedbackResponse>(http, "/v1/memory/tools/feedback"),
+        feedback: createPostMethod<AionisToolsFeedbackRequest, AionisToolsFeedbackResponse>(
+          http,
+          AIONIS_SHARED_ROUTE_PATHS.toolsFeedback,
+        ),
         rehydratePayload: createPostMethod<AionisAnchorRehydratePayloadRequest>(http, "/v1/memory/tools/rehydrate_payload"),
       },
       patterns: {
@@ -279,7 +273,10 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
         unsuppress: createPostMethod<AionisPatternUnsuppressRequest>(http, "/v1/memory/patterns/unsuppress"),
       },
       anchors: {
-        rehydratePayload: createPostMethod<AionisAnchorRehydratePayloadRequest>(http, "/v1/memory/anchors/rehydrate_payload"),
+        rehydratePayload: createPostMethod<AionisAnchorRehydratePayloadRequest>(
+          http,
+          AIONIS_SHARED_ROUTE_PATHS.anchorsRehydratePayload,
+        ),
       },
       replay: {
         run: {
@@ -299,7 +296,10 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
           run: createPostMethod<AionisReplayPlaybookRunRequest>(http, "/v1/memory/replay/playbooks/run"),
           dispatch: createPostMethod<AionisReplayPlaybookDispatchRequest>(http, "/v1/memory/replay/playbooks/dispatch"),
           repair: createPostMethod<AionisReplayPlaybookRepairRequest>(http, "/v1/memory/replay/playbooks/repair"),
-          repairReview: createPostMethod<AionisReplayPlaybookRepairReviewRequest>(http, "/v1/memory/replay/playbooks/repair/review"),
+          repairReview: createPostMethod<AionisReplayPlaybookRepairReviewRequest>(
+            http,
+            AIONIS_SHARED_ROUTE_PATHS.replayPlaybookRepairReview,
+          ),
         },
       },
       sandbox: {

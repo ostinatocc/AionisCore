@@ -1,4 +1,5 @@
 import type { AionisAgentMemoryInspectRequest, AionisAgentMemoryInspectResponse } from "../contracts.js";
+import { AIONIS_SHARED_ROUTE_PATHS } from "../generated/full-sdk-routes.js";
 import type { AionisHttpClient } from "../types.js";
 
 export function createAgentMemoryInspectModule(client: AionisHttpClient) {
@@ -6,7 +7,7 @@ export function createAgentMemoryInspectModule(client: AionisHttpClient) {
     payload: AionisAgentMemoryInspectRequest,
   ): Promise<AionisAgentMemoryInspectResponse> {
     return await client.post<AionisAgentMemoryInspectRequest, AionisAgentMemoryInspectResponse>({
-      path: "/v1/memory/agent/inspect",
+      path: AIONIS_SHARED_ROUTE_PATHS.agentInspect,
       payload,
     });
   };

@@ -1,34 +1,20 @@
 import type {
-  AionisKickoffRecommendation,
   AionisKickoffRecommendationResponse,
   AionisPlanningContextRequest,
   AionisPlanningContextResponse,
-  AionisTaskStartAction,
   AionisTaskStartPlanRequest,
   AionisTaskStartPlanResponse,
 } from "../contracts.js";
+import { AIONIS_SHARED_ROUTE_PATHS } from "../generated/full-sdk-routes.js";
+import { buildTaskStartAction } from "../generated/full-sdk-task-start.js";
 import type { AionisHttpClient } from "../types.js";
-
-function buildTaskStartAction(
-  kickoff: AionisKickoffRecommendation | null | undefined,
-): AionisTaskStartAction | null {
-  if (!kickoff?.selected_tool) return null;
-  return {
-    action_kind: kickoff.file_path ? "file_step" : "tool_step",
-    source_kind: kickoff.source_kind,
-    history_applied: kickoff.history_applied,
-    selected_tool: kickoff.selected_tool,
-    file_path: kickoff.file_path,
-    next_action: kickoff.next_action,
-  };
-}
 
 export function createTaskStartPlanModule(client: AionisHttpClient) {
   return async function taskStartPlan(
     payload: AionisTaskStartPlanRequest,
   ): Promise<AionisTaskStartPlanResponse> {
     const kickoffResponse = await client.post<AionisTaskStartPlanRequest, AionisKickoffRecommendationResponse>({
-      path: "/v1/memory/kickoff/recommendation",
+      path: AIONIS_SHARED_ROUTE_PATHS.kickoffRecommendation,
       payload,
     });
     const kickoffAction = buildTaskStartAction(kickoffResponse.kickoff_recommendation);
@@ -48,7 +34,7 @@ export function createTaskStartPlanModule(client: AionisHttpClient) {
     }
 
     const planningResponse = await client.post<AionisPlanningContextRequest, AionisPlanningContextResponse>({
-      path: "/v1/memory/planning/context",
+      path: AIONIS_SHARED_ROUTE_PATHS.planningContext,
       payload: {
         tenant_id: payload.tenant_id,
         scope: payload.scope,

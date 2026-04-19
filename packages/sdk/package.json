@@ -35,9 +35,13 @@
   "scripts": {
     "contracts:sync": "node ../../scripts/sync-internal-sdk-contracts.mjs",
     "contracts:check": "node ../../scripts/sync-internal-sdk-contracts.mjs --check",
-    "build": "npm run -s contracts:check && tsc -p tsconfig.build.json",
+    "routes:sync": "node ../../scripts/sync-internal-sdk-routes.mjs",
+    "routes:check": "node ../../scripts/sync-internal-sdk-routes.mjs --check",
+    "task-start:sync": "node ../../scripts/sync-internal-sdk-task-start.mjs",
+    "task-start:check": "node ../../scripts/sync-internal-sdk-task-start.mjs --check",
+    "build": "npm run -s contracts:check && npm run -s routes:check && npm run -s task-start:check && tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
-    "test": "npm run -s contracts:check && node ../../node_modules/tsx/dist/cli.mjs --test test/*.test.ts",
+    "test": "npm run -s contracts:check && npm run -s routes:check && npm run -s task-start:check && node ../../node_modules/tsx/dist/cli.mjs --test test/*.test.ts",
     "pack:dry-run": "npm run build && npm pack --dry-run --json --cache /tmp/aionis-npm-cache",
     "publish:dry-run": "npm run build && npm publish --dry-run"
   },

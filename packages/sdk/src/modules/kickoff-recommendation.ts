@@ -2,6 +2,7 @@ import type {
   AionisKickoffRecommendationRequest,
   AionisKickoffRecommendationResponse,
 } from "../contracts.js";
+import { AIONIS_SHARED_ROUTE_PATHS } from "../generated/full-sdk-routes.js";
 import type { AionisHttpClient } from "../types.js";
 
 export function createKickoffRecommendationModule(client: AionisHttpClient) {
@@ -9,7 +10,7 @@ export function createKickoffRecommendationModule(client: AionisHttpClient) {
     payload: AionisKickoffRecommendationRequest,
   ): Promise<AionisKickoffRecommendationResponse> {
     return await client.post<AionisKickoffRecommendationRequest, AionisKickoffRecommendationResponse>({
-      path: "/v1/memory/kickoff/recommendation",
+      path: AIONIS_SHARED_ROUTE_PATHS.kickoffRecommendation,
       payload,
     });
   };

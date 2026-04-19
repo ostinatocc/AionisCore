@@ -1,4 +1,5 @@
 import type { AionisContextAssembleRequest, AionisContextAssembleResponse } from "../contracts.js";
+import { AIONIS_SHARED_ROUTE_PATHS } from "../generated/full-sdk-routes.js";
 import type { AionisHttpClient } from "../types.js";
 
 export function createContextAssembleModule(client: AionisHttpClient) {
@@ -6,7 +7,7 @@ export function createContextAssembleModule(client: AionisHttpClient) {
     payload: AionisContextAssembleRequest,
   ): Promise<AionisContextAssembleResponse> {
     return await client.post<AionisContextAssembleRequest, AionisContextAssembleResponse>({
-      path: "/v1/memory/context/assemble",
+      path: AIONIS_SHARED_ROUTE_PATHS.contextAssemble,
       payload,
     });
   };
