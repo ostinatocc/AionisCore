@@ -118,6 +118,19 @@ import {
   buildReplayRepairedSlots,
   buildReplayReviewedSlots,
 } from "./replay-promotion-review-helpers.js";
+import {
+  buildReplayBlockedStepReport,
+  buildReplayExecutionFailureStepReport,
+  buildReplayExecutionSuccessStepReport,
+  buildReplayExecutionSummary,
+  buildReplayExecutionSurface,
+  buildReplayGuidedPartialStepReport,
+  buildReplayPendingStepReport,
+  buildReplayRunPlaybookSurface,
+  buildReplayRunSurface,
+  buildReplaySimulateStepReport,
+  buildReplaySimulateSummary,
+} from "./replay-run-surfaces.js";
 
 type ReplayWriteOptions = {
   defaultScope: string;
@@ -2919,30 +2932,25 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           opts.writeOptions!,
         );
       }
-      stepReports.push({
-        step_index: stepIndex,
-        tool_name: toolName,
-        safety_level: toStringOrNull(stepObj.safety_level) ?? "needs_confirm",
-        readiness,
-        command: command || null,
-        argv,
-        sensitive_review: sensitive.sensitive
-          ? {
-              required_override: true,
-              reason: sensitive.reason,
-              risk_level: sensitive.risk_level,
-              default_mode: "block",
-            }
-          : null,
-        precondition_total: checks.length,
-        checks,
-        notes:
-          readiness === "blocked"
-            ? ["One or more preconditions failed; strict replay would stop here."]
-            : readiness === "unknown"
-              ? ["Some preconditions are unsupported/ambiguous; guided mode may need repair."]
-              : ["Preconditions passed."],
-      });
+      stepReports.push(
+        buildReplaySimulateStepReport({
+          stepIndex,
+          toolName,
+          safetyLevel: toStringOrNull(stepObj.safety_level) ?? "needs_confirm",
+          readiness,
+          command: command || null,
+          argv,
+          sensitiveReview: sensitive.sensitive
+            ? {
+                required_override: true,
+                reason: sensitive.reason,
+                risk_level: sensitive.risk_level,
+                default_mode: "block",
+              }
+            : null,
+          checks,
+        }),
+      );
     }
     const runStatus = blockedSteps > 0 || unknownSteps > 0 ? "partial" : "success";
     let runEndOut: Record<string, unknown> | null = null;
@@ -2978,48 +2986,32 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
     return {
       tenant_id: tenancy.tenant_id,
       scope: tenancy.scope,
-      playbook: {
-        playbook_id: parsed.playbook_id,
-        version: row.version_num,
-        status: row.playbook_status ?? "draft",
-        name: row.title,
-        uri: buildAionisUri({
-          tenant_id: tenancy.tenant_id,
-          scope: tenancy.scope,
-          type: row.type,
-          id: row.id,
-        }),
-      },
+      playbook: buildReplayRunPlaybookSurface({
+        tenantId: tenancy.tenant_id,
+        scope: tenancy.scope,
+        playbookId: parsed.playbook_id,
+        row,
+      }),
       mode: "simulate",
       deterministic_gate: deterministicGate,
-      run:
-        recordRun
-          ? {
-              run_id: replayRunId,
-              status: runStatus,
-              run_uri: toStringOrNull(runStartOut?.run_uri),
-              run_end_uri: toStringOrNull(runEndOut?.run_end_uri),
-              commit_id_start: toStringOrNull(runStartOut?.commit_id),
-              commit_id_end: toStringOrNull(runEndOut?.commit_id),
-            }
-          : null,
+      run: recordRun
+        ? buildReplayRunSurface({
+            runId: replayRunId,
+            status: runStatus,
+            runStartOut,
+            runEndOut,
+          })
+        : null,
       execution_policy: {
         execution_backend: normalizeReplayExecutionBackend(toStringOrNull(paramsObj.execution_backend)),
         sensitive_review_mode: normalizeReplaySensitiveReviewMode(toStringOrNull(paramsObj.sensitive_review_mode)),
       },
-      summary: {
-        total_steps: stepsRaw.length,
-        ready_steps: readySteps,
-        blocked_steps: blockedSteps,
-        unknown_steps: unknownSteps,
-        replay_readiness: blockedSteps > 0 ? "blocked" : unknownSteps > 0 ? "partial" : "ready",
-        next_action:
-          blockedSteps > 0
-            ? "Fix blocked preconditions before strict replay or use guided repair."
-            : unknownSteps > 0
-              ? "Define unsupported precondition kinds or run guided mode with repair."
-              : "Safe to run strict replay when execution backend policy is satisfied.",
-      },
+      summary: buildReplaySimulateSummary({
+        totalSteps: stepsRaw.length,
+        readySteps: readySteps,
+        blockedSteps: blockedSteps,
+        unknownSteps: unknownSteps,
+      }),
       steps: stepReports,
       execution: {
         inference_skipped: deterministicGate.inference_skipped,
@@ -3227,14 +3219,14 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           : "preconditions_unknown";
       if (mode === "strict") {
         failedSteps += 1;
-        stepReports.push({
-          step_index: stepIndex,
-          tool_name: toolName,
-          status: "failed",
-          readiness: "blocked",
-          preconditions: preChecks,
-          error: reason,
-        });
+        stepReports.push(
+          buildReplayBlockedStepReport({
+            stepIndex,
+            toolName,
+            preconditions: preChecks,
+            error: reason,
+          }),
+        );
         if (recordRun) {
           await replayStepAfter(
             client,
@@ -3285,15 +3277,15 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         mode: "guided",
       });
       mergeReplayUsage(usageOut, asObject(repair)?.usage);
-      stepReports.push({
-        step_index: stepIndex,
-        tool_name: toolName,
-        status: "partial",
-        readiness: preUnknown.length > 0 ? "unknown" : "blocked",
-        preconditions: preChecks,
-        repair_applied: true,
-        repair,
-      });
+      stepReports.push(
+        buildReplayGuidedPartialStepReport({
+          stepIndex,
+          toolName,
+          readiness: preUnknown.length > 0 ? "unknown" : "blocked",
+          preconditions: preChecks,
+          repair,
+        }),
+      );
       if (recordRun) {
         await replayStepAfter(
           client,
@@ -3325,13 +3317,13 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       const reason = safetyLevel === "manual_only" ? "manual_only_step" : "confirmation_required";
       if (mode === "strict") {
         failedSteps += 1;
-        stepReports.push({
-          step_index: stepIndex,
-          tool_name: toolName,
-          status: "failed",
-          readiness: "blocked",
-          error: reason,
-        });
+        stepReports.push(
+          buildReplayBlockedStepReport({
+            stepIndex,
+            toolName,
+            error: reason,
+          }),
+        );
         if (recordRun) {
           await replayStepAfter(
             client,
@@ -3379,14 +3371,14 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         mode: "guided",
       });
       mergeReplayUsage(usageOut, asObject(repair)?.usage);
-      stepReports.push({
-        step_index: stepIndex,
-        tool_name: toolName,
-        status: "partial",
-        readiness: "blocked",
-        repair_applied: true,
-        repair,
-      });
+      stepReports.push(
+        buildReplayGuidedPartialStepReport({
+          stepIndex,
+          toolName,
+          readiness: "blocked",
+          repair,
+        }),
+      );
       if (recordRun) {
         await replayStepAfter(
           client,
@@ -3414,13 +3406,13 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       const reason = "unsupported_tool_for_command_executor";
       if (mode === "strict") {
         failedSteps += 1;
-        stepReports.push({
-          step_index: stepIndex,
-          tool_name: toolName,
-          status: "failed",
-          readiness: "blocked",
-          error: reason,
-        });
+        stepReports.push(
+          buildReplayBlockedStepReport({
+            stepIndex,
+            toolName,
+            error: reason,
+          }),
+        );
         if (recordRun) {
           await replayStepAfter(
             client,
@@ -3468,14 +3460,14 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         mode: "guided",
       });
       mergeReplayUsage(usageOut, asObject(repair)?.usage);
-      stepReports.push({
-        step_index: stepIndex,
-        tool_name: toolName,
-        status: "partial",
-        readiness: "unknown",
-        repair_applied: true,
-        repair,
-      });
+      stepReports.push(
+        buildReplayGuidedPartialStepReport({
+          stepIndex,
+          toolName,
+          readiness: "unknown",
+          repair,
+        }),
+      );
       if (recordRun) {
         await replayStepAfter(
           client,
@@ -3505,15 +3497,15 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       const reason = "command_not_allowed_or_missing";
       if (mode === "strict") {
         failedSteps += 1;
-        stepReports.push({
-          step_index: stepIndex,
-          tool_name: toolName,
-          status: "failed",
-          readiness: "blocked",
-          error: reason,
-          command,
-          allowed_commands: [...allowedCommands.values()],
-        });
+        stepReports.push(
+          buildReplayBlockedStepReport({
+            stepIndex,
+            toolName,
+            error: reason,
+            command,
+            allowedCommands: [...allowedCommands.values()],
+          }),
+        );
         if (recordRun) {
           await replayStepAfter(
             client,
@@ -3563,15 +3555,15 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         mode: "guided",
       });
       mergeReplayUsage(usageOut, asObject(repair)?.usage);
-      stepReports.push({
-        step_index: stepIndex,
-        tool_name: toolName,
-        status: "partial",
-        readiness: "blocked",
-        repair_applied: true,
-        repair,
-        command,
-      });
+      stepReports.push(
+        buildReplayGuidedPartialStepReport({
+          stepIndex,
+          toolName,
+          readiness: "blocked",
+          command,
+          repair,
+        }),
+      );
       if (recordRun) {
         await replayStepAfter(
           client,
@@ -3618,14 +3610,14 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       if (mode === "strict") {
         failedSteps += 1;
         blockedSteps += 1;
-        stepReports.push({
-          step_index: stepIndex,
-          tool_name: toolName,
-          status: "failed",
-          readiness: "blocked",
-          error: reason,
-          sensitive_review: sensitiveReview,
-        });
+        stepReports.push(
+          buildReplayBlockedStepReport({
+            stepIndex,
+            toolName,
+            error: reason,
+            sensitiveReview,
+          }),
+        );
         if (recordRun) {
           await replayStepAfter(
             client,
@@ -3675,17 +3667,17 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         mode: "guided",
       });
       mergeReplayUsage(usageOut, asObject(repair)?.usage);
-      stepReports.push({
-        step_index: stepIndex,
-        tool_name: toolName,
-        status: "partial",
-        readiness: "blocked",
-        command,
-        argv,
-        sensitive_review: sensitiveReview,
-        repair_applied: true,
-        repair,
-      });
+      stepReports.push(
+        buildReplayGuidedPartialStepReport({
+          stepIndex,
+          toolName,
+          readiness: "blocked",
+          command,
+          argv,
+          sensitiveReview,
+          repair,
+        }),
+      );
       if (recordRun) {
         await replayStepAfter(
           client,
@@ -3724,18 +3716,18 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       pendingSteps += 1;
       repairedSteps += mode === "guided" ? 1 : 0;
       const reason = "sandbox_async_execution_pending";
-      stepReports.push({
-        step_index: stepIndex,
-        tool_name: toolName,
-        status: mode === "guided" ? "partial" : "failed",
-        readiness: "pending",
-        command,
-        argv,
-        execution_backend: executionBackend,
-        sandbox_run_id: exec.sandbox_run_id,
-        pending: true,
-        error: reason,
-      });
+      stepReports.push(
+        buildReplayPendingStepReport({
+          stepIndex,
+          toolName,
+          mode,
+          command,
+          argv,
+          executionBackend,
+          sandboxRunId: exec.sandbox_run_id,
+          error: reason,
+        }),
+      );
       if (recordRun) {
         await replayStepAfter(
           client,
@@ -3783,21 +3775,21 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
 
     if (executionPassed) {
       succeededSteps += 1;
-      stepReports.push({
-        step_index: stepIndex,
-        tool_name: toolName,
-        status: "success",
-        readiness: "ready",
-        command,
-        argv,
-        execution_backend: executionBackend,
-        sandbox_run_id: exec.sandbox_run_id,
-        sensitive_review: sensitiveReviewInfo,
-        execution: execOutcome,
-        result_summary: resultSummary,
-        signature,
-        postconditions: postChecks,
-      });
+      stepReports.push(
+        buildReplayExecutionSuccessStepReport({
+          stepIndex,
+          toolName,
+          command,
+          argv,
+          executionBackend,
+          sandboxRunId: exec.sandbox_run_id,
+          sensitiveReview: sensitiveReviewInfo,
+          execution: execOutcome as unknown as Record<string, unknown>,
+          resultSummary: resultSummary as Record<string, unknown>,
+          signature: signature as unknown as Record<string, unknown>,
+          postconditions: postChecks,
+        }),
+      );
       if (recordRun) {
         await replayStepAfter(
           client,
@@ -3833,22 +3825,22 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
     const failureReason = execOutcome.error ?? (execOutcome.status === "timeout" ? "execution_timeout" : "execution_failed");
     if (mode === "strict") {
       failedSteps += 1;
-      stepReports.push({
-        step_index: stepIndex,
-        tool_name: toolName,
-        status: "failed",
-        readiness: "blocked",
-        command,
-        argv,
-        execution_backend: executionBackend,
-        sandbox_run_id: exec.sandbox_run_id,
-        sensitive_review: sensitiveReviewInfo,
-        execution: execOutcome,
-        result_summary: resultSummary,
-        signature,
-        postconditions: postChecks,
-        error: failureReason,
-      });
+      stepReports.push(
+        buildReplayExecutionFailureStepReport({
+          stepIndex,
+          toolName,
+          command,
+          argv,
+          executionBackend,
+          sandboxRunId: exec.sandbox_run_id,
+          sensitiveReview: sensitiveReviewInfo,
+          execution: execOutcome as unknown as Record<string, unknown>,
+          resultSummary: resultSummary as Record<string, unknown>,
+          signature: signature as unknown as Record<string, unknown>,
+          postconditions: postChecks,
+          error: failureReason,
+        }),
+      );
       if (recordRun) {
         await replayStepAfter(
           client,
@@ -3910,23 +3902,23 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       mode: "guided",
     });
     mergeReplayUsage(usageOut, asObject(repair)?.usage);
-    stepReports.push({
-      step_index: stepIndex,
-      tool_name: toolName,
-      status: "partial",
-      readiness: "partial",
-      command,
-      argv,
-      execution_backend: executionBackend,
-      sandbox_run_id: exec.sandbox_run_id,
-      sensitive_review: sensitiveReviewInfo,
-      execution: execOutcome,
-      result_summary: resultSummary,
-      signature,
-      postconditions: postChecks,
-      repair_applied: true,
-      repair,
-    });
+    stepReports.push(
+      buildReplayGuidedPartialStepReport({
+        stepIndex,
+        toolName,
+        readiness: "partial",
+        command,
+        argv,
+        executionBackend,
+        sandboxRunId: exec.sandbox_run_id,
+        sensitiveReview: sensitiveReviewInfo,
+        execution: execOutcome as unknown as Record<string, unknown>,
+        resultSummary: resultSummary as Record<string, unknown>,
+        signature: signature as unknown as Record<string, unknown>,
+        postconditions: postChecks,
+        repair,
+      }),
+    );
     if (recordRun) {
       await replayStepAfter(
         client,
@@ -4004,72 +3996,54 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
   return {
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
-    playbook: {
-      playbook_id: parsed.playbook_id,
-      version: row.version_num,
-      status: row.playbook_status ?? "draft",
-      name: row.title,
-      uri: buildAionisUri({
-        tenant_id: tenancy.tenant_id,
-        scope: tenancy.scope,
-        type: row.type,
-        id: row.id,
-      }),
-    },
+    playbook: buildReplayRunPlaybookSurface({
+      tenantId: tenancy.tenant_id,
+      scope: tenancy.scope,
+      playbookId: parsed.playbook_id,
+      row,
+    }),
     mode,
     deterministic_gate: deterministicGate,
-    run: {
-      run_id: replayRunId,
+    run: buildReplayRunSurface({
+      runId: replayRunId,
       status: runStatus,
-      run_uri: toStringOrNull(runStartOut?.run_uri),
-      run_end_uri: toStringOrNull(runEndOut?.run_end_uri),
-      commit_id_start: toStringOrNull(runStartOut?.commit_id),
-      commit_id_end: toStringOrNull(runEndOut?.commit_id),
-    },
-    summary: {
-      total_steps: stepsRaw.length,
-      executed_steps: executedSteps,
-      succeeded_steps: succeededSteps,
-      failed_steps: failedSteps,
-      repaired_steps: repairedSteps,
-      blocked_steps: blockedSteps,
-      skipped_steps: skippedSteps,
-      pending_steps: pendingSteps,
-      replay_readiness:
-        failedSteps > 0 ? "failed" : pendingSteps > 0 || repairedSteps > 0 || skippedSteps > 0 ? "partial" : "success",
-      next_action:
-        failedSteps > 0
-          ? "Inspect failed step outputs and fix playbook/tool constraints."
-          : pendingSteps > 0
-            ? "Wait for queued sandbox runs and then replay run_get for completion evidence."
-            : repairedSteps > 0 || skippedSteps > 0
-            ? "Review guided repair patches and promote a new playbook version if accepted."
-            : "Replay run passed with no repair.",
-    },
+      runStartOut,
+      runEndOut,
+    }),
+    summary: buildReplayExecutionSummary({
+      totalSteps: stepsRaw.length,
+      executedSteps,
+      succeededSteps,
+      failedSteps,
+      repairedSteps,
+      blockedSteps,
+      skippedSteps,
+      pendingSteps,
+    }),
     steps: stepReports,
-    execution: {
-      inference_skipped: deterministicGate.inference_skipped,
-      deterministic_gate_matched: deterministicGate.matched,
-      execution_backend: executionBackend,
-      local_executor_enabled: localExecutor?.enabled === true,
-      sandbox_executor_available: typeof opts.sandboxExecutor === "function",
-      sandbox_project_id: sandboxProjectId,
+    execution: buildReplayExecutionSurface({
+      inferenceSkipped: deterministicGate.inference_skipped,
+      deterministicGateMatched: deterministicGate.matched,
+      executionBackend,
+      localExecutorEnabled: localExecutor?.enabled === true,
+      sandboxExecutorAvailable: typeof opts.sandboxExecutor === "function",
+      sandboxProjectId,
       workdir,
-      timeout_ms: timeoutMs,
-      stdio_max_bytes: stdioMaxBytes,
-      allowed_commands: [...allowedCommands.values()],
-      auto_confirm: autoConfirm,
-      stop_on_failure: stopOnFailure,
-      record_run: recordRun,
-      sensitive_review_mode: sensitiveReviewMode,
-      allow_sensitive_exec: allowSensitiveExec,
-      guided_repair_strategy: guidedRepairStrategy,
-      guided_repair_max_error_chars: guidedRepairMaxErrorChars,
-      guided_repair_http_configured: Boolean(opts.guidedRepair?.httpEndpoint),
-      guided_repair_builtin_llm_configured: Boolean(
+      timeoutMs,
+      stdioMaxBytes,
+      allowedCommands: [...allowedCommands.values()],
+      autoConfirm,
+      stopOnFailure,
+      recordRun,
+      sensitiveReviewMode,
+      allowSensitiveExec,
+      guidedRepairStrategy,
+      guidedRepairMaxErrorChars,
+      guidedRepairHttpConfigured: Boolean(opts.guidedRepair?.httpEndpoint),
+      guidedRepairBuiltinLlmConfigured: Boolean(
         opts.guidedRepair?.llmBaseUrl && opts.guidedRepair?.llmApiKey && opts.guidedRepair?.llmModel,
       ),
-    },
+    }),
     params_echo: parsed.params ?? {},
     usage: usageOut,
     cost_signals: buildReplayCostSignals({ deterministic_gate: deterministicGate }),
