@@ -131,6 +131,16 @@ import {
   buildReplaySimulateStepReport,
   buildReplaySimulateSummary,
 } from "./replay-run-surfaces.js";
+import {
+  buildReplayCompileResult,
+  buildReplayCompileSlots,
+  buildReplayCompileWriteRequest,
+  buildReplayRunGetCounters,
+  buildReplayRunGetRunSurface,
+  buildReplayRunGetStepSurface,
+  buildReplayTimelineEntry,
+  collectReplayArtifactRefs,
+} from "./replay-read-compile-surfaces.js";
 
 type ReplayWriteOptions = {
   defaultScope: string;
@@ -1280,35 +1290,17 @@ export async function replayRunGet(client: pg.PoolClient, body: unknown, opts: R
     if (!sid) continue;
     resultByStepId.set(sid, row);
   }
-  const timeline = rows.map((row) => ({
-    uri: buildAionisUri({
-      tenant_id: tenancy.tenant_id,
+  const timeline = rows.map((row) =>
+    buildReplayTimelineEntry({
+      tenantId: tenancy.tenant_id,
       scope: tenancy.scope,
-      type: row.type,
-      id: row.id,
+      row,
+      replayKind: replayKindOf(row),
+      commitUri: row.commit_id != null ? buildCommitUri(tenancy.tenant_id, tenancy.scope, row.commit_id) : null,
     }),
-    node_id: row.id,
-    type: row.type,
-    replay_kind: replayKindOf(row),
-    title: row.title,
-    text_summary: row.text_summary,
-    created_at: row.created_at,
-    commit_id: row.commit_id,
-    commit_uri:
-      row.commit_id != null
-        ? buildCommitUri(tenancy.tenant_id, tenancy.scope, row.commit_id)
-        : null,
-  }));
+  );
 
-  const artifacts = stepResultRows.flatMap((row) => {
-    if (!parsed.include_artifacts) return [];
-    const slotsObj = asObject(row.slots);
-    const refs = slotsObj?.artifact_refs;
-    if (!Array.isArray(refs)) return [];
-    return refs
-      .map((v) => toStringOrNull(v))
-      .filter((v): v is string => !!v);
-  });
+  const artifacts = collectReplayArtifactRefs(stepResultRows, parsed.include_artifacts);
 
   const runStatus = toStringOrNull(asObject(lastRunEnd?.slots)?.status) ?? "in_progress";
   const runGoal = toStringOrNull(asObject(runNode?.slots)?.goal);
@@ -1316,66 +1308,35 @@ export async function replayRunGet(client: pg.PoolClient, body: unknown, opts: R
   return {
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
-    run: {
-      run_id: parsed.run_id,
-      status: runStatus,
-      goal: runGoal,
-      run_node_id: runNode?.id ?? null,
-      run_uri:
-        runNode?.id != null
-          ? buildAionisUri({
-              tenant_id: tenancy.tenant_id,
-              scope: tenancy.scope,
-              type: runNode.type,
-              id: runNode.id,
-            })
-          : null,
-      started_at: runNode?.created_at ?? null,
-      ended_at: lastRunEnd?.created_at ?? null,
-    },
+    run: buildReplayRunGetRunSurface({
+      tenantId: tenancy.tenant_id,
+      scope: tenancy.scope,
+      runId: parsed.run_id,
+      runNode,
+      lastRunEnd,
+      runStatus,
+      runGoal,
+    }),
     steps: parsed.include_steps
       ? stepRows.map((row) => {
           const slotsObj = asObject(row.slots);
           const sid = toStringOrNull(slotsObj?.step_id) ?? row.id;
-          const result = resultByStepId.get(sid) ?? null;
-          const resultSlots = asObject(result?.slots);
-          return {
-            step_id: sid,
-            step_index: Number(slotsObj?.step_index ?? 0) || null,
-            tool_name: toStringOrNull(slotsObj?.tool_name),
-            status: toStringOrNull(resultSlots?.status) ?? "pending",
-            safety_level: toStringOrNull(slotsObj?.safety_level),
-            repair_applied: Boolean(resultSlots?.repair_applied ?? false),
-            preconditions: Array.isArray(slotsObj?.preconditions) ? slotsObj?.preconditions : [],
-            postconditions: Array.isArray(resultSlots?.postconditions) ? resultSlots?.postconditions : [],
-            artifact_refs: Array.isArray(resultSlots?.artifact_refs) ? resultSlots?.artifact_refs : [],
-            step_uri: buildAionisUri({
-              tenant_id: tenancy.tenant_id,
-              scope: tenancy.scope,
-              type: row.type,
-              id: row.id,
-            }),
-            created_at: row.created_at,
-            result_uri:
-              result != null
-                ? buildAionisUri({
-                    tenant_id: tenancy.tenant_id,
-                    scope: tenancy.scope,
-                    type: result.type,
-                    id: result.id,
-                  })
-                : null,
-          };
+          return buildReplayRunGetStepSurface({
+            tenantId: tenancy.tenant_id,
+            scope: tenancy.scope,
+            row,
+            result: resultByStepId.get(sid) ?? null,
+          });
         })
       : [],
     artifacts: parsed.include_artifacts ? artifacts : [],
     timeline,
-    counters: {
-      total_nodes: rows.length,
-      step_nodes: stepRows.length,
-      step_result_nodes: stepResultRows.length,
-      artifact_refs: artifacts.length,
-    },
+    counters: buildReplayRunGetCounters({
+      totalNodes: rows.length,
+      stepNodes: stepRows.length,
+      stepResultNodes: stepResultRows.length,
+      artifactRefs: artifacts.length,
+    }),
   };
 }
 
@@ -1518,79 +1479,45 @@ export async function replayPlaybookCompileFromRun(client: pg.PoolClient, body: 
   const playbookCid = playbookClientId(playbookId, version);
   const writeIdentity = replayWriteIdentityFromInput(parsed, runNode ? replayWriteIdentityFromRow(runNode) : undefined);
 
-  const writeReq = {
-    tenant_id: tenancy.tenant_id,
+  const writeReq = buildReplayCompileWriteRequest({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
     actor: parsed.actor ?? "replay_compiler",
-    input_text: `compile playbook ${playbookName}`,
-    auto_embed: false,
-    ...writeIdentity,
-    nodes: [
-      {
-        client_id: playbookCid,
-        type: "procedure" as const,
-        title: playbookName,
-        text_summary: `Replay playbook compiled from run ${parsed.run_id}`,
-        slots: {
-          replay_kind: "playbook",
-          playbook_id: playbookId,
-          name: playbookName,
-          version,
-          status: "draft",
-          matchers: parsed.matchers ?? {},
-          success_criteria: successCriteria,
-          risk_profile: parsed.risk_profile,
-          created_from_run_ids: [parsed.run_id],
-          source_run_id: parsed.run_id,
-          policy_constraints: {},
-          steps_template: stepsTemplate,
-          compile_summary: summary,
-          metadata: parsed.metadata ?? {},
-        },
-      },
-    ],
-    edges: [
-      ...(runNode
-        ? [
-            {
-              type: "derived_from" as const,
-              src: { client_id: playbookCid },
-              dst: { id: runNode.id },
-            },
-          ]
-        : []),
-      ...stepRows.map((row) => ({
-        type: "derived_from" as const,
-        src: { client_id: playbookCid },
-        dst: { id: row.id },
-      })),
-    ],
-  };
+    inputText: `compile playbook ${playbookName}`,
+    writeIdentity: writeIdentity as unknown as Record<string, unknown>,
+    playbookCid,
+    playbookName,
+    textSummary: `Replay playbook compiled from run ${parsed.run_id}`,
+    slots: buildReplayCompileSlots({
+      playbookId,
+      playbookName,
+      version,
+      matchers: (parsed.matchers ?? {}) as Record<string, unknown>,
+      successCriteria: successCriteria as Record<string, unknown>,
+      riskProfile: parsed.risk_profile,
+      sourceRunId: parsed.run_id,
+      stepsTemplate,
+      summary,
+      metadata: (parsed.metadata ?? {}) as Record<string, unknown>,
+    }),
+    runNode,
+    stepRows,
+  });
   const { out } = await applyReplayMemoryWrite(client, writeReq, opts);
   const playbookNode = out.nodes.find((n) => n.client_id === playbookCid) ?? out.nodes[0] ?? null;
-  return {
-    tenant_id: tenancy.tenant_id,
+  return buildReplayCompileResult({
+    tenantId: tenancy.tenant_id,
     scope: tenancy.scope,
-    playbook_id: playbookId,
+    playbookId,
     version,
-    status: "draft",
-    source_run_id: parsed.run_id,
-    playbook_node_id: playbookNode?.id ?? null,
-    playbook_uri:
-      playbookNode?.id != null
-        ? buildAionisUri({
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            type: "procedure",
-            id: playbookNode.id,
-          })
-        : null,
-    compile_summary: summary,
+    sourceRunId: parsed.run_id,
+    playbookNodeId: playbookNode?.id ?? null,
+    summary,
     usage: usageOut,
-    commit_id: out.commit_id,
-    commit_uri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
-    commit_hash: out.commit_hash,
-  };
+    commitId: out.commit_id,
+    commitUri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
+    commitHash: out.commit_hash,
+  });
 }
 
 export async function replayPlaybookGet(client: pg.PoolClient, body: unknown, opts: ReplayReadOptions) {
