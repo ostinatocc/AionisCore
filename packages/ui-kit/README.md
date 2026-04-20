@@ -6,10 +6,10 @@ Shared UI primitives, brand theme, and hooks used by the three Aionis-surface UI
 - `apps/playground` — public hosted demo
 - Aionis Workbench UI — browser for the Workbench task/session controller
 
-This package is the single source of truth for the Aionis Visual Identity v1
-(`docs/AIONIS_BRAND_VISUAL_IDENTITY_V1.md`). Consumers get: a Tailwind preset,
-a CSS token layer, a small set of Preact components, a few logic-only hooks,
-and a typed Aionis HTTP client.
+This package is the single source of truth for the shipped Aionis UI theme
+tokens and primitives. Consumers get: a Tailwind preset, a CSS token layer, a
+small set of Preact components, a few logic-only hooks, and a typed Aionis
+HTTP client.
 
 ## Install
 
@@ -87,8 +87,8 @@ import { alias, toneOf, formatDurationMs, parseRationale, createAionisHttpClient
 - State colors (`trusted`, `candidate`, `contested`, `governed`, `shadow`) carry
   runtime meaning only — never generic success/warning/error chrome
 
-See [docs/AIONIS_BRAND_VISUAL_IDENTITY_V1.md](../../docs/AIONIS_BRAND_VISUAL_IDENTITY_V1.md)
-for the canonical spec.
+The canonical tokens and rules live in this package through
+`theme/tokens.css` and `theme/tailwind-preset`.
 
 ## Versioning
 

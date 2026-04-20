@@ -8,7 +8,7 @@ This document is the canonical architecture reference for the current Lite local
 
 It describes the runtime as it exists in the source tree today. It does not try to preserve older completion tracking language or historical codebase metrics.
 
-For the phase-level summary of what is now considered stable in this local-first technical beta, see [AIONIS_RUNTIME_STAGE_BASELINE_2026_04_20.md](AIONIS_RUNTIME_STAGE_BASELINE_2026_04_20.md).
+For the public summary of what ships today, see [../apps/docs/docs/evidence/stable-baseline.md](../apps/docs/docs/evidence/stable-baseline.md).
 
 For endpoint-by-endpoint public surface details, see [LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md).
 

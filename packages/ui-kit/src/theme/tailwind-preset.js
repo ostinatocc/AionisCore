@@ -1,9 +1,8 @@
 /**
  * @aionis/ui-kit — Tailwind preset.
  *
- * Mirrors docs/AIONIS_BRAND_VISUAL_IDENTITY_V1.md §3 Color, §4 Typography,
- * §5 Corner scale, §10 Code tokens. When the VI document changes, this file
- * is the first follower. Consumers do:
+ * Mirrors the shipped Aionis UI token set for color, typography, corners,
+ * and code styling. Consumers do:
  *
  *   import aionis from "@aionis/ui-kit/theme/tailwind-preset";
  *   export default { presets: [aionis], content: [...] };

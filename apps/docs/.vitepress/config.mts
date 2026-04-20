@@ -115,12 +115,6 @@ export default withMermaid(defineConfig({
             { text: "FAQ and Troubleshooting", link: "/docs/faq-and-troubleshooting" },
           ],
         },
-        {
-          text: "Contributing",
-          items: [
-            { text: "Architecture and Boundaries", link: "/docs/contributing/architecture-and-boundaries" },
-          ],
-        },
       ],
     },
   },

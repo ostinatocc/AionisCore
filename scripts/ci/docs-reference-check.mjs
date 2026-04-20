@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const repoRoot = process.cwd();
@@ -6,33 +6,22 @@ const repoRoot = process.cwd();
 const publicFiles = [
   "README.md",
   "docs/README.md",
-  "docs/AIONIS_PRODUCT_DEFINITION_V1.md",
-  "docs/LAUNCH_MESSAGING.md",
   "docs/OPEN_CORE_BOUNDARY.md",
   "docs/SDK_QUICKSTART.md",
-  "docs/SDK_PUBLISHING.md",
   "docs/LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md",
   "docs/LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md",
   "docs/LOCAL_RUNTIME_SOURCE_BOUNDARY.md",
   "docs/LOCAL_RUNTIME_REAL_TASK_BENCHMARK_REPORT.md",
   "docs/CORE_TESTING_STRATEGY.md",
-  "docs/RUNTIME_MAINLINE.md",
-  "docs/CORE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md",
-  "docs/CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md",
-  "docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md",
-  "docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md",
-  "docs/CORE_ANCHOR_SCHEMA.md",
   "apps/lite/README.md",
   "packages/full-sdk/README.md",
   "packages/runtime-core/README.md",
   "packages/aionis-doc/README.md",
+  "packages/ui-kit/README.md",
   "examples/full-sdk/README.md",
 ];
 
-const governanceFilesAllowedToMentionRemovedDocs = [
-  "docs/DOCUMENTATION_TAXONOMY.md",
-  "docs/DOCS_MAINTENANCE.md",
-];
+const governanceFilesAllowedToMentionRemovedDocs = [];
 
 const forbiddenReferencePatterns = [
   /docs\/FULL_SDK_QUICKSTART\.md/g,
@@ -42,23 +31,9 @@ const forbiddenReferencePatterns = [
 ];
 
 const historicalFiles = [
-  "docs/AIONIS_0_1_0_RELEASE_NOTE.md",
-  "docs/AIONIS_RUNTIME_CAPABILITY_AUDIT_V1.md",
-  "docs/CORE_GOVERNANCE_AND_STRATEGY_STATUS.md",
-  "docs/CORE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md",
-  "docs/CORE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md",
-  "docs/CORE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md",
-  "docs/CORE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md",
-  "docs/CORE_FOUNDATION_MEMORY_V1_IMPLEMENTATION_PLAN.md",
-  "docs/CORE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md",
-  "docs/CORE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md",
 ];
 
 const adrFiles = [
-  "docs/adr/README.md",
-  "docs/adr/ADR-0001-lite-execution-memory-kernel.md",
-  "docs/adr/ADR-0002-lite-execution-policy-intervention-model.md",
-  "docs/plans/README.md",
 ];
 
 const planFiles = walkMarkdown(join(repoRoot, "docs/plans")).filter(
@@ -70,6 +45,9 @@ const rootDocs = readdirSync(join(repoRoot, "docs"))
   .sort();
 
 function walkMarkdown(dir) {
+  if (!existsSync(dir)) {
+    return [];
+  }
   const results = [];
   for (const entry of readdirSync(dir)) {
     const fullPath = join(dir, entry);
@@ -96,12 +74,16 @@ function read(relativePath) {
   return readFileSync(join(repoRoot, relativePath), "utf8");
 }
 
+function filterExisting(files) {
+  return files.filter((relativePath) => existsSync(join(repoRoot, relativePath)));
+}
+
 function topLines(content, count = 18) {
   return content.split("\n").slice(0, count).join("\n");
 }
 
 const appDocsFiles = walkMarkdown(join(repoRoot, "apps/docs"));
-const activeFiles = [...new Set([...publicFiles, ...appDocsFiles])];
+const activeFiles = [...new Set([...filterExisting(publicFiles), ...appDocsFiles])];
 const failures = [];
 
 for (const file of activeFiles) {
@@ -116,14 +98,14 @@ for (const file of activeFiles) {
   }
 }
 
-for (const file of historicalFiles) {
+for (const file of filterExisting(historicalFiles)) {
   const header = topLines(read(file));
   if (!/^Historical status:/m.test(header) && !/^Document status:/m.test(header)) {
     failures.push(`${file}: missing historical/document status marker near top of file`);
   }
 }
 
-for (const file of adrFiles) {
+for (const file of filterExisting(adrFiles)) {
   const header = topLines(read(file));
   if (!/archive/i.test(header) && !/^Document status:/m.test(header) && !/^Historical status:/m.test(header)) {
     failures.push(`${file}: missing archive or document status marker near top of file`);

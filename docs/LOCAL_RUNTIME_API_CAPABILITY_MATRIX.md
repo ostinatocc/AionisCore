@@ -33,11 +33,11 @@ Primary routing sources:
 2. `src/host/lite-edition.ts`
 3. `src/routes/*.ts`
 
-Related packet/provenance reference:
+Related public references:
 
-1. [docs/CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](CORE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
-2. [docs/CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](CORE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
-3. [docs/CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](CORE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
+1. [SDK_QUICKSTART.md](SDK_QUICKSTART.md)
+2. [../apps/docs/docs/reference/contracts-and-routes.md](../apps/docs/docs/reference/contracts-and-routes.md)
+3. [../apps/docs/docs/reference/memory.md](../apps/docs/docs/reference/memory.md)
 
 ## Status Legend
 
