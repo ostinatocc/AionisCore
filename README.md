@@ -65,6 +65,8 @@ This self-evolving loop is already proven publicly through six live outcomes:
 5. `session continuity` can independently promote stable workflows
 6. semantic forgetting cools memory instead of deleting it
 
+You can reproduce all six proofs yourself through the step-by-step [Self-Evolving Demos](apps/docs/docs/evidence/self-evolving-demos.md) guide.
+
 ## Forgetting Mechanism
 
 Aionis treats forgetting as a lifecycle mechanism, not as a delete button.
