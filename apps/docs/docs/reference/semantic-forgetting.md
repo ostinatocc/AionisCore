@@ -5,7 +5,7 @@ slug: /reference/semantic-forgetting
 
 # Semantic forgetting
 
-Semantic forgetting in Aionis is not deletion. It is the runtime's lifecycle layer for deciding when execution memory should stay active, be demoted, be archived, or only be rehydrated on demand.
+Semantic forgetting is the runtime's lifecycle layer for deciding when execution memory should stay active, become colder, move into archive, or be restored on demand.
 
 <div class="doc-lead">
   <span class="doc-kicker">What forgetting means here</span>
@@ -65,7 +65,7 @@ flowchart LR
     F --> G["planning and execution summaries"]
 ```
 
-The forgetting path is useful because it explains why memory stays hot, why it becomes colder, and how the runtime will bring it back when the task proves it still needs that context.
+The forgetting path is useful because it explains why memory stays hot, why it becomes colder, and how the runtime brings it back when the task needs that context.
 
 ## What is active today
 
@@ -76,7 +76,7 @@ Today the runtime already supports:
 3. differential payload rehydration for anchored workflow memory
 4. planning and execution summary surfaces that expose these signals directly
 
-That means forgetting is no longer only an internal implementation detail. It is visible through public runtime behavior.
+That means forgetting is visible through public runtime behavior.
 
 ## The main public entry points
 
@@ -105,24 +105,13 @@ Those fields exist to answer questions such as:
 - why is this workflow archived instead of reused immediately?
 - why did the runtime recommend widening recall or rehydrating a colder payload?
 
-## What this does not mean yet
+## What to look for when you evaluate it
 
-Aionis is now on a serious Memory v2 path, but this is still the first strong implementation rather than the final operating system.
+The easiest signals to inspect are:
 
-What is still incomplete:
-
-1. lifecycle coverage is not yet fully uniform across every memory object class
-2. archive relocation is still aimed at `local_cold_store`, not a full external cold-storage system
-3. differential rehydration exists, but it is not yet the final strongest selector
-4. semantic compaction and broader abstraction promotion are still being expanded
-
-So the right claim is:
-
-> Aionis already has a semantic forgetting system.
-
-The wrong claim would be:
-
-> Aionis already finished the entire Memory v2 forgetting operating system.
+1. whether planning explains why colder memory stayed out of the default working set
+2. whether execution introspection shows archive and relocation state directly
+3. whether rehydration restores only the level of detail the task needs
 
 ## Practical reading order
 

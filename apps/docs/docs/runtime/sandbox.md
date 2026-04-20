@@ -79,11 +79,11 @@ Use the sandbox when you need:
 - logs and artifacts attached to the run
 - a bounded execution path that the runtime can reason about
 
-This is especially useful when replay validation, automation, or host-side workflows need a local execution primitive instead of raw shell access.
+This is especially useful when replay validation, automation, or host-side workflows need a local execution primitive with runtime-managed logs and artifacts.
 
 ## How sandbox fits the runtime model
 
-The sandbox is not an isolated extra feature. It sits inside the same runtime story:
+The sandbox sits inside the same runtime story:
 
 1. task start chooses a better first move
 2. replay records how work succeeded or failed
@@ -92,13 +92,13 @@ The sandbox is not an isolated extra feature. It sits inside the same runtime st
 
 That is why the sandbox belongs under Lite runtime rather than under miscellaneous utilities.
 
-## Lite boundary notes
+## Sandbox in Lite today
 
 Three constraints matter:
 
 1. sandbox availability depends on Lite config such as `SANDBOX_ENABLED`
 2. local-safe profiles can narrow allowed commands
-3. Lite sandbox is a local execution surface, not a hosted remote runner
+3. sandbox runs, logs, and artifacts all come back through the same runtime surface
 
 If sandbox routes fail, the first place to look is runtime config rather than SDK code.
 

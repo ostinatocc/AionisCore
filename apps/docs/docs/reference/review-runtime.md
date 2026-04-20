@@ -158,6 +158,7 @@ await aionis.memory.replay.playbooks.repairReview({
 ## Why this matters
 
 These surfaces matter because continuity is not only about starting or replaying work. It is also about deciding whether the runtime state is trustworthy enough to reuse.
+These surfaces matter because continuity includes deciding whether runtime state is trustworthy enough to reuse.
 
 That is what review runtime paths are for:
 
@@ -170,15 +171,13 @@ That is what review runtime paths are for:
   <p>Task start, handoff, and replay create continuity artifacts. Review runtime is the layer that decides whether those artifacts deserve reuse. That is why this surface belongs in the public runtime: self-evolving systems still need explicit trust checkpoints.</p>
 </div>
 
-## Lite boundary notes
+## Review in Lite today
 
-In Lite, these paths are present, but still narrower than a full hosted governance system.
+In Lite, these paths are present through:
 
-The practical rule is:
-
-- review packs are public and useful
-- replay repair review exists in a Lite governed subset
-- broader hosted review workflows still belong to a bigger control-plane story, not Lite
+- public review packs
+- replay repair review
+- policy and evolution review surfaces
 
 ## Related docs
 

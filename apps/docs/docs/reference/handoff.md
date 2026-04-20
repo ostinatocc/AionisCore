@@ -47,7 +47,7 @@ The point is not to save another prose summary. The point is to store execution-
 
 <div class="section-frame">
   <span class="doc-kicker">Resume contract</span>
-  <p>Think of handoff as a contract, not a note. The contract says where the next run should attach, what object it should touch first, what must remain true, and how the host can tell whether recovery actually worked. If those constraints are missing, the runtime may recover the packet but still fail to resume the work well.</p>
+  <p>Think of handoff as an execution-ready contract. It says where the next run should attach, what object it should touch first, what must remain true, and how the host can tell whether recovery actually worked.</p>
 </div>
 
 <div class="state-strip">

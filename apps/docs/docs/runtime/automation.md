@@ -5,13 +5,13 @@ slug: /runtime/automation
 
 # Automation
 
-Lite includes a local automation kernel. It is not a generic hosted workflow engine. It is a runtime path for executing playbook-shaped work locally, with explicit graph validation, run state, and pause/resume behavior.
+Lite includes a local automation runtime for executing playbook-shaped work with graph validation, run state, and pause/resume behavior.
 
 <div class="doc-lead">
   <span class="doc-kicker">Automation in Lite</span>
-  <p>The Lite automation kernel is built around local playbook execution. It lets you define a graph, validate it, create an automation, run it, inspect run state, and resume approval pauses through the public SDK.</p>
+  <p>The Lite automation runtime is built around local playbook execution. It lets you define a graph, validate it, create an automation, run it, inspect run state, and resume approval pauses through the public SDK.</p>
   <div class="doc-chip-row">
-    <span class="doc-chip">Local playbook kernel</span>
+    <span class="doc-chip">Local playbook runtime</span>
     <span class="doc-chip">Graph validation</span>
     <span class="doc-chip">Run lifecycle</span>
     <span class="doc-chip">Approval pauses</span>
@@ -22,13 +22,13 @@ Lite includes a local automation kernel. It is not a generic hosted workflow eng
 
 Automation in Aionis is continuity-aware execution reuse.
 
-The point is not only to schedule work. The point is to take a reusable playbook or task graph and run it through a local runtime that already understands replay, pause, approval, and artifact checks.
+Automation takes a reusable playbook or task graph and runs it through a local runtime that already understands replay, pause, approval, and artifact checks.
 
 ## Public automation methods
 
 | SDK method | Route | Purpose |
 | --- | --- | --- |
-| `automations.validate(...)` | `POST /v1/automations/validate` | Validate a graph against the Lite automation kernel |
+| `automations.validate(...)` | `POST /v1/automations/validate` | Validate a graph against the Lite automation runtime |
 | `automations.graphValidate(...)` | `POST /v1/automations/graph/validate` | Alternate validation entrypoint for graph validation |
 | `automations.create(...)` | `POST /v1/automations/create` | Persist an automation definition |
 | `automations.get(...)` | `POST /v1/automations/get` | Fetch one automation definition |
@@ -41,7 +41,7 @@ The point is not only to schedule work. The point is to take a reusable playbook
 
 ## Supported Lite node kinds
 
-The current Lite kernel supports these node kinds:
+The current Lite runtime supports these node kinds:
 
 | Node kind | What it does |
 | --- | --- |
@@ -50,7 +50,7 @@ The current Lite kernel supports these node kinds:
 | `condition` | Evaluate a boolean branch condition |
 | `artifact_gate` | Require expected artifacts before continuing |
 
-This is enough to express useful local workflows without pretending Lite already ships a full hosted orchestration plane.
+This is enough to express useful local workflows through the public Lite path.
 
 ## Minimal validation and create example
 
@@ -130,7 +130,7 @@ await aionis.automations.runs.resume({
 
 ## How automation relates to replay
 
-Automation is not separate from replay in Aionis. It sits on top of the same continuity substrate.
+Automation sits on top of the same continuity substrate as replay.
 
 The practical relationship is:
 
@@ -140,13 +140,13 @@ The practical relationship is:
 
 That is why automation belongs in the runtime story rather than living as a separate side feature.
 
-## Lite boundary notes
+## Automation in Lite today
 
 Three things matter in Lite:
 
-1. the automation kernel is local and explicit
-2. reviewer-scoped governance and broader hosted workflow controls are narrower than a hosted system
-3. approval pauses are supported, but Lite is still not a full remote orchestration plane
+1. the automation runtime is local and explicit
+2. approval pauses are supported
+3. replay and automation share the same playbook model
 
 ## Related docs
 

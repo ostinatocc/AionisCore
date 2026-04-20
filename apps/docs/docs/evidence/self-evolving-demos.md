@@ -7,7 +7,7 @@ slug: /evidence/self-evolving-demos
 
 This page is the runnable companion to the higher-level [Proof by Evidence](./proof-by-evidence.md) page.
 
-The goal is not to show every route. The goal is to show six concrete loops:
+The goal is to show six concrete loops:
 
 1. the second task start gets better
 2. positive execution feedback becomes persisted policy memory
@@ -18,7 +18,7 @@ The goal is not to show every route. The goal is to show six concrete loops:
 
 <div class="doc-lead">
   <span class="doc-kicker">Proof path</span>
-  <p>If these six demos work, Aionis is doing more than storing transcripts. It is improving startup, materializing execution policy, governing what it learns, preserving continuity provenance, and managing colder execution memory through semantic forgetting and rehydration.</p>
+  <p>If these six demos work, Aionis is improving startup, materializing execution policy, governing what it learns, preserving continuity provenance, and managing colder execution memory through semantic forgetting and rehydration.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">Task start</span>
     <span class="doc-chip">Policy memory</span>
@@ -55,7 +55,7 @@ What it proves:
 
 1. a cold repeated task can start with weak or incomplete guidance
 2. after successful execution packets are written back, the next `taskStart(...)` can produce a more grounded first move
-3. Aionis is not only storing history; it is improving the next startup decision
+3. Aionis is improving the next startup decision from prior execution
 
 What to inspect in the output:
 
@@ -87,7 +87,7 @@ npm run example:sdk:policy-memory
 
 What it proves:
 
-1. repeated positive `tools.feedback(...)` does not stop at pattern hints
+1. repeated positive `tools.feedback(...)` can progress past pattern hints
 2. stable learning can materialize into persisted `policy memory`
 3. the same state can be read back through `reviewPacks.evolution(...)` and `memory.agent.inspect(...)`
 
@@ -111,7 +111,7 @@ npm run example:sdk:policy-governance
 
 What it proves:
 
-1. policy memory is not write-once and forgotten
+1. policy memory remains reviewable over time
 2. the public governance route can move persisted policy state through `retire`
 3. fresh live evidence can `reactivate` the same policy memory cleanly
 
@@ -265,10 +265,4 @@ Each demo proves a different layer of the self-evolving claim:
 | Session continuity promotes stable workflows | Aionis can lift repeated session state into stable workflow guidance without needing an event-only path |
 | Semantic forgetting archives and rehydrates execution memory | Aionis can cool down, relocate, and selectively restore execution memory instead of only accumulating it |
 
-Taken together, they show that the runtime is not just:
-
-- a memory store
-- a transcript archive
-- a long-task shell
-
-It is a continuity kernel that can accumulate, materialize, and govern execution memory over time.
+Taken together, they show that the runtime can accumulate, materialize, and govern execution memory over time.

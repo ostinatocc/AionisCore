@@ -19,13 +19,12 @@ slug: /intro
 </div>
 
 <div class="section-frame">
-  <span class="doc-kicker">Current stable baseline</span>
-  <p>The current repository head is the stage-stable baseline for the local-first technical beta. Lite posture is explicit, the self-evolving claim is backed by six live proofs, and the first major refactor tranche has already reduced the biggest runtime seams without breaking the contract-tested surface.</p>
-  <p><a href="./evidence/stable-baseline.md">Read the stable baseline summary</a>.</p>
+  <span class="doc-kicker">What ships today</span>
+  <p>Aionis Runtime ships today as a local runtime with typed SDK access to task start, handoff, replay, policy memory, semantic forgetting, sandbox execution, and automation.</p>
+  <p><a href="./evidence/what-ships-today">See what ships today</a>.</p>
 </div>
 
 `Aionis Runtime` is the public runtime in this repository.  
-`Aionis Core` is the kernel beneath it.  
 `Lite` is the runtime shape that ships publicly today.
 
 The purpose of the runtime is straightforward:
@@ -64,15 +63,13 @@ The purpose of the runtime is straightforward:
 
 ## The failure it targets
 
-The problem is not generic “AI memory”.
-
 The concrete failure is agent continuity:
 
 1. a familiar task comes in and the agent still starts from zero
 2. a paused task is resumed and the agent has no trustworthy execution state
 3. a successful repair finishes and the knowledge disappears instead of becoming reusable
 
-That failure is especially visible in coding workflows, but it is not limited to coding. Any agent workflow that depends on reliable startup guidance, pause/resume, or replay reuse will hit the same continuity problem.
+That failure is especially visible in coding workflows, but the same pattern appears anywhere reliable startup guidance, pause/resume, or replay reuse matters.
 
 ## What Aionis Runtime does
 
@@ -97,8 +94,6 @@ Not every valuable capability belongs in the first evaluation loop.
 - `tools.*`, `rules.*`, and `patterns.*` belong in the advanced path because they govern learned behavior rather than simply exposing outputs.
 
 ## What "self-evolving" means here
-
-The runtime is not claiming magical self-improvement in the abstract.
 
 In Aionis, self-evolving means that later execution can be informed by earlier execution through explicit runtime structures:
 
@@ -126,18 +121,11 @@ The current public runtime is especially well suited to:
 - task-oriented hosts that need pause/resume
 - multi-agent systems that need trustworthy handoff between workers
 
-The common requirement is not domain. The common requirement is continuity.
+The common requirement is continuity.
 
-## What the runtime is not
+## Where it fits
 
-Aionis Runtime is not:
-
-- a hosted control plane
-- a generic chat memory plugin
-- a vague orchestration wrapper with continuity hidden in prompts
-- a replacement for the model, agent UI, or workflow host you already use
-
-Instead, it sits underneath those systems as continuity infrastructure.
+Aionis Runtime fits underneath the model, host, and workflow layers as the continuity layer that helps work carry forward across runs.
 
 ## Why the runtime shape matters
 
@@ -162,7 +150,7 @@ flowchart TD
     E --> G["Next similar task starts with better first action"]
 ```
 
-This is the loop Aionis is trying to own. The runtime is not only storing data; it is trying to improve later execution quality.
+This is the loop Aionis is trying to own. The runtime turns prior execution into better later execution.
 
 ## What ships today
 
@@ -177,7 +165,6 @@ Use this mental model:
 
 | Layer | What it means |
 | --- | --- |
-| `Aionis Core` | The underlying kernel concepts and runtime substrate |
 | `Aionis Runtime` | The public runtime shape you integrate against |
 | `Lite` | The local distribution that ships publicly today |
 
@@ -210,7 +197,7 @@ If you are evaluating or integrating Aionis, you mainly care about `Aionis Runti
   <a class="doc-card" href="./architecture/overview.md">
     <span class="doc-kicker">Understand it</span>
     <h3>Architecture Overview</h3>
-    <p>Read the runtime shell, bootstrap, host, kernel, and store seams that make Lite explicit.</p>
+    <p>Read the runtime shell, bootstrap, host, and store seams that make Lite easy to understand.</p>
   </a>
 </div>
 

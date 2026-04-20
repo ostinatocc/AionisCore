@@ -5,11 +5,11 @@ slug: /architecture/overview
 
 # Architecture overview
 
-The public runtime shape is organized around a thin local runtime shell, a Lite-only assembly path, an HTTP host layer, kernel subsystems, and SQLite-backed local stores.
+The public runtime shape is organized around a thin local runtime shell, a Lite-only assembly path, an HTTP host layer, runtime subsystems, and SQLite-backed local stores.
 
 <div class="doc-lead">
   <span class="doc-kicker">Architecture summary</span>
-  <p>Lite is not a monolith and not a fake local wrapper around an implied hosted system. The runtime has explicit seams: shell, bootstrap, assembly, host, kernel subsystems, and local stores.</p>
+  <p>Lite is organized around explicit seams: shell, bootstrap, assembly, host, runtime subsystems, and local stores. That structure makes the runtime easier to understand and integrate.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">apps/lite shell</span>
     <span class="doc-chip">runtime-entry bootstrap</span>
@@ -39,7 +39,7 @@ The public runtime shape is organized around a thin local runtime shell, a Lite-
   </div>
   <div class="stack-layer">
     <span class="stack-kicker">Layer 04</span>
-    <h3>Kernel subsystems</h3>
+    <h3>Runtime subsystems</h3>
     <span class="stack-path">src/memory/*</span>
     <p>Implements write, recall, handoff, replay, automation, sandbox, and review behavior.</p>
   </div>
@@ -59,7 +59,7 @@ The public runtime shape is organized around a thin local runtime shell, a Lite-
 
 <div class="section-frame">
   <span class="section-label">Architectural stance</span>
-  <p>The important design choice here is explicitness. Lite does not hide continuity inside an assistant product shell. The runtime has named seams, named stores, named routes, and named boundaries.</p>
+  <p>The important design choice here is explicitness. The runtime has named seams, named stores, and named routes so teams can follow how continuity moves through the system.</p>
 </div>
 
 ## Repository seams
@@ -70,7 +70,7 @@ The public runtime shape is organized around a thin local runtime shell, a Lite-
 | Bootstrap | `src/index.ts`, `src/runtime-entry.ts` | Start the runtime, register routes, and own bootstrap lifecycle |
 | Runtime assembly | `src/app/runtime-services.ts` | Wire Lite stores, replay, sandbox, automation, embeddings, and runtime helpers |
 | Host layer | `src/host/*` | Expose supported Lite routes and structured error behavior |
-| Kernel subsystems | `src/memory/*` | Implement write, recall, context, handoff, replay, automation, and sandbox logic |
+| Runtime subsystems | `src/memory/*` | Implement write, recall, context, handoff, replay, automation, and sandbox logic |
 | Storage layer | `src/store/*` | Provide SQLite-backed local persistence for write, recall, replay, automation, and host state |
 | SDK layer | `packages/full-sdk/` | Expose the public client surface through `@ostinato/aionis` |
 
@@ -130,29 +130,24 @@ Its job is to:
 1. register stable health and runtime routes
 2. expose the Lite-supported public surface
 3. return structured error envelopes
-4. return structured `501` responses for intentionally unsupported full-runtime surfaces
+4. keep the public runtime surface clear and consistent
+## Lite runtime model
 
-That boundary is one of the design strengths of the project: Lite is explicit about what is public and what remains server-only.
-
-## Lite boundary model
-
-| Category | Inside Lite today | Outside Lite today |
-| --- | --- | --- |
-| Memory | write, recall, planning, task start, lifecycle routes | broader hosted control-plane memory operations |
-| Handoff | store and recover | hosted coordination layers beyond Lite |
-| Replay | replay runs, playbooks, governed subset | broader server-only governance surfaces |
-| Runtime ops | `/health`, config-driven local boot, structured `501` boundaries | admin control plane |
-| Execution | local sandbox and local automation kernel | hosted remote execution plane |
+| Category | Lite today |
+| --- | --- |
+| Memory | write, recall, planning, task start, lifecycle routes |
+| Handoff | store and recover |
+| Replay | replay runs, playbooks, governed subset |
+| Runtime ops | `/health`, config-driven local boot |
+| Execution | local sandbox and local automation |
 
 <div class="state-strip" aria-label="Boundary states">
   <span class="state-badge state-trusted">inside lite</span>
-  <span class="state-badge state-governed">governed subset</span>
-  <span class="state-badge state-shadow">hosted later</span>
+  <span class="state-badge state-governed">governed reuse</span>
+  <span class="state-badge state-shadow">local execution</span>
 </div>
 
-<p class="state-note">Lite is designed to be narrow and reliable before it is broad.</p>
-
-## Kernel subsystems
+## Runtime subsystems
 
 The largest runtime subsystems live in `src/memory/`:
 
@@ -162,9 +157,9 @@ The largest runtime subsystems live in `src/memory/`:
 - `handoff.ts` for structured pause and resume
 - `replay.ts` for replay lifecycle, playbooks, review, and governed execution
 - `sandbox.ts` for local sandbox execution
-- `automation-lite.ts` for the local automation kernel
+- `automation-lite.ts` for the local automation runtime
 
-These modules are what make the runtime more than a storage wrapper.
+These modules are what connect execution memory, replay, handoff, sandbox, and automation into one runtime.
 
 ## Storage model
 
@@ -185,15 +180,13 @@ That split makes the runtime easier to evolve by responsibility rather than hidi
 
 This architecture does three important things:
 
-1. it keeps the public runtime honest about its Lite boundary
-2. it makes runtime behavior inspectable instead of burying it in prompts
-3. it lets continuity live as infrastructure, not as a hidden side effect of one agent product
-
-That is the practical reason Aionis feels different from a thin prompt wrapper or one big monolithic agent app.
+1. it makes runtime behavior inspectable
+2. it keeps the continuity loop easy to follow
+3. it turns continuity into infrastructure that teams can integrate directly
 
 <div class="section-frame">
   <span class="section-label">Reading rule</span>
-  <p>When you read this repo, do not start from random source files. Start from the layer that owns the behavior you care about. That is how the architecture stays understandable.</p>
+  <p>When you read this repo, start from the layer that owns the behavior you care about. That is how the architecture stays understandable.</p>
 </div>
 
 ## Read deeper when you need to
@@ -204,7 +197,7 @@ You can stay inside the docs site for normal product and integration understandi
   <a class="doc-card" href="../runtime/lite-runtime.md">
     <span class="doc-kicker">Runtime surface</span>
     <h3>Lite Runtime</h3>
-    <p>Read what Lite includes today, what it excludes, and why the `501` boundary is a feature.</p>
+    <p>Read what Lite includes today and how the local runtime shape comes together.</p>
   </a>
   <a class="doc-card" href="../runtime/lite-config-and-operations.md">
     <span class="doc-kicker">Operations</span>

@@ -207,12 +207,12 @@ For public product boundary and open-core distribution stance:
 - [`@ostinato/aionis`](https://github.com/ostinatocc/AionisCore/blob/main/packages/full-sdk/README.md)
 - [`@aionis/doc`](https://github.com/ostinatocc/AionisCore/blob/main/packages/aionis-doc/README.md)
 
-## What this page is not trying to be
+## How to use this page
 
-This page is not trying to reproduce every field-level schema in the repository.
+Use this page for the public shape and integration path first.
 
-That means:
+When you need exact field-level detail, continue into:
 
-1. the docs site explains the public shape and integration path
-2. the repository contract files still remain the literal source of truth for exact field-level detail
-3. deeper route-by-route debugging still sometimes requires reading the raw capability matrix or SDK contracts
+1. the repository contract files
+2. the capability matrix
+3. the SDK contract sources

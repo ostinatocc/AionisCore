@@ -11,12 +11,12 @@ That is the problem space the runtime is built for.
 
 <div class="doc-lead">
   <span class="doc-kicker">Why it matters</span>
-  <p>The strongest argument for Aionis is not "it stores memory." The argument is that continuity becomes a runtime primitive with explicit APIs, typed contracts, and a real local runtime boundary.</p>
+  <p>The strongest argument for Aionis is that continuity becomes a runtime primitive with explicit APIs, typed contracts, and a local runtime teams can evaluate directly.</p>
   <div class="doc-chip-row">
-    <span class="doc-chip">Not transcript glue</span>
+    <span class="doc-chip">Continuity infrastructure</span>
     <span class="doc-chip">Explicit contracts</span>
     <span class="doc-chip">Replay-driven reuse</span>
-    <span class="doc-chip">Honest Lite boundary</span>
+    <span class="doc-chip">Lite runtime</span>
   </div>
 </div>
 
@@ -45,7 +45,7 @@ That is the problem space the runtime is built for.
 
 <div class="section-frame">
   <span class="section-label">Mechanism</span>
-  <p>Aionis is not trying to sound more intelligent than other agent products. It is trying to make execution more accumulative, more recoverable, and more reusable.</p>
+  <p>Aionis is built to make execution more accumulative, more recoverable, and more reusable across runs.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">Task start</span>
     <span class="doc-chip">Handoff</span>
@@ -63,8 +63,8 @@ Aionis is about making the next run better because the previous run happened.
 
 That is the difference:
 
-- not just "an agent that can work for a while"
-- but a runtime that can accumulate execution memory and reuse it through task start, handoff, replay, automation, and review
+- a runtime that can accumulate execution memory
+- a runtime that can reuse it through task start, handoff, replay, automation, and review
 
 ## The problem behind the product
 
@@ -93,15 +93,15 @@ That is a stronger foundation than hoping the next prompt reconstructs the right
 
 What this means in practice is that continuity is visible and programmable:
 
-- `task start` becomes an API, not a vibe
-- `handoff` becomes a recoverable packet, not a prose note
-- `replay` becomes a reusable artifact, not a log line
+- `task start` becomes an API
+- `handoff` becomes a recoverable packet
+- `replay` becomes a reusable artifact
 
 ### 2. Contracts are explicit
 
 The public SDK and route surfaces are typed and inspectable.
 
-That matters when you are integrating agent behavior into a real product and need something more stable than internal prompt conventions.
+That matters when you are integrating agent behavior into a real product and need something durable enough to build against.
 
 It also matters for long-lived systems, because you can:
 
@@ -110,9 +110,9 @@ It also matters for long-lived systems, because you can:
 - reason about Lite support vs non-Lite support
 - build host logic around typed responses instead of transcript parsing
 
-### 3. Lite is a real runtime, not a placeholder
+### 3. Lite is a real runtime
 
-The public runtime story is not a conceptual API sketch. Lite runs locally today with:
+Lite runs locally today with:
 
 - SQLite-backed persistence
 - route registration
@@ -122,7 +122,7 @@ The public runtime story is not a conceptual API sketch. Lite runs locally today
 
 That makes the project evaluable as software, not only as architecture.
 
-This is one of the practical strengths of Aionis: the public runtime is not only a future hosted promise. You can run it now, inspect it now, and decide whether the runtime shape fits your system.
+This is one of the practical strengths of Aionis: you can run it now, inspect it now, and decide whether the runtime shape fits your system.
 
 ### 4. Successful work can become reusable work
 
@@ -139,22 +139,11 @@ That is the "self-evolving" part of the story in concrete form:
 
 ### 5. The runtime boundary is deliberate
 
-Lite does not pretend to expose every server-only or control-plane surface.
-
-Unsupported route groups are omitted or returned as structured `501` responses. That is a strength, because it keeps the local runtime honest about what it does and does not ship.
-
-For infrastructure, honesty matters. A fake local surface is worse than a narrow explicit one.
+Lite ships as a clear local runtime shape. That clarity makes it easier to evaluate, integrate, and extend.
 
 ## Where Aionis fits in the stack
 
-Aionis is not trying to replace:
-
-- the model
-- the chat assistant UI
-- the orchestration framework
-- the host application
-
-It fits below those systems as a continuity layer.
+Aionis fits below models, hosts, and workflow layers as the continuity layer that helps work carry forward across runs.
 
 ```mermaid
 flowchart TD
@@ -169,12 +158,12 @@ That is why Aionis is strongest when your system already has agents, tools, or w
 
 <div class="section-frame">
   <span class="section-label">Decision frame</span>
-  <p>If your main problem is raw model quality, Aionis is not the first layer you fix. If your main problem is that execution cannot survive, recover, or improve across runs, Aionis is the right layer to evaluate.</p>
+  <p>Aionis is most useful when the important question is how execution survives, recovers, and improves across runs.</p>
 </div>
 
 ## Why this matters more than "long tasks"
 
-Many agent products can already run long tasks. That is not enough.
+Many agent products can already run long tasks. The harder question is what improves after the run ends.
 
 The harder question is:
 
@@ -206,7 +195,7 @@ If you are building coding-agent infrastructure, the runtime gives you a clearer
 The same continuity model also applies to:
 
 - multi-agent repair loops
-- internal workflow copilots
+- workflow copilots
 - automation paths that need approval and replay
 - operational systems where the next action is more important than the last chat turn
 

@@ -57,7 +57,7 @@ Use this checklist:
 3. `memory.taskStart(...)` returns a structured response
 4. `memory.planningContext(...)` returns planner-facing fields
 
-If all four are true, Lite is probably healthy. Sparse guidance usually means low-quality or low-quantity execution evidence, not a dead runtime.
+If all four are true, Lite is probably healthy. Sparse guidance usually means low-quality or low-quantity execution evidence.
 
 ## Where does Lite store data?
 
@@ -106,7 +106,7 @@ Do not start debugging sandbox with a large command chain.
 
 ## Why do automation routes not behave like a full workflow engine?
 
-Because Lite automation is a local automation kernel, not a hosted orchestration control plane.
+Because Lite automation is a local automation runtime built around playbook execution and approval pauses.
 
 In practice that means:
 

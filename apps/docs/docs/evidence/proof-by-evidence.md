@@ -23,8 +23,8 @@ The answer here is based on six live Lite runs through the public SDK on `2026-0
 </div>
 
 <div class="section-frame">
-  <span class="section-label">How this relates to the current baseline</span>
-  <p>This page proves the strongest runtime claims. If you want the broader answer to why this version is the current freeze point, read <a href="./stable-baseline.md">Stable Baseline</a>.</p>
+  <span class="section-label">How this relates to the release story</span>
+  <p>This page proves the strongest runtime claims. If you want the broader product view of what is available today, read <a href="./what-ships-today">What Ships Today</a>.</p>
 </div>
 
 <div class="state-strip">
@@ -139,7 +139,7 @@ npm run example:sdk:policy-memory
 
 Why this matters:
 
-- it proves Aionis is not only accumulating transcripts
+- it proves Aionis accumulates usable execution policy
 - it proves stable execution can become persistent execution policy
 - it makes the self-evolving claim inspectable through the public SDK
 
@@ -177,7 +177,7 @@ Why this matters:
 
 - it proves policy memory is reversible and reviewable
 - it proves governance is a runtime action, not just a metadata idea
-- it shows that self-evolving does not have to mean uncontrolled drift
+- it shows how self-evolving behavior stays inspectable and governable
 
 ## Proof 4: Continuity provenance survives promotion
 
@@ -287,7 +287,7 @@ Why this matters:
 
 - it proves forgetting is lifecycle control, not deletion
 - it proves the runtime can explain colder-memory decisions in public summary surfaces
-- it makes selective rehydration part of the product story instead of an internal helper
+- it makes selective rehydration part of the product story
 
 ## What these six proofs mean together
 

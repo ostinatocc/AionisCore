@@ -43,7 +43,7 @@ This is the fastest path from zero to a working `@ostinato/aionis` integration w
 
 <div class="section-frame">
   <span class="doc-kicker">Reading rule</span>
-  <p>This page intentionally does not present every memory endpoint as one flat checklist. The right question is: what are you trying to prove right now? If you are proving continuity, stay in the core path. If you are proving self-improvement, add the enhanced path. If you are building a deeper host substrate, continue into the advanced path.</p>
+  <p>This page follows a layered path. If you are proving continuity, stay in the core path. If you are proving self-improvement, add the enhanced path. If you are building a deeper host substrate, continue into the advanced path.</p>
 </div>
 
 <div class="state-strip">
@@ -61,9 +61,9 @@ Before writing any client code, make sure:
 2. your Node version supports `node:sqlite` and the local shell startup
 3. you know the default Lite target is `http://127.0.0.1:3001`
 
-## What this quickstart is trying to prove
+## What this quickstart proves
 
-This page is not trying to show every endpoint. It is trying to prove that the public SDK path supports a layered continuity product:
+This page proves that the public SDK path supports a layered continuity product:
 
 1. core path: prove continuity
 2. enhanced path: prove self-improvement
@@ -116,7 +116,7 @@ This quickstart intentionally moves in three layers:
 | --- | --- |
 | Core | Prove the continuity loop is real |
 | Enhanced | Prove the runtime can improve its own reuse quality |
-| Advanced | Prove the kernel exposes deeper control surfaces |
+| Advanced | Prove the runtime exposes deeper control surfaces |
 
 If you skip straight to advanced surfaces before proving the core loop, the runtime will feel wider than it needs to.
 
@@ -224,9 +224,9 @@ await aionis.handoff.store({
 
 What this step proves:
 
-1. pause/resume is a public runtime path, not a host-only convention
+1. pause/resume is a public runtime path
 2. you can store resume-ready task state through the SDK
-3. the continuity loop can survive a pause, not only a completed run
+3. the continuity loop can survive a pause as well as a completed run
 
 ### 8. Record replay and compile a playbook
 
@@ -309,7 +309,7 @@ What this step proves:
 
 1. lifecycle routes are part of Lite now
 2. the runtime can bring older memory back into active use
-3. continuity is not only append-only storage
+3. continuity includes lifecycle reuse as well as new writes
 
 ### 10. Record node reuse outcome
 

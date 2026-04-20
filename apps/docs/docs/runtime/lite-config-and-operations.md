@@ -143,7 +143,7 @@ Lite is intentionally opinionated:
 1. auth is off by default
 2. tenant quota enforcement is off by default
 3. some server-only route groups, such as admin control, return structured `501`
-4. Lite is local-first, not a hosted control plane
+4. Lite is designed for local-first use
 
 ## Related docs
 

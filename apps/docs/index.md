@@ -25,15 +25,15 @@ features:
   - title: Task start that remembers
     details: Prior runs return a better first action for the next similar task. No more starting familiar work from zero.
   - title: Handoff without summaries
-    details: Pause with target files, next action, and recovery context stored as runtime state — not as a chat summary.
+    details: Pause with target files, next action, and recovery context stored as structured runtime state.
   - title: Replay that becomes reusable
-    details: Successful runs get recorded, promoted into playbooks, and reused through the local automation kernel.
+    details: Successful runs get recorded, promoted into playbooks, and reused through local automation flows.
   - title: Typed SDK, stable routes
     details: Integrate against a typed TypeScript surface and explicit HTTP routes for kickoff, recall, replay, sandbox, and review.
   - title: Runs locally today
     details: SQLite-backed persistence, memory lifecycle routes, policy memory, sandbox execution, and automation — all in the public Lite distribution.
   - title: Inspectable by design
-    details: Runtime shell, assembly, host, kernel, and stores live in separate seams — continuity is not hidden inside a prompt.
+    details: Runtime shell, assembly, host, and stores are explicit, so continuity stays clear as teams integrate it.
 ---
 
 <div class="hero-install" aria-label="Install command">
@@ -48,56 +48,56 @@ features:
 </div>
 
 <div class="section-frame">
-  <span class="section-label">Current stable baseline · 2026-04-20</span>
-  <p>This repository is now being treated as the stage-stable baseline for the current local-first technical beta: Lite posture is hardened, six self-evolving proofs are live, SDK convergence has started, and the first major refactor tranche has already landed without breaking the contract-tested runtime surface.</p>
+  <span class="section-label">What ships today</span>
+  <p>Aionis Runtime ships today as a local runtime with typed SDK access to task start, handoff, replay, policy memory, semantic forgetting, sandbox execution, and automation. The fastest way to judge it is simple: run it locally, inspect the evidence, and decide whether the continuity model fits your system.</p>
   <div class="doc-chip-row">
-    <span class="doc-chip">sdk:test green</span>
-    <span class="doc-chip">lite:test 194 / 194</span>
-    <span class="doc-chip">Lite posture hardened</span>
+    <span class="doc-chip">Lite runtime</span>
+    <span class="doc-chip">Public SDK</span>
     <span class="doc-chip">6 live proofs</span>
+    <span class="doc-chip">SQLite-backed persistence</span>
   </div>
-  <p><a href="/docs/evidence/stable-baseline">Read the stable baseline summary</a></p>
+  <p><a href="/AionisCore/docs/evidence/what-ships-today">Read what ships today</a></p>
 </div>
 
 <div class="home-proof-section">
   <span class="home-demo-caption">Observed proof from six live Lite runs on 2026-04-18</span>
   <div class="home-proof-runbook">
-    <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
+    <a class="home-proof-runbook-card" href="/AionisCore/docs/evidence/proof-by-evidence">
       <span class="home-proof-runbook-label">Demo 1</span>
       <h3>Better second task start</h3>
       <p>The same task moved from a generic cold start to a learned file-aware startup.</p>
       <div class="home-proof-metric">cold: <code>tool_selection</code> → warm: <code>experience_intelligence</code></div>
       <div class="home-proof-code"><code>src/services/billing.ts</code></div>
     </a>
-    <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
+    <a class="home-proof-runbook-card" href="/AionisCore/docs/evidence/proof-by-evidence">
       <span class="home-proof-runbook-label">Demo 2</span>
       <h3>Policy memory materialized</h3>
       <p>Repeated positive execution feedback became persisted policy memory instead of staying as loose hints.</p>
       <div class="home-proof-metric"><code>materialization_state = "persisted"</code></div>
       <div class="home-proof-code"><code>selected_policy_memory_state = "active"</code></div>
     </a>
-    <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
+    <a class="home-proof-runbook-card" href="/AionisCore/docs/evidence/proof-by-evidence">
       <span class="home-proof-runbook-label">Demo 3</span>
       <h3>Governance loop proved</h3>
       <p>The runtime retired policy memory and reactivated it with fresh live evidence through the public route.</p>
       <div class="home-proof-metric"><code>active → retired → active</code></div>
       <div class="home-proof-code"><code>live_policy_selected_tool = "bash"</code></div>
     </a>
-    <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
+    <a class="home-proof-runbook-card" href="/AionisCore/docs/evidence/proof-by-evidence">
       <span class="home-proof-runbook-label">Demo 4</span>
       <h3>Provenance survived promotion</h3>
       <p>Stable workflow guidance kept explicit continuity provenance instead of erasing where the learning signal came from.</p>
       <div class="home-proof-metric"><code>distillation=handoff_continuity_carrier</code></div>
       <div class="home-proof-code"><code>distillation=session_event_continuity_carrier</code></div>
     </a>
-    <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
+    <a class="home-proof-runbook-card" href="/AionisCore/docs/evidence/proof-by-evidence">
       <span class="home-proof-runbook-label">Demo 5</span>
       <h3>Session continuity promoted a stable workflow</h3>
       <p>Repeated session state now counts as distinct workflow observations instead of depending on an event-only path.</p>
       <div class="home-proof-metric"><code>distillation=session_continuity_carrier</code></div>
       <div class="home-proof-code"><code>observed_count = 2</code></div>
     </a>
-    <a class="home-proof-runbook-card" href="/docs/evidence/proof-by-evidence">
+    <a class="home-proof-runbook-card" href="/AionisCore/docs/evidence/proof-by-evidence">
       <span class="home-proof-runbook-label">Demo 6</span>
       <h3>Semantic forgetting cooled memory without deleting it</h3>
       <p>Archived workflow memory now surfaces lifecycle decay, cold relocation, and differential payload restore instead of silently disappearing.</p>
@@ -145,7 +145,6 @@ await aionis.memory.replay.run.start({
 ## What Aionis Runtime is
 
 `Aionis Runtime` is the public runtime in this repository.
-`Aionis Core` is the kernel that powers it.
 `Lite` is the local runtime distribution shipping today.
 
 The practical mental model is:
@@ -173,8 +172,8 @@ Most agent systems break on continuity before they break on raw reasoning qualit
 Aionis turns continuity into runtime infrastructure instead of leaving it inside prompts and chat transcripts.
 
 <div class="section-frame">
-  <span class="section-label">Why the new proof path matters</span>
-  <p>Many systems can run a long task. That is not the same as proving that the next task starts better, that stable execution becomes inspectable policy memory, that the resulting policy can be governed instead of silently drifting, that continuity provenance survives workflow promotion, that repeated session state can itself promote stable workflow guidance, and that colder execution memory can be archived and selectively rehydrated instead of deleted. The new evidence path is meant to prove those six claims directly.</p>
+  <span class="section-label">What the proof path shows</span>
+  <p>The evidence path focuses on six concrete outcomes: stronger task starts, policy memory materialization, policy governance, preserved provenance, session-based workflow promotion, and semantic forgetting with selective rehydration. Together they show how execution quality improves over time.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">task-start-proof</span>
     <span class="doc-chip">policy-memory</span>
@@ -186,8 +185,8 @@ Aionis turns continuity into runtime infrastructure instead of leaving it inside
 </div>
 
 <div class="section-frame">
-  <span class="section-label">Why this version is a real baseline</span>
-  <p>The public story is no longer only “Aionis can do these things.” The current head is being treated as a stable evaluation baseline because the runtime posture is explicit, the evidence path is public, the SDK surface is typed, and the biggest runtime seams have already been tightened enough to stop pretending this is still only a loose prototype.</p>
+  <span class="section-label">How to evaluate it</span>
+  <p>Start with the local runtime, run the core path, then move through the evidence pages and SDK examples. The product becomes clear fastest when you see the same continuity model in task start, handoff, replay, policy memory, and semantic forgetting.</p>
 </div>
 
 ## How continuity improves over time
@@ -218,7 +217,7 @@ The core product loop:
 | --- | --- | --- |
 | Core | Continuity works at all | `memory.write(...)`, `memory.taskStart(...)` or `memory.planningContext(...)`, `handoff.store(...)`, `memory.replay.run.*` |
 | Enhanced | Continuity improves over time | `memory.archive.rehydrate(...)`, `memory.nodes.activate(...)`, `memory.reviewPacks.*`, `memory.sessions.*` |
-| Advanced | The kernel exposes deeper learning and control | `memory.experienceIntelligence(...)`, `memory.executionIntrospect(...)`, `memory.delegationRecords.*`, `memory.tools.*`, `memory.rules.*`, `memory.patterns.*` |
+| Advanced | The runtime exposes deeper learning and control | `memory.experienceIntelligence(...)`, `memory.executionIntrospect(...)`, `memory.delegationRecords.*`, `memory.tools.*`, `memory.rules.*`, `memory.patterns.*` |
 
 Recommended order:
 
@@ -237,20 +236,20 @@ npm run example:sdk:core-path
 ## Choose your reading path
 
 <div class="home-path-grid">
-  <a class="home-path-card" href="/docs/getting-started">
+  <a class="home-path-card" href="/AionisCore/docs/getting-started">
     <span class="home-path-kicker">Evaluate · 5 min</span>
     <h3 class="home-path-title">Run Lite locally</h3>
     <p>Boot the runtime, hit the health route, and see the local runtime shape.</p>
   </a>
-  <a class="home-path-card" href="/docs/sdk/quickstart">
+  <a class="home-path-card" href="/AionisCore/docs/sdk/quickstart">
     <span class="home-path-kicker">Integrate · 10 min</span>
     <h3 class="home-path-title">Use the SDK</h3>
     <p>Write memory, ask for task start, store handoff, and move into replay from TypeScript.</p>
   </a>
-  <a class="home-path-card" href="/docs/architecture/overview">
+  <a class="home-path-card" href="/AionisCore/docs/architecture/overview">
     <span class="home-path-kicker">Understand · 15 min</span>
     <h3 class="home-path-title">Read the runtime shape</h3>
-    <p>See how Lite splits shell, bootstrap, host, stores, and kernel instead of hiding continuity in prompts.</p>
+    <p>See how Lite is organized across shell, bootstrap, host, and stores so the continuity model stays clear as you integrate it.</p>
   </a>
 </div>
 
@@ -265,7 +264,7 @@ npm run example:sdk:core-path
   <div class="home-proof-card">
     <span class="home-proof-label">Core loop</span>
     <span class="home-proof-value">start · handoff · replay</span>
-    <p>The docs and runtime revolve around the same three continuity surfaces, not a vague memory story.</p>
+    <p>The docs and runtime revolve around the same three continuity surfaces: task start, handoff, and replay.</p>
   </div>
   <div class="home-proof-card">
     <span class="home-proof-label">Evidence</span>

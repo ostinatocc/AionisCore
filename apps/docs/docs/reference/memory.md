@@ -9,7 +9,7 @@ The memory surface is the widest part of the public SDK. It covers write, recall
 
 <div class="doc-lead">
   <span class="doc-kicker">What memory means here</span>
-  <p>Aionis memory is not just "stored context." It is the substrate behind task start, planning context, lifecycle reuse, review packs, and workflow learning. The memory surface is where execution evidence becomes continuity infrastructure.</p>
+  <p>Aionis memory turns execution evidence into task start, planning context, lifecycle reuse, review packs, and workflow learning. The memory surface is where execution evidence becomes continuity infrastructure.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">Write + recall</span>
     <span class="doc-chip">Planning context</span>
@@ -99,7 +99,7 @@ flowchart LR
     H --> I["experience intelligence / governance"]
 ```
 
-Memory in Aionis is useful because later runtime paths can build on it. It is not only a storage bucket.
+Memory in Aionis is useful because later runtime paths can build on it.
 
 ## Core memory families
 
@@ -118,7 +118,7 @@ If you specifically care about lifecycle decay, archive planning, and selective 
 
 <div class="section-frame">
   <span class="doc-kicker">Decision frame</span>
-  <p>Memory is not the place to force full orchestration. Its job is narrower and more important: hold execution evidence, assemble better startup context, track reuse signals, and expose review-ready continuity state. Shell execution, hosted governance, and model capability still live elsewhere.</p>
+  <p>Think of memory as the layer that holds execution evidence, assembles better startup context, tracks reuse signals, and exposes review-ready continuity state.</p>
 </div>
 
 ## How to choose the right call
@@ -359,30 +359,22 @@ Most disappointing first integrations come from one of these:
 1. writing generic notes and expecting strong task-start guidance
 2. mixing unrelated work into the same scope
 3. querying one scope and writing into another
-4. expecting hosted control-plane behavior from Lite-local routes
+4. expecting broader orchestration behavior from a local runtime path
 5. treating `taskStart` as magic instead of as a surface fed by execution evidence
 
 If the runtime feels sparse, the first thing to inspect is usually the shape and quality of the written evidence.
 
-## Lite boundary notes
+## Memory in Lite today
 
-Three things matter when integrating against Lite:
+The Lite runtime includes:
 
-1. archive rehydrate and node activation lifecycle routes are part of Lite now
-2. admin control and broader server-only control-plane routes still return structured `501`
-3. heavy route-by-route debugging still belongs in the repository capability matrix
+1. write and recall
+2. planning context and task start
+3. archive rehydrate and node activation
+4. review packs
+5. policy memory and governance apply
 
-Lite is honest about its boundary, but the memory lifecycle surface is now inside the public local runtime.
-
-## What memory is responsible for vs not responsible for
-
-| Inside the memory surface | Outside the memory surface |
-| --- | --- |
-| execution evidence | hosted admin control plane |
-| recall and planning context | full remote orchestration |
-| task-start guidance | model capability itself |
-| lifecycle reuse signals | arbitrary shell execution |
-| review-ready runtime material | unrelated product analytics |
+That means the main continuity loop is available through the public local runtime.
 
 ## Raw contract sources
 

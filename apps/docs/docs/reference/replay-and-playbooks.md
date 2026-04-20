@@ -76,7 +76,7 @@ flowchart LR
     E --> F["Automation and future task-start reuse"]
 ```
 
-Replay is what pushes the runtime from "it remembers" toward "it can reuse".
+Replay is what turns recorded execution into reusable runtime behavior.
 
 <div class="section-frame">
   <span class="doc-kicker">Promotion rule</span>
@@ -259,7 +259,7 @@ In practice, that provenance now stays visible through:
 - `memory.executionIntrospect(...)`
 - `planner packet` and demo workflow lines
 
-This matters because replay is not only creating reusable structure. It is now preserving where that reusable structure came from.
+This matters because replay now preserves where reusable structure came from as it becomes stable guidance.
 
 ## How replay interacts with the rest of the runtime
 
@@ -270,7 +270,7 @@ Replay is tightly connected to the other public surfaces:
 - review runtime can review repaired playbooks before reuse
 - handoff can capture state around incomplete or partial runs
 
-So replay should be read as part of the continuity loop, not as an isolated logging feature.
+Replay is best understood as part of the continuity loop rather than as a standalone logging surface.
 
 ## Common mistakes
 
@@ -283,23 +283,17 @@ Replay integration is usually weak for one of these reasons:
 
 If replay is not changing future task starts or automation behavior, you are probably recording history without closing the reuse loop.
 
-## Lite boundary notes
+## Replay in Lite today
 
-Lite supports real replay and playbook behavior, but it is still narrower than a full hosted control plane.
+Lite includes:
 
-The important boundary is:
+1. replay run lifecycle
+2. playbook compilation
+3. candidate and promotion flow
+4. repair and repair review
+5. local playbook execution and dispatch
 
-1. replay core is fully present
-2. governed replay is a Lite subset
-3. playbook execution is local-first
-4. automation reuses that same local playbook model
-
-This is an important product boundary:
-
-- Lite already supports meaningful replay and local reuse
-- Lite does not claim to be a full hosted workflow governance platform
-
-That narrower claim is part of why the runtime is believable.
+That means replay is already part of the public runtime path for evaluation and integration.
 
 ## Related docs
 

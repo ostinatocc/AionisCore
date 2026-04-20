@@ -9,7 +9,7 @@ The current public runtime story is Lite.
 
 <div class="doc-lead">
   <span class="doc-kicker">Runtime distribution</span>
-  <p>Lite is the current public runtime shape. It is local, explicit, SQLite-backed, and honest about what does not ship yet.</p>
+  <p>Lite is the current public runtime shape. It is local, explicit, and SQLite-backed, with one place to run task start, handoff, replay, lifecycle reuse, sandbox execution, and automation.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">Local shell</span>
     <span class="doc-chip">SQLite stores</span>
@@ -19,7 +19,7 @@ The current public runtime story is Lite.
   </div>
 </div>
 
-Lite is a real local runtime shell with SQLite-backed persistence. It is not a hosted control plane and it does not pretend to expose every server-side surface.
+Lite is a real local runtime shell with SQLite-backed persistence.
 
 ## Mental model
 
@@ -31,7 +31,7 @@ It gives you:
 2. explicit supported routes
 3. local persistence
 4. sandbox and automation support
-5. honest boundaries for what does not ship yet
+5. a clear runtime shape you can inspect and integrate
 
 That is different from a toy "local demo mode". Lite is the public runtime shape.
 
@@ -44,44 +44,31 @@ That is different from a toy "local demo mode". Lite is the public runtime shape
 - handoff store and recover
 - replay core
 - governed replay subset
-- local automation kernel
-- local sandbox kernel
+- local automation runtime
+- local sandbox runtime
 
 ## What Lite is good for
 
 Lite is the right shape when you want to:
 
 - evaluate the Aionis runtime locally
-- integrate the public SDK without waiting for a hosted control plane
-- run continuity flows in development, internal tooling, or local-first environments
+- integrate the public SDK directly
+- run continuity flows in development, local tooling, or local-first environments
 - test task start, handoff, replay, automation, and lifecycle behavior directly
 
 It is especially strong for coding and ops-style workflows where file targets, next actions, and execution evidence matter.
 
-## What Lite does not include
+## Why Lite is a good evaluation surface
 
-Lite intentionally excludes server-only route groups such as:
+Lite brings the core continuity loop into one local runtime:
 
-- admin control routes
-- broader hosted control-plane surfaces
+1. task start and planning
+2. handoff and resume
+3. replay and playbooks
+4. lifecycle reuse and semantic forgetting
+5. sandbox execution and automation
 
-When a surface is intentionally outside Lite, the runtime should not blur that boundary. It either omits the route or returns a structured `501`.
-
-## Why the `501` boundary is useful
-
-An explicit `501` is better than a fake local surface that behaves differently from the real runtime model.
-
-That boundary tells you:
-
-1. this route family exists in the broader repository
-2. it is not part of the public Lite promise
-3. your host should not assume it is available locally
-
-This makes Lite easier to trust as a product surface.
-
-## Why that matters
-
-This is one of Aionis' strengths: Lite now includes local memory lifecycle routes without pretending every broader hosted capability is already productized.
+That makes it a strong surface for evaluation, local tooling, and local-first integration.
 
 ## A typical Lite deployment shape
 
@@ -93,7 +80,7 @@ flowchart LR
     B --> C["Lite HTTP runtime"]
     C --> D["SQLite stores"]
     C --> E["Local sandbox executor"]
-    C --> F["Local automation kernel"]
+    C --> F["Local automation runtime"]
 ```
 
 That means you can evaluate and integrate the runtime without needing a hosted service first.

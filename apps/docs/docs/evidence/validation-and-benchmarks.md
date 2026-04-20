@@ -40,7 +40,7 @@ These commands are doing different jobs:
 
 ## Why this matters
 
-For a continuity kernel, the important question is not just "does the API respond?"
+For a continuity runtime, the important question is larger than "does the API respond?"
 
 It is also:
 

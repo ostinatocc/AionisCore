@@ -103,7 +103,7 @@ const pause = await session.pauseTask({
 
 ## What the bridge adds
 
-The host bridge is not a second SDK. It is a task-shaped layer over the same runtime.
+The host bridge is a task-shaped layer over the same runtime.
 
 What it adds is:
 
