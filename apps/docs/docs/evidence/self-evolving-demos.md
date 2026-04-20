@@ -31,6 +31,21 @@ The goal is to show six concrete loops:
 
 ## Before you run them
 
+These demos are reproducible for anyone running the repository locally. They are not npm-package-only snippets. They use the example scripts in `examples/full-sdk/` against a live Lite runtime.
+
+### Environment requirements
+
+You need:
+
+- the repository checked out locally
+- Node `22+` so Lite can use `node:sqlite`
+- one terminal to keep Lite running
+- one second terminal to run the demo commands
+
+Every demo creates its own random `scope`, `run_id`, and `state_id`, so you do not need to seed fixed data or clean up between runs.
+
+### Terminal A: start Lite and keep it running
+
 From the repository root:
 
 ```bash
@@ -39,13 +54,68 @@ npm run sdk:build
 npm run lite:start
 ```
 
-All six demos use the public SDK against the Lite runtime at:
+Lite listens on:
 
 `http://127.0.0.1:3001`
 
+Optional health check:
+
+```bash
+curl http://127.0.0.1:3001/health
+```
+
+If you are using a different host or port, set:
+
+```bash
+export AIONIS_BASE_URL=http://127.0.0.1:3001
+```
+
+in the terminal where you run the demos.
+
+### Terminal B: run the demo commands
+
+Open a second terminal in the same repository root. Keep Terminal A running the whole time.
+
+### Recommended reproduction order
+
+Run them in this order:
+
+1. Demo 1
+2. Demo 2
+3. Demo 3
+4. restart Lite with workflow promotion enabled
+5. Demo 4
+6. Demo 5
+7. Demo 6
+
+That order matches the actual runtime assumptions on this page and avoids the only special case: Demo 4 and Demo 5 need stable workflow promotion enabled.
+
+### Special restart required for Demo 4 and Demo 5
+
+Demo 4 and Demo 5 require a different Lite startup mode.
+
+Stop Terminal A and restart Lite like this:
+
+```bash
+WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED=true npm run lite:start
+```
+
+You can keep that same Lite process running for both Demo 4 and Demo 5.
+
+After Demo 5, you may keep the same Lite process for Demo 6 as well. Demo 6 uses its own random scope and does not require a reset.
+
+### What success looks like
+
+If reproduction is working correctly:
+
+- each demo exits successfully without needing manual data setup
+- each demo prints a `Proof summary`
+- the strongest field values on this page appear in that summary
+- rerunning a demo should still work because each run uses fresh random identifiers
+
 ## Demo 1: Better second task start
 
-Run:
+From Terminal B, run:
 
 ```bash
 npm run example:sdk:task-start-proof
@@ -79,7 +149,7 @@ For continuity-driven startup, those surfaces now carry explicit provenance such
 
 ## Demo 2: Policy memory materializes from positive feedback
 
-Run:
+From Terminal B, run:
 
 ```bash
 npm run example:sdk:policy-memory
@@ -103,7 +173,7 @@ The strongest signal is `materialization_state: "persisted"` together with an in
 
 ## Demo 3: Governance can retire and reactivate policy memory
 
-Run:
+From Terminal B, run:
 
 ```bash
 npm run example:sdk:policy-governance
@@ -128,13 +198,13 @@ The strongest signal is a real `retire -> reactivate` loop with a live policy co
 
 ## Demo 4: Continuity provenance survives promotion
 
-This proof depends on stable workflow promotion. Restart Lite with the workflow static provider enabled:
+This proof depends on stable workflow promotion. In Terminal A, restart Lite with the workflow static provider enabled:
 
 ```bash
 WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED=true npm run lite:start
 ```
 
-Run:
+Then in Terminal B, run:
 
 ```bash
 npm run example:sdk:continuity-provenance
@@ -171,13 +241,13 @@ Why this matters:
 
 ## Demo 5: Session continuity carriers promote stable workflows
 
-This proof depends on stable workflow promotion. Restart Lite with the workflow static provider enabled:
+This proof depends on stable workflow promotion. In Terminal A, restart Lite with the workflow static provider enabled:
 
 ```bash
 WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED=true npm run lite:start
 ```
 
-Run:
+Then in Terminal B, run:
 
 ```bash
 npm run example:sdk:session-continuity
@@ -214,7 +284,7 @@ Why this matters:
 
 ## Demo 6: Semantic forgetting archives and rehydrates execution memory
 
-Run:
+From Terminal B, run:
 
 ```bash
 npm run example:sdk:semantic-forgetting
