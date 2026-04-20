@@ -4,9 +4,10 @@
   "description": "Standalone local-first Aionis Runtime package for self-evolving execution memory on a local machine.",
   "type": "module",
   "bin": {
-    "aionis-runtime": "./dist/bin/aionis-runtime.mjs"
+    "aionis-runtime": "bin/aionis-runtime"
   },
   "files": [
+    "bin",
     "dist",
     "README.md"
   ],

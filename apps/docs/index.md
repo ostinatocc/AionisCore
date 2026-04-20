@@ -42,7 +42,7 @@ features:
 
 <div class="trust-strip" aria-label="Project status">
   <span>Lite ships today</span>
-  <span>SDK v0.2.0</span>
+  <span>SDK v0.3.0</span>
   <span>Apache-2.0 licensed</span>
   <span>15 / 15 benchmark scenarios</span>
 </div>

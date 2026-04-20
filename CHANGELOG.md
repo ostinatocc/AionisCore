@@ -49,6 +49,5 @@ Recommended combined public release message:
 | Package | Current repo version | Next public recommendation |
 | --- | --- | --- |
 | `@ostinato/aionis-runtime` | `0.1.0` | publish `0.1.0` |
-| `@ostinato/aionis` | `0.2.0` | bump to `0.3.0` |
+| `@ostinato/aionis` | `0.3.0` | publish `0.3.0` |
 | `@ostinato/aionis-rtc` | `0.1.0` | keep as-is unless boundary exports change |
-

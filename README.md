@@ -7,7 +7,7 @@
 
 [Docs Site](https://ostinatocc.github.io/AionisCore/) · [Proof By Evidence](apps/docs/docs/evidence/proof-by-evidence.md) · [SDK Quickstart](docs/SDK_QUICKSTART.md) · [Examples](examples/full-sdk/README.md)
 
-- Status: active technical beta · local-first Lite runtime · public SDK v0.2.0
+- Status: active technical beta · local-first Lite runtime · public SDK v0.3.0
 - Runtime requirements: Node 22+ · SQLite via `node:sqlite` · local macOS or Linux shell recommended
 - Security posture: Lite binds to `127.0.0.1` by default; sandbox remote allowlists fail closed.
 
