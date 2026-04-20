@@ -7,6 +7,10 @@
 
 [Docs Site](https://ostinatocc.github.io/AionisCore/) · [Proof By Evidence](apps/docs/docs/evidence/proof-by-evidence.md) · [SDK Quickstart](docs/SDK_QUICKSTART.md) · [Examples](examples/full-sdk/README.md)
 
+- Status: active technical beta · local-first Lite runtime · public SDK v0.2.0
+- Runtime requirements: Node 22+ · SQLite via `node:sqlite` · local macOS or Linux shell recommended
+- Security posture: Lite binds to `127.0.0.1` by default; sandbox remote allowlists fail closed.
+
 ## Positioning
 
 Aionis Runtime turns `task start`, `handoff`, `replay`, `policy memory`, and `semantic forgetting` into one unified execution-memory loop, so agent systems do not restart from zero every time. They can continue from prior execution, improve over time, and reuse what already worked.
@@ -25,6 +29,22 @@ The public product shape today includes:
 - **Self-evolution first**: every run can feed the next run, producing stronger task starts, more reliable handoffs, better replay, and clearer policy memory.
 - **Intelligent forgetting first**: memory is managed by importance, lifecycle, and reuse value through demotion, archive, relocation, and on-demand restoration.
 - **Explicit architecture first**: SDKs, HTTP routes, runtime subsystems, SQLite stores, sandbox, and automation are all visible seams instead of one black box.
+
+## Why Aionis Is Different
+
+If you already use LangChain memory, mem0, Letta, Zep, or pgvector-backed recall, the point is not that those tools are useless. The point is that the center of gravity is different. Most memory stacks are optimized to recover context. Aionis is optimized to improve execution.
+
+Execution-first means the primary unit is execution state and runtime outcome: what the agent should do next, what handoff state must survive, what workflows proved reusable, what policy should govern the next run, and what should cool into archive instead of staying hot forever.
+
+| Question | Typical chat/vector memory stack | Aionis Runtime |
+| --- | --- | --- |
+| What is remembered? | conversations, facts, passages, embeddings | task starts, handoffs, replay runs, workflow promotions, policy memory, forgetting decisions |
+| What improves over time? | recall quality | kickoff quality, resume quality, replay reuse, governed policy reuse |
+| Core loop | ask → retrieve → answer | start → handoff → replay → govern → forget → start better again |
+| Failure control | stale or noisy context | governed demotion, archive relocation, differential rehydration |
+| Main question | “What should the model remember?” | “What should the agent do next, and what already worked?” |
+
+That is why Aionis exposes `Task Start`, `Task Handoff`, and `Task Replay` as first-class runtime surfaces instead of treating memory as a sidecar vector store.
 
 ## Core Capabilities
 
@@ -123,6 +143,8 @@ flowchart TD
     F3 --> I["archive relocation / differential rehydration"]
     H --> J["planner / introspection / proof surfaces"]
     I --> J
+    C --> K["Inspector / Playground"]
+    J --> K
 ```
 
 The architectural point is simple: continuity, self-evolution, forgetting, and governance all live on explicit runtime seams instead of being hidden inside a single opaque system.
@@ -148,6 +170,16 @@ The strongest proofs to look at first are:
 - semantic forgetting with differential rehydration
 
 ## Quick Start
+
+### Runtime Requirements
+
+| Item | Requirement |
+| --- | --- |
+| Node | `22+` |
+| Runtime store | SQLite via `node:sqlite` |
+| Recommended environment | local macOS or Linux shell |
+| Lite default bind | `127.0.0.1` |
+| Sandbox posture | remote allowlists fail closed |
 
 ### 1. Start Lite Runtime
 
@@ -188,7 +220,43 @@ const taskStart = await aionis.memory.taskStart({
 console.log(taskStart.first_action);
 ```
 
-### 4. Open the local observation interface
+### 4. Store a structured handoff
+
+```ts
+await aionis.handoff.store({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  actor: "sdk-demo",
+  anchor: "billing-retry-task",
+  summary: "Task paused with a clear next action",
+  handoff_text: "Resume in src/billing/retry.ts and rerun timeout checks.",
+  target_files: ["src/billing/retry.ts"],
+  next_action: "Patch retry timeout handling and rerun the retry checks.",
+});
+```
+
+### 5. Record a replay-backed run
+
+```ts
+await aionis.memory.replay.run.start({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  actor: "sdk-demo",
+  run_id: "billing-retry-run-1",
+  goal: "repair billing retry timeout",
+});
+
+await aionis.memory.replay.run.end({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  actor: "sdk-demo",
+  run_id: "billing-retry-run-1",
+  status: "success",
+  summary: "patched retry timeout handling",
+});
+```
+
+### 6. Open the local observation interface
 
 ```bash
 npm run inspector:build
@@ -241,3 +309,15 @@ npm run -s sdk:test
 npm run -s lite:test
 npm run -s lite:benchmark:real
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Use Node `22.x`, run `npm run -s lite:test`, and update docs when external behavior changes.
+
+## Releases
+
+Track runtime and package milestones in [GitHub Releases](https://github.com/ostinatocc/AionisCore/releases).
+
+## License
+
+Apache-2.0 — see [LICENSE](LICENSE).
