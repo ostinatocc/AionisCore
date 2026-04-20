@@ -78,7 +78,6 @@ import {
   asStringArray,
   asStringRecord,
   isReplayCommandTool,
-  makeGuidedRepairPatch,
   mergeReplayUsage,
   parseStepArgv,
   type ReplayGuidedRepairStrategy,
@@ -109,13 +108,8 @@ import {
   buildReplayReviewedSlots,
 } from "./replay-promotion-review-helpers.js";
 import {
-  buildReplayBlockedStepReport,
-  buildReplayExecutionFailureStepReport,
-  buildReplayExecutionSuccessStepReport,
   buildReplayExecutionSummary,
   buildReplayExecutionSurface,
-  buildReplayGuidedPartialStepReport,
-  buildReplayPendingStepReport,
   buildReplayRunPlaybookSurface,
   buildReplayRunSurface,
   buildReplaySimulateStepReport,
@@ -161,6 +155,27 @@ import {
   stepClientId,
   stepResultClientId,
 } from "./replay-run-write-surfaces.js";
+import {
+  resolveReplayCommandAllowlistGate,
+  resolveReplayConfirmationGate,
+  resolveReplayPreconditionGate,
+  resolveReplaySensitiveCommandGate,
+  resolveReplayUnsupportedToolGate,
+} from "./replay-run-gates.js";
+import {
+  isReplayExecutionPassed,
+  resolveReplayExecutionFailureReason,
+} from "./replay-run-results.js";
+import {
+  applyReplayRunStepDelta,
+  handleReplayGuidedFailureStep,
+  handleReplayGuidedGateStep,
+  handleReplayPendingStep,
+  handleReplayStrictFailureStep,
+  handleReplayStrictGateStep,
+  handleReplaySuccessStep,
+  type ReplayRunCounters,
+} from "./replay-run-step-flow.js";
 
 type ReplayWriteOptions = {
   defaultScope: string;
@@ -2405,19 +2420,71 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
     ) as Record<string, unknown>;
   }
 
-  let executedSteps = 0;
-  let succeededSteps = 0;
-  let failedSteps = 0;
-  let repairedSteps = 0;
-  let blockedSteps = 0;
-  let skippedSteps = 0;
-  let pendingSteps = 0;
+  const counters: ReplayRunCounters = {
+    executedSteps: 0,
+    succeededSteps: 0,
+    failedSteps: 0,
+    repairedSteps: 0,
+    blockedSteps: 0,
+    skippedSteps: 0,
+    pendingSteps: 0,
+  };
   const usageOut = {
     prompt_tokens: 0,
     completion_tokens: 0,
     total_tokens: 0,
     source: "no_model_call",
   };
+
+  const guidedRepairConfig = {
+    strategy: guidedRepairStrategy,
+    allowedCommands,
+    commandAliasMap,
+    maxErrorChars: guidedRepairMaxErrorChars,
+    httpEndpoint: opts.guidedRepair?.httpEndpoint,
+    httpTimeoutMs: opts.guidedRepair?.httpTimeoutMs,
+    httpAuthToken: opts.guidedRepair?.httpAuthToken,
+    llmBaseUrl: opts.guidedRepair?.llmBaseUrl,
+    llmApiKey: opts.guidedRepair?.llmApiKey,
+    llmModel: opts.guidedRepair?.llmModel,
+    llmTimeoutMs: opts.guidedRepair?.llmTimeoutMs,
+    llmMaxTokens: opts.guidedRepair?.llmMaxTokens,
+    llmTemperature: opts.guidedRepair?.llmTemperature,
+  };
+
+  const writeStepAfter = recordRun
+    ? async (input: {
+        stepId: string | null;
+        stepIndex: number | null;
+        status: "success" | "partial" | "failed";
+        outputSignature: Record<string, unknown>;
+        postconditions: PreconditionResult[];
+        artifactRefs: unknown[];
+        repairApplied: boolean;
+        repairNote?: string;
+        error?: string;
+      }) => {
+        await replayStepAfter(
+          client,
+          {
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            ...replayCallIdentity,
+            run_id: replayRunId,
+            step_id: input.stepId ?? undefined,
+            step_index: input.stepIndex ?? undefined,
+            status: input.status,
+            output_signature: input.outputSignature,
+            postconditions: input.postconditions,
+            artifact_refs: input.artifactRefs,
+            repair_applied: input.repairApplied,
+            repair_note: input.repairNote,
+            error: input.error,
+          },
+          opts.writeOptions,
+        );
+      }
+    : null;
 
   for (const step of stepsRaw) {
     const stepObj = asObject(step) ?? {};
@@ -2457,381 +2524,139 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
 
     const preChecks: PreconditionResult[] = [];
     for (const cond of preconditions) preChecks.push(await evaluatePrecondition(cond));
-    const preFailed = preChecks.filter((c) => c.state === "fail");
-    const preUnknown = preChecks.filter((c) => c.state === "unknown");
-    if (preFailed.length > 0 || preUnknown.length > 0) {
-      blockedSteps += 1;
-      const reason =
-        preFailed.length > 0
-          ? "preconditions_failed"
-          : "preconditions_unknown";
+    const preconditionGate = resolveReplayPreconditionGate(preChecks);
+    if (preconditionGate) {
       if (mode === "strict") {
-        failedSteps += 1;
-        stepReports.push(
-          buildReplayBlockedStepReport({
-            stepIndex,
-            toolName,
-            preconditions: preChecks,
-            error: reason,
-          }),
-        );
-        if (recordRun) {
-          await replayStepAfter(
-            client,
-            {
-              tenant_id: tenancy.tenant_id,
-              scope: tenancy.scope,
-              ...replayCallIdentity,
-              run_id: replayRunId,
-              step_id: persistedStepId ?? undefined,
-              step_index: stepIndex ?? undefined,
-              status: "failed",
-              output_signature: {
-                reason,
-                preconditions: preChecks,
-              },
-              postconditions: [],
-              artifact_refs: [],
-              repair_applied: false,
-              error: reason,
-            },
-            opts.writeOptions,
-          );
-        }
-        if (stopOnFailure) break;
-        continue;
-      }
-      repairedSteps += 1;
-      skippedSteps += 1;
-      const repair = await makeGuidedRepairPatch({
-        strategy: guidedRepairStrategy,
-        stepIndex,
-        toolName,
-        reason,
-        detail: "guided mode skipped blocked step",
-        stepObj,
-        allowedCommands,
-        commandAliasMap,
-        maxErrorChars: guidedRepairMaxErrorChars,
-        httpEndpoint: opts.guidedRepair?.httpEndpoint,
-        httpTimeoutMs: opts.guidedRepair?.httpTimeoutMs,
-        httpAuthToken: opts.guidedRepair?.httpAuthToken,
-        llmBaseUrl: opts.guidedRepair?.llmBaseUrl,
-        llmApiKey: opts.guidedRepair?.llmApiKey,
-        llmModel: opts.guidedRepair?.llmModel,
-        llmTimeoutMs: opts.guidedRepair?.llmTimeoutMs,
-        llmMaxTokens: opts.guidedRepair?.llmMaxTokens,
-        llmTemperature: opts.guidedRepair?.llmTemperature,
-        mode: "guided",
-      });
-      mergeReplayUsage(usageOut, asObject(repair)?.usage);
-      stepReports.push(
-        buildReplayGuidedPartialStepReport({
+        const handled = await handleReplayStrictGateStep({
+          gate: preconditionGate,
+          stepId: persistedStepId,
           stepIndex,
           toolName,
-          readiness: preUnknown.length > 0 ? "unknown" : "blocked",
           preconditions: preChecks,
-          repair,
-        }),
-      );
-      if (recordRun) {
-        await replayStepAfter(
-          client,
-          {
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            ...replayCallIdentity,
-            run_id: replayRunId,
-            step_id: persistedStepId ?? undefined,
-            step_index: stepIndex ?? undefined,
-            status: "partial",
-            output_signature: {
-              reason,
-              preconditions: preChecks,
-              repair,
-            },
-            postconditions: [],
-            artifact_refs: [],
-            repair_applied: true,
-            repair_note: reason,
-          },
-          opts.writeOptions,
-        );
+          writeStepAfter,
+          stopOnFailure,
+          countBlocked: true,
+        });
+        stepReports.push(handled.report);
+        applyReplayRunStepDelta(counters, handled.delta);
+        if (handled.stop) break;
+        continue;
       }
+      const handled = await handleReplayGuidedGateStep({
+        gate: preconditionGate,
+        stepId: persistedStepId,
+        stepIndex,
+        toolName,
+        stepObj,
+        preconditions: preChecks,
+        writeStepAfter,
+        guidedRepair: guidedRepairConfig,
+        countBlocked: true,
+      });
+      mergeReplayUsage(usageOut, handled.usage);
+      stepReports.push(handled.report);
+      applyReplayRunStepDelta(counters, handled.delta);
       continue;
     }
 
-    if (safetyLevel === "manual_only" || (safetyLevel === "needs_confirm" && !autoConfirm)) {
-      const reason = safetyLevel === "manual_only" ? "manual_only_step" : "confirmation_required";
+    const confirmationGate = resolveReplayConfirmationGate({
+      safetyLevel,
+      autoConfirm,
+    });
+    if (confirmationGate) {
       if (mode === "strict") {
-        failedSteps += 1;
-        stepReports.push(
-          buildReplayBlockedStepReport({
-            stepIndex,
-            toolName,
-            error: reason,
-          }),
-        );
-        if (recordRun) {
-          await replayStepAfter(
-            client,
-            {
-              tenant_id: tenancy.tenant_id,
-              scope: tenancy.scope,
-              ...replayCallIdentity,
-              run_id: replayRunId,
-              step_id: persistedStepId ?? undefined,
-              step_index: stepIndex ?? undefined,
-              status: "failed",
-              output_signature: { reason },
-              postconditions: [],
-              artifact_refs: [],
-              repair_applied: false,
-              error: reason,
-            },
-            opts.writeOptions,
-          );
-        }
-        if (stopOnFailure) break;
-        continue;
-      }
-      repairedSteps += 1;
-      skippedSteps += 1;
-      const repair = await makeGuidedRepairPatch({
-        strategy: guidedRepairStrategy,
-        stepIndex,
-        toolName,
-        reason,
-        detail: "guided mode skipped confirmation-gated step",
-        stepObj,
-        allowedCommands,
-        commandAliasMap,
-        maxErrorChars: guidedRepairMaxErrorChars,
-        httpEndpoint: opts.guidedRepair?.httpEndpoint,
-        httpTimeoutMs: opts.guidedRepair?.httpTimeoutMs,
-        httpAuthToken: opts.guidedRepair?.httpAuthToken,
-        llmBaseUrl: opts.guidedRepair?.llmBaseUrl,
-        llmApiKey: opts.guidedRepair?.llmApiKey,
-        llmModel: opts.guidedRepair?.llmModel,
-        llmTimeoutMs: opts.guidedRepair?.llmTimeoutMs,
-        llmMaxTokens: opts.guidedRepair?.llmMaxTokens,
-        llmTemperature: opts.guidedRepair?.llmTemperature,
-        mode: "guided",
-      });
-      mergeReplayUsage(usageOut, asObject(repair)?.usage);
-      stepReports.push(
-        buildReplayGuidedPartialStepReport({
+        const handled = await handleReplayStrictGateStep({
+          gate: confirmationGate,
+          stepId: persistedStepId,
           stepIndex,
           toolName,
-          readiness: "blocked",
-          repair,
-        }),
-      );
-      if (recordRun) {
-        await replayStepAfter(
-          client,
-          {
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            ...replayCallIdentity,
-            run_id: replayRunId,
-            step_id: persistedStepId ?? undefined,
-            step_index: stepIndex ?? undefined,
-            status: "partial",
-            output_signature: { reason, repair },
-            postconditions: [],
-            artifact_refs: [],
-            repair_applied: true,
-            repair_note: reason,
-          },
-          opts.writeOptions,
-        );
+          writeStepAfter,
+          stopOnFailure,
+        });
+        stepReports.push(handled.report);
+        applyReplayRunStepDelta(counters, handled.delta);
+        if (handled.stop) break;
+        continue;
       }
+      const handled = await handleReplayGuidedGateStep({
+        gate: confirmationGate,
+        stepId: persistedStepId,
+        stepIndex,
+        toolName,
+        stepObj,
+        writeStepAfter,
+        guidedRepair: guidedRepairConfig,
+      });
+      mergeReplayUsage(usageOut, handled.usage);
+      stepReports.push(handled.report);
+      applyReplayRunStepDelta(counters, handled.delta);
       continue;
     }
 
-    if (!isReplayCommandTool(toolName)) {
-      const reason = "unsupported_tool_for_command_executor";
+    const unsupportedToolGate = resolveReplayUnsupportedToolGate(toolName);
+    if (unsupportedToolGate) {
       if (mode === "strict") {
-        failedSteps += 1;
-        stepReports.push(
-          buildReplayBlockedStepReport({
-            stepIndex,
-            toolName,
-            error: reason,
-          }),
-        );
-        if (recordRun) {
-          await replayStepAfter(
-            client,
-            {
-              tenant_id: tenancy.tenant_id,
-              scope: tenancy.scope,
-              ...replayCallIdentity,
-              run_id: replayRunId,
-              step_id: persistedStepId ?? undefined,
-              step_index: stepIndex ?? undefined,
-              status: "failed",
-              output_signature: { reason },
-              postconditions: [],
-              artifact_refs: [],
-              repair_applied: false,
-              error: reason,
-            },
-            opts.writeOptions,
-          );
-        }
-        if (stopOnFailure) break;
-        continue;
-      }
-      repairedSteps += 1;
-      skippedSteps += 1;
-      const repair = await makeGuidedRepairPatch({
-        strategy: guidedRepairStrategy,
-        stepIndex,
-        toolName,
-        reason,
-        detail: "tool is not mapped to command-style replay executor",
-        stepObj,
-        allowedCommands,
-        commandAliasMap,
-        maxErrorChars: guidedRepairMaxErrorChars,
-        httpEndpoint: opts.guidedRepair?.httpEndpoint,
-        httpTimeoutMs: opts.guidedRepair?.httpTimeoutMs,
-        httpAuthToken: opts.guidedRepair?.httpAuthToken,
-        llmBaseUrl: opts.guidedRepair?.llmBaseUrl,
-        llmApiKey: opts.guidedRepair?.llmApiKey,
-        llmModel: opts.guidedRepair?.llmModel,
-        llmTimeoutMs: opts.guidedRepair?.llmTimeoutMs,
-        llmMaxTokens: opts.guidedRepair?.llmMaxTokens,
-        llmTemperature: opts.guidedRepair?.llmTemperature,
-        mode: "guided",
-      });
-      mergeReplayUsage(usageOut, asObject(repair)?.usage);
-      stepReports.push(
-        buildReplayGuidedPartialStepReport({
+        const handled = await handleReplayStrictGateStep({
+          gate: unsupportedToolGate,
+          stepId: persistedStepId,
           stepIndex,
           toolName,
-          readiness: "unknown",
-          repair,
-        }),
-      );
-      if (recordRun) {
-        await replayStepAfter(
-          client,
-          {
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            ...replayCallIdentity,
-            run_id: replayRunId,
-            step_id: persistedStepId ?? undefined,
-            step_index: stepIndex ?? undefined,
-            status: "partial",
-            output_signature: { reason, repair },
-            postconditions: [],
-            artifact_refs: [],
-            repair_applied: true,
-            repair_note: reason,
-          },
-          opts.writeOptions,
-        );
+          writeStepAfter,
+          stopOnFailure,
+        });
+        stepReports.push(handled.report);
+        applyReplayRunStepDelta(counters, handled.delta);
+        if (handled.stop) break;
+        continue;
       }
+      const handled = await handleReplayGuidedGateStep({
+        gate: unsupportedToolGate,
+        stepId: persistedStepId,
+        stepIndex,
+        toolName,
+        stepObj,
+        writeStepAfter,
+        guidedRepair: guidedRepairConfig,
+      });
+      mergeReplayUsage(usageOut, handled.usage);
+      stepReports.push(handled.report);
+      applyReplayRunStepDelta(counters, handled.delta);
       continue;
     }
 
     const argv = parseStepArgv(stepObj, toolName);
     const command = String(argv[0] ?? "").trim();
-    if (argv.length === 0 || !command || !isSafeCommandName(command) || !allowedCommands.has(command)) {
-      const reason = "command_not_allowed_or_missing";
+    const commandAllowlistGate = resolveReplayCommandAllowlistGate({
+      argv,
+      allowedCommands,
+    });
+    if (commandAllowlistGate) {
       if (mode === "strict") {
-        failedSteps += 1;
-        stepReports.push(
-          buildReplayBlockedStepReport({
-            stepIndex,
-            toolName,
-            error: reason,
-            command,
-            allowedCommands: [...allowedCommands.values()],
-          }),
-        );
-        if (recordRun) {
-          await replayStepAfter(
-            client,
-            {
-              tenant_id: tenancy.tenant_id,
-              scope: tenancy.scope,
-              ...replayCallIdentity,
-              run_id: replayRunId,
-              step_id: persistedStepId ?? undefined,
-              step_index: stepIndex ?? undefined,
-              status: "failed",
-              output_signature: { reason, command, allowed_commands: [...allowedCommands.values()] },
-              postconditions: [],
-              artifact_refs: [],
-              repair_applied: false,
-              error: reason,
-            },
-            opts.writeOptions,
-          );
-        }
-        if (stopOnFailure) break;
-        continue;
-      }
-      repairedSteps += 1;
-      skippedSteps += 1;
-      const repair = await makeGuidedRepairPatch({
-        strategy: guidedRepairStrategy,
-        stepIndex,
-        toolName,
-        reason,
-        detail: command ? `command '${command}' is not allowed` : "argv is missing",
-        stepObj,
-        command,
-        argv,
-        allowedCommands,
-        commandAliasMap,
-        maxErrorChars: guidedRepairMaxErrorChars,
-        httpEndpoint: opts.guidedRepair?.httpEndpoint,
-        httpTimeoutMs: opts.guidedRepair?.httpTimeoutMs,
-        httpAuthToken: opts.guidedRepair?.httpAuthToken,
-        llmBaseUrl: opts.guidedRepair?.llmBaseUrl,
-        llmApiKey: opts.guidedRepair?.llmApiKey,
-        llmModel: opts.guidedRepair?.llmModel,
-        llmTimeoutMs: opts.guidedRepair?.llmTimeoutMs,
-        llmMaxTokens: opts.guidedRepair?.llmMaxTokens,
-        llmTemperature: opts.guidedRepair?.llmTemperature,
-        mode: "guided",
-      });
-      mergeReplayUsage(usageOut, asObject(repair)?.usage);
-      stepReports.push(
-        buildReplayGuidedPartialStepReport({
+        const handled = await handleReplayStrictGateStep({
+          gate: commandAllowlistGate,
+          stepId: persistedStepId,
           stepIndex,
           toolName,
-          readiness: "blocked",
-          command,
-          repair,
-        }),
-      );
-      if (recordRun) {
-        await replayStepAfter(
-          client,
-          {
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            ...replayCallIdentity,
-            run_id: replayRunId,
-            step_id: persistedStepId ?? undefined,
-            step_index: stepIndex ?? undefined,
-            status: "partial",
-            output_signature: { reason, command, repair },
-            postconditions: [],
-            artifact_refs: [],
-            repair_applied: true,
-            repair_note: reason,
-          },
-          opts.writeOptions,
-        );
+          writeStepAfter,
+          stopOnFailure,
+        });
+        stepReports.push(handled.report);
+        applyReplayRunStepDelta(counters, handled.delta);
+        if (handled.stop) break;
+        continue;
       }
+      const handled = await handleReplayGuidedGateStep({
+        gate: commandAllowlistGate,
+        stepId: persistedStepId,
+        stepIndex,
+        toolName,
+        stepObj,
+        writeStepAfter,
+        guidedRepair: guidedRepairConfig,
+      });
+      mergeReplayUsage(usageOut, handled.usage);
+      stepReports.push(handled.report);
+      applyReplayRunStepDelta(counters, handled.delta);
       continue;
     }
 
@@ -2846,110 +2671,46 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           override_used: allowSensitiveExec,
         }
       : null;
-    if (sensitive.sensitive && sensitiveReviewMode === "block" && !allowSensitiveExec) {
-      const reason = "sensitive_command_requires_override";
-      const sensitiveReview = {
-        command,
-        argv,
-        reason: sensitive.reason,
-        risk_level: sensitive.risk_level,
-        required_param: "params.allow_sensitive_exec=true",
-      };
+    const sensitiveGate = resolveReplaySensitiveCommandGate({
+      command,
+      argv,
+      sensitive: sensitive.sensitive,
+      sensitiveReason: sensitive.reason,
+      riskLevel: sensitive.risk_level,
+      sensitiveReviewMode,
+      allowSensitiveExec,
+    });
+    if (sensitiveGate) {
       if (mode === "strict") {
-        failedSteps += 1;
-        blockedSteps += 1;
-        stepReports.push(
-          buildReplayBlockedStepReport({
-            stepIndex,
-            toolName,
-            error: reason,
-            sensitiveReview,
-          }),
-        );
-        if (recordRun) {
-          await replayStepAfter(
-            client,
-            {
-              tenant_id: tenancy.tenant_id,
-              scope: tenancy.scope,
-              ...replayCallIdentity,
-              run_id: replayRunId,
-              step_id: persistedStepId ?? undefined,
-              step_index: stepIndex ?? undefined,
-              status: "failed",
-              output_signature: { reason, sensitive_review: sensitiveReview },
-              postconditions: [],
-              artifact_refs: [],
-              repair_applied: false,
-              error: reason,
-            },
-            opts.writeOptions,
-          );
-        }
-        if (stopOnFailure) break;
-        continue;
-      }
-      repairedSteps += 1;
-      skippedSteps += 1;
-      const repair = await makeGuidedRepairPatch({
-        strategy: guidedRepairStrategy,
-        stepIndex,
-        toolName,
-        reason,
-        detail: `blocked sensitive command '${command}' (${sensitive.reason ?? "risk"})`,
-        stepObj,
-        command,
-        argv,
-        allowedCommands,
-        commandAliasMap,
-        maxErrorChars: guidedRepairMaxErrorChars,
-        httpEndpoint: opts.guidedRepair?.httpEndpoint,
-        httpTimeoutMs: opts.guidedRepair?.httpTimeoutMs,
-        httpAuthToken: opts.guidedRepair?.httpAuthToken,
-        llmBaseUrl: opts.guidedRepair?.llmBaseUrl,
-        llmApiKey: opts.guidedRepair?.llmApiKey,
-        llmModel: opts.guidedRepair?.llmModel,
-        llmTimeoutMs: opts.guidedRepair?.llmTimeoutMs,
-        llmMaxTokens: opts.guidedRepair?.llmMaxTokens,
-        llmTemperature: opts.guidedRepair?.llmTemperature,
-        mode: "guided",
-      });
-      mergeReplayUsage(usageOut, asObject(repair)?.usage);
-      stepReports.push(
-        buildReplayGuidedPartialStepReport({
+        const handled = await handleReplayStrictGateStep({
+          gate: sensitiveGate,
+          stepId: persistedStepId,
           stepIndex,
           toolName,
-          readiness: "blocked",
-          command,
-          argv,
-          sensitiveReview,
-          repair,
-        }),
-      );
-      if (recordRun) {
-        await replayStepAfter(
-          client,
-          {
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            ...replayCallIdentity,
-            run_id: replayRunId,
-            step_id: persistedStepId ?? undefined,
-            step_index: stepIndex ?? undefined,
-            status: "partial",
-            output_signature: { reason, sensitive_review: sensitiveReview, repair },
-            postconditions: [],
-            artifact_refs: [],
-            repair_applied: true,
-            repair_note: reason,
-          },
-          opts.writeOptions,
-        );
+          writeStepAfter,
+          stopOnFailure,
+          countBlocked: true,
+        });
+        stepReports.push(handled.report);
+        applyReplayRunStepDelta(counters, handled.delta);
+        if (handled.stop) break;
+        continue;
       }
+      const handled = await handleReplayGuidedGateStep({
+        gate: sensitiveGate,
+        stepId: persistedStepId,
+        stepIndex,
+        toolName,
+        stepObj,
+        writeStepAfter,
+        guidedRepair: guidedRepairConfig,
+      });
+      mergeReplayUsage(usageOut, handled.usage);
+      stepReports.push(handled.report);
+      applyReplayRunStepDelta(counters, handled.delta);
       continue;
     }
 
-    executedSteps += 1;
     const exec = await executeReplayCommand({
       backend: executionBackend,
       tenant_id: tenancy.tenant_id,
@@ -2961,49 +2722,22 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       sandboxExecutor: opts.sandboxExecutor,
     });
     if (exec.pending || !exec.outcome) {
-      pendingSteps += 1;
-      repairedSteps += mode === "guided" ? 1 : 0;
-      const reason = "sandbox_async_execution_pending";
-      stepReports.push(
-        buildReplayPendingStepReport({
-          stepIndex,
-          toolName,
-          mode,
-          command,
-          argv,
-          executionBackend,
-          sandboxRunId: exec.sandbox_run_id,
-          error: reason,
-        }),
-      );
-      if (recordRun) {
-        await replayStepAfter(
-          client,
-          {
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            ...replayCallIdentity,
-            run_id: replayRunId,
-            step_id: persistedStepId ?? undefined,
-            step_index: stepIndex ?? undefined,
-            status: mode === "guided" ? "partial" : "failed",
-            output_signature: {
-              reason,
-              execution_backend: executionBackend,
-              sandbox_run_id: exec.sandbox_run_id,
-              sandbox_status: exec.raw_status,
-            },
-            postconditions: [],
-            artifact_refs: [],
-            repair_applied: mode === "guided",
-            repair_note: mode === "guided" ? reason : undefined,
-            error: mode === "strict" ? reason : undefined,
-          },
-          opts.writeOptions,
-        );
-      }
-      if (mode === "strict" && stopOnFailure) break;
-      if (mode === "strict") failedSteps += 1;
+      const handled = await handleReplayPendingStep({
+        stepId: persistedStepId,
+        stepIndex,
+        toolName,
+        mode,
+        command,
+        argv,
+        executionBackend,
+        sandboxRunId: exec.sandbox_run_id,
+        sandboxStatus: exec.raw_status,
+        writeStepAfter,
+        stopOnFailure,
+      });
+      stepReports.push(handled.report);
+      applyReplayRunStepDelta(counters, handled.delta);
+      if (handled.stop) break;
       continue;
     }
     const execOutcome = exec.outcome;
@@ -3017,195 +2751,86 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
     const signature = evaluateExpectedSignature(expectedSignature, execOutcome);
     const postChecks: PreconditionResult[] = [];
     for (const cond of postconditions) postChecks.push(await evaluatePostcondition(cond, execOutcome));
-    const failedPost = postChecks.filter((c) => c.state === "fail");
-    const unknownPost = postChecks.filter((c) => c.state === "unknown");
-    const executionPassed = execOutcome.ok && signature.ok && failedPost.length === 0 && unknownPost.length === 0;
+    const executionPassed = isReplayExecutionPassed({
+      execution: execOutcome,
+      signature,
+      postconditions: postChecks,
+    });
 
     if (executionPassed) {
-      succeededSteps += 1;
-      stepReports.push(
-        buildReplayExecutionSuccessStepReport({
-          stepIndex,
-          toolName,
-          command,
-          argv,
-          executionBackend,
-          sandboxRunId: exec.sandbox_run_id,
-          sensitiveReview: sensitiveReviewInfo,
-          execution: execOutcome as unknown as Record<string, unknown>,
-          resultSummary: resultSummary as Record<string, unknown>,
-          signature: signature as unknown as Record<string, unknown>,
-          postconditions: postChecks,
-        }),
-      );
-      if (recordRun) {
-        await replayStepAfter(
-          client,
-          {
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            ...replayCallIdentity,
-            run_id: replayRunId,
-            step_id: persistedStepId ?? undefined,
-            step_index: stepIndex ?? undefined,
-            status: "success",
-            output_signature: {
-              command,
-              argv,
-              execution_backend: executionBackend,
-              sandbox_run_id: exec.sandbox_run_id,
-              sensitive_review: sensitiveReviewInfo,
-              exit_code: execOutcome.exit_code,
-              duration_ms: execOutcome.duration_ms,
-              result_summary: resultSummary,
-              signature,
-            },
-            postconditions: postChecks,
-            artifact_refs: [],
-            repair_applied: false,
-          },
-          opts.writeOptions,
-        );
-      }
-      continue;
-    }
-
-    const failureReason = execOutcome.error ?? (execOutcome.status === "timeout" ? "execution_timeout" : "execution_failed");
-    if (mode === "strict") {
-      failedSteps += 1;
-      stepReports.push(
-        buildReplayExecutionFailureStepReport({
-          stepIndex,
-          toolName,
-          command,
-          argv,
-          executionBackend,
-          sandboxRunId: exec.sandbox_run_id,
-          sensitiveReview: sensitiveReviewInfo,
-          execution: execOutcome as unknown as Record<string, unknown>,
-          resultSummary: resultSummary as Record<string, unknown>,
-          signature: signature as unknown as Record<string, unknown>,
-          postconditions: postChecks,
-          error: failureReason,
-        }),
-      );
-      if (recordRun) {
-        await replayStepAfter(
-          client,
-          {
-            tenant_id: tenancy.tenant_id,
-            scope: tenancy.scope,
-            ...replayCallIdentity,
-            run_id: replayRunId,
-            step_id: persistedStepId ?? undefined,
-            step_index: stepIndex ?? undefined,
-            status: "failed",
-            output_signature: {
-              command,
-              argv,
-              execution_backend: executionBackend,
-              sandbox_run_id: exec.sandbox_run_id,
-              sensitive_review: sensitiveReviewInfo,
-              exit_code: execOutcome.exit_code,
-              duration_ms: execOutcome.duration_ms,
-              result_summary: resultSummary,
-              signature,
-              preconditions: preChecks,
-              postconditions: postChecks,
-            },
-            postconditions: postChecks,
-            artifact_refs: [],
-            repair_applied: false,
-            error: failureReason,
-          },
-          opts.writeOptions,
-        );
-      }
-      if (stopOnFailure) break;
-      continue;
-    }
-
-    repairedSteps += 1;
-    const repair = await makeGuidedRepairPatch({
-      strategy: guidedRepairStrategy,
-      stepIndex,
-      toolName,
-      reason: "execution_failed_guided_skip",
-      detail: failureReason,
-      stepObj,
-      command,
-      argv,
-      allowedCommands,
-      commandAliasMap,
-      maxErrorChars: guidedRepairMaxErrorChars,
-      httpEndpoint: opts.guidedRepair?.httpEndpoint,
-      httpTimeoutMs: opts.guidedRepair?.httpTimeoutMs,
-      httpAuthToken: opts.guidedRepair?.httpAuthToken,
-      llmBaseUrl: opts.guidedRepair?.llmBaseUrl,
-      llmApiKey: opts.guidedRepair?.llmApiKey,
-      llmModel: opts.guidedRepair?.llmModel,
-      llmTimeoutMs: opts.guidedRepair?.llmTimeoutMs,
-      llmMaxTokens: opts.guidedRepair?.llmMaxTokens,
-      llmTemperature: opts.guidedRepair?.llmTemperature,
-      mode: "guided",
-    });
-    mergeReplayUsage(usageOut, asObject(repair)?.usage);
-    stepReports.push(
-      buildReplayGuidedPartialStepReport({
+      const handled = await handleReplaySuccessStep({
+        stepId: persistedStepId,
         stepIndex,
         toolName,
-        readiness: "partial",
         command,
         argv,
         executionBackend,
         sandboxRunId: exec.sandbox_run_id,
         sensitiveReview: sensitiveReviewInfo,
-        execution: execOutcome as unknown as Record<string, unknown>,
+        execution: execOutcome,
         resultSummary: resultSummary as Record<string, unknown>,
-        signature: signature as unknown as Record<string, unknown>,
+        signature,
         postconditions: postChecks,
-        repair,
-      }),
-    );
-    if (recordRun) {
-      await replayStepAfter(
-        client,
-        {
-          tenant_id: tenancy.tenant_id,
-          scope: tenancy.scope,
-          ...replayCallIdentity,
-          run_id: replayRunId,
-          step_id: persistedStepId ?? undefined,
-          step_index: stepIndex ?? undefined,
-          status: "partial",
-          output_signature: {
-            command,
-            argv,
-            execution_backend: executionBackend,
-            sandbox_run_id: exec.sandbox_run_id,
-            sensitive_review: sensitiveReviewInfo,
-            exit_code: execOutcome.exit_code,
-            duration_ms: execOutcome.duration_ms,
-            result_summary: resultSummary,
-            signature,
-            postconditions: postChecks,
-            repair,
-          },
-          postconditions: postChecks,
-          artifact_refs: [],
-          repair_applied: true,
-          repair_note: failureReason,
-          error: failureReason,
-        },
-        opts.writeOptions,
-      );
+        writeStepAfter,
+      });
+      stepReports.push(handled.report);
+      applyReplayRunStepDelta(counters, handled.delta);
+      continue;
     }
+
+    const failureReason = resolveReplayExecutionFailureReason(execOutcome);
+    if (mode === "strict") {
+      const handled = await handleReplayStrictFailureStep({
+        stepId: persistedStepId,
+        stepIndex,
+        toolName,
+        command,
+        argv,
+        executionBackend,
+        sandboxRunId: exec.sandbox_run_id,
+        sensitiveReview: sensitiveReviewInfo,
+        execution: execOutcome,
+        resultSummary: resultSummary as Record<string, unknown>,
+        signature,
+        preconditions: preChecks,
+        postconditions: postChecks,
+        error: failureReason,
+        writeStepAfter,
+        stopOnFailure,
+      });
+      stepReports.push(handled.report);
+      applyReplayRunStepDelta(counters, handled.delta);
+      if (handled.stop) break;
+      continue;
+    }
+
+    const handled = await handleReplayGuidedFailureStep({
+      stepId: persistedStepId,
+      stepIndex,
+      toolName,
+      stepObj,
+      command,
+      argv,
+      executionBackend,
+      sandboxRunId: exec.sandbox_run_id,
+      sensitiveReview: sensitiveReviewInfo,
+      execution: execOutcome,
+      resultSummary: resultSummary as Record<string, unknown>,
+      signature,
+      postconditions: postChecks,
+      error: failureReason,
+      writeStepAfter,
+      guidedRepair: guidedRepairConfig,
+    });
+    mergeReplayUsage(usageOut, handled.usage);
+    stepReports.push(handled.report);
+    applyReplayRunStepDelta(counters, handled.delta);
   }
 
   const runStatus: "success" | "failed" | "partial" =
     mode === "strict"
-      ? (failedSteps > 0 ? "failed" : "success")
-      : (failedSteps > 0 ? "failed" : repairedSteps > 0 || skippedSteps > 0 ? "partial" : "success");
+      ? (counters.failedSteps > 0 ? "failed" : "success")
+      : (counters.failedSteps > 0 ? "failed" : counters.repairedSteps > 0 || counters.skippedSteps > 0 ? "partial" : "success");
 
   let runEndOut: Record<string, unknown> | null = null;
   if (recordRun) {
@@ -3217,24 +2842,24 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         ...replayCallIdentity,
         run_id: replayRunId,
         status: runStatus,
-        summary: `Replay ${mode} run completed: success=${succeededSteps}, failed=${failedSteps}, repaired=${repairedSteps}, pending=${pendingSteps}`,
+        summary: `Replay ${mode} run completed: success=${counters.succeededSteps}, failed=${counters.failedSteps}, repaired=${counters.repairedSteps}, pending=${counters.pendingSteps}`,
         success_criteria: {
           mode,
           execution_backend: executionBackend,
-          failed_steps: failedSteps,
-          repaired_steps: repairedSteps,
-          skipped_steps: skippedSteps,
-          pending_steps: pendingSteps,
+          failed_steps: counters.failedSteps,
+          repaired_steps: counters.repairedSteps,
+          skipped_steps: counters.skippedSteps,
+          pending_steps: counters.pendingSteps,
         },
         metrics: {
           total_steps: stepsRaw.length,
-          executed_steps: executedSteps,
-          succeeded_steps: succeededSteps,
-          failed_steps: failedSteps,
-          repaired_steps: repairedSteps,
-          blocked_steps: blockedSteps,
-          skipped_steps: skippedSteps,
-          pending_steps: pendingSteps,
+          executed_steps: counters.executedSteps,
+          succeeded_steps: counters.succeededSteps,
+          failed_steps: counters.failedSteps,
+          repaired_steps: counters.repairedSteps,
+          blocked_steps: counters.blockedSteps,
+          skipped_steps: counters.skippedSteps,
+          pending_steps: counters.pendingSteps,
         },
       },
       opts.writeOptions,
@@ -3260,13 +2885,13 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
     }),
     summary: buildReplayExecutionSummary({
       totalSteps: stepsRaw.length,
-      executedSteps,
-      succeededSteps,
-      failedSteps,
-      repairedSteps,
-      blockedSteps,
-      skippedSteps,
-      pendingSteps,
+      executedSteps: counters.executedSteps,
+      succeededSteps: counters.succeededSteps,
+      failedSteps: counters.failedSteps,
+      repairedSteps: counters.repairedSteps,
+      blockedSteps: counters.blockedSteps,
+      skippedSteps: counters.skippedSteps,
+      pendingSteps: counters.pendingSteps,
     }),
     steps: stepReports,
     execution: buildReplayExecutionSurface({
