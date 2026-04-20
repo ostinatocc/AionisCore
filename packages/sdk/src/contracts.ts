@@ -1,5 +1,6 @@
 import type { AionisRequestPayload, AionisResponsePayload } from "./types.js";
 import type {
+  AionisActionRetrievalUncertainty,
   AionisAgentMemoryInspectRequest,
   AionisAnchorRehydratePayloadRequest as AionisAnchorsRehydratePayloadRequest,
   AionisContextAssembleRequest,
@@ -20,6 +21,7 @@ import type {
 } from "./generated/full-sdk-contracts.js";
 
 export type {
+  AionisActionRetrievalUncertainty,
   AionisAgentMemoryInspectRequest,
   AionisAnchorRehydratePayloadRequest as AionisAnchorsRehydratePayloadRequest,
   AionisContextAssembleRequest,
@@ -150,10 +152,39 @@ export type AionisExecutionKernelSummary = {
   action_packet_summary: AionisActionPacketSummary;
 } & AionisPassthroughObject;
 
+export type AionisActionRetrievalGateAction =
+  | "inspect_context"
+  | "widen_recall"
+  | "rehydrate_payload"
+  | "request_operator_review";
+
+export type AionisActionRetrievalGateSummary = {
+  summary_version: "action_retrieval_gate_v1";
+  gate_action: AionisActionRetrievalGateAction;
+  escalates_task_start: boolean;
+  confidence: number;
+  primary_reason: string | null;
+  recommended_actions: AionisActionRetrievalGateAction[];
+  instruction: string | null;
+  rehydration_candidate_count: number;
+  preferred_rehydration: {
+    anchor_id: string | null;
+    anchor_kind: string | null;
+    anchor_level: string | null;
+    title: string | null;
+    summary: string | null;
+    mode: "summary_only" | "partial" | "full" | "differential" | null;
+    example_call: string | null;
+    payload_cost_hint: "low" | "medium" | "high" | null;
+  } | null;
+} & AionisPassthroughObject;
+
 export type AionisPlanningSummary = {
   summary_version: "planning_summary_v1";
   planner_explanation: string | null;
   first_step_recommendation?: AionisKickoffRecommendation | null;
+  action_retrieval_uncertainty?: AionisActionRetrievalUncertainty | null;
+  action_retrieval_gate?: AionisActionRetrievalGateSummary | null;
   workflow_signal_summary: AionisWorkflowSignalSummary;
   action_packet_summary: AionisActionPacketSummary;
   workflow_lifecycle_summary: AionisLifecycleSummary;
@@ -170,6 +201,8 @@ export type AionisAssemblySummary = {
   summary_version: "assembly_summary_v1";
   planner_explanation: string | null;
   first_step_recommendation?: AionisKickoffRecommendation | null;
+  action_retrieval_uncertainty?: AionisActionRetrievalUncertainty | null;
+  action_retrieval_gate?: AionisActionRetrievalGateSummary | null;
   workflow_signal_summary: AionisWorkflowSignalSummary;
   action_packet_summary: AionisActionPacketSummary;
   workflow_lifecycle_summary: AionisLifecycleSummary;
@@ -183,6 +216,8 @@ export type AionisAssemblySummary = {
 } & AionisPassthroughObject;
 
 export type AionisPlannerEntry = AionisPassthroughObject;
+
+export type AionisTaskStartGateAction = AionisActionRetrievalGateAction;
 
 export type AionisPlanningContextResponse = {
   planner_packet: AionisPlannerPacketTextSurface;
@@ -220,6 +255,8 @@ export type AionisTaskStartPlanResponse = {
   scope: string;
   query_text: string;
   kickoff_recommendation: AionisKickoffRecommendation | null;
+  gate_action: AionisTaskStartGateAction | null;
+  action_retrieval_uncertainty: AionisActionRetrievalUncertainty | null;
   first_action: AionisTaskStartAction | null;
   planner_explanation: string | null;
   planner_packet: AionisPlannerPacketTextSurface | null;

@@ -1,5 +1,6 @@
 import { pickPreferredDelegationRecordsSummary } from "../memory/delegation-records-surface.js";
 import type {
+  ActionRetrievalUncertaintySummary,
   AssemblySummary,
   ExecutionPacketAssemblySummary,
   ExecutionSummary,
@@ -16,6 +17,7 @@ import {
   buildExecutionMaintenanceSummary,
 } from "./planning-summary-forgetting.js";
 import {
+  buildActionRetrievalGate,
   buildFirstStepRecommendation,
   buildPlannerExplanation,
 } from "./planning-summary-planner.js";
@@ -33,7 +35,47 @@ type ExperienceRecommendationProjection = {
   path_source_kind: "recommended_workflow" | "candidate_workflow" | "none";
   file_path: string | null;
   combined_next_action: string | null;
+  action_retrieval_uncertainty: ActionRetrievalUncertaintySummary | null;
 };
+
+function readActionRetrievalUncertainty(
+  experienceIntelligence: unknown,
+): ActionRetrievalUncertaintySummary | null {
+  if (!experienceIntelligence || typeof experienceIntelligence !== "object") return null;
+  const actionRetrieval = (experienceIntelligence as Record<string, unknown>).action_retrieval;
+  if (!actionRetrieval || typeof actionRetrieval !== "object") return null;
+  const uncertainty = (actionRetrieval as Record<string, unknown>).uncertainty;
+  if (!uncertainty || typeof uncertainty !== "object") return null;
+  const record = uncertainty as Record<string, unknown>;
+  const level =
+    record.level === "low" || record.level === "moderate" || record.level === "high"
+      ? record.level
+      : null;
+  if (!level) return null;
+  return {
+    summary_version: record.summary_version === "action_retrieval_uncertainty_v1"
+      ? "action_retrieval_uncertainty_v1"
+      : "action_retrieval_uncertainty_v1",
+    level,
+    confidence: typeof record.confidence === "number" ? record.confidence : 0,
+    evidence_gap_count: typeof record.evidence_gap_count === "number" ? record.evidence_gap_count : 0,
+    reasons: Array.isArray(record.reasons)
+      ? record.reasons.filter((entry): entry is string => typeof entry === "string")
+      : [],
+    recommended_actions: Array.isArray(record.recommended_actions)
+      ? record.recommended_actions.filter(
+          (
+            entry,
+          ): entry is ActionRetrievalUncertaintySummary["recommended_actions"][number] =>
+            entry === "proceed"
+            || entry === "widen_recall"
+            || entry === "rehydrate_payload"
+            || entry === "inspect_context"
+            || entry === "request_operator_review",
+        )
+      : [],
+  };
+}
 
 function buildExecutionPacketAssemblySummary(
   packetAssembly?: Partial<ExecutionPacketAssemblySummary> | null,
@@ -216,6 +258,7 @@ export function buildPlanningSummary(args: {
     args.experience_intelligence && typeof args.experience_intelligence === "object"
       ? ((args.experience_intelligence as Record<string, unknown>).recommendation as Record<string, unknown> | undefined)
       : undefined;
+  const actionRetrievalUncertainty = readActionRetrievalUncertainty(args.experience_intelligence);
   const experiencePath =
     experienceRecommendation?.path && typeof experienceRecommendation.path === "object"
       ? (experienceRecommendation.path as Record<string, unknown>)
@@ -235,6 +278,7 @@ export function buildPlanningSummary(args: {
           typeof experienceRecommendation.combined_next_action === "string"
             ? experienceRecommendation.combined_next_action
             : null,
+        action_retrieval_uncertainty: actionRetrievalUncertainty,
       }
     : null;
   const selectedTool =
@@ -245,10 +289,17 @@ export function buildPlanningSummary(args: {
     selectedTool,
     experienceSummary,
   });
+  const actionRetrievalGate = buildActionRetrievalGate({
+    firstStepRecommendation,
+    plannerSurface,
+    uncertainty: actionRetrievalUncertainty,
+  });
 
   return {
     summary_version: "planning_summary_v1",
     first_step_recommendation: firstStepRecommendation,
+    action_retrieval_uncertainty: actionRetrievalUncertainty,
+    action_retrieval_gate: actionRetrievalGate,
     planner_explanation: buildPlannerExplanation({
       selectedTool,
       decision,
@@ -256,6 +307,7 @@ export function buildPlanningSummary(args: {
       plannerSurface,
       actionPacketSummary,
       workflowLifecycleSummary,
+      actionRetrievalUncertainty,
     }),
     selected_tool: selectedTool,
     decision_id: typeof decision.decision_id === "string" ? decision.decision_id : null,
@@ -321,6 +373,8 @@ export function buildAssemblySummary(args: {
     summary_version: "assembly_summary_v1",
     planner_explanation: planning.planner_explanation,
     first_step_recommendation: planning.first_step_recommendation,
+    action_retrieval_uncertainty: planning.action_retrieval_uncertainty,
+    action_retrieval_gate: planning.action_retrieval_gate,
     selected_tool: planning.selected_tool,
     decision_id: planning.decision_id,
     rules_considered: planning.rules_considered,

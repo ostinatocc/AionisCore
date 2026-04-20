@@ -38,6 +38,13 @@ test("createAionisRuntimeClient exposes the full Aionis Core SDK surface and map
     context: { goal: "repair export failure" },
     candidates: ["bash", "edit"],
   });
+  await client.memory.actionRetrieval({
+    tenant_id: "default",
+    scope: "runtime-sdk",
+    query_text: "repair export failure",
+    context: { goal: "repair export failure" },
+    candidates: ["bash", "edit"],
+  });
   await client.memory.experienceIntelligence({
     tenant_id: "default",
     scope: "runtime-sdk",
@@ -248,6 +255,7 @@ test("createAionisRuntimeClient exposes the full Aionis Core SDK surface and map
       "http://127.0.0.1:3001/health",
       "http://127.0.0.1:3001/v1/memory/recall_text",
       "http://127.0.0.1:3001/v1/memory/kickoff/recommendation",
+      "http://127.0.0.1:3001/v1/memory/action/retrieval",
       "http://127.0.0.1:3001/v1/memory/experience/intelligence",
       "http://127.0.0.1:3001/v1/memory/kickoff/recommendation",
       "http://127.0.0.1:3001/v1/memory/sessions?tenant_id=default&scope=runtime-sdk&limit=10",
@@ -275,9 +283,10 @@ test("createAionisRuntimeClient exposes the full Aionis Core SDK surface and map
   assert.equal(calls[2]?.init?.method, "POST");
   assert.equal(calls[3]?.init?.method, "POST");
   assert.equal(calls[4]?.init?.method, "POST");
-  assert.equal(calls[5]?.init?.method, "GET");
+  assert.equal(calls[5]?.init?.method, "POST");
   assert.equal(calls[6]?.init?.method, "GET");
-  for (const call of [calls[1], calls[2], calls[3], calls[4], calls[7], calls[8], calls[9], calls[10], calls[11], calls[12], calls[13], calls[14], calls[15], calls[16], calls[17], calls[18], calls[19], calls[20], calls[21]]) {
+  assert.equal(calls[7]?.init?.method, "GET");
+  for (const call of [calls[1], calls[2], calls[3], calls[4], calls[5], calls[8], calls[9], calls[10], calls[11], calls[12], calls[13], calls[14], calls[15], calls[16], calls[17], calls[18], calls[19], calls[20], calls[21], calls[22]]) {
     assert.equal(call?.init?.method, "POST");
     assert.equal((call?.init?.headers as Record<string, string>)["content-type"], "application/json");
   }
@@ -330,6 +339,53 @@ test("runtime SDK taskStart derives first_action from kickoff recommendation", a
     file_path: "src/services/billing.ts",
     next_action: "Patch src/services/billing.ts and rerun export tests",
   });
+});
+
+test("runtime SDK taskStart suppresses first_action when kickoff uncertainty requires escalation", async () => {
+  const client = createAionisRuntimeClient({
+    baseUrl: "http://127.0.0.1:3001/",
+    fetch: async () =>
+      new Response(JSON.stringify({
+        summary_version: "kickoff_recommendation_v1",
+        tenant_id: "default",
+        scope: "runtime-sdk-task-start-gated",
+        query_text: "repair billing retry timeout in service code",
+        kickoff_recommendation: {
+          source_kind: "experience_intelligence",
+          history_applied: true,
+          selected_tool: "edit",
+          file_path: null,
+          next_action: "Inspect the current context before starting with edit.",
+        },
+        action_retrieval_uncertainty: {
+          summary_version: "action_retrieval_uncertainty_v1",
+          level: "high",
+          confidence: 0.33,
+          evidence_gap_count: 3,
+          reasons: ["payload rehydration may be needed before taking the next step"],
+          recommended_actions: ["rehydrate_payload", "inspect_context"],
+        },
+        rationale: {
+          summary: "Use planning before reusing the learned path.",
+        },
+      }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+  });
+
+  const response = await client.memory.taskStart({
+    tenant_id: "default",
+    scope: "runtime-sdk-task-start-gated",
+    query_text: "repair billing retry timeout in service code",
+    context: { goal: "repair billing retry timeout in service code" },
+    candidates: ["bash", "edit"],
+  });
+
+  assert.equal(response.first_action, null);
+  assert.equal(response.action_retrieval_uncertainty?.level, "high");
 });
 
 test("runtime SDK throws AionisRuntimeSdkHttpError with response payload on failures", async () => {
@@ -576,9 +632,9 @@ test("host bridge inspectTaskContext requests debug planning context and resolve
                 missing_return: 1,
               },
               recommendation_count: 3,
-            },
-            learning_recommendations: [{
-              recommendation_kind: "capture_missing_returns",
+              },
+              learning_recommendations: [{
+                recommendation_kind: "capture_missing_returns",
               priority: "high",
               route_role: "patch",
               task_family: "task:repair_export",
@@ -587,9 +643,32 @@ test("host bridge inspectTaskContext requests debug planning context and resolve
               sample_mission: "Apply the export repair patch and rerun node tests.",
               sample_acceptance_checks: ["npm run -s test:lite -- export"],
               sample_working_set_files: ["src/routes/export.ts"],
-              sample_artifact_refs: ["artifact://repair-export/patch"],
-            }],
+                sample_artifact_refs: ["artifact://repair-export/patch"],
+              }],
           },
+          action_retrieval_gate: {
+            summary_version: "action_retrieval_gate_v1",
+            gate_action: "inspect_context",
+            escalates_task_start: true,
+            confidence: 0.41,
+            primary_reason: "inspect current context before committing to the learned path",
+            recommended_actions: ["inspect_context"],
+            instruction: "Inspect the current context before starting with edit.",
+            rehydration_candidate_count: 0,
+            preferred_rehydration: null,
+          },
+          action_hints: [{
+            summary_version: "context_operator_action_hint_v1",
+            action: "inspect_context",
+            priority: "required",
+            instruction: "Inspect the current context before starting with edit.",
+            selected_tool: "edit",
+            file_path: null,
+            tool_route: null,
+            tool_method: null,
+            example_call: null,
+            preferred_rehydration_anchor_id: null,
+          }],
         },
         layered_context: {
           delegation_learning: {
@@ -634,6 +713,8 @@ test("host bridge inspectTaskContext requests debug planning context and resolve
   assert.equal(inspect.task_id, "task-ctx-1");
   assert.equal(inspect.delegation_learning?.learning_summary.task_family, "task:repair_export");
   assert.equal(inspect.operator_projection?.delegation_learning?.learning_summary.task_family, "task:repair_export");
+  assert.equal(inspect.operator_projection?.action_retrieval_gate?.gate_action, "inspect_context");
+  assert.equal(inspect.operator_projection?.action_hints?.[0]?.action, "inspect_context");
   assert.equal(inspect.planning_context.query.text, "repair export route");
   assert.deepEqual(calls.map((entry) => entry.url), [
     "http://127.0.0.1:3001/v1/memory/planning/context",
@@ -740,6 +821,7 @@ test("host bridge planTaskStart combines inspectTaskContext and startTask into a
   assert.equal(plan.first_action?.selected_tool, "edit");
   assert.equal(plan.decision.summary_version, "host_bridge_startup_decision_v1");
   assert.equal(plan.decision.startup_mode, "learned_kickoff");
+  assert.equal(plan.decision.gate_action, null);
   assert.equal(plan.decision.tool, "edit");
   assert.equal(plan.decision.file_path, "src/routes/export.ts");
   assert.equal(plan.decision.instruction, "Patch src/routes/export.ts and rerun serializer checks.");
@@ -753,6 +835,270 @@ test("host bridge planTaskStart combines inspectTaskContext and startTask into a
     "http://127.0.0.1:3001/v1/memory/kickoff/recommendation",
     "http://127.0.0.1:3001/v1/memory/planning/context",
   ]);
+});
+
+test("host bridge planTaskStart surfaces explicit retrieval gate modes instead of collapsing to manual triage", async () => {
+  const bridge = createAionisHostBridge({
+    baseUrl: "http://127.0.0.1:3001/",
+    fetch: async (input, init) => {
+      const url = String(input);
+      const payload = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : undefined;
+
+      if (url.endsWith("/v1/memory/planning/context")) {
+        return new Response(JSON.stringify({
+          tenant_id: "default",
+          scope: "host-bridge",
+          execution_kernel: {},
+          execution_summary: {},
+          query: { text: payload?.query_text ?? null },
+          recall: {},
+          runtime_tool_hints: [],
+          planner_packet: {},
+          pattern_signals: [],
+          workflow_signals: [],
+          planning_summary: {
+            planner_explanation: "Rehydrate colder payload before applying the learned billing retry path.",
+            first_step_recommendation: {
+              source_kind: "experience_intelligence",
+              history_applied: true,
+              selected_tool: "edit",
+              file_path: "src/services/billing.ts",
+              next_action: "Rehydrate colder payload before reusing edit on src/services/billing.ts.",
+            },
+            action_retrieval_uncertainty: {
+              summary_version: "action_retrieval_uncertainty_v1",
+              level: "high",
+              confidence: 0.29,
+              evidence_gap_count: 3,
+              reasons: ["payload rehydration may be needed before taking the next step"],
+              recommended_actions: ["rehydrate_payload", "inspect_context"],
+            },
+          },
+          operator_projection: {
+            delegation_learning: {
+              summary_version: "delegation_learning_projection_v1",
+              learning_summary: {
+                task_family: "task:repair_billing_retry",
+                matched_records: 1,
+                truncated: false,
+                route_role_counts: {
+                  patch: 1,
+                },
+                record_outcome_counts: {
+                  completed: 1,
+                },
+                recommendation_count: 1,
+              },
+              learning_recommendations: [],
+            },
+            action_retrieval_gate: {
+              summary_version: "action_retrieval_gate_v1",
+              gate_action: "rehydrate_payload",
+              escalates_task_start: true,
+              confidence: 0.29,
+              primary_reason: "payload rehydration is required before reusing the learned billing retry path",
+              recommended_actions: ["rehydrate_payload", "inspect_context"],
+              instruction: "Rehydrate the billing retry payload before committing to the learned path.",
+              rehydration_candidate_count: 1,
+              preferred_rehydration: {
+                anchor_id: "anchor-billing-retry-1",
+                mode: "differential",
+                rationale: "Recover the colder billing retry payload before editing.",
+              },
+            },
+            action_hints: [{
+              summary_version: "context_operator_action_hint_v1",
+              action: "rehydrate_payload",
+              priority: "required",
+              instruction: "Rehydrate the billing retry payload before committing to the learned path.",
+              selected_tool: "edit",
+              file_path: "src/services/billing.ts",
+              tool_route: "/v1/memory/tools/rehydrate_payload",
+              tool_method: "POST",
+              example_call: "aionis.memory.tools.rehydratePayload(...)",
+              preferred_rehydration_anchor_id: "anchor-billing-retry-1",
+            }],
+          },
+          layered_context: {},
+          cost_signals: {},
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        summary_version: "kickoff_recommendation_v1",
+        tenant_id: "default",
+        scope: "host-bridge",
+        query_text: payload?.query_text ?? null,
+        kickoff_recommendation: {
+          source_kind: "experience_intelligence",
+          history_applied: true,
+          selected_tool: "edit",
+          file_path: null,
+          next_action: "Inspect the current context before starting with edit.",
+        },
+        action_retrieval_uncertainty: {
+          summary_version: "action_retrieval_uncertainty_v1",
+          level: "high",
+          confidence: 0.29,
+          evidence_gap_count: 3,
+          reasons: ["payload rehydration may be needed before taking the next step"],
+          recommended_actions: ["rehydrate_payload", "inspect_context"],
+        },
+        rationale: {
+          summary: "Do not commit to the learned path before rehydration.",
+        },
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  }, {
+    tenant_id: "default",
+    scope: "host-bridge",
+    actor: "host-v1",
+  });
+
+  const plan = await bridge.planTaskStart({
+    task_id: "task-plan-gated-1",
+    text: "repair billing retry timeout",
+    context: {
+      task_kind: "repair_billing_retry",
+    },
+    candidates: ["bash", "edit", "test"],
+  });
+
+  assert.equal(plan.first_action, null);
+  assert.equal(plan.decision.startup_mode, "rehydrate_payload");
+  assert.equal(plan.decision.gate_action, "rehydrate_payload");
+  assert.equal(plan.decision.tool, "edit");
+  assert.equal(plan.decision.file_path, "src/services/billing.ts");
+  assert.equal(plan.decision.instruction, "Rehydrate the billing retry payload before committing to the learned path.");
+  assert.equal(plan.decision.task_family, "task:repair_billing_retry");
+});
+
+test("host bridge planTaskStart prefers explicit operator hints over kickoff first action when planning escalates task start", async () => {
+  const bridge = createAionisHostBridge({
+    baseUrl: "http://127.0.0.1:3001/",
+    fetch: async (input, init) => {
+      const url = String(input);
+      const payload = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : undefined;
+
+      if (url.endsWith("/v1/memory/planning/context")) {
+        return new Response(JSON.stringify({
+          tenant_id: "default",
+          scope: "host-bridge",
+          execution_kernel: {},
+          execution_summary: {},
+          query: { text: payload?.query_text ?? null },
+          recall: {},
+          runtime_tool_hints: [],
+          planner_packet: {},
+          pattern_signals: [],
+          workflow_signals: [],
+          planning_summary: {
+            planner_explanation: "Inspect the current export repair context before applying the learned edit path.",
+            first_step_recommendation: {
+              source_kind: "experience_intelligence",
+              history_applied: true,
+              selected_tool: "edit",
+              file_path: "src/routes/export.ts",
+              next_action: "Inspect the current export repair context before applying the learned edit path.",
+            },
+          },
+          operator_projection: {
+            delegation_learning: {
+              summary_version: "delegation_learning_projection_v1",
+              learning_summary: {
+                task_family: "task:repair_export",
+                matched_records: 2,
+                truncated: false,
+                route_role_counts: {
+                  patch: 2,
+                },
+                record_outcome_counts: {
+                  completed: 2,
+                },
+                recommendation_count: 2,
+              },
+              learning_recommendations: [],
+            },
+            action_retrieval_gate: {
+              summary_version: "action_retrieval_gate_v1",
+              gate_action: "inspect_context",
+              escalates_task_start: true,
+              confidence: 0.44,
+              primary_reason: "inspect the current export repair context before committing to the learned edit path",
+              recommended_actions: ["inspect_context"],
+              instruction: "Inspect the current export repair context before editing src/routes/export.ts.",
+              rehydration_candidate_count: 0,
+              preferred_rehydration: null,
+            },
+            action_hints: [{
+              summary_version: "context_operator_action_hint_v1",
+              action: "inspect_context",
+              priority: "required",
+              instruction: "Inspect the current export repair context before editing src/routes/export.ts.",
+              selected_tool: "edit",
+              file_path: "src/routes/export.ts",
+              tool_route: null,
+              tool_method: null,
+              example_call: null,
+              preferred_rehydration_anchor_id: null,
+            }],
+          },
+          layered_context: {},
+          cost_signals: {},
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        summary_version: "kickoff_recommendation_v1",
+        tenant_id: "default",
+        scope: "host-bridge",
+        query_text: payload?.query_text ?? null,
+        kickoff_recommendation: {
+          source_kind: "experience_intelligence",
+          history_applied: true,
+          selected_tool: "edit",
+          file_path: "src/routes/export.ts",
+          next_action: "Patch src/routes/export.ts and rerun serializer checks.",
+        },
+        rationale: {
+          summary: "Use the learned export repair path.",
+        },
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  }, {
+    tenant_id: "default",
+    scope: "host-bridge",
+    actor: "host-v1",
+  });
+
+  const plan = await bridge.planTaskStart({
+    task_id: "task-plan-operator-gate-1",
+    text: "repair export route",
+    context: {
+      task_kind: "repair_export",
+    },
+    candidates: ["bash", "edit", "test"],
+  });
+
+  assert.equal(plan.first_action?.selected_tool, "edit");
+  assert.equal(plan.decision.startup_mode, "inspect_context");
+  assert.equal(plan.decision.gate_action, "inspect_context");
+  assert.equal(plan.decision.tool, "edit");
+  assert.equal(plan.decision.file_path, "src/routes/export.ts");
+  assert.equal(plan.decision.instruction, "Inspect the current export repair context before editing src/routes/export.ts.");
+  assert.equal(plan.decision.task_family, "task:repair_export");
 });
 
 test("host bridge openTaskSession binds session, planning, handoff, and resume flows into one adapter", async () => {
@@ -961,6 +1307,7 @@ test("host bridge openTaskSession binds session, planning, handoff, and resume f
   assert.equal((event as { session_id?: string }).session_id, "session-host-1");
   assert.deepEqual((events as { items?: Array<{ event_text?: string }> }).items?.map((entry) => entry.event_text), ["observed serializer failure"]);
   assert.equal(plan.decision.startup_mode, "learned_kickoff");
+  assert.equal(plan.decision.gate_action, null);
   assert.equal(plan.decision.task_family, "task:repair_export");
   assert.equal((pause.handoff as { anchor?: string }).anchor, "task-session-1");
   assert.equal((resume.handoff as { anchor?: string }).anchor, "task-session-1");

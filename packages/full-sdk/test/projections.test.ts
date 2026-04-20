@@ -87,6 +87,34 @@ test("resolveContextOperatorProjection falls back to layered context mirror for 
   });
 });
 
+test("resolveContextOperatorProjection keeps explicit action hints even without delegation learning", () => {
+  const projection = resolveContextOperatorProjection({
+    operator_projection: {
+      action_retrieval_gate: {
+        summary_version: "action_retrieval_gate_v1",
+        gate_action: "rehydrate_payload",
+      },
+      action_hints: [{
+        summary_version: "context_operator_action_hint_v1",
+        action: "rehydrate_payload",
+        priority: "required",
+        instruction: "Rehydrate colder payload before reusing edit on src/routes/export.ts.",
+        selected_tool: "edit",
+        file_path: "src/routes/export.ts",
+        tool_route: "/v1/memory/tools/rehydrate_payload",
+        tool_method: "POST",
+        example_call: "rehydrate_payload(anchor_id='wf_123', mode='partial')",
+        preferred_rehydration_anchor_id: "wf_123",
+      }],
+    },
+    layered_context: {},
+  });
+
+  assert.equal(projection?.action_retrieval_gate?.gate_action, "rehydrate_payload");
+  assert.equal(projection?.action_hints?.[0]?.action, "rehydrate_payload");
+  assert.equal(projection?.action_hints?.[0]?.tool_route, "/v1/memory/tools/rehydrate_payload");
+});
+
 test("resolveContextOperatorProjection returns null when neither projection surface is available", () => {
   assert.equal(resolveContextOperatorProjection({
     operator_projection: undefined,

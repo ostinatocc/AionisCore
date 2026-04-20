@@ -1090,17 +1090,108 @@ export function registerMemoryContextRuntimeRoutes(args: {
     };
   };
   const buildContextOperatorProjection = (args: {
-    layeredContext: unknown;
+    returnLayeredContext: boolean;
     experienceIntelligence: ExperienceIntelligenceResponse | null;
+    actionRetrievalGate?: Record<string, unknown> | null;
+    firstStepRecommendation?: Record<string, unknown> | null;
   }) => {
-    if (!args.layeredContext || typeof args.layeredContext !== "object" || Array.isArray(args.layeredContext)) return undefined;
-    if (!args.experienceIntelligence) return undefined;
+    if (!args.returnLayeredContext) return undefined;
+    const delegationLearning = args.experienceIntelligence
+      ? {
+          summary_version: "delegation_learning_projection_v1",
+          learning_summary: args.experienceIntelligence.learning_summary,
+          learning_recommendations: args.experienceIntelligence.learning_recommendations,
+        }
+      : undefined;
+    const firstStep = args.firstStepRecommendation && typeof args.firstStepRecommendation === "object"
+      ? args.firstStepRecommendation
+      : null;
+    const gate = args.actionRetrievalGate && typeof args.actionRetrievalGate === "object"
+      ? args.actionRetrievalGate
+      : null;
+    const gateAction =
+      typeof gate?.gate_action === "string"
+      && (
+        gate.gate_action === "inspect_context"
+        || gate.gate_action === "widen_recall"
+        || gate.gate_action === "rehydrate_payload"
+        || gate.gate_action === "request_operator_review"
+      )
+        ? gate.gate_action
+        : null;
+    const recommendedActions = Array.isArray(gate?.recommended_actions)
+      ? gate.recommended_actions.filter(
+          (entry): entry is "inspect_context" | "widen_recall" | "rehydrate_payload" | "request_operator_review" =>
+            entry === "inspect_context"
+            || entry === "widen_recall"
+            || entry === "rehydrate_payload"
+            || entry === "request_operator_review",
+        )
+      : [];
+    const orderedActions = gateAction
+      ? [gateAction, ...recommendedActions.filter((entry) => entry !== gateAction)]
+      : recommendedActions;
+    const selectedTool = typeof firstStep?.selected_tool === "string" ? firstStep.selected_tool : null;
+    const filePath = typeof firstStep?.file_path === "string" ? firstStep.file_path : null;
+    const preferredRehydration = gate?.preferred_rehydration && typeof gate.preferred_rehydration === "object"
+      ? (gate.preferred_rehydration as Record<string, unknown>)
+      : null;
+    const buildFallbackInstruction = (
+      action: "inspect_context" | "widen_recall" | "rehydrate_payload" | "request_operator_review",
+    ) => {
+      if (action === "request_operator_review") {
+        return selectedTool
+          ? `Request operator review before committing to ${selectedTool}.`
+          : "Request operator review before committing to the next step.";
+      }
+      if (action === "rehydrate_payload") {
+        const label =
+          (typeof preferredRehydration?.title === "string" && preferredRehydration.title)
+          || (typeof preferredRehydration?.summary === "string" && preferredRehydration.summary)
+          || "the colder payload";
+        return filePath
+          ? `Rehydrate colder payload for ${label} before reusing ${selectedTool ?? "the learned path"} on ${filePath}.`
+          : `Rehydrate colder payload for ${label} before committing to the next step.`;
+      }
+      if (action === "widen_recall") {
+        return selectedTool
+          ? `Widen recall before committing to ${selectedTool}${filePath ? ` on ${filePath}` : ""}.`
+          : "Widen recall before committing to the next step.";
+      }
+      if (selectedTool && filePath) {
+        return `Inspect ${filePath} and the current context before using ${selectedTool}.`;
+      }
+      if (selectedTool) {
+        return `Inspect the current context before starting with ${selectedTool}.`;
+      }
+      return "Inspect the current context before taking the next step.";
+    };
+    const actionHints = orderedActions.map((action, index) => ({
+      summary_version: "context_operator_action_hint_v1" as const,
+      action,
+      priority: index === 0 ? "required" as const : "recommended" as const,
+      instruction:
+        index === 0 && typeof gate?.instruction === "string"
+          ? gate.instruction
+          : buildFallbackInstruction(action),
+      selected_tool: selectedTool,
+      file_path: filePath,
+      tool_route: action === "rehydrate_payload" ? "/v1/memory/tools/rehydrate_payload" : null,
+      tool_method: action === "rehydrate_payload" ? "POST" as const : null,
+      example_call:
+        action === "rehydrate_payload" && typeof preferredRehydration?.example_call === "string"
+          ? preferredRehydration.example_call
+          : null,
+      preferred_rehydration_anchor_id:
+        action === "rehydrate_payload" && typeof preferredRehydration?.anchor_id === "string"
+          ? preferredRehydration.anchor_id
+          : null,
+    }));
+    if (!delegationLearning && !gate && actionHints.length === 0) return undefined;
     return {
-      delegation_learning: {
-        summary_version: "delegation_learning_projection_v1",
-        learning_summary: args.experienceIntelligence.learning_summary,
-        learning_recommendations: args.experienceIntelligence.learning_recommendations,
-      },
+      ...(delegationLearning ? { delegation_learning: delegationLearning } : {}),
+      ...(gate ? { action_retrieval_gate: gate } : {}),
+      ...(actionHints.length > 0 ? { action_hints: actionHints } : {}),
     };
   };
   const buildRecallRouteDiagnostics = (args: {
@@ -1663,10 +1754,6 @@ export function registerMemoryContextRuntimeRoutes(args: {
       layeredContext,
       experienceIntelligence,
     });
-    const operatorProjection = buildContextOperatorProjection({
-      layeredContext,
-      experienceIntelligence,
-    });
     const plannerSurface = extractPlannerPacketSurface({ layeredContext, recall: recallOut });
     const persistedDelegationRecords = await loadPersistedDelegationRecordsForContext({
       liteWriteStore,
@@ -1688,6 +1775,18 @@ export function registerMemoryContextRuntimeRoutes(args: {
       optimization_profile: planningOptimization.optimization_profile.requested,
       recall_mode: explicitMode.mode,
       experience_intelligence: experienceIntelligence,
+    });
+    const operatorProjection = buildContextOperatorProjection({
+      returnLayeredContext: parsed.return_layered_context === true,
+      experienceIntelligence,
+      actionRetrievalGate:
+        planningSummary.action_retrieval_gate && typeof planningSummary.action_retrieval_gate === "object"
+          ? (planningSummary.action_retrieval_gate as Record<string, unknown>)
+          : null,
+      firstStepRecommendation:
+        planningSummary.first_step_recommendation && typeof planningSummary.first_step_recommendation === "object"
+          ? (planningSummary.first_step_recommendation as Record<string, unknown>)
+          : null,
     });
     const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
     await recordContextAssemblyTelemetrySafe({
@@ -1893,10 +1992,6 @@ export function registerMemoryContextRuntimeRoutes(args: {
       layeredContext,
       experienceIntelligence,
     });
-    const operatorProjection = buildContextOperatorProjection({
-      layeredContext,
-      experienceIntelligence,
-    });
     const plannerSurface = extractPlannerPacketSurface({ layeredContext, recall: recallOut });
     const persistedDelegationRecords = await loadPersistedDelegationRecordsForContext({
       liteWriteStore,
@@ -1919,6 +2014,18 @@ export function registerMemoryContextRuntimeRoutes(args: {
       recall_mode: explicitMode.mode,
       include_rules: parsed.include_rules,
       experience_intelligence: experienceIntelligence,
+    });
+    const operatorProjection = buildContextOperatorProjection({
+      returnLayeredContext: parsed.return_layered_context === true,
+      experienceIntelligence,
+      actionRetrievalGate:
+        assemblySummary.action_retrieval_gate && typeof assemblySummary.action_retrieval_gate === "object"
+          ? (assemblySummary.action_retrieval_gate as Record<string, unknown>)
+          : null,
+      firstStepRecommendation:
+        assemblySummary.first_step_recommendation && typeof assemblySummary.first_step_recommendation === "object"
+          ? (assemblySummary.first_step_recommendation as Record<string, unknown>)
+          : null,
     });
     const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
     await recordContextAssemblyTelemetrySafe({

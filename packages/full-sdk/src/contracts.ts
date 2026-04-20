@@ -207,11 +207,52 @@ export type AionisKickoffRecommendationResponse = {
   scope: string;
   query_text: string;
   kickoff_recommendation: AionisKickoffRecommendation | null;
+  action_retrieval_uncertainty?: AionisActionRetrievalUncertainty | null;
   policy_contract?: AionisPolicyContract | null;
   rationale: {
     summary: string;
   } & AionisPassthroughObject;
 } & AionisRuntimeResponse;
+
+export type AionisActionRetrievalRequest = AionisKickoffRecommendationRequest;
+
+export type AionisActionRetrievalEvidenceEntry = {
+  source_kind:
+    | "persisted_policy_memory"
+    | "trusted_pattern"
+    | "stable_workflow"
+    | "candidate_workflow"
+    | "contested_pattern"
+    | "rehydration_candidate";
+  anchor_id: string | null;
+  selected_tool: string | null;
+  workflow_signature: string | null;
+  file_path: string | null;
+  target_files: string[];
+  confidence: number | null;
+  reason: string;
+} & AionisPassthroughObject;
+
+export type AionisActionRetrievalEvidence = {
+  stable_workflow_count: number;
+  candidate_workflow_count: number;
+  trusted_pattern_count: number;
+  contested_pattern_count: number;
+  rehydration_candidate_count: number;
+  persisted_policy_memory_id: string | null;
+  selected_path_anchor_id: string | null;
+  entries: AionisActionRetrievalEvidenceEntry[];
+} & AionisPassthroughObject;
+
+export type AionisActionRetrievalUncertainty = {
+  summary_version: "action_retrieval_uncertainty_v1";
+  level: "low" | "moderate" | "high";
+  confidence: number;
+  evidence_gap_count: number;
+  reasons: string[];
+  recommended_actions:
+    Array<"proceed" | "widen_recall" | "rehydrate_payload" | "inspect_context" | "request_operator_review">;
+} & AionisPassthroughObject;
 
 export type AionisDelegationLearningSummary = {
   task_family: string | null;
@@ -379,6 +420,19 @@ export type AionisPolicyGovernanceApplyResult = {
 
 export type AionisContextOperatorProjection = {
   delegation_learning?: AionisDelegationLearningProjection;
+  action_retrieval_gate?: AionisPassthroughObject;
+  action_hints?: Array<{
+    summary_version: "context_operator_action_hint_v1";
+    action: "inspect_context" | "widen_recall" | "rehydrate_payload" | "request_operator_review";
+    priority: "required" | "recommended";
+    instruction: string | null;
+    selected_tool: string | null;
+    file_path: string | null;
+    tool_route: string | null;
+    tool_method: "POST" | null;
+    example_call: string | null;
+    preferred_rehydration_anchor_id: string | null;
+  } & AionisPassthroughObject>;
 } & AionisPassthroughObject;
 
 export type AionisExperienceIntelligenceResponse = {
@@ -386,6 +440,7 @@ export type AionisExperienceIntelligenceResponse = {
   tenant_id: string;
   scope: string;
   query_text: string;
+  action_retrieval: AionisActionRetrievalResponse;
   recommendation: {
     history_applied: boolean;
     tool: {
@@ -416,6 +471,44 @@ export type AionisExperienceIntelligenceResponse = {
   policy_contract: AionisPolicyContract | null;
   learning_summary: AionisDelegationLearningSummary;
   learning_recommendations: AionisDelegationRecordsLearningRecommendation[];
+  rationale: {
+    summary: string;
+  } & AionisPassthroughObject;
+} & AionisRuntimeResponse;
+
+export type AionisActionRetrievalResponse = {
+  summary_version: "action_retrieval_v1";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  history_applied: boolean;
+  tool_source_kind: "tools_select" | "trusted_pattern" | "stable_workflow" | "persisted_policy_memory" | "blended";
+  selected_tool: string | null;
+  recommended_file_path: string | null;
+  recommended_next_action: string | null;
+  tool: {
+    selected_tool: string | null;
+    ordered_tools: string[];
+    preferred_tools: string[];
+    allowed_tools: string[];
+    trusted_pattern_anchor_ids: string[];
+    candidate_pattern_anchor_ids: string[];
+    suppressed_pattern_anchor_ids: string[];
+  } & AionisPassthroughObject;
+  path: {
+    source_kind: "recommended_workflow" | "candidate_workflow" | "none";
+    anchor_id: string | null;
+    workflow_signature: string | null;
+    title: string | null;
+    summary: string | null;
+    file_path: string | null;
+    target_files: string[];
+    next_action: string | null;
+    confidence: number | null;
+    tool_set: string[];
+  } & AionisPassthroughObject;
+  evidence: AionisActionRetrievalEvidence;
+  uncertainty: AionisActionRetrievalUncertainty;
   rationale: {
     summary: string;
   } & AionisPassthroughObject;

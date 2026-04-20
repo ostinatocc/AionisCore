@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type {
+  AionisActionRetrievalUncertainty,
   AionisContextOperatorProjection,
   AionisDelegationLearningProjection,
   AionisHandoffRecoverRequest,
@@ -21,6 +22,7 @@ import type {
 } from "./contracts.js";
 import { createAionisRuntimeClient, type AionisRuntimeClient } from "./client.js";
 import { resolveContextOperatorProjection } from "./projections.js";
+import { resolveKickoffGateAction, type AionisTaskStartGateAction } from "./task-start.js";
 import type { AionisClientOptions } from "./types.js";
 
 const DEFAULT_TOOL_CANDIDATES = ["read", "glob", "grep", "bash", "edit", "write", "ls"];
@@ -38,6 +40,7 @@ export type AionisHostBridgeTask = {
 };
 
 export type AionisHostBridgeFirstAction = NonNullable<AionisTaskStartResponse["first_action"]>;
+type AionisHostBridgeOperatorActionHint = NonNullable<AionisContextOperatorProjection["action_hints"]>[number];
 
 export type AionisHostBridgeTaskStartResponse = {
   summary_version: "host_bridge_task_start_v1";
@@ -75,7 +78,15 @@ export type AionisHostBridgeTaskStartPlanRequest = AionisHostBridgeInspectTaskCo
 
 export type AionisHostBridgeStartupDecision = {
   summary_version: "host_bridge_startup_decision_v1";
-  startup_mode: "learned_kickoff" | "planner_fallback" | "manual_triage";
+  startup_mode:
+    | "learned_kickoff"
+    | "planner_fallback"
+    | "inspect_context"
+    | "widen_recall"
+    | "rehydrate_payload"
+    | "request_operator_review"
+    | "manual_triage";
+  gate_action: AionisTaskStartGateAction | null;
   tool: string | null;
   file_path: string | null;
   instruction: string | null;
@@ -536,6 +547,78 @@ function getTaskStartRationaleSummary(taskStart: AionisTaskStartResponse): strin
   return typeof rationale?.summary === "string" ? rationale.summary : null;
 }
 
+function getPlanningSummaryRecord(
+  planningContext: AionisPlanningContextResponse,
+): Record<string, unknown> | null {
+  return (
+    planningContext.planning_summary && typeof planningContext.planning_summary === "object" && !Array.isArray(planningContext.planning_summary)
+      ? (planningContext.planning_summary as Record<string, unknown>)
+      : null
+  );
+}
+
+function getPlanningSummaryFirstStep(
+  planningContext: AionisPlanningContextResponse,
+): Record<string, unknown> | null {
+  const planningSummary = getPlanningSummaryRecord(planningContext);
+  const firstStep = planningSummary?.first_step_recommendation;
+  return firstStep && typeof firstStep === "object" && !Array.isArray(firstStep)
+    ? (firstStep as Record<string, unknown>)
+    : null;
+}
+
+function getPlanningSummaryUncertainty(
+  planningContext: AionisPlanningContextResponse,
+): AionisActionRetrievalUncertainty | null {
+  const planningSummary = getPlanningSummaryRecord(planningContext);
+  const uncertainty = planningSummary?.action_retrieval_uncertainty;
+  return uncertainty && typeof uncertainty === "object" && !Array.isArray(uncertainty)
+    ? (uncertainty as AionisActionRetrievalUncertainty)
+    : null;
+}
+
+function getPlanningSummaryGateRecord(
+  planningContext: AionisPlanningContextResponse,
+): Record<string, unknown> | null {
+  const planningSummary = getPlanningSummaryRecord(planningContext);
+  const gate = planningSummary?.action_retrieval_gate;
+  return gate && typeof gate === "object" && !Array.isArray(gate)
+    ? (gate as Record<string, unknown>)
+    : null;
+}
+
+function normalizeTaskStartGateAction(value: unknown): AionisTaskStartGateAction | null {
+  return typeof value === "string"
+    && (
+      value === "inspect_context"
+      || value === "widen_recall"
+      || value === "rehydrate_payload"
+      || value === "request_operator_review"
+    )
+    ? value
+    : null;
+}
+
+function getOperatorProjectionGateRecord(
+  taskContext: AionisHostBridgeTaskContextResponse,
+): Record<string, unknown> | null {
+  const gate = taskContext.operator_projection?.action_retrieval_gate;
+  return gate && typeof gate === "object" && !Array.isArray(gate)
+    ? (gate as Record<string, unknown>)
+    : null;
+}
+
+function getOperatorProjectionPrimaryHint(
+  taskContext: AionisHostBridgeTaskContextResponse,
+): AionisHostBridgeOperatorActionHint | null {
+  const hints = taskContext.operator_projection?.action_hints;
+  if (!Array.isArray(hints) || hints.length === 0) {
+    return null;
+  }
+  const requiredHint = hints.find((hint) => hint?.priority === "required");
+  return requiredHint ?? hints[0] ?? null;
+}
+
 function buildHostBridgeStartupDecision(args: {
   taskStart: AionisHostBridgeTaskStartResponse;
   taskContext: AionisHostBridgeTaskContextResponse;
@@ -543,10 +626,24 @@ function buildHostBridgeStartupDecision(args: {
   const firstAction = args.taskStart.first_action;
   const learningSummary = args.taskContext.delegation_learning?.learning_summary;
   const plannerExplanation = getPlannerExplanation(args.taskContext.planning_context) ?? getTaskStartRationaleSummary(args.taskStart.task_start);
-  if (firstAction) {
+  const planningFirstStep = getPlanningSummaryFirstStep(args.taskContext.planning_context);
+  const planningUncertainty = getPlanningSummaryUncertainty(args.taskContext.planning_context);
+  const planningGate = getPlanningSummaryGateRecord(args.taskContext.planning_context);
+  const operatorPrimaryHint = getOperatorProjectionPrimaryHint(args.taskContext);
+  const operatorGate = getOperatorProjectionGateRecord(args.taskContext);
+  const operatorGateAction = normalizeTaskStartGateAction(operatorPrimaryHint?.action)
+    ?? normalizeTaskStartGateAction(operatorGate?.gate_action);
+  const kickoffGateAction = resolveKickoffGateAction({
+    kickoff: args.taskStart.task_start.kickoff_recommendation,
+    uncertainty: args.taskStart.task_start.action_retrieval_uncertainty ?? planningUncertainty,
+  });
+  const planningGateAction = normalizeTaskStartGateAction(planningGate?.gate_action);
+  const gateAction = operatorGateAction ?? kickoffGateAction ?? planningGateAction;
+  if (firstAction && !gateAction) {
     return {
       summary_version: "host_bridge_startup_decision_v1",
       startup_mode: firstAction.history_applied ? "learned_kickoff" : "planner_fallback",
+      gate_action: null,
       tool: firstAction.selected_tool,
       file_path: firstAction.file_path,
       instruction: firstAction.next_action,
@@ -557,9 +654,44 @@ function buildHostBridgeStartupDecision(args: {
     };
   }
 
+  if (gateAction) {
+    return {
+      summary_version: "host_bridge_startup_decision_v1",
+      startup_mode: gateAction,
+      gate_action: gateAction,
+      tool:
+        typeof operatorPrimaryHint?.selected_tool === "string"
+          ? operatorPrimaryHint.selected_tool
+          : typeof planningFirstStep?.selected_tool === "string"
+          ? planningFirstStep.selected_tool
+          : null,
+      file_path:
+        typeof operatorPrimaryHint?.file_path === "string"
+          ? operatorPrimaryHint.file_path
+          : typeof planningFirstStep?.file_path === "string"
+          ? planningFirstStep.file_path
+          : null,
+      instruction:
+        typeof operatorPrimaryHint?.instruction === "string"
+          ? operatorPrimaryHint.instruction
+          : typeof operatorGate?.instruction === "string"
+          ? operatorGate.instruction
+          : typeof planningGate?.instruction === "string"
+          ? planningGate.instruction
+          : typeof planningFirstStep?.next_action === "string"
+          ? planningFirstStep.next_action
+          : plannerExplanation,
+      planner_explanation: plannerExplanation,
+      task_family: learningSummary?.task_family ?? null,
+      matched_records: learningSummary?.matched_records ?? 0,
+      recommendation_count: learningSummary?.recommendation_count ?? 0,
+    };
+  }
+
   return {
     summary_version: "host_bridge_startup_decision_v1",
     startup_mode: "manual_triage",
+    gate_action: null,
     tool: null,
     file_path: null,
     instruction: null,

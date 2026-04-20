@@ -31,6 +31,8 @@ export type PlanningSummary = {
   summary_version: "planning_summary_v1";
   planner_explanation: string | null;
   first_step_recommendation: FirstStepRecommendation | null;
+  action_retrieval_uncertainty: ActionRetrievalUncertaintySummary | null;
+  action_retrieval_gate: ActionRetrievalGateSummary | null;
   selected_tool: string | null;
   decision_id: string | null;
   rules_considered: number;
@@ -65,6 +67,8 @@ export type AssemblySummary = {
   summary_version: "assembly_summary_v1";
   planner_explanation: string | null;
   first_step_recommendation: FirstStepRecommendation | null;
+  action_retrieval_uncertainty: ActionRetrievalUncertaintySummary | null;
+  action_retrieval_gate: ActionRetrievalGateSummary | null;
   selected_tool: string | null;
   decision_id: string | null;
   rules_considered: number;
@@ -110,6 +114,50 @@ export type KickoffRecommendation = {
   selected_tool: string | null;
   file_path: string | null;
   next_action: string | null;
+};
+
+export type ActionRetrievalUncertaintySummary = {
+  summary_version: "action_retrieval_uncertainty_v1";
+  level: "low" | "moderate" | "high";
+  confidence: number;
+  evidence_gap_count: number;
+  reasons: string[];
+  recommended_actions: Array<
+    "proceed"
+    | "widen_recall"
+    | "rehydrate_payload"
+    | "inspect_context"
+    | "request_operator_review"
+  >;
+};
+
+export type ActionRetrievalGateAction =
+  | "inspect_context"
+  | "widen_recall"
+  | "rehydrate_payload"
+  | "request_operator_review";
+
+export type ActionRetrievalGateRehydrationHint = {
+  anchor_id: string | null;
+  anchor_kind: string | null;
+  anchor_level: string | null;
+  title: string | null;
+  summary: string | null;
+  mode: "summary_only" | "partial" | "full" | "differential" | null;
+  example_call: string | null;
+  payload_cost_hint: "low" | "medium" | "high" | null;
+};
+
+export type ActionRetrievalGateSummary = {
+  summary_version: "action_retrieval_gate_v1";
+  gate_action: ActionRetrievalGateAction;
+  escalates_task_start: boolean;
+  confidence: number;
+  primary_reason: string | null;
+  recommended_actions: ActionRetrievalGateAction[];
+  instruction: string | null;
+  rehydration_candidate_count: number;
+  preferred_rehydration: ActionRetrievalGateRehydrationHint | null;
 };
 
 type PatternSignalSummary = {

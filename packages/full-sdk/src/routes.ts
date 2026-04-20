@@ -2,6 +2,7 @@ export const AIONIS_SHARED_ROUTE_PATHS = {
   memoryWrite: "/v1/memory/write",
   planningContext: "/v1/memory/planning/context",
   contextAssemble: "/v1/memory/context/assemble",
+  actionRetrieval: "/v1/memory/action/retrieval",
   kickoffRecommendation: "/v1/memory/kickoff/recommendation",
   executionIntrospect: "/v1/memory/execution/introspect",
   evolutionReviewPack: "/v1/memory/evolution/review-pack",

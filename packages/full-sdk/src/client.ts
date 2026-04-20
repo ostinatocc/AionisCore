@@ -1,4 +1,6 @@
 import type {
+  AionisActionRetrievalRequest,
+  AionisActionRetrievalResponse,
   AionisAgentMemoryHandoffPackRequest,
   AionisAgentMemoryHandoffPackResponse,
   AionisAgentMemoryInspectRequest,
@@ -175,6 +177,10 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
       contextAssemble: createPostMethod<AionisContextAssembleRequest, AionisContextAssembleResponse>(
         http,
         AIONIS_SHARED_ROUTE_PATHS.contextAssemble,
+      ),
+      actionRetrieval: createPostMethod<AionisActionRetrievalRequest, AionisActionRetrievalResponse>(
+        http,
+        AIONIS_SHARED_ROUTE_PATHS.actionRetrieval,
       ),
       experienceIntelligence: createPostMethod<AionisExperienceIntelligenceRequest, AionisExperienceIntelligenceResponse>(
         http,

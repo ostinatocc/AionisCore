@@ -902,6 +902,10 @@ export const ExperienceIntelligenceRequest = z.object({
 
 export type ExperienceIntelligenceInput = z.infer<typeof ExperienceIntelligenceRequest>;
 
+export const ActionRetrievalRequest = ExperienceIntelligenceRequest;
+
+export type ActionRetrievalInput = z.infer<typeof ActionRetrievalRequest>;
+
 export const KickoffRecommendationRequest = ExperienceIntelligenceRequest;
 
 export type KickoffRecommendationInput = z.infer<typeof KickoffRecommendationRequest>;
@@ -991,6 +995,113 @@ export const ExperienceIntelligenceToolRecommendationSchema = z.object({
   candidate_pattern_anchor_ids: z.array(z.string()),
   suppressed_pattern_anchor_ids: z.array(z.string()),
 }).passthrough();
+
+export const ActionRetrievalEvidenceEntrySchema = z.object({
+  source_kind: z.enum([
+    "persisted_policy_memory",
+    "trusted_pattern",
+    "stable_workflow",
+    "candidate_workflow",
+    "contested_pattern",
+    "rehydration_candidate",
+  ]),
+  anchor_id: z.string().nullable(),
+  selected_tool: z.string().nullable(),
+  workflow_signature: z.string().nullable(),
+  file_path: z.string().nullable(),
+  target_files: z.array(z.string()),
+  confidence: z.number().nullable(),
+  reason: z.string(),
+}).passthrough();
+
+export type ActionRetrievalEvidenceEntry = z.infer<typeof ActionRetrievalEvidenceEntrySchema>;
+
+export const ActionRetrievalEvidenceSchema = z.object({
+  stable_workflow_count: z.number().int().min(0),
+  candidate_workflow_count: z.number().int().min(0),
+  trusted_pattern_count: z.number().int().min(0),
+  contested_pattern_count: z.number().int().min(0),
+  rehydration_candidate_count: z.number().int().min(0),
+  persisted_policy_memory_id: z.string().nullable(),
+  selected_path_anchor_id: z.string().nullable(),
+  entries: z.array(ActionRetrievalEvidenceEntrySchema),
+}).passthrough();
+
+export type ActionRetrievalEvidence = z.infer<typeof ActionRetrievalEvidenceSchema>;
+
+export const ActionRetrievalUncertaintySchema = z.object({
+  summary_version: z.literal("action_retrieval_uncertainty_v1"),
+  level: z.enum(["low", "moderate", "high"]),
+  confidence: z.number().min(0).max(1),
+  evidence_gap_count: z.number().int().min(0),
+  reasons: z.array(z.string()),
+  recommended_actions: z.array(z.enum([
+    "proceed",
+    "widen_recall",
+    "rehydrate_payload",
+    "inspect_context",
+    "request_operator_review",
+  ])),
+}).passthrough();
+
+export type ActionRetrievalUncertainty = z.infer<typeof ActionRetrievalUncertaintySchema>;
+
+export const ActionRetrievalGateActionSchema = z.enum([
+  "inspect_context",
+  "widen_recall",
+  "rehydrate_payload",
+  "request_operator_review",
+]);
+
+export type ActionRetrievalGateAction = z.infer<typeof ActionRetrievalGateActionSchema>;
+
+export const ActionRetrievalGateRehydrationHintSchema = z.object({
+  anchor_id: z.string().nullable(),
+  anchor_kind: z.string().nullable(),
+  anchor_level: z.string().nullable(),
+  title: z.string().nullable(),
+  summary: z.string().nullable(),
+  mode: z.enum(["summary_only", "partial", "full", "differential"]).nullable(),
+  example_call: z.string().nullable(),
+  payload_cost_hint: z.enum(["low", "medium", "high"]).nullable(),
+}).passthrough();
+
+export type ActionRetrievalGateRehydrationHint = z.infer<typeof ActionRetrievalGateRehydrationHintSchema>;
+
+export const ActionRetrievalGateSummarySchema = z.object({
+  summary_version: z.literal("action_retrieval_gate_v1"),
+  gate_action: ActionRetrievalGateActionSchema,
+  escalates_task_start: z.boolean(),
+  confidence: z.number().min(0).max(1),
+  primary_reason: z.string().nullable(),
+  recommended_actions: z.array(ActionRetrievalGateActionSchema),
+  instruction: z.string().nullable(),
+  rehydration_candidate_count: z.number().int().min(0),
+  preferred_rehydration: ActionRetrievalGateRehydrationHintSchema.nullable(),
+}).passthrough();
+
+export type ActionRetrievalGateSummary = z.infer<typeof ActionRetrievalGateSummarySchema>;
+
+export const ActionRetrievalResponseSchema = z.object({
+  summary_version: z.literal("action_retrieval_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  query_text: z.string(),
+  history_applied: z.boolean(),
+  tool_source_kind: z.enum(["tools_select", "trusted_pattern", "stable_workflow", "persisted_policy_memory", "blended"]),
+  selected_tool: z.string().nullable(),
+  recommended_file_path: z.string().nullable(),
+  recommended_next_action: z.string().nullable(),
+  tool: ExperienceIntelligenceToolRecommendationSchema,
+  path: ExperienceIntelligencePathRecommendationSchema,
+  evidence: ActionRetrievalEvidenceSchema,
+  uncertainty: ActionRetrievalUncertaintySchema,
+  rationale: z.object({
+    summary: z.string(),
+  }).passthrough(),
+}).passthrough();
+
+export type ActionRetrievalResponse = z.infer<typeof ActionRetrievalResponseSchema>;
 
 export const PolicyHintEntrySchema = z.object({
   hint_id: z.string(),
@@ -1179,6 +1290,7 @@ export const ExperienceIntelligenceResponseSchema = z.object({
   tenant_id: z.string(),
   scope: z.string(),
   query_text: z.string(),
+  action_retrieval: ActionRetrievalResponseSchema,
   recommendation: z.object({
     history_applied: z.boolean(),
     tool: ExperienceIntelligenceToolRecommendationSchema,
@@ -1203,6 +1315,7 @@ export const KickoffRecommendationResponseSchema = z.object({
   scope: z.string(),
   query_text: z.string(),
   kickoff_recommendation: z.lazy(() => KickoffRecommendationSchema).nullable(),
+  action_retrieval_uncertainty: ActionRetrievalUncertaintySchema.nullable().optional(),
   policy_contract: PolicyContractSchema.nullable().default(null),
   rationale: z.object({
     summary: z.string(),
@@ -2079,6 +2192,8 @@ export const PlanningSummaryContractSchema = z.object({
   summary_version: z.literal("planning_summary_v1"),
   planner_explanation: z.string().nullable(),
   first_step_recommendation: FirstStepRecommendationSchema.nullable().optional(),
+  action_retrieval_uncertainty: ActionRetrievalUncertaintySchema.nullable().optional(),
+  action_retrieval_gate: ActionRetrievalGateSummarySchema.nullable().optional(),
   workflow_signal_summary: WorkflowSignalSummarySchema,
   action_packet_summary: ActionPacketSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
@@ -2102,6 +2217,8 @@ export const AssemblySummaryContractSchema = z.object({
   summary_version: z.literal("assembly_summary_v1"),
   planner_explanation: z.string().nullable(),
   first_step_recommendation: FirstStepRecommendationSchema.nullable().optional(),
+  action_retrieval_uncertainty: ActionRetrievalUncertaintySchema.nullable().optional(),
+  action_retrieval_gate: ActionRetrievalGateSummarySchema.nullable().optional(),
   workflow_signal_summary: WorkflowSignalSummarySchema,
   action_packet_summary: ActionPacketSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
@@ -2123,6 +2240,19 @@ export type AssemblySummaryContract = z.infer<typeof AssemblySummaryContractSche
 
 export const ContextOperatorProjectionSchema = z.object({
   delegation_learning: DelegationLearningProjectionSchema.optional(),
+  action_retrieval_gate: ActionRetrievalGateSummarySchema.optional(),
+  action_hints: z.array(z.object({
+    summary_version: z.literal("context_operator_action_hint_v1"),
+    action: ActionRetrievalGateActionSchema,
+    priority: z.enum(["required", "recommended"]),
+    instruction: z.string().nullable(),
+    selected_tool: z.string().nullable(),
+    file_path: z.string().nullable(),
+    tool_route: z.string().nullable(),
+    tool_method: z.enum(["POST"]).nullable(),
+    example_call: z.string().nullable(),
+    preferred_rehydration_anchor_id: z.string().nullable(),
+  }).passthrough()).optional(),
 }).passthrough();
 
 export type ContextOperatorProjection = z.infer<typeof ContextOperatorProjectionSchema>;

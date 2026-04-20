@@ -11,6 +11,7 @@ import { registerHostErrorHandler } from "../../src/host/http-host.ts";
 import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
 import { registerMemoryWriteRoutes } from "../../src/routes/memory-write.ts";
 import {
+  ActionRetrievalResponseSchema,
   ExperienceIntelligenceResponseSchema,
   KickoffRecommendationResponseSchema,
   MemoryAnchorV1Schema,
@@ -334,6 +335,7 @@ test("experience intelligence route combines trusted tool memory with learned wo
 
     assert.equal(response.statusCode, 200);
     const body = ExperienceIntelligenceResponseSchema.parse(response.json());
+    assert.equal(body.action_retrieval.summary_version, "action_retrieval_v1");
     assert.equal(body.recommendation.history_applied, true);
     assert.equal(body.recommendation.tool.selected_tool, "edit");
     assert.equal(body.recommendation.path.source_kind, "recommended_workflow");
@@ -356,6 +358,145 @@ test("experience intelligence route combines trusted tool memory with learned wo
     assert.match(body.rationale.summary, /trusted_patterns=1/);
     assert.match(body.rationale.summary, /stable_workflows=1/);
     assert.match(body.rationale.summary, /policy_contract=default:edit/);
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("action retrieval route exposes explicit retrieval evidence and low uncertainty for a stable learned path", async () => {
+  const app = Fastify();
+  const { liteWriteStore, liteRecallStore } = await seedStableWorkflowFixture(tmpDbPath("action-retrieval-stable"));
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryAccessRoutes({
+      app,
+      env: {
+        AIONIS_EDITION: "lite",
+        APP_ENV: "test",
+        MEMORY_SCOPE: "default",
+        MEMORY_TENANT_ID: "default",
+        LITE_LOCAL_ACTOR_ID: "local-user",
+        MAX_TEXT_LEN: 10_000,
+        PII_REDACTION: false,
+        ALLOW_CROSS_SCOPE_EDGES: false,
+        MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+        MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+      } as any,
+      embedder: FakeEmbeddingProvider,
+      liteWriteStore,
+      liteRecallAccess: liteRecallStore.createRecallAccess(),
+      writeAccessShadowMirrorV2: false,
+      requireStoreFeatureCapability: () => {},
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/action/retrieval",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "repair export failure in node tests",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        candidates: ["bash", "edit", "test"],
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = ActionRetrievalResponseSchema.parse(response.json());
+    assert.equal(body.history_applied, true);
+    assert.equal(body.selected_tool, "edit");
+    assert.equal(body.recommended_file_path, "src/routes/export.ts");
+    assert.match(body.recommended_next_action ?? "", /src\/routes\/export\.ts/);
+    assert.equal(body.path.source_kind, "recommended_workflow");
+    assert.equal(body.tool_source_kind, "blended");
+    assert.equal(body.uncertainty.level, "low");
+    assert.equal(body.evidence.stable_workflow_count >= 1, true);
+    assert.equal(body.evidence.trusted_pattern_count >= 1, true);
+    assert.equal(body.evidence.entries.some((entry) => entry.source_kind === "stable_workflow"), true);
+    assert.equal(body.evidence.entries.some((entry) => entry.source_kind === "trusted_pattern"), true);
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("action retrieval route surfaces higher uncertainty when no learned path matches", async () => {
+  const app = Fastify();
+  const { liteWriteStore, liteRecallStore } = await seedStableWorkflowFixture(tmpDbPath("action-retrieval-unrelated"));
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryAccessRoutes({
+      app,
+      env: {
+        AIONIS_EDITION: "lite",
+        APP_ENV: "test",
+        MEMORY_SCOPE: "default",
+        MEMORY_TENANT_ID: "default",
+        LITE_LOCAL_ACTOR_ID: "local-user",
+        MAX_TEXT_LEN: 10_000,
+        PII_REDACTION: false,
+        ALLOW_CROSS_SCOPE_EDGES: false,
+        MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+        MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+      } as any,
+      embedder: FakeEmbeddingProvider,
+      liteWriteStore,
+      liteRecallAccess: liteRecallStore.createRecallAccess(),
+      writeAccessShadowMirrorV2: false,
+      requireStoreFeatureCapability: () => {},
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/action/retrieval",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "summarize competitor pricing deltas for the quarterly market memo",
+        context: {
+          task_kind: "market_pricing_memo",
+          goal: "summarize competitor pricing deltas for the quarterly market memo",
+          error: {
+            signature: "pricing-table-delta",
+          },
+        },
+        candidates: ["bash", "grep", "read"],
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = ActionRetrievalResponseSchema.parse(response.json());
+    assert.equal(body.history_applied, false);
+    assert.equal(body.selected_tool, "bash");
+    assert.equal(body.path.source_kind, "none");
+    assert.equal(body.tool_source_kind, "tools_select");
+    assert.equal(body.recommended_file_path, null);
+    assert.equal(body.recommended_next_action, null);
+    assert.equal(body.uncertainty.level, "high");
+    assert.equal(body.uncertainty.recommended_actions.includes("widen_recall"), true);
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -739,6 +880,10 @@ test("kickoff recommendation can recover file-level workflow guidance from host-
     assert.equal(body.kickoff_recommendation?.source_kind, "experience_intelligence");
     assert.equal(body.kickoff_recommendation?.file_path, "src/routes/export.ts");
     assert.match(body.kickoff_recommendation?.next_action ?? "", /src\/routes\/export\.ts/);
+    assert.equal(body.action_retrieval_uncertainty?.summary_version, "action_retrieval_uncertainty_v1");
+    assert.notEqual(body.action_retrieval_uncertainty?.level, "high");
+    assert.ok((body.action_retrieval_uncertainty?.confidence ?? 0) >= 0.48);
+    assert.ok(!(body.action_retrieval_uncertainty?.recommended_actions ?? []).includes("request_operator_review"));
     assert.equal(body.policy_contract?.selected_tool, "edit");
     assert.equal(body.policy_contract?.materialization_state, "persisted");
   } finally {
@@ -801,6 +946,7 @@ test("experience intelligence route does not force unrelated queries onto an unr
 
     assert.equal(response.statusCode, 200);
     const body = ExperienceIntelligenceResponseSchema.parse(response.json());
+    assert.equal(body.action_retrieval.path.source_kind, "none");
     assert.equal(body.recommendation.history_applied, false);
     assert.equal(body.recommendation.tool.selected_tool, "bash");
     assert.equal(body.recommendation.path.source_kind, "none");
@@ -1045,8 +1191,11 @@ test("kickoff recommendation route falls back to tool-only kickoff for unrelated
       history_applied: false,
       selected_tool: "bash",
       file_path: null,
-      next_action: "Start with bash as the next step.",
+      next_action: "Inspect the current context before starting with bash.",
     });
+    assert.equal(body.action_retrieval_uncertainty?.summary_version, "action_retrieval_uncertainty_v1");
+    assert.equal(body.action_retrieval_uncertainty?.level, "high");
+    assert.ok(body.action_retrieval_uncertainty?.recommended_actions.includes("inspect_context"));
   } finally {
     await app.close();
     await liteRecallStore.close();

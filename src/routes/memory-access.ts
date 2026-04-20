@@ -15,6 +15,7 @@ import {
   buildExperienceIntelligenceLite,
   buildKickoffRecommendationResponseFromExperience,
 } from "../memory/experience-intelligence.js";
+import { buildActionRetrievalLite } from "../memory/action-retrieval.js";
 import { buildExecutionMemoryIntrospectionLite } from "../memory/execution-introspection.js";
 import { aggregateDelegationRecordsLite, findDelegationRecordsLite } from "../memory/delegation-records-find.js";
 import { buildContinuityReviewPackLite, buildEvolutionReviewPackLite } from "../memory/reviewer-packs.js";
@@ -39,6 +40,7 @@ type MemoryAccessRequestKind =
   | "agent_memory_handoff_pack"
   | "execution_introspect"
   | "evolution_review_pack"
+  | "action_retrieval"
   | "experience_intelligence"
   | "delegation_records_write"
   | "delegation_records_find"
@@ -400,6 +402,23 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     inflightKind: "recall",
     execute: (body) =>
       buildEvolutionReviewPackLite({
+        liteWriteStore,
+        liteRecallAccess,
+        embedder,
+        body,
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        defaultActorId: env.LITE_LOCAL_ACTOR_ID,
+      }),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/action/retrieval",
+    requestKind: "action_retrieval",
+    inflightKind: "recall",
+    execute: (body) =>
+      buildActionRetrievalLite({
         liteWriteStore,
         liteRecallAccess,
         embedder,

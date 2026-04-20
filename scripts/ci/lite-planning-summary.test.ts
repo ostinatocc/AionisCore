@@ -463,6 +463,8 @@ test("buildPlanningSummary includes pattern trust totals and tool lists", () => 
     session_event_count: 0,
     session_count: 0,
   });
+  assert.equal(summary.action_retrieval_uncertainty, null);
+  assert.equal(summary.action_retrieval_gate, null);
   assert.equal(summary.forgotten_items, 1);
   assert.equal(summary.static_blocks_selected, 2);
   assert.equal(summary.recall_mode, "tool_first");
@@ -481,6 +483,86 @@ test("buildPlanningSummary includes pattern trust totals and tool lists", () => 
   assert.equal(
     summary.planner_explanation,
     "workflow guidance: Fix export failure; candidate workflows visible but not yet promoted: Replay Episode: Fix export failure; selected tool: edit; trusted pattern support: edit; contested patterns visible but not trusted: bash; rehydration available: Fix export failure; supporting knowledge appended: 1",
+  );
+});
+
+test("buildPlanningSummary makes first-step and planner explanation uncertainty-aware", () => {
+  const summary = buildPlanningSummary({
+    rules: { considered: 4, matched: 1 },
+    tools: {
+      selection: { selected: "edit" },
+      decision: {
+        decision_id: "d_uncertain",
+        pattern_summary: {
+          used_trusted_pattern_tools: ["edit"],
+          skipped_contested_pattern_tools: ["bash"],
+        },
+      },
+    },
+    layered_context: layeredContextFixture,
+    cost_signals: null,
+    context_est_tokens: 384,
+    context_compaction_profile: "balanced",
+    optimization_profile: "balanced",
+    recall_mode: "balanced",
+    experience_intelligence: {
+      recommendation: {
+        history_applied: true,
+        tool: {
+          selected_tool: "edit",
+        },
+        path: {
+          source_kind: "candidate_workflow",
+          file_path: "src/routes/export.ts",
+        },
+        combined_next_action: "Patch src/routes/export.ts and rerun export tests.",
+      },
+      action_retrieval: {
+        uncertainty: {
+          summary_version: "action_retrieval_uncertainty_v1",
+          level: "moderate",
+          confidence: 0.58,
+          evidence_gap_count: 2,
+          reasons: [
+            "workflow guidance is still candidate-grade and has not stabilized yet",
+          ],
+          recommended_actions: ["inspect_context"],
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(summary.action_retrieval_uncertainty, {
+    summary_version: "action_retrieval_uncertainty_v1",
+    level: "moderate",
+    confidence: 0.58,
+    evidence_gap_count: 2,
+    reasons: [
+      "workflow guidance is still candidate-grade and has not stabilized yet",
+    ],
+    recommended_actions: ["inspect_context"],
+  });
+  assert.deepEqual(summary.action_retrieval_gate, {
+    summary_version: "action_retrieval_gate_v1",
+    gate_action: "inspect_context",
+    escalates_task_start: false,
+    confidence: 0.58,
+    primary_reason: "workflow guidance is still candidate-grade and has not stabilized yet",
+    recommended_actions: ["inspect_context"],
+    instruction: "Inspect src/routes/export.ts and the current context before using edit.",
+    rehydration_candidate_count: 1,
+    preferred_rehydration: null,
+  });
+  assert.deepEqual(summary.first_step_recommendation, {
+    source_kind: "experience_intelligence",
+    history_applied: true,
+    selected_tool: "edit",
+    file_path: "src/routes/export.ts",
+    next_action: "Inspect src/routes/export.ts and the current context before using edit.",
+  });
+  assert.equal(
+    summary.planner_explanation,
+    "workflow guidance: Fix export failure; candidate workflows visible but not yet promoted: Replay Episode: Fix export failure; selected tool: edit; trusted pattern support: edit; contested patterns visible but not trusted: bash; rehydration available: Fix export failure; supporting knowledge appended: 1; action retrieval uncertainty: moderate; workflow guidance is still candidate-grade and has not stabilized yet; recommended follow-up: inspect_context",
   );
 });
 
@@ -548,6 +630,8 @@ test("buildAssemblySummary surfaces semantic forgetting, relocation, and rehydra
     full: 0,
     differential: 1,
   });
+  assert.equal(summary.action_retrieval_uncertainty, null);
+  assert.equal(summary.action_retrieval_gate, null);
   assert.equal(summary.forgetting_summary.differential_rehydration_candidate_count, 1);
   assert.equal(summary.forgetting_summary.stale_signal_count, 2);
   assert.equal(

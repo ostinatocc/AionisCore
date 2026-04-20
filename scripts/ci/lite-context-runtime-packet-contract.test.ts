@@ -759,6 +759,29 @@ function assertOperatorDelegationLearningProjection(body: Record<string, unknown
   );
 }
 
+function assertOperatorActionHintProjection(body: Record<string, unknown>, expected: {
+  gate_action: string;
+  instruction: string;
+  tool_route: string | null;
+  selected_tool: string | null;
+  file_path: string | null;
+}) {
+  const operatorProjection = body.operator_projection as Record<string, unknown>;
+  const actionGate = operatorProjection.action_retrieval_gate as Record<string, unknown>;
+  const actionHints = Array.isArray(operatorProjection.action_hints)
+    ? operatorProjection.action_hints as Array<Record<string, unknown>>
+    : [];
+  assert.equal(actionGate.summary_version, "action_retrieval_gate_v1");
+  assert.equal(actionGate.gate_action, expected.gate_action);
+  assert.ok(actionHints.length >= 1);
+  assert.equal(actionHints[0]?.summary_version, "context_operator_action_hint_v1");
+  assert.equal(actionHints[0]?.action, expected.gate_action);
+  assert.equal(actionHints[0]?.instruction, expected.instruction);
+  assert.equal(actionHints[0]?.tool_route ?? null, expected.tool_route);
+  assert.equal(actionHints[0]?.selected_tool ?? null, expected.selected_tool);
+  assert.equal(actionHints[0]?.file_path ?? null, expected.file_path);
+}
+
 function tmpDbPath(name: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-lite-context-runtime-"));
   return path.join(dir, `${name}.sqlite`);
@@ -1443,7 +1466,20 @@ test("planning_context returns aligned planner packet, action packet summary, an
       history_applied: true,
       selected_tool: body.planning_summary.selected_tool,
       file_path: null,
-      next_action: "Start with edit as the next step.",
+      next_action: "Inspect the current context before starting with edit.",
+    });
+    assert.equal(body.planning_summary.action_retrieval_uncertainty?.summary_version, "action_retrieval_uncertainty_v1");
+    assert.ok(body.planning_summary.action_retrieval_uncertainty?.recommended_actions.includes("inspect_context"));
+    assert.deepEqual(body.planning_summary.action_retrieval_gate, {
+      summary_version: "action_retrieval_gate_v1",
+      gate_action: "inspect_context",
+      escalates_task_start: true,
+      confidence: body.planning_summary.action_retrieval_uncertainty?.confidence ?? 0,
+      primary_reason: body.planning_summary.action_retrieval_uncertainty?.reasons?.[0] ?? null,
+      recommended_actions: ["inspect_context"],
+      instruction: "Inspect the current context before starting with edit.",
+      rehydration_candidate_count: body.planning_summary.action_packet_summary.rehydration_candidate_count,
+      preferred_rehydration: null,
     });
     assert.ok(!("first_step_recommendation" in body), "default planning_context should not expose the legacy top-level first_step_recommendation mirror");
     assert.deepEqual(body.kickoff_recommendation, body.planning_summary.first_step_recommendation);
@@ -1842,6 +1878,13 @@ test("planning_context debug layered_context projects delegation learning withou
       recommendation_count: 3,
       recommendation_kinds: ["capture_missing_returns", "increase_artifact_capture", "promote_reusable_pattern"],
     });
+    assertOperatorActionHintProjection(body, {
+      gate_action: "inspect_context",
+      instruction: "Inspect the current context before starting with edit.",
+      tool_route: null,
+      selected_tool: "edit",
+      file_path: null,
+    });
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -2206,7 +2249,20 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
       history_applied: true,
       selected_tool: body.assembly_summary.selected_tool,
       file_path: null,
-      next_action: "Start with edit as the next step.",
+      next_action: "Inspect the current context before starting with edit.",
+    });
+    assert.equal(body.assembly_summary.action_retrieval_uncertainty?.summary_version, "action_retrieval_uncertainty_v1");
+    assert.ok(body.assembly_summary.action_retrieval_uncertainty?.recommended_actions.includes("inspect_context"));
+    assert.deepEqual(body.assembly_summary.action_retrieval_gate, {
+      summary_version: "action_retrieval_gate_v1",
+      gate_action: "inspect_context",
+      escalates_task_start: true,
+      confidence: body.assembly_summary.action_retrieval_uncertainty?.confidence ?? 0,
+      primary_reason: body.assembly_summary.action_retrieval_uncertainty?.reasons?.[0] ?? null,
+      recommended_actions: ["inspect_context"],
+      instruction: "Inspect the current context before starting with edit.",
+      rehydration_candidate_count: body.assembly_summary.action_packet_summary.rehydration_candidate_count,
+      preferred_rehydration: null,
     });
     assert.ok(!("first_step_recommendation" in body), "default context_assemble should not expose the legacy top-level first_step_recommendation mirror");
     assert.deepEqual(body.kickoff_recommendation, body.assembly_summary.first_step_recommendation);
@@ -2328,6 +2384,13 @@ test("context_assemble can still return layered_context when explicitly requeste
       record_outcome_counts: {},
       recommendation_count: 0,
       recommendation_kinds: [],
+    });
+    assertOperatorActionHintProjection(body, {
+      gate_action: "inspect_context",
+      instruction: "Inspect the current context before starting with edit.",
+      tool_route: null,
+      selected_tool: "edit",
+      file_path: null,
     });
     assertExecutionKernelBundle(body as {
       layered_context: Record<string, unknown>;

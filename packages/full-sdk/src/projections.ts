@@ -27,11 +27,18 @@ export function resolveContextOperatorProjection(
 ): AionisContextOperatorProjection | null {
   const operatorProjection = asObject(response.operator_projection);
   const directDelegationLearning = readDelegationLearningProjection(operatorProjection?.delegation_learning);
+  const directActionHints = Array.isArray(operatorProjection?.action_hints)
+    ? operatorProjection.action_hints
+    : null;
+  const directActionGate = asObject(operatorProjection?.action_retrieval_gate);
   if (directDelegationLearning) {
     return {
       ...operatorProjection,
       delegation_learning: directDelegationLearning,
     } as AionisContextOperatorProjection;
+  }
+  if (directActionHints || directActionGate) {
+    return operatorProjection as AionisContextOperatorProjection;
   }
 
   const layeredContext = asObject(response.layered_context);
