@@ -126,6 +126,7 @@ For most integrations, you should not need to start from raw TypeScript files.
 | Family | Main job | Start here |
 | --- | --- | --- |
 | Memory | Write, recall, planning, task start, sessions, lifecycle | [Memory](./memory.md) |
+| Action retrieval | Retrieve the next move explicitly, with evidence, uncertainty, and gate surfaces | [Action Retrieval](../concepts/action-retrieval.md) |
 | Policy memory | Persist, inspect, and govern self-evolving policy state | [Policy Memory and Evolution](./policy-memory.md) |
 | Handoff | Pause, store, recover, and resume task state | [Handoff](./handoff.md) |
 | Replay | Record runs, compile playbooks, promote and reuse | [Replay and Playbooks](./replay-and-playbooks.md) |
@@ -140,6 +141,9 @@ For most integrations, you should not need to start from raw TypeScript files.
 | If you are trying to answer... | Read this page first |
 | --- | --- |
 | "How do I ask for a better first action?" | [Memory](./memory.md) |
+| "How do I ask what the agent should do next, and why?" | [Action Retrieval](../concepts/action-retrieval.md) |
+| "How do I know when the runtime wants inspect / widen recall / rehydrate first?" | [Uncertainty and Gates](../concepts/uncertainty-and-gates.md) |
+| "How do I turn gate output into a host action?" | [Operator Projection and Action Hints](../sdk/operator-projection-and-action-hints.md) |
 | "How do I inspect or govern self-evolving policy state?" | [Policy Memory and Evolution](./policy-memory.md) |
 | "How do I pause work and resume it later?" | [Handoff](./handoff.md) |
 | "How do I turn a successful run into something reusable?" | [Replay and Playbooks](./replay-and-playbooks.md) |
@@ -155,6 +159,7 @@ The docs site already explains:
 
 - the runtime model
 - the main continuity surfaces
+- the explicit action-retrieval and gate surfaces
 - the public SDK integration path
 - the Lite runtime boundary
 - the most important memory, handoff, and replay families

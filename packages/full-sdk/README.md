@@ -44,6 +44,7 @@ npm run example:sdk:core-path
 ## What The SDK Covers
 
 - memory write / recall / planning / context assembly
+- explicit action retrieval, uncertainty, and operator-facing gate surfaces
 - kickoff recommendation and task-start surfaces
 - archive rehydrate and node activation lifecycle surfaces
 - replay run lifecycle and playbook operations
@@ -74,6 +75,24 @@ const taskStart = await aionis.memory.taskStart({
 });
 
 console.log(taskStart.first_action);
+```
+
+Explicit action-retrieval example:
+
+```ts
+const retrieval = await aionis.memory.actionRetrieval({
+  tenant_id: "default",
+  scope: "default",
+  query_text: "debug the failed replay run",
+  context: {
+    goal: "debug the failed replay run",
+  },
+  candidates: ["read", "bash", "edit", "test"],
+});
+
+console.log(retrieval.selected_tool);
+console.log(retrieval.recommended_next_action);
+console.log(retrieval.uncertainty);
 ```
 
 Lite runtime lifecycle example:
@@ -117,6 +136,7 @@ npm run example:sdk:automation
 npm run example:sdk:sandbox
 npm run example:sdk:host-bridge
 npm run example:sdk:agent-memory
+npm run example:sdk:action-retrieval
 npm run example:sdk:continuity-provenance
 ```
 

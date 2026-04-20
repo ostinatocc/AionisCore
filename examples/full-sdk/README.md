@@ -30,6 +30,7 @@ npm run example:sdk:automation
 npm run example:sdk:sandbox
 npm run example:sdk:host-bridge
 npm run example:sdk:agent-memory
+npm run example:sdk:action-retrieval
 npm run example:sdk:task-start-proof
 npm run example:sdk:policy-memory
 npm run example:sdk:policy-governance
@@ -75,3 +76,5 @@ Examples:
   proves that repeated `memory.sessions.create(...)` calls can promote stable workflow guidance through `session_continuity_carrier`, not only through session events
 - `13-semantic-forgetting-proof.ts`
   proves that archived workflow memory can surface semantic forgetting and archive relocation, use differential payload rehydration, and be brought back into the active tier without deleting the colder-memory recommendation
+- `14-action-retrieval-and-gates.ts`
+  calls `memory.actionRetrieval(...)`, then shows how `planningContext(...)` exposes uncertainty gates and operator action hints for host-side integration

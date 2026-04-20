@@ -1,6 +1,6 @@
 # Aionis Runtime Quickstart
 
-Last reviewed: 2026-04-17
+Last reviewed: 2026-04-20
 
 Document status: living public integration quickstart
 
@@ -119,7 +119,31 @@ console.log(planning.kickoff_recommendation);
 console.log(planning.planner_packet);
 ```
 
-## 8. Ask for a learned task start
+When `return_layered_context: true` is enabled, this route can also expose `operator_projection` for host/operator inspection paths.
+
+## 8. Ask for explicit action retrieval
+
+```ts
+const retrieval = await aionis.memory.actionRetrieval({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  query_text: "repair billing retry timeout in service code",
+  context: {
+    goal: "repair billing retry timeout in service code",
+    task_kind: "repair_billing_retry",
+  },
+  candidates: ["bash", "edit", "test"],
+});
+
+console.log(retrieval.selected_tool);
+console.log(retrieval.recommended_file_path);
+console.log(retrieval.recommended_next_action);
+console.log(retrieval.uncertainty);
+```
+
+Use this when your host wants the explicit decision layer rather than only the compact kickoff output.
+
+## 9. Ask for a learned task start
 
 ```ts
 const taskStart = await aionis.memory.taskStart({
@@ -135,7 +159,7 @@ const taskStart = await aionis.memory.taskStart({
 console.log(taskStart.first_action);
 ```
 
-## 9. Store a structured handoff
+## 10. Store a structured handoff
 
 ```ts
 await aionis.handoff.store({
@@ -152,7 +176,7 @@ await aionis.handoff.store({
 });
 ```
 
-## 10. Record replay and move toward a playbook
+## 11. Record replay and move toward a playbook
 
 ```ts
 await aionis.memory.replay.run.start({
@@ -189,7 +213,7 @@ await aionis.memory.replay.step.after({
 
 From there, end the run and compile a playbook through the replay surface.
 
-## 11. Inspect host bridge task context
+## 12. Inspect host bridge task context
 
 ```ts
 import { createAionisHostBridge } from "@ostinato/aionis";
@@ -214,21 +238,22 @@ const taskContext = await taskSession.inspectTaskContext({
 console.log(taskContext.planning_context.kickoff_recommendation);
 ```
 
-## 12. What else is in the SDK
+## 13. What else is in the SDK
 
 Current complete SDK surface includes:
 
 1. memory write / recall / planning / introspection
-2. archive rehydrate and node activation lifecycle surfaces
-3. experience-intelligence, kickoff, and task-start surfaces
-4. handoff store and recover
-5. continuity and evolution review-pack surfaces
-6. standalone delegation-record write, query, and aggregate surfaces
-7. replay run lifecycle and playbooks
-8. sandbox and automation surfaces
-9. host bridge integration
+2. action retrieval, uncertainty, and planning gate surfaces
+3. archive rehydrate and node activation lifecycle surfaces
+4. experience-intelligence, kickoff, and task-start surfaces
+5. handoff store and recover
+6. continuity and evolution review-pack surfaces
+7. standalone delegation-record write, query, and aggregate surfaces
+8. replay run lifecycle and playbooks
+9. sandbox and automation surfaces
+10. host bridge integration
 
-## 13. Run bundled SDK examples
+## 14. Run bundled SDK examples
 
 ```bash
 cd /path/to/AionisRuntime
@@ -245,6 +270,7 @@ npm run example:sdk:sessions
 npm run example:sdk:automation
 npm run example:sdk:sandbox
 npm run example:sdk:host-bridge
+npm run example:sdk:action-retrieval
 npm run example:integration:host-task-start
 npm run example:integration:task-start-learning-loop
 ```

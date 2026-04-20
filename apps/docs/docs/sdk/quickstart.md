@@ -184,7 +184,39 @@ Read these first:
 
 If those come back sparse, check the earlier write step before assuming the planner path is broken.
 
-### 6. Ask for a learned task start
+### 6. Ask for explicit action retrieval
+
+```ts
+const retrieval = await aionis.memory.actionRetrieval({
+  tenant_id: "default",
+  scope: "docs-sdk-quickstart",
+  query_text: "repair billing retry timeout in service code",
+  context: {
+    goal: "repair billing retry timeout in service code",
+    task_kind: "repair_billing_retry",
+  },
+  candidates: ["bash", "edit", "test"],
+});
+
+console.log(retrieval.selected_tool);
+console.log(retrieval.recommended_file_path);
+console.log(retrieval.recommended_next_action);
+console.log(retrieval.uncertainty);
+```
+
+Use this surface when your host wants the explicit decision layer instead of only the compact kickoff surface.
+
+Read these first:
+
+1. `selected_tool`
+2. `recommended_file_path`
+3. `recommended_next_action`
+4. `evidence.entries`
+5. `uncertainty.recommended_actions`
+
+If your host needs operator-facing hints, the earlier `planningContext(...)` call can also expose `operator_projection` when `return_layered_context: true` is enabled.
+
+### 7. Ask for a learned task start
 
 ```ts
 const taskStart = await aionis.memory.taskStart({
@@ -206,8 +238,9 @@ console.log(taskStart.first_action);
 
 - use `planningContext(...)` when you want context assembly
 - use `taskStart(...)` when you want the next move
+- use `actionRetrieval(...)` when you want the explicit retrieval evidence and uncertainty layer
 
-### 7. Store a structured handoff
+### 8. Store a structured handoff
 
 ```ts
 await aionis.handoff.store({
@@ -228,7 +261,7 @@ What this step proves:
 2. you can store resume-ready task state through the SDK
 3. the continuity loop can survive a pause as well as a completed run
 
-### 8. Record replay and compile a playbook
+### 9. Record replay and compile a playbook
 
 ```ts
 await aionis.memory.replay.run.start({
@@ -291,7 +324,7 @@ That is the step where continuity starts to become reuse instead of memory only.
 
 ## Enhanced path
 
-### 9. Rehydrate archived memory in Lite
+### 10. Rehydrate archived memory in Lite
 
 ```ts
 await aionis.memory.archive.rehydrate({
@@ -311,7 +344,7 @@ What this step proves:
 2. the runtime can bring older memory back into active use
 3. continuity includes lifecycle reuse as well as new writes
 
-### 10. Record node reuse outcome
+### 11. Record node reuse outcome
 
 ```ts
 await aionis.memory.nodes.activate({
@@ -333,7 +366,7 @@ What this step proves:
 2. continuity can accumulate quality signals, not just history
 3. the self-evolving claim has a concrete substrate in the public SDK path
 
-### 11. Pull review-ready runtime state
+### 12. Pull review-ready runtime state
 
 If your host or reviewer needs structured review material, you can already call:
 
@@ -367,7 +400,7 @@ console.log(evolutionPack.evolution_review_pack.policy_governance_contract);
 
 That step is where the docs path starts to expose self-evolving policy rather than only continuity artifacts.
 
-### 12. Add a session when continuity spans time
+### 13. Add a session when continuity spans time
 
 When continuity needs to persist beyond one answer or one handoff packet, move into the session family:
 
@@ -386,7 +419,7 @@ That is the point where continuity becomes an explicit longer-lived runtime obje
 
 ## Advanced path
 
-### 13. Use the host bridge when your app already has task state
+### 14. Use the host bridge when your app already has task state
 
 If your host already thinks in terms of task IDs, pause/resume, and lifecycle transitions, move up one layer:
 
@@ -420,7 +453,7 @@ Use the host bridge when your host already thinks in:
 
 Use the raw client when you want direct control over route families.
 
-### 14. Move into deeper learning and control surfaces
+### 15. Move into deeper learning and control surfaces
 
 When the core and enhanced paths already work, the next valuable surfaces are:
 

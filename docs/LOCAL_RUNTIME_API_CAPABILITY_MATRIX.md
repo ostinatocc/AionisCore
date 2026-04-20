@@ -1,6 +1,6 @@
 # Aionis Runtime API Capability Matrix
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-04-20
 
 Document status: living technical capability reference
 
@@ -83,10 +83,10 @@ This is one of Lite's `Supported (Subset)` surfaces. The following routes are pr
 | `POST` | `/v1/memory/execution/introspect` | Supported | Demo/introspection surface for execution memory. Aggregates workflow/pattern signals, maintenance summaries, and demo-ready text in one local response. |
 | `POST` | `/v1/memory/anchors/rehydrate_payload` | Supported | Anchor-linked payload rehydration by id or URI. In Lite, omitted `actor` defaults to the local actor identity, so private local anchors remain directly rehydratable through the normal single-user path. |
 
-## Recall And Context Runtime
+## Recall, Action Retrieval, And Context Runtime
 
 This route group is one half of the `Anchor-Guided Rehydration Loop`.
-It serves the `recall -> runtime hint` portion of the loop.
+It serves the `recall -> action retrieval -> runtime hint` portion of the loop.
 
 Planner-packet contract:
 
@@ -104,17 +104,21 @@ Planner-packet contract:
 5. `planner_explanation` now follows packet order and explains workflow guidance, pattern trust, rehydration availability, and supporting knowledge append behavior
 6. lower-level `context.items` and `citations` may now expose `summary_kind`, `execution_kind`, `anchor_kind`, and `compression_layer` so planner-facing consumers can distinguish action memory from supporting knowledge without re-parsing raw slots
 7. heavy recall substrate and demo-facing aggregation have moved to `POST /v1/memory/execution/introspect`
+8. `planning_summary` and `assembly_summary` can now expose `action_retrieval_uncertainty` and `action_retrieval_gate`
+9. when `return_layered_context=true`, `planning_context` and `context_assemble` can also expose `operator_projection.action_retrieval_gate` and `operator_projection.action_hints[]`
 
 Recommended integrator read path:
 
 1. prefer `planner_packet.sections.*` for full workflow/pattern/rehydration collections
 2. read `workflow_signals` and `pattern_signals` directly as canonical signal surfaces
 3. read `planning_summary` / `assembly_summary` and `execution_kernel` for compact aligned state
+4. use `POST /v1/memory/action/retrieval` when you need the explicit tool/file/next-action decision layer instead of only planner context
 
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |
 | `POST` | `/v1/memory/recall` | Supported | Core Lite recall path. |
 | `POST` | `/v1/memory/recall_text` | Supported | Context-runtime text recall. |
+| `POST` | `/v1/memory/action/retrieval` | Supported | Explicit next-action retrieval with evidence, source kind, and uncertainty. |
 | `POST` | `/v1/memory/planning/context` | Supported | Planning-context assembly. |
 | `POST` | `/v1/memory/context/assemble` | Supported | Final context assembly route. |
 
