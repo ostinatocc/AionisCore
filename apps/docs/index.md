@@ -1,12 +1,12 @@
 ---
 layout: home
 title: Aionis Runtime
-titleTemplate: Self-evolving continuity runtime for agent systems
+titleTemplate: Self-evolving continuity execution-memory engine for agent systems
 
 hero:
   name: Aionis Runtime
-  text: Your agent learns. Every run.
-  tagline: Task starts, handoffs, and replays become runtime infrastructure — so the next run starts where the last one ended, not from scratch.
+  text: Self-evolving execution memory for agent systems.
+  tagline: Aionis Runtime learns from every run to improve task starts, stabilize handoffs, reuse successful workflows, and forget intelligently.
   image:
     src: /logo-mark.svg
     alt: Aionis Runtime
@@ -22,18 +22,18 @@ hero:
       link: https://github.com/ostinatocc/AionisCore
 
 features:
-  - title: Task start that remembers
-    details: Prior runs return a better first action for the next similar task. No more starting familiar work from zero.
-  - title: Handoff without summaries
-    details: Pause with target files, next action, and recovery context stored as structured runtime state.
+  - title: Better task starts
+    details: Prior execution gives the next similar task a stronger first action instead of another generic cold start.
+  - title: Structured handoff
+    details: Pause with target files, recovery anchors, and next action stored as explicit runtime state.
   - title: Replay that becomes reusable
-    details: Successful runs get recorded, promoted into playbooks, and reused through local automation flows.
-  - title: Typed SDK, stable routes
-    details: Integrate against a typed TypeScript surface and explicit HTTP routes for kickoff, recall, replay, sandbox, and review.
-  - title: Runs locally today
-    details: SQLite-backed persistence, memory lifecycle routes, policy memory, sandbox execution, and automation — all in the public Lite distribution.
-  - title: Inspectable by design
-    details: Runtime shell, assembly, host, and stores are explicit, so continuity stays clear as teams integrate it.
+    details: Successful execution gets recorded, promoted into stable workflows, and reused through playbooks.
+  - title: Policy memory
+    details: Repeated successful execution can materialize into governable policy memory.
+  - title: Semantic forgetting
+    details: Memory cools, relocates, and rehydrates by lifecycle instead of accumulating forever.
+  - title: Typed runtime surface
+    details: SDK, routes, stores, sandbox, and automation all stay explicit and inspectable.
 ---
 
 <div class="hero-install" aria-label="Install command">
@@ -47,16 +47,85 @@ features:
   <span>15 / 15 benchmark scenarios</span>
 </div>
 
+## Positioning
+
+Aionis Runtime turns `task start`, `handoff`, `replay`, `policy memory`, and `semantic forgetting` into one unified execution-memory loop, so agent systems do not restart from zero every time. They can continue from prior execution, improve over time, and reuse what already worked.
+
 <div class="section-frame">
-  <span class="section-label">What ships today</span>
-  <p>Aionis Runtime ships today as a local runtime with typed SDK access to task start, handoff, replay, policy memory, semantic forgetting, sandbox execution, and automation. The fastest way to judge it is simple: run it locally, inspect the evidence, and decide whether the continuity model fits your system.</p>
+  <span class="section-label">Public product shape</span>
+  <p>The public product shape today includes Lite, the public TypeScript SDK, the local Inspector and Playground interfaces, and the docs site that explains the product, mechanisms, proof path, and route surfaces.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">Lite runtime</span>
-    <span class="doc-chip">Public SDK</span>
-    <span class="doc-chip">6 live proofs</span>
-    <span class="doc-chip">SQLite-backed persistence</span>
+    <span class="doc-chip">@ostinato/aionis</span>
+    <span class="doc-chip">Inspector / Playground</span>
+    <span class="doc-chip">Docs + proofs</span>
   </div>
-  <p><a href="/AionisCore/docs/evidence/what-ships-today">Read what ships today</a></p>
+</div>
+
+## Design Principles
+
+<div class="doc-grid">
+  <div class="doc-card">
+    <span class="doc-kicker">Principle 1</span>
+    <h3>Execution first</h3>
+    <p>Aionis learns from real task starts, handoffs, replays, repairs, and governance instead of treating chat history as the product.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Principle 2</span>
+    <h3>Continuity first</h3>
+    <p>The next start, the next resume, and the next reuse path are exposed as explicit runtime surfaces.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Principle 3</span>
+    <h3>Self-evolution first</h3>
+    <p>Each run can strengthen the next run through better task starts, better replay, and clearer policy memory.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Principle 4</span>
+    <h3>Intelligent forgetting first</h3>
+    <p>Memory is managed through demotion, archive, relocation, and on-demand restoration instead of growing without control.</p>
+  </div>
+</div>
+
+## Core Capabilities
+
+| Capability | What it does | Primary surface |
+| --- | --- | --- |
+| Task Start | Produces a stronger first action for the next similar task | `memory.taskStart(...)`, `memory.planningContext(...)` |
+| Task Handoff | Stores structured recovery state across runs, including target files and next action | `handoff.store(...)`, `handoff.recover(...)` |
+| Task Replay | Records successful execution, promotes stable workflows, and reuses playbooks | `memory.replay.run.*`, `memory.replay.playbooks.*` |
+| Policy Memory | Materializes repeated successful execution into governable policy memory | `memory.tools.feedback(...)`, `memory.reviewPacks.evolution(...)` |
+| Semantic Forgetting | Moves memory through retain / demote / archive / review and supports differential rehydration | `memory.archive.rehydrate(...)`, `memory.anchors.rehydratePayload(...)` |
+| Session / Review / Inspect | Exposes continuity state, evolution state, and review entry points | `memory.sessions.*`, `memory.agent.*`, `memory.executionIntrospect(...)` |
+| Sandbox / Automation | Executes local shell, playbook, and automation flows | Lite runtime, sandbox, automation routes |
+
+## Self-Evolving Mechanism
+
+```mermaid
+flowchart LR
+    A["Execution write / feedback"] --> B["Execution memory"]
+    B --> C["Task start improves"]
+    B --> D["Handoff becomes recoverable"]
+    B --> E["Replay becomes reusable"]
+    E --> F["Stable workflow / playbook promotion"]
+    D --> G["Continuity carriers preserve provenance"]
+    A --> H["Policy memory materializes"]
+    H --> I["Governance can retire or reactivate policy"]
+    F --> J["Next similar run starts better"]
+    I --> J
+```
+
+<div class="section-frame">
+  <span class="section-label">What the proof path already shows</span>
+  <p>The self-evolving loop is already defended by six live Lite proofs: better second task start, policy memory materialization, governance loop, continuity provenance preservation, session continuity promotion, and semantic forgetting with differential rehydration.</p>
+  <div class="doc-chip-row">
+    <span class="doc-chip">task-start-proof</span>
+    <span class="doc-chip">policy-memory</span>
+    <span class="doc-chip">policy-governance</span>
+    <span class="doc-chip">continuity-provenance</span>
+    <span class="doc-chip">session-continuity</span>
+    <span class="doc-chip">semantic-forgetting</span>
+  </div>
 </div>
 
 <div class="home-proof-section">
@@ -107,8 +176,127 @@ features:
   </div>
 </div>
 
-<div class="home-demo">
-  <span class="home-demo-caption">A real SDK slice against a local Lite runtime</span>
+## Forgetting Mechanism
+
+```mermaid
+flowchart LR
+    A["Execution evidence"] --> B["importance dynamics"]
+    B --> C["semantic forgetting action"]
+    C --> D["retain / demote / archive / review"]
+    D --> E["archive relocation"]
+    E --> F["summary / partial / full / differential rehydration"]
+    F --> G["planning / introspection surfaces"]
+```
+
+<div class="section-frame">
+  <span class="section-label">How forgetting works</span>
+  <p>Aionis treats forgetting as lifecycle control. Memory is cooled, relocated, and restored when needed. It is not left to accumulate forever, and it is not reduced to blind deletion either.</p>
+  <div class="doc-chip-row">
+    <span class="doc-chip">semantic_forgetting_v1</span>
+    <span class="doc-chip">archive_relocation_v1</span>
+    <span class="doc-chip">archive rehydrate</span>
+    <span class="doc-chip">differential rehydration</span>
+  </div>
+</div>
+
+## Continuity Mechanism
+
+<div class="doc-grid">
+  <div class="doc-card">
+    <span class="doc-kicker">Continuity 1</span>
+    <h3>Start better</h3>
+    <p>Prior execution improves the kickoff for the next similar task instead of forcing another generic first step.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Continuity 2</span>
+    <h3>Resume cleanly</h3>
+    <p>Handoff packets store recovery anchors, target files, next actions, and resume context as runtime state.</p>
+  </div>
+  <div class="doc-card">
+    <span class="doc-kicker">Continuity 3</span>
+    <h3>Reuse successful work</h3>
+    <p>Replay runs feed playbook promotion, repair review, and stable workflow reuse across later execution.</p>
+  </div>
+</div>
+
+## Full Architecture
+
+```mermaid
+flowchart TD
+    A["Agent / Host / Worker / CLI"] --> B["@ostinato/aionis SDK"]
+    A --> C["HTTP routes"]
+    B --> D["Lite runtime shell"]
+    C --> D
+    D --> E["Bootstrap / assembly / host"]
+    E --> F["Execution memory subsystems"]
+    F --> F1["write / recall / context"]
+    F --> F2["task start / handoff / replay"]
+    F --> F3["policy memory / semantic forgetting"]
+    F --> F4["sandbox / automation / review"]
+    F --> G["SQLite-backed stores"]
+    F2 --> H["workflow / playbook promotion"]
+    F3 --> I["archive relocation / differential rehydration"]
+    H --> J["planner / introspection / proof surfaces"]
+    I --> J
+```
+
+<div class="section-frame">
+  <span class="section-label">Architectural stance</span>
+  <p>Continuity, self-evolution, forgetting, and governance all live on explicit runtime seams. The SDK, routes, stores, sandbox, and automation path are visible and inspectable by design.</p>
+</div>
+
+## Benchmarks And Validation
+
+| Metric | Current result | Entry point |
+| --- | --- | --- |
+| Runnable self-evolving proofs | `6` | [Proof By Evidence](/docs/evidence/proof-by-evidence) |
+| Benchmark scenarios | `15 / 15` | [Validation and Benchmarks](/docs/evidence/validation-and-benchmarks) |
+| Lite runtime test suite | `194 / 194` | `npm run -s lite:test` |
+| Public SDK test suite | `10 / 10` | `npm run -s sdk:test` |
+
+<div class="home-proof-grid">
+  <div class="home-proof-card">
+    <span class="home-proof-label">Evidence</span>
+    <span class="home-proof-value">6 live proofs</span>
+    <p>Task start improvement, policy memory, governance, provenance, session continuity, and semantic forgetting are all defended by runnable Lite evidence.</p>
+  </div>
+  <div class="home-proof-card">
+    <span class="home-proof-label">Benchmarks</span>
+    <span class="home-proof-value">15 / 15 scenarios</span>
+    <p>Public benchmark coverage exists alongside smoke validation and route-contract checks.</p>
+  </div>
+  <div class="home-proof-card">
+    <span class="home-proof-label">SDK tests</span>
+    <span class="home-proof-value">10 / 10</span>
+    <p>The public SDK surface is validated directly instead of only being implied by route behavior.</p>
+  </div>
+  <div class="home-proof-card">
+    <span class="home-proof-label">Lite tests</span>
+    <span class="home-proof-value">194 / 194</span>
+    <p>The current Lite runtime baseline stays green across replay, recall, handoff, policy, forgetting, and automation.</p>
+  </div>
+</div>
+
+## Quick Start
+
+### 1. Start Lite Runtime
+
+```bash
+npm install
+npm run lite:start
+```
+
+### 2. Run the minimal continuity path in one command
+
+```bash
+npm run example:sdk:core-path
+```
+
+### 3. Integrate the SDK into your own project
+
+```bash
+npm install @ostinato/aionis
+```
 
 ```ts
 import { createAionisClient } from "@ostinato/aionis";
@@ -140,75 +328,6 @@ await aionis.memory.replay.run.start({
 });
 ```
 
-</div>
-
-## What Aionis Runtime is
-
-`Aionis Runtime` is the public runtime in this repository.
-`Lite` is the local runtime distribution shipping today.
-
-The practical mental model is:
-
-> `Aionis Runtime = a self-evolving continuity runtime for agent systems`
-
-It provides explicit runtime surfaces for:
-
-- learned task start for repeated work
-- structured handoff and resume
-- replay and playbook promotion
-- local automation and sandbox execution
-- typed SDK and stable route contracts
-
-Today the runtime is strongest for coding and ops workflows, but the continuity model is broader. If an agent or multi-agent workflow needs reliable task start, trustworthy handoff, or reusable replay, Aionis is in scope.
-
-## Why teams use it
-
-Most agent systems break on continuity before they break on raw reasoning quality:
-
-1. repeated tasks still start from zero
-2. paused work resumes without trustworthy execution state
-3. successful repairs do not become reusable operating knowledge
-
-Aionis turns continuity into runtime infrastructure instead of leaving it inside prompts and chat transcripts.
-
-<div class="section-frame">
-  <span class="section-label">What the proof path shows</span>
-  <p>The evidence path focuses on six concrete outcomes: stronger task starts, policy memory materialization, policy governance, preserved provenance, session-based workflow promotion, and semantic forgetting with selective rehydration. Together they show how execution quality improves over time.</p>
-  <div class="doc-chip-row">
-    <span class="doc-chip">task-start-proof</span>
-    <span class="doc-chip">policy-memory</span>
-    <span class="doc-chip">policy-governance</span>
-    <span class="doc-chip">continuity-provenance</span>
-    <span class="doc-chip">session-continuity</span>
-    <span class="doc-chip">semantic-forgetting</span>
-  </div>
-</div>
-
-<div class="section-frame">
-  <span class="section-label">How to evaluate it</span>
-  <p>Start with the local runtime, run the core path, then move through the evidence pages and SDK examples. The product becomes clear fastest when you see the same continuity model in task start, handoff, replay, policy memory, and semantic forgetting.</p>
-</div>
-
-## How continuity improves over time
-
-```mermaid
-flowchart LR
-    A["New task arrives"] --> B["Task start uses prior execution"]
-    B --> C["Agent works through Lite runtime"]
-    C --> D["Pause or handoff stores structured state"]
-    C --> E["Successful run recorded as replay"]
-    D --> F["Next agent resumes from runtime state"]
-    E --> G["Replay promoted into reusable guidance"]
-    F --> H["Next similar task starts better"]
-    G --> H
-```
-
-The core product loop:
-
-- execution produces evidence
-- evidence becomes execution memory
-- execution memory improves the next task start, handoff, and replay path
-
 <!-- BEGIN:CORE_PATH -->
 
 ## Default Product Path
@@ -233,13 +352,13 @@ npm run example:sdk:core-path
 
 <!-- END:CORE_PATH -->
 
-## Choose your reading path
+## Read Next
 
 <div class="home-path-grid">
   <a class="home-path-card" href="/AionisCore/docs/getting-started">
     <span class="home-path-kicker">Evaluate · 5 min</span>
     <h3 class="home-path-title">Run Lite locally</h3>
-    <p>Boot the runtime, hit the health route, and see the local runtime shape.</p>
+    <p>Boot the runtime, hit the health route, and confirm the local runtime shape.</p>
   </a>
   <a class="home-path-card" href="/AionisCore/docs/sdk/quickstart">
     <span class="home-path-kicker">Integrate · 10 min</span>
@@ -248,52 +367,7 @@ npm run example:sdk:core-path
   </a>
   <a class="home-path-card" href="/AionisCore/docs/architecture/overview">
     <span class="home-path-kicker">Understand · 15 min</span>
-    <h3 class="home-path-title">Read the runtime shape</h3>
-    <p>See how Lite is organized across shell, bootstrap, host, and stores so the continuity model stays clear as you integrate it.</p>
+    <h3 class="home-path-title">Read the architecture</h3>
+    <p>See how Lite is organized across shell, bootstrap, host, subsystems, and SQLite-backed stores.</p>
   </a>
 </div>
-
-## What ships in Lite today
-
-<div class="home-proof-grid">
-  <div class="home-proof-card">
-    <span class="home-proof-label">Public shape</span>
-    <span class="home-proof-value">Lite ships now</span>
-    <p>SQLite-backed runtime, typed SDK, replay, handoff, sandbox, and automation on the public path.</p>
-  </div>
-  <div class="home-proof-card">
-    <span class="home-proof-label">Core loop</span>
-    <span class="home-proof-value">start · handoff · replay</span>
-    <p>The docs and runtime revolve around the same three continuity surfaces: task start, handoff, and replay.</p>
-  </div>
-  <div class="home-proof-card">
-    <span class="home-proof-label">Evidence</span>
-    <span class="home-proof-value">15 / 15 benchmarks</span>
-    <p>Benchmark reports, smoke validation, and contract tests sit behind the docs narrative.</p>
-  </div>
-  <div class="home-proof-card">
-    <span class="home-proof-label">Developer path</span>
-    <span class="home-proof-value">SDK first</span>
-    <p>Start at runtime health, move into the SDK, drop into routes and architecture only when needed.</p>
-  </div>
-</div>
-
-## Who should read what
-
-| If you want to know... | Start here |
-| --- | --- |
-| What Aionis is and why it exists | [Introduction](/docs/intro) |
-| Why continuity is the core differentiator | [Why Aionis](/docs/why-aionis) |
-| How the runtime is assembled | [Architecture Overview](/docs/architecture/overview) |
-| How to boot Lite and call it | [Getting Started](/docs/getting-started) |
-| How to integrate from TypeScript | [SDK Quickstart](/docs/sdk/quickstart) |
-| What fields and route families exist | [Contracts and Routes](/docs/reference/contracts-and-routes) |
-
-## Start here
-
-1. [Introduction](/docs/intro)
-2. [Why Aionis](/docs/why-aionis)
-3. [Architecture Overview](/docs/architecture/overview)
-4. [Getting Started](/docs/getting-started)
-5. [SDK Quickstart](/docs/sdk/quickstart)
-6. [FAQ and Troubleshooting](/docs/faq-and-troubleshooting)
