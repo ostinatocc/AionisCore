@@ -37,7 +37,7 @@ features:
 ---
 
 <div class="hero-install" aria-label="Install command">
-  <code>npm install @ostinato/aionis</code>
+  <code>npx @ostinato/aionis-runtime start</code>
 </div>
 
 <div class="trust-strip" aria-label="Project status">
@@ -53,8 +53,9 @@ Aionis Runtime turns `task start`, `handoff`, `replay`, `policy memory`, and `se
 
 <div class="section-frame">
   <span class="section-label">Public product shape</span>
-  <p>The public product shape today includes Lite, the public TypeScript SDK, the local Inspector and Playground interfaces, and the docs site that explains the product, mechanisms, proof path, and route surfaces.</p>
+  <p>The public product shape today includes the standalone runtime package, Lite, the public TypeScript SDK, the local Inspector and Playground interfaces, and the docs site that explains the product, mechanisms, proof path, and route surfaces.</p>
   <div class="doc-chip-row">
+    <span class="doc-chip">@ostinato/aionis-runtime</span>
     <span class="doc-chip">Lite runtime</span>
     <span class="doc-chip">@ostinato/aionis</span>
     <span class="doc-chip">Inspector / Playground</span>
@@ -305,20 +306,20 @@ flowchart TD
 
 ## Quick Start
 
-### 1. Start Lite Runtime
+### 1. Start Aionis Runtime
+
+```bash
+npx @ostinato/aionis-runtime start
+```
+
+If you are working from a source checkout instead of the published runtime package:
 
 ```bash
 npm install
 npm run lite:start
 ```
 
-### 2. Run the minimal continuity path in one command
-
-```bash
-npm run example:sdk:core-path
-```
-
-### 3. Integrate the SDK into your own project
+### 2. Integrate the SDK into your own project
 
 ```bash
 npm install @ostinato/aionis
@@ -352,6 +353,12 @@ await aionis.memory.replay.run.start({
   run_id: "retry-fix-run-1",
   goal: "fix flaky retry in worker.ts",
 });
+```
+
+### 3. Optional: run the repository proof path
+
+```bash
+npm run example:sdk:core-path
 ```
 
 <!-- BEGIN:CORE_PATH -->

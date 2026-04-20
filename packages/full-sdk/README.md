@@ -118,6 +118,14 @@ await aionis.memory.nodes.activate({
 
 ## Local Workflow
 
+Recommended standalone runtime path:
+
+```bash
+npx @ostinato/aionis-runtime start
+```
+
+If you are working from this repository and want the bundled examples:
+
 ```bash
 cd /path/to/AionisRuntime
 npm install

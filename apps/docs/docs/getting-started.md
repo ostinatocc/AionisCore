@@ -9,7 +9,7 @@ The fastest evaluation path is:
 
 <div class="doc-lead">
   <span class="doc-kicker">Fastest path</span>
-  <p>If you only have ten minutes, treat this page as the core path: run Lite locally, install `@ostinato/aionis`, write one piece of execution evidence, and call `taskStart` or `planningContext` against `http://127.0.0.1:3001`.</p>
+  <p>If you only have ten minutes, treat this page as the core path: start the standalone runtime package, install `@ostinato/aionis`, write one piece of execution evidence, and call `taskStart` or `planningContext` against `http://127.0.0.1:3001`.</p>
   <div class="doc-chip-row">
     <span class="doc-chip">Lite local shell</span>
     <span class="doc-chip">SDK-first integration</span>
@@ -18,7 +18,7 @@ The fastest evaluation path is:
   </div>
 </div>
 
-1. start the Lite runtime locally
+1. start the runtime locally
 2. install the public SDK
 3. call `taskStart` or `planningContext`
 
@@ -34,13 +34,12 @@ The fastest evaluation path is:
   <span class="state-note">Getting Started proves the baseline: continuity works at all.</span>
 </div>
 
-## 1. Start the Lite runtime
+## 1. Start the runtime
 
-From the repository root:
+Recommended standalone path:
 
 ```bash
-npm install
-npm run lite:start
+npx @ostinato/aionis-runtime start
 ```
 
 The default local target is:
@@ -56,6 +55,13 @@ curl http://127.0.0.1:3001/health
 ```
 
 You should get a structured JSON health response from the local host.
+
+If you are evaluating from a source checkout instead of the published runtime package:
+
+```bash
+npm install
+npm run lite:start
+```
 
 ## 2. Install the public SDK
 

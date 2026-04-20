@@ -27,6 +27,7 @@
     "core:build:runtime-host": "test -f src/runtime-entry.ts",
     "core:build:aionis-doc": "npm --prefix packages/aionis-doc run build",
     "core:build:runtime-core": "npm --prefix packages/runtime-core run build",
+    "core:build:runtime-package": "npm --prefix packages/aionis-runtime run build",
     "core:build:sdk": "npm --prefix packages/full-sdk run build",
     "core:test:sdk": "npm --prefix packages/full-sdk run test",
     "core:build:internal-sdk": "npm --prefix packages/sdk run build",
@@ -46,7 +47,11 @@
     "runtime-core:pack:dry-run": "npm --prefix packages/runtime-core run pack:dry-run",
     "runtime-core:publish:dry-run": "npm --prefix packages/runtime-core run publish:dry-run",
     "runtime-core:release:check": "bash scripts/package-release-baseline.sh --package-dir packages/runtime-core --verify-template scripts/release-verify/runtime-core-consumer.mjs",
-    "packages:release:check": "npm run -s aionis-doc:release:check && npm run -s sdk:release:check && npm run -s runtime-core:release:check",
+    "runtime:build": "npm --prefix packages/aionis-runtime run build",
+    "runtime:pack:dry-run": "npm --prefix packages/aionis-runtime run pack:dry-run",
+    "runtime:publish:dry-run": "npm --prefix packages/aionis-runtime run publish:dry-run",
+    "runtime:release:check": "bash scripts/package-release-baseline.sh --package-dir packages/aionis-runtime --verify-template scripts/release-verify/runtime-consumer.mjs",
+    "packages:release:check": "npm run -s aionis-doc:release:check && npm run -s sdk:release:check && npm run -s runtime-core:release:check && npm run -s runtime:release:check",
     "ui-kit:install": "npm --prefix packages/ui-kit install",
     "ui-kit:build": "npm --prefix packages/ui-kit run build",
     "ui-kit:clean": "npm --prefix packages/ui-kit run clean",
@@ -104,7 +109,7 @@
     "example:integration:task-start-learning-loop": "npx tsx examples/sdk/08-task-start-learning-loop.ts",
     "example:internal-sdk:agent-memory-diagnostics": "npx tsx examples/sdk/09-agent-memory-diagnostics.ts",
     "build": "npm run -s core:build",
-    "core:build": "npm run -s core:build:runtime-host && npm run -s core:build:aionis-doc && npm run -s core:build:runtime-core && npm run -s core:build:sdk && npm run -s core:build:internal-sdk"
+    "core:build": "npm run -s core:build:runtime-host && npm run -s core:build:aionis-doc && npm run -s core:build:runtime-core && npm run -s core:build:runtime-package && npm run -s core:build:sdk && npm run -s core:build:internal-sdk"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

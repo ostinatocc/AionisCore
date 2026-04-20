@@ -57,7 +57,7 @@ This is the fastest path from zero to a working `@ostinato/aionis` integration w
 
 Before writing any client code, make sure:
 
-1. you are running the Lite runtime locally
+1. you are running Aionis Runtime locally
 2. your Node version supports `node:sqlite` and the local shell startup
 3. you know the default Lite target is `http://127.0.0.1:3001`
 
@@ -71,13 +71,12 @@ This page proves that the public SDK path supports a layered continuity product:
 
 If you can do that through the public SDK, you already understand the core product path.
 
-## 1. Start Lite locally
+## 1. Start Aionis Runtime locally
 
-From the repository root:
+Recommended standalone path:
 
 ```bash
-npm install
-npm run lite:start
+npx @ostinato/aionis-runtime start
 ```
 
 Check that the runtime is alive:
@@ -87,6 +86,13 @@ curl http://127.0.0.1:3001/health
 ```
 
 At this point you are proving the runtime host is available, not that continuity is useful yet.
+
+If you are working from a source checkout instead of the published runtime package:
+
+```bash
+npm install
+npm run lite:start
+```
 
 ## 2. Install the public SDK
 

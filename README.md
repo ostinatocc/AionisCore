@@ -3,7 +3,7 @@
 > Aionis Runtime is the self-evolving continuity execution-memory engine for agent systems.<br>
 > It learns from every run to improve task starts, stabilize handoffs, reuse successful workflows, and forget intelligently.
 
-`Lite ships today` · `@ostinato/aionis` · `6 live proofs` · `15 / 15 benchmark scenarios`
+`Lite ships today` · `@ostinato/aionis-runtime` · `@ostinato/aionis` · `6 live proofs`
 
 [Docs Site](https://ostinatocc.github.io/AionisCore/) · [Proof By Evidence](apps/docs/docs/evidence/proof-by-evidence.md) · [SDK Quickstart](docs/SDK_QUICKSTART.md) · [Examples](examples/full-sdk/README.md)
 
@@ -17,6 +17,7 @@ Aionis Runtime turns `task start`, `handoff`, `replay`, `policy memory`, and `se
 
 The public product shape today includes:
 
+- `@ostinato/aionis-runtime`: the standalone local-first runtime package
 - `Lite`: the local-first runtime shape
 - `@ostinato/aionis`: the public TypeScript SDK
 - `Inspector / Playground`: runtime observation and demo interfaces
@@ -197,20 +198,20 @@ The strongest proofs to look at first are:
 | Lite default bind | `127.0.0.1` |
 | Sandbox posture | remote allowlists fail closed |
 
-### 1. Start Lite Runtime
+### 1. Start Aionis Runtime
+
+```bash
+npx @ostinato/aionis-runtime start
+```
+
+If you are working from a source checkout instead of the published runtime package:
 
 ```bash
 npm install
 npm run lite:start
 ```
 
-### 2. Run the minimal continuity path in one command
-
-```bash
-npm run example:sdk:core-path
-```
-
-### 3. Integrate the SDK into your own project
+### 2. Integrate the SDK into your own project
 
 ```bash
 npm install @ostinato/aionis
@@ -236,7 +237,7 @@ const taskStart = await aionis.memory.taskStart({
 console.log(taskStart.first_action);
 ```
 
-### 4. Store a structured handoff
+### 3. Store a structured handoff
 
 ```ts
 await aionis.handoff.store({
@@ -251,7 +252,7 @@ await aionis.handoff.store({
 });
 ```
 
-### 5. Record a replay-backed run
+### 4. Record a replay-backed run
 
 ```ts
 await aionis.memory.replay.run.start({
@@ -270,6 +271,12 @@ await aionis.memory.replay.run.end({
   status: "success",
   summary: "patched retry timeout handling",
 });
+```
+
+### 5. Optional: run the repository proof path
+
+```bash
+npm run example:sdk:core-path
 ```
 
 ### 6. Open the local observation interface

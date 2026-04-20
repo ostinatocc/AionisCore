@@ -6,6 +6,7 @@ import type {
   AionisDelegationLearningProjection,
   AionisHandoffRecoverRequest,
   AionisHandoffStoreRequest,
+  AionisKickoffRecommendation,
   AionisKickoffRecommendationRequest,
   AionisPlanningContextRequest,
   AionisPlanningContextResponse,
@@ -631,11 +632,13 @@ function buildHostBridgeStartupDecision(args: {
   const planningGate = getPlanningSummaryGateRecord(args.taskContext.planning_context);
   const operatorPrimaryHint = getOperatorProjectionPrimaryHint(args.taskContext);
   const operatorGate = getOperatorProjectionGateRecord(args.taskContext);
+  const taskStartKickoff = args.taskStart.task_start.kickoff_recommendation as AionisKickoffRecommendation | null;
+  const taskStartUncertainty = (args.taskStart.task_start.action_retrieval_uncertainty ?? null) as AionisActionRetrievalUncertainty | null;
   const operatorGateAction = normalizeTaskStartGateAction(operatorPrimaryHint?.action)
     ?? normalizeTaskStartGateAction(operatorGate?.gate_action);
   const kickoffGateAction = resolveKickoffGateAction({
-    kickoff: args.taskStart.task_start.kickoff_recommendation,
-    uncertainty: args.taskStart.task_start.action_retrieval_uncertainty ?? planningUncertainty,
+    kickoff: taskStartKickoff,
+    uncertainty: taskStartUncertainty ?? planningUncertainty,
   });
   const planningGateAction = normalizeTaskStartGateAction(planningGate?.gate_action);
   const gateAction = operatorGateAction ?? kickoffGateAction ?? planningGateAction;

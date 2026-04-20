@@ -9,9 +9,7 @@ This guide is the fastest way to get from a running Aionis Runtime instance to a
 ## 1. Start Aionis Runtime
 
 ```bash
-cd /path/to/AionisRuntime
-npm install
-npm run lite:start
+npx @ostinato/aionis-runtime start
 ```
 
 Default local SDK target:
@@ -22,6 +20,14 @@ Check that the runtime is alive:
 
 ```bash
 curl http://127.0.0.1:3001/health
+```
+
+If you are working from a source checkout instead of the published runtime package:
+
+```bash
+cd /path/to/AionisRuntime
+npm install
+npm run lite:start
 ```
 
 ## 2. Install the SDK
