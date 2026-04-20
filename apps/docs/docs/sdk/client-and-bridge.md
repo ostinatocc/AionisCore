@@ -128,6 +128,9 @@ The bridge is opinionated, but it is not all-or-nothing.
 ## Best reads
 
 - [SDK Quickstart](./quickstart.md)
+- [Operator Projection and Action Hints](./operator-projection-and-action-hints.md)
+- [Action Retrieval](../concepts/action-retrieval.md)
+- [Uncertainty and Gates](../concepts/uncertainty-and-gates.md)
 - [Memory reference](../reference/memory.md)
 - [Handoff reference](../reference/handoff.md)
 - [Replay and Playbooks reference](../reference/replay-and-playbooks.md)

@@ -62,6 +62,8 @@ export default withMermaid(defineConfig({
             { text: "Task Start", link: "/docs/concepts/task-start" },
             { text: "Task Handoff", link: "/docs/concepts/handoff" },
             { text: "Task Replay", link: "/docs/concepts/replay" },
+            { text: "Action Retrieval", link: "/docs/concepts/action-retrieval" },
+            { text: "Uncertainty and Gates", link: "/docs/concepts/uncertainty-and-gates" },
           ],
         },
         {
@@ -78,6 +80,7 @@ export default withMermaid(defineConfig({
           items: [
             { text: "SDK Quickstart", link: "/docs/sdk/quickstart" },
             { text: "Client and Host Bridge", link: "/docs/sdk/client-and-bridge" },
+            { text: "Operator Projection and Action Hints", link: "/docs/sdk/operator-projection-and-action-hints" },
           ],
         },
         {

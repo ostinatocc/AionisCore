@@ -53,10 +53,26 @@ That is why Aionis exposes `Task Start`, `Task Handoff`, and `Task Replay` as fi
 | Task Start | Produces a stronger first action for the next similar task | `memory.taskStart(...)`, `memory.planningContext(...)` |
 | Task Handoff | Stores structured recovery state across runs, including target files and next action | `handoff.store(...)`, `handoff.recover(...)` |
 | Task Replay | Records successful execution, promotes stable workflows, and reuses playbooks | `memory.replay.run.*`, `memory.replay.playbooks.*` |
+| Action Retrieval | Exposes the explicit next-action retrieval layer with evidence, source kind, and retrieval surfaces | `memory.actionRetrieval(...)`, `memory.experienceIntelligence(...)` |
+| Uncertainty Layer | Turns weak retrieval into explicit gates such as inspect, widen recall, rehydrate payload, or request review | `memory.taskStart(...)`, `memory.planningContext(...)`, `operator_projection.action_hints[]` |
 | Policy Memory | Materializes repeated successful execution into governable policy memory | `memory.tools.feedback(...)`, `memory.reviewPacks.evolution(...)` |
 | Semantic Forgetting | Moves memory through retain / demote / archive / review and supports differential rehydration | `memory.archive.rehydrate(...)`, `memory.anchors.rehydratePayload(...)` |
 | Session / Review / Inspect | Exposes continuity state, evolution state, and review entry points | `memory.sessions.*`, `memory.agent.*`, `memory.executionIntrospect(...)` |
 | Sandbox / Automation | Executes local shell, playbook, and automation flows | Lite runtime, sandbox, automation routes |
+
+## Action Retrieval And Uncertainty Layer
+
+Aionis does not stop at remembering prior execution. It exposes an explicit action-retrieval layer that answers the runtime question directly: what should the agent do next, what evidence supports it, and how certain is that recommendation.
+
+That layer now surfaces:
+
+- retrieval evidence entries instead of only a single recommendation
+- the selected tool, next action, and recommended file path
+- source kind across learned workflow, pattern, policy, and continuity evidence
+- uncertainty levels and gate actions such as `inspect_context`, `widen_recall`, `rehydrate_payload`, and `request_operator_review`
+- host/operator action hints through `operator_projection.action_hints[]`
+
+This matters because weak retrieval no longer gets flattened into a fake first action. Aionis can escalate task start when the runtime should inspect more context, widen recall, or rehydrate colder payload before acting.
 
 ## Self-Evolving Mechanism
 
@@ -157,8 +173,8 @@ The current public validation signals include:
 | --- | --- | --- |
 | Runnable self-evolving proofs | `6` | [Proof By Evidence](apps/docs/docs/evidence/proof-by-evidence.md) |
 | Benchmark scenarios | `15 / 15` | [Validation and Benchmarks](apps/docs/docs/evidence/validation-and-benchmarks.md) |
-| Lite runtime test suite | `194 / 194` | `npm run -s lite:test` |
-| Public SDK test suite | `10 / 10` | `npm run -s sdk:test` |
+| Lite runtime test suite | `207 / 207` | `npm run -s lite:test` |
+| Public SDK test suite | `14 / 14` | `npm run -s sdk:test` |
 
 The strongest proofs to look at first are:
 

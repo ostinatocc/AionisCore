@@ -39,6 +39,12 @@ The memory surface is the widest part of the public SDK. It covers write, recall
     <code class="reference-route">/v1/memory/kickoff/*</code>
   </div>
   <div class="reference-tile">
+    <span class="reference-kicker">Decision layer</span>
+    <h3>Action retrieval</h3>
+    <p>Expose the explicit next-action retrieval layer with evidence, source kind, and uncertainty instead of hiding it inside a generic recommendation.</p>
+    <code class="reference-route">/v1/memory/action/retrieval</code>
+  </div>
+  <div class="reference-tile">
     <span class="reference-kicker">Lifecycle</span>
     <h3>Reuse signals</h3>
     <p>Rehydrate archived nodes and record whether reused memory actually helped when it was brought back.</p>
@@ -129,6 +135,7 @@ If you specifically care about lifecycle decay, archive planning, and selective 
 | Search with natural language | `memory.recallText(...)` |
 | Get planner-facing context | `memory.planningContext(...)` |
 | Get the best next first move | `memory.taskStart(...)` |
+| Inspect the explicit next-action retrieval layer | `memory.actionRetrieval(...)` |
 | Inspect heavier workflow and learning state | `memory.experienceIntelligence(...)` or `memory.executionIntrospect(...)` |
 | Bring archived memory back into active use | `memory.archive.rehydrate(...)` |
 | Record whether reused memory helped | `memory.nodes.activate(...)` |
@@ -145,6 +152,7 @@ If you specifically care about lifecycle decay, archive planning, and selective 
 | `memory.recallText(...)` | `POST /v1/memory/recall_text` | Ask recall using natural language |
 | `memory.planningContext(...)` | `POST /v1/memory/planning/context` | Get planner-facing recall and kickoff context |
 | `memory.contextAssemble(...)` | `POST /v1/memory/context/assemble` | Build final context runtime payload |
+| `memory.actionRetrieval(...)` | `POST /v1/memory/action/retrieval` | Ask the runtime for an explicit tool, file, next-action, and evidence-backed retrieval decision |
 | `memory.experienceIntelligence(...)` | `POST /v1/memory/experience/intelligence` | Inspect learned workflow and tool guidance |
 | `memory.taskStart(...)` | `POST /v1/memory/kickoff/recommendation` | Get the best first action for a repeated task |
 | `memory.executionIntrospect(...)` | `POST /v1/memory/execution/introspect` | Pull the heavier local introspection surface |
@@ -203,9 +211,12 @@ If you want the shortest public entrypoint into memory-guided continuity, these 
 | --- | --- |
 | `memory.taskStart(...)` | A compact `first_action` derived from kickoff recommendation |
 | `memory.kickoffRecommendation(...)` | The raw kickoff response and rationale |
+| `memory.actionRetrieval(...)` | The explicit tool, file, next-action, evidence, and uncertainty layer |
 | `memory.experienceIntelligence(...)` | Workflow, tool, and learning-oriented guidance |
 
 Use `taskStart` first when you want the best first move. Use `planningContext` first when you want more than one hint and need the runtime to assemble planner-facing context.
+
+If you specifically care about why the runtime picked that move, read [Action Retrieval](../concepts/action-retrieval.md) and [Uncertainty and Gates](../concepts/uncertainty-and-gates.md) next.
 
 ## Recommended call order
 

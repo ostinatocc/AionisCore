@@ -43,7 +43,7 @@ features:
 <div class="trust-strip" aria-label="Project status">
   <span>Lite ships today</span>
   <span>SDK v0.2.0</span>
-  <span>MIT licensed</span>
+  <span>Apache-2.0 licensed</span>
   <span>15 / 15 benchmark scenarios</span>
 </div>
 
@@ -94,10 +94,36 @@ Aionis Runtime turns `task start`, `handoff`, `replay`, `policy memory`, and `se
 | Task Start | Produces a stronger first action for the next similar task | `memory.taskStart(...)`, `memory.planningContext(...)` |
 | Task Handoff | Stores structured recovery state across runs, including target files and next action | `handoff.store(...)`, `handoff.recover(...)` |
 | Task Replay | Records successful execution, promotes stable workflows, and reuses playbooks | `memory.replay.run.*`, `memory.replay.playbooks.*` |
+| Action Retrieval | Exposes the explicit next-action retrieval layer with evidence, source kind, and retrieval surfaces | `memory.actionRetrieval(...)`, `memory.experienceIntelligence(...)` |
+| Uncertainty Layer | Turns weak retrieval into explicit gates such as inspect, widen recall, rehydrate payload, or request review | `memory.taskStart(...)`, `memory.planningContext(...)`, `operator_projection.action_hints[]` |
 | Policy Memory | Materializes repeated successful execution into governable policy memory | `memory.tools.feedback(...)`, `memory.reviewPacks.evolution(...)` |
 | Semantic Forgetting | Moves memory through retain / demote / archive / review and supports differential rehydration | `memory.archive.rehydrate(...)`, `memory.anchors.rehydratePayload(...)` |
 | Session / Review / Inspect | Exposes continuity state, evolution state, and review entry points | `memory.sessions.*`, `memory.agent.*`, `memory.executionIntrospect(...)` |
 | Sandbox / Automation | Executes local shell, playbook, and automation flows | Lite runtime, sandbox, automation routes |
+
+## Action Retrieval And Uncertainty Layer
+
+Aionis does not stop at remembering prior execution. It exposes an explicit action-retrieval layer that answers the runtime question directly: what should the agent do next, what evidence supports it, and how certain is that recommendation.
+
+<div class="section-frame">
+  <span class="section-label">What this layer now exposes</span>
+  <p>The runtime can now return explicit retrieval evidence, source-kind signals, uncertainty levels, gate actions, and operator hints instead of flattening everything into one overconfident first step.</p>
+  <div class="doc-chip-row">
+    <span class="doc-chip">memory.actionRetrieval(...)</span>
+    <span class="doc-chip">gate_action</span>
+    <span class="doc-chip">widen_recall</span>
+    <span class="doc-chip">rehydrate_payload</span>
+    <span class="doc-chip">request_operator_review</span>
+    <span class="doc-chip">operator_projection.action_hints[]</span>
+  </div>
+</div>
+
+This means weak retrieval can now escalate task start instead of pretending to be a confident answer. Hosts and operators can inspect the gate surface directly and decide whether to inspect context, widen recall, or rehydrate colder payload before acting.
+
+Read next:
+[Action Retrieval](./docs/concepts/action-retrieval.md),
+[Uncertainty and Gates](./docs/concepts/uncertainty-and-gates.md),
+[Operator Projection and Action Hints](./docs/sdk/operator-projection-and-action-hints.md)
 
 ## Self-Evolving Mechanism
 
@@ -251,8 +277,8 @@ flowchart TD
 | --- | --- | --- |
 | Runnable self-evolving proofs | `6` | [Proof By Evidence](/docs/evidence/proof-by-evidence) |
 | Benchmark scenarios | `15 / 15` | [Validation and Benchmarks](/docs/evidence/validation-and-benchmarks) |
-| Lite runtime test suite | `194 / 194` | `npm run -s lite:test` |
-| Public SDK test suite | `10 / 10` | `npm run -s sdk:test` |
+| Lite runtime test suite | `207 / 207` | `npm run -s lite:test` |
+| Public SDK test suite | `14 / 14` | `npm run -s sdk:test` |
 
 <div class="home-proof-grid">
   <div class="home-proof-card">
@@ -267,12 +293,12 @@ flowchart TD
   </div>
   <div class="home-proof-card">
     <span class="home-proof-label">SDK tests</span>
-    <span class="home-proof-value">10 / 10</span>
+    <span class="home-proof-value">14 / 14</span>
     <p>The public SDK surface is validated directly instead of only being implied by route behavior.</p>
   </div>
   <div class="home-proof-card">
     <span class="home-proof-label">Lite tests</span>
-    <span class="home-proof-value">194 / 194</span>
+    <span class="home-proof-value">207 / 207</span>
     <p>The current Lite runtime baseline stays green across replay, recall, handoff, policy, forgetting, and automation.</p>
   </div>
 </div>

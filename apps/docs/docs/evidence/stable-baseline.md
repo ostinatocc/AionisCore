@@ -15,8 +15,8 @@ This page gives the clearest external answer to a practical question:
   <div class="doc-chip-row">
     <span class="doc-chip">Lite runtime</span>
     <span class="doc-chip">Public SDK</span>
-    <span class="doc-chip">Task start · handoff · replay</span>
-    <span class="doc-chip">194 / 194 lite tests</span>
+    <span class="doc-chip">Task start · handoff · replay · action retrieval</span>
+    <span class="doc-chip">207 / 207 lite tests</span>
   </div>
 </div>
 
@@ -26,7 +26,7 @@ Aionis Runtime is ready to evaluate today through:
 
 1. Lite as the shipped runtime distribution
 2. `@ostinato/aionis` as the public SDK
-3. task start, handoff, replay, policy memory, and semantic forgetting
+3. task start, handoff, replay, action retrieval, uncertainty gates, policy memory, and semantic forgetting
 4. sandbox and automation through the same local runtime
 5. six runnable proofs that show how continuity improves over time
 
@@ -46,9 +46,15 @@ Aionis Runtime is ready to evaluate today through:
     <code class="reference-route">6 reproducible Lite proofs</code>
   </div>
   <div class="reference-tile">
+    <span class="reference-kicker">Decision layer</span>
+    <h3>Action retrieval and gates are public</h3>
+    <p>The runtime now exposes explicit next-action retrieval, uncertainty, and gate surfaces instead of hiding them inside one flat recommendation.</p>
+    <code class="reference-route">actionRetrieval + planning gate surfaces</code>
+  </div>
+  <div class="reference-tile">
     <span class="reference-kicker">SDK cleanup</span>
     <h3>Typed integration path</h3>
-    <p>The public SDK exposes task start, handoff, replay, sandbox, automation, lifecycle reuse, and review surfaces through one typed client.</p>
+    <p>The public SDK exposes task start, handoff, replay, action retrieval, sandbox, automation, lifecycle reuse, and review surfaces through one typed client.</p>
     <code class="reference-route">@ostinato/aionis</code>
   </div>
   <div class="reference-tile">
@@ -64,7 +70,7 @@ Aionis Runtime is ready to evaluate today through:
 The current release path is backed by:
 
 1. `npm run -s sdk:test` is passing
-2. `npm run -s lite:test` is passing at `194/194`
+2. `npm run -s lite:test` is passing at `207/207`
 3. the docs site remains part of the baseline and should keep `docs:check` green
 
 ## Runtime snapshot

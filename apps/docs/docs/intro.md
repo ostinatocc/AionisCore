@@ -179,9 +179,11 @@ If you are evaluating or integrating Aionis, you mainly care about `Aionis Runti
 5. [Task Start](./concepts/task-start.md)
 6. [Handoff](./concepts/handoff.md)
 7. [Replay](./concepts/replay.md)
-8. [Memory](./reference/memory.md) for enhanced and advanced surfaces
-9. [Lite Runtime](./runtime/lite-runtime.md)
-10. [Contracts and Routes](./reference/contracts-and-routes.md)
+8. [Action Retrieval](./concepts/action-retrieval.md)
+9. [Uncertainty and Gates](./concepts/uncertainty-and-gates.md)
+10. [Memory](./reference/memory.md) for enhanced and advanced surfaces
+11. [Lite Runtime](./runtime/lite-runtime.md)
+12. [Contracts and Routes](./reference/contracts-and-routes.md)
 
 <div class="doc-grid">
   <a class="doc-card" href="./getting-started.md">
