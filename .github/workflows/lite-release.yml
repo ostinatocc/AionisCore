@@ -37,12 +37,24 @@ jobs:
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             version="${GITHUB_REF_NAME#v}"
           else
-            version="$(node -p 'require("./package.json").version')"
+            version="$(node -p 'require("./packages/full-sdk/package.json").version')"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Pack source
-        run: tar --exclude-vcs --exclude='./node_modules' --exclude='./.aionisgo' --exclude='./.tmp' --exclude='./artifacts' -czf "aionis-${{ steps.version.outputs.version }}-source.tgz" .
+        env:
+          ARCHIVE_NAME: aionis-${{ steps.version.outputs.version }}-source.tgz
+        run: |
+          archive_path="$RUNNER_TEMP/$ARCHIVE_NAME"
+          tar \
+            --exclude-vcs \
+            --exclude='./node_modules' \
+            --exclude='./.aionisgo' \
+            --exclude='./.tmp' \
+            --exclude='./artifacts' \
+            -czf "$archive_path" .
+          cp "$archive_path" "$ARCHIVE_NAME"
+          rm -f "$archive_path"
 
       - name: Upload source artifact
         uses: actions/upload-artifact@v4
