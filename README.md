@@ -339,7 +339,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Use Node `22.x`, run `npm run -s lite:te
 
 ## Releases
 
-Track runtime and package milestones in [GitHub Releases](https://github.com/ostinatocc/AionisCore/releases).
+Track runtime and package milestones in [GitHub Releases](https://github.com/ostinatocc/AionisCore/releases) and [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
