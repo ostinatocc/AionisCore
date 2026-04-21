@@ -3,7 +3,7 @@ import { createEmbedJsonPoster, type EmbedHttpConfig } from "./http.js";
 
 type MinimaxEmbeddingProviderOptions = {
   apiKey: string;
-  groupId: string;
+  groupId?: string;
   model: string;
   endpointUrl: string;
   embedType: "db" | "query";
@@ -30,7 +30,9 @@ export function createMinimaxEmbeddingProvider(opts: MinimaxEmbeddingProviderOpt
       if (texts.length === 0) return [];
 
       const url = new URL(endpointUrl);
-      url.searchParams.set("GroupId", groupId);
+      if (groupId?.trim()) {
+        url.searchParams.set("GroupId", groupId.trim());
+      }
 
       const json = await poster.postJson<MinimaxEmbeddingResponse>(
         url.toString(),

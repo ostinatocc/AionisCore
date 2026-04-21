@@ -1,7 +1,8 @@
 import { buildAionisUri } from "./uri.js";
 import {
   evaluatePrecondition,
-  isSafeCommandName,
+  isAllowedReplayCommand,
+  isSafeCommandReference,
   type PreconditionResult,
 } from "./replay-execution-helpers.js";
 import { isReplayCommandTool, parseStepArgv } from "./replay-guided-repair.js";
@@ -152,7 +153,7 @@ export async function validatePlaybookShadowReadiness(
     if (isReplayCommandTool(toolName)) {
       const argv = parseStepArgv(stepObj, toolName);
       const command = String(argv[0] ?? "").trim();
-      if (!command || argv.length === 0 || !isSafeCommandName(command)) {
+      if (!command || argv.length === 0 || !isSafeCommandReference(command)) {
         commandState = "fail";
         commandCheck = {
           state: "fail",
@@ -166,7 +167,7 @@ export async function validatePlaybookShadowReadiness(
           reason: "local_executor_not_enabled",
           command,
         };
-      } else if (!localExecutor.allowedCommands.has(command)) {
+      } else if (!isAllowedReplayCommand(command, localExecutor.allowedCommands)) {
         commandState = "fail";
         commandCheck = {
           state: "fail",

@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { accessSync, constants as fsConstants } from "node:fs";
 import net from "node:net";
+import path from "node:path";
 import { HttpError } from "../util/http.js";
 
 export type PreconditionResult = {
@@ -163,6 +164,30 @@ async function isPortFree(host: string, port: number): Promise<boolean> {
 
 export function isSafeCommandName(raw: string): boolean {
   return /^[a-zA-Z0-9._-]+$/.test(raw);
+}
+
+export function isSafeCommandReference(raw: string): boolean {
+  const command = raw.trim();
+  if (!command) return false;
+  if (isSafeCommandName(command)) return true;
+  if (!path.isAbsolute(command)) return false;
+  const segments = command.split(path.sep).filter((segment) => segment.length > 0);
+  return segments.length > 0 && segments.every((segment) => isSafeCommandName(segment));
+}
+
+export function resolveCommandReferenceAliases(raw: string): string[] {
+  const command = raw.trim();
+  if (!isSafeCommandReference(command)) return [];
+  const aliases = new Set<string>();
+  aliases.add(command);
+  const base = path.basename(command);
+  if (base !== command && isSafeCommandName(base)) aliases.add(base);
+  return [...aliases.values()];
+}
+
+export function isAllowedReplayCommand(raw: string, allowedCommands: Set<string>): boolean {
+  const aliases = resolveCommandReferenceAliases(raw);
+  return aliases.some((alias) => allowedCommands.has(alias));
 }
 
 export async function evaluatePrecondition(raw: unknown): Promise<PreconditionResult> {

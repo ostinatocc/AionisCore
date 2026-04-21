@@ -8,6 +8,7 @@ import type { EmbedHttpConfig } from "./http.js";
 const ProviderEnvSchema = z.object({
   EMBEDDING_PROVIDER: z.enum(["none", "fake", "openai", "minimax"]).default("fake"),
   OPENAI_API_KEY: z.string().optional(),
+  OPENAI_EMBED_BASE_URL: z.string().default("https://api.openai.com/v1"),
   OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
   OPENAI_EMBED_BATCH_SIZE: z.coerce.number().int().positive().max(256).default(32),
   EMBEDDING_DIM: z.coerce.number().int().positive().default(1536),
@@ -46,7 +47,6 @@ export function createEmbeddingProviderFromEnv(env: Record<string, string | unde
 
   if (parsed.EMBEDDING_PROVIDER === "minimax") {
     if (!parsed.MINIMAX_API_KEY) throw new Error("EMBEDDING_PROVIDER=minimax requires MINIMAX_API_KEY");
-    if (!parsed.MINIMAX_GROUP_ID) throw new Error("EMBEDDING_PROVIDER=minimax requires MINIMAX_GROUP_ID");
     return createMinimaxEmbeddingProvider({
       apiKey: parsed.MINIMAX_API_KEY,
       groupId: parsed.MINIMAX_GROUP_ID,
@@ -63,6 +63,7 @@ export function createEmbeddingProviderFromEnv(env: Record<string, string | unde
   }
   return createOpenAIEmbeddingProvider({
     apiKey: parsed.OPENAI_API_KEY,
+    baseUrl: parsed.OPENAI_EMBED_BASE_URL,
     model: parsed.OPENAI_EMBEDDING_MODEL,
     dim: parsed.EMBEDDING_DIM,
     batchSize: parsed.OPENAI_EMBED_BATCH_SIZE,

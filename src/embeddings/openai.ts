@@ -6,12 +6,14 @@ type OpenAIEmbeddingProviderOptions = {
   model: string;
   dim: number;
   batchSize: number;
+  baseUrl: string;
   http: EmbedHttpConfig;
 };
 
 export function createOpenAIEmbeddingProvider(opts: OpenAIEmbeddingProviderOptions): EmbeddingProvider {
-  const { apiKey, model, dim, batchSize, http } = opts;
+  const { apiKey, model, dim, batchSize, baseUrl, http } = opts;
   const poster = createEmbedJsonPoster(http);
+  const endpoint = `${baseUrl.trim().replace(/\/+$/, "")}/embeddings`;
   return {
     name: `openai:${model}`,
     dim,
@@ -20,7 +22,7 @@ export function createOpenAIEmbeddingProvider(opts: OpenAIEmbeddingProviderOptio
       for (let i = 0; i < texts.length; i += batchSize) {
         const chunk = texts.slice(i, i + batchSize);
         const json = await poster.postJson<any>(
-          "https://api.openai.com/v1/embeddings",
+          endpoint,
           { authorization: `Bearer ${apiKey}` },
           { model, input: chunk },
         );

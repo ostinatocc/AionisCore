@@ -69,6 +69,20 @@ test("replay run gate helpers classify unsupported tool and allowlist mismatches
     }),
     null,
   );
+  assert.equal(
+    resolveReplayCommandAllowlistGate({
+      argv: ["/usr/bin/python3", "-V"],
+      allowedCommands: new Set(["/usr/bin/python3"]),
+    }),
+    null,
+  );
+  assert.equal(
+    resolveReplayCommandAllowlistGate({
+      argv: ["/usr/bin/python3", "-V"],
+      allowedCommands: new Set(["python3"]),
+    }),
+    null,
+  );
 });
 
 test("replay run gate helpers classify blocked sensitive commands", () => {

@@ -67,7 +67,8 @@ import {
   evaluatePostcondition,
   evaluatePrecondition,
   executeReplayCommand,
-  isSafeCommandName,
+  isAllowedReplayCommand,
+  isSafeCommandReference,
   normalizeReplayExecutionBackend,
   normalizeReplaySensitiveReviewMode,
   type PreconditionResult,
@@ -1507,7 +1508,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
 
             const argv = parseStepArgv(stepObj, toolName);
             const command = String(argv[0] ?? "").trim();
-            if (argv.length === 0 || !command || !isSafeCommandName(command)) {
+            if (argv.length === 0 || !command || !isSafeCommandReference(command)) {
               blockedSteps += 1;
               checks.push({
                 step_index: stepIndex,
@@ -2284,7 +2285,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
   const requestedSet = requestedCommands.length > 0 ? new Set(requestedCommands) : null;
   const allowedCommands = new Set<string>();
   for (const cmd of (localExecutor?.allowedCommands ?? new Set<string>()).values()) {
-    if (requestedSet && !requestedSet.has(cmd)) continue;
+    if (requestedSet && !isAllowedReplayCommand(cmd, requestedSet)) continue;
     allowedCommands.add(cmd);
   }
   if (allowedCommands.size === 0) {

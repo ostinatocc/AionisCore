@@ -74,6 +74,38 @@ npm run lite:start
 PORT=3101 npm run lite:start
 ```
 
+### Use an OpenAI-compatible embedding backend
+
+Lite can also call an OpenAI-compatible embeddings endpoint instead of the
+default fake embedder. For providers that expose a `/v1/embeddings` surface, set:
+
+```bash
+EMBEDDING_PROVIDER=openai \
+OPENAI_API_KEY=your-provider-key \
+OPENAI_EMBED_BASE_URL=https://api.moonshot.cn/v1 \
+OPENAI_EMBEDDING_MODEL=your-embedding-model \
+npm run lite:start
+```
+
+`OPENAI_EMBED_BASE_URL` defaults to `https://api.openai.com/v1`, but it can now
+point at any OpenAI-compatible embeddings host.
+
+### Use an OpenAI-compatible governance model
+
+The review / governance path already accepts OpenAI-compatible chat-completions
+backends. For example:
+
+```bash
+GOVERNANCE_MODEL_CLIENT_TRANSPORT=openai_chat_completions_v1 \
+GOVERNANCE_MODEL_CLIENT_BASE_URL=https://api.moonshot.cn/v1 \
+GOVERNANCE_MODEL_CLIENT_API_KEY=your-provider-key \
+GOVERNANCE_MODEL_CLIENT_MODEL=kimi-k2.6 \
+WORKFLOW_GOVERNANCE_HTTP_MODEL_PROMOTE_MEMORY_PROVIDER_ENABLED=true \
+REPLAY_GOVERNANCE_HTTP_MODEL_PROMOTE_MEMORY_PROVIDER_ENABLED=true \
+TOOLS_GOVERNANCE_HTTP_MODEL_FORM_PATTERN_PROVIDER_ENABLED=true \
+npm run lite:start
+```
+
 ### Print the effective startup environment
 
 ```bash

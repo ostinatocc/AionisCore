@@ -1,5 +1,6 @@
 import {
-  isSafeCommandName,
+  isAllowedReplayCommand,
+  isSafeCommandReference,
   type PreconditionResult,
   type ReplaySensitiveReviewMode,
 } from "./replay-execution-helpers.js";
@@ -92,8 +93,8 @@ export function resolveReplayCommandAllowlistGate(input: {
   if (
     input.argv.length > 0
     && command
-    && isSafeCommandName(command)
-    && input.allowedCommands.has(command)
+    && isSafeCommandReference(command)
+    && isAllowedReplayCommand(command, input.allowedCommands)
   ) {
     return null;
   }
