@@ -173,8 +173,9 @@ The current public validation signals include:
 | Metric | Current result | Entry point |
 | --- | --- | --- |
 | Runnable self-evolving proofs | `6` | [Proof By Evidence](apps/docs/docs/evidence/proof-by-evidence.md) |
-| Benchmark scenarios | `15 / 15` | [Validation and Benchmarks](apps/docs/docs/evidence/validation-and-benchmarks.md) |
-| Lite runtime test suite | `207 / 207` | `npm run -s lite:test` |
+| Real-provider A/B snapshot | `31 / 31` vs thin · `25 / 25` vs chat · `25 / 25` vs vector | [Validation and Benchmarks](apps/docs/docs/evidence/validation-and-benchmarks.md) |
+| Strict replay reuse | `3 / 3`, `0` replay tokens | [Validation and Benchmarks](apps/docs/docs/evidence/validation-and-benchmarks.md) |
+| Lite runtime test suite | `211 / 211` | `npm run -s lite:test` |
 | Public SDK test suite | `14 / 14` | `npm run -s sdk:test` |
 
 The strongest proofs to look at first are:

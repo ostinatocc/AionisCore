@@ -1,0 +1,27 @@
+{
+  "name": "aionis-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Next.js product site for Aionis Runtime.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "geist": "^1.7.0",
+    "next": "^16.2.4",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

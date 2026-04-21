@@ -277,8 +277,9 @@ flowchart TD
 | Metric | Current result | Entry point |
 | --- | --- | --- |
 | Runnable self-evolving proofs | `6` | [Proof By Evidence](/docs/evidence/proof-by-evidence) |
-| Benchmark scenarios | `15 / 15` | [Validation and Benchmarks](/docs/evidence/validation-and-benchmarks) |
-| Lite runtime test suite | `207 / 207` | `npm run -s lite:test` |
+| Real-provider A/B snapshot | `31 / 31` vs thin · `25 / 25` vs chat · `25 / 25` vs vector | [Validation and Benchmarks](/docs/evidence/validation-and-benchmarks) |
+| Strict replay reuse | `3 / 3`, `0` replay tokens | [Validation and Benchmarks](/docs/evidence/validation-and-benchmarks) |
+| Lite runtime test suite | `211 / 211` | `npm run -s lite:test` |
 | Public SDK test suite | `14 / 14` | `npm run -s sdk:test` |
 
 <div class="home-proof-grid">
@@ -289,8 +290,8 @@ flowchart TD
   </div>
   <div class="home-proof-card">
     <span class="home-proof-label">Benchmarks</span>
-    <span class="home-proof-value">15 / 15 scenarios</span>
-    <p>Public benchmark coverage exists alongside smoke validation and route-contract checks.</p>
+    <span class="home-proof-value">31/31 · 25/25 · 25/25</span>
+    <p>Real-provider A/B coverage now spans repeated starts, forgetting, replay, multi-cycle refinement, and production simulation.</p>
   </div>
   <div class="home-proof-card">
     <span class="home-proof-label">SDK tests</span>
@@ -299,7 +300,7 @@ flowchart TD
   </div>
   <div class="home-proof-card">
     <span class="home-proof-label">Lite tests</span>
-    <span class="home-proof-value">207 / 207</span>
+    <span class="home-proof-value">211 / 211</span>
     <p>The current Lite runtime baseline stays green across replay, recall, handoff, policy, forgetting, and automation.</p>
   </div>
 </div>
