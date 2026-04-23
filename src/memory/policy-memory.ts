@@ -11,6 +11,7 @@ import {
   buildPolicyMaintenanceMetadata,
 } from "./evolution-operators.js";
 import {
+  type ContractTrust,
   DerivedPolicySurfaceSchema,
   ExecutionNativeV1Schema,
   PolicyContractSchema,
@@ -122,6 +123,12 @@ function firstString(...values: unknown[]): string | null {
     if (trimmed) return trimmed;
   }
   return null;
+}
+
+function normalizeContractTrust(value: unknown): ContractTrust | null {
+  return value === "authoritative" || value === "advisory" || value === "observational"
+    ? value
+    : null;
 }
 
 function stringList(value: unknown, limit = 16): string[] {
@@ -428,6 +435,15 @@ function derivePolicyMemoryStateFromSlots(slots: Record<string, unknown> | null 
   return "active";
 }
 
+function normalizePersistedPolicyLifecycleState(args: {
+  requestedState: PolicyMemoryLifecycleState;
+  contractTrust: ContractTrust | null;
+}): PolicyMemoryLifecycleState {
+  if (args.requestedState === "retired") return "retired";
+  if (args.requestedState === "contested") return "contested";
+  return args.contractTrust === "authoritative" ? "active" : "contested";
+}
+
 function parseStoredPolicyContract(value: unknown, nodeId: string): PolicyContract | null {
   const parsed = PolicyContractSchema.safeParse({
     ...(asRecord(value) ?? {}),
@@ -444,17 +460,21 @@ function parseStoredDerivedPolicy(value: unknown): DerivedPolicySurface | null {
 
 function normalizePolicyContractLifecycle(args: {
   contract: PolicyContract;
-  nodeId: string;
+  nodeId: string | null;
   nextState: PolicyMemoryLifecycleState;
 }): PolicyContract {
-  const shouldDegrade = args.nextState !== "active";
+  const effectiveState = normalizePersistedPolicyLifecycleState({
+    requestedState: args.nextState,
+    contractTrust: normalizeContractTrust(args.contract.contract_trust),
+  });
+  const shouldDegrade = effectiveState !== "active";
   return PolicyContractSchema.parse({
     ...args.contract,
     policy_state: shouldDegrade ? "candidate" : args.contract.policy_state,
-    policy_memory_state: args.nextState,
+    policy_memory_state: effectiveState,
     activation_mode: shouldDegrade ? "hint" : args.contract.activation_mode,
     materialization_state: "persisted",
-    policy_memory_id: args.nodeId,
+    policy_memory_id: args.nodeId ?? null,
   });
 }
 
@@ -823,6 +843,7 @@ async function applyPolicyMemoryGovernanceToNode(args: {
     nodeId: args.node.id,
     nextState,
   });
+  const effectiveNextState = nextContract.policy_memory_state;
   const nextDerivedPolicy = args.liveDerivedPolicy ?? parseStoredDerivedPolicy(slots.derived_policy_v1);
   const taskSignature = firstString(slots.task_signature, asRecord(slots.execution_native_v1)?.task_signature);
   const errorSignature = firstString(slots.error_signature, asRecord(slots.execution_native_v1)?.error_signature);
@@ -875,7 +896,7 @@ async function applyPolicyMemoryGovernanceToNode(args: {
     ...(nextDerivedPolicy ? { derived_policy_v1: nextDerivedPolicy } : {}),
   };
   if (args.action !== "retire") nextSlots.last_materialized_at = args.appliedAt;
-  if (nextState !== previousState) {
+  if (effectiveNextState !== previousState) {
     nextSlots.policy_state_changed_at = args.appliedAt;
     nextSlots.policy_state_changed_by = firstString(args.actor) ?? "policy_governance_apply";
   }
@@ -903,7 +924,7 @@ async function applyPolicyMemoryGovernanceToNode(args: {
 
   return {
     previous_state: previousState,
-    next_state: nextState,
+    next_state: effectiveNextState,
     policy_memory: formatPolicyMemoryFeedbackResult({
       tenantId: args.tenantId,
       scope: args.scope,
@@ -953,7 +974,6 @@ export async function writePolicyMemorySnapshot(
 ): Promise<PolicyMemorySnapshotWriteResult> {
   const parsedContract = PolicyContractSchema.parse({
     ...args.policy_contract,
-    policy_memory_state: "active",
     materialization_state: "persisted",
   });
   const parsedDerivedPolicy = DerivedPolicySurfaceSchema.parse(args.derived_policy);
@@ -987,15 +1007,19 @@ export async function writePolicyMemorySnapshot(
     ? await findExistingPolicyMemoryLite(opts.liteWriteStore, args.scope, clientId)
     : null;
 
+  const nextContract = normalizePolicyContractLifecycle({
+    contract: PolicyContractSchema.parse({
+      ...parsedContract,
+      materialization_state: "persisted",
+      policy_memory_id: existingNode?.id ?? null,
+    }),
+    nodeId: existingNode?.id ?? null,
+    nextState: "active",
+  });
   const summary = buildPolicyMemorySummary({
-    contract: parsedContract,
+    contract: nextContract,
     taskSignature,
     errorSignature,
-  });
-  const nextContract = PolicyContractSchema.parse({
-    ...parsedContract,
-    materialization_state: "persisted",
-    policy_memory_id: existingNode?.id ?? null,
   });
   const materializedAt = new Date().toISOString();
   const slots = buildPolicyMemorySlots({

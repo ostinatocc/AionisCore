@@ -1,6 +1,7 @@
 import {
   ActionRetrievalRequest,
   ActionRetrievalResponseSchema,
+  type ContractTrust,
   DerivedPolicySurfaceSchema,
   PolicyContractSchema,
   type ActionRetrievalResponse,
@@ -19,6 +20,9 @@ import type { LiteWriteStore } from "../store/lite-write-store.js";
 
 export type WorkflowEntry = {
   anchor_id: string;
+  contract_trust?: ContractTrust | null;
+  anchor_level?: string | null;
+  promotion_state?: string | null;
   workflow_signature?: string | null;
   task_family?: string | null;
   title?: string | null;
@@ -125,7 +129,15 @@ export function workflowEvidenceParts(workflow: WorkflowEntry): string[] {
     reuseSuccessCount > 0 ? `reuse_success=${reuseSuccessCount}` : null,
     reuseFailureCount > 0 ? `reuse_failure=${reuseFailureCount}` : null,
     feedbackQuality != null ? `feedback_quality=${feedbackQuality.toFixed(2)}` : null,
+    workflow.contract_trust ? `contract_trust=${workflow.contract_trust}` : null,
   ].filter((value): value is string => !!value);
+}
+
+function firstContractTrust(...values: unknown[]): ContractTrust | null {
+  for (const value of values) {
+    if (value === "authoritative" || value === "advisory" || value === "observational") return value;
+  }
+  return null;
 }
 
 function normalizeTokens(value: string): string[] {
@@ -381,6 +393,7 @@ function scoreWorkflow(args: {
   const feedbackQuality = Number.isFinite(Number(args.workflow.feedback_quality))
     ? Math.max(-1, Math.min(1, Number(args.workflow.feedback_quality)))
     : 0;
+  const contractTrust = firstContractTrust(args.workflow.contract_trust);
   let score = args.kind === "recommended_workflow" ? 200 : 120;
   if (toolAligned) score += 60;
   if (familyMatch) score += 55;
@@ -392,6 +405,9 @@ function scoreWorkflow(args: {
   score += Math.min(reuseSuccessCount, 6) * 10;
   score -= Math.min(reuseFailureCount, 4) * 14;
   score += Math.round(feedbackQuality * 18);
+  if (contractTrust === "authoritative") score += 18;
+  else if (contractTrust === "advisory") score -= 10;
+  else if (contractTrust === "observational") score -= 72;
   score += overlap * 12;
   return {
     kind: args.kind,
@@ -437,6 +453,7 @@ export function choosePathRecommendation(args: {
     return {
       source_kind: "none" as const,
       anchor_id: null,
+      contract_trust: null,
       workflow_signature: null,
       title: null,
       summary: null,
@@ -465,6 +482,7 @@ export function choosePathRecommendation(args: {
   return {
     source_kind: top.kind,
     anchor_id: top.workflow.anchor_id,
+    contract_trust: firstContractTrust(top.workflow.contract_trust),
     task_family: firstString(top.workflow.task_family),
     workflow_signature: firstString(top.workflow.workflow_signature),
     title,
@@ -539,6 +557,13 @@ export function workflowToolPreferenceState(args: {
   if (!selectedTool || !args.workflow) return "none";
   const toolSet = stringList(args.workflow.tool_set, 24);
   if (!toolSet.includes(selectedTool)) return "none";
+  const contractTrust = firstContractTrust(args.workflow.contract_trust);
+  if (contractTrust === "observational") return "none";
+  const anchorLevel = firstString(args.workflow.anchor_level);
+  const promotionState = firstString(args.workflow.promotion_state);
+  if (anchorLevel === "L2" || promotionState === "stable") {
+    return contractTrust === "advisory" ? "candidate" : "stable";
+  }
   const usageCount = Math.max(0, Number(args.workflow.usage_count ?? 0));
   const reuseSuccessCount = Math.max(0, Number(args.workflow.reuse_success_count ?? 0));
   const reuseFailureCount = Math.max(0, Number(args.workflow.reuse_failure_count ?? 0));
@@ -877,6 +902,19 @@ export function buildActionRetrievalResponse(args: {
     path: {
       source_kind: path.source_kind,
       anchor_id: path.anchor_id,
+      ...(firstContractTrust(
+        (path as Record<string, unknown>).contract_trust,
+        selectedWorkflow?.contract_trust,
+        persistedPolicy?.contract.contract_trust,
+      )
+        ? {
+            contract_trust: firstContractTrust(
+              (path as Record<string, unknown>).contract_trust,
+              selectedWorkflow?.contract_trust,
+              persistedPolicy?.contract.contract_trust,
+            ),
+          }
+        : {}),
       task_family: recommendedTaskFamily,
       workflow_signature: path.workflow_signature,
       title: path.title,

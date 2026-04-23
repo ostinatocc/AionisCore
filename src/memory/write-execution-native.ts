@@ -34,6 +34,13 @@ function firstString(...values: unknown[]): string | null {
   return null;
 }
 
+function firstContractTrust(...values: unknown[]): "authoritative" | "advisory" | "observational" | null {
+  for (const value of values) {
+    if (value === "authoritative" || value === "advisory" || value === "observational") return value;
+  }
+  return null;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
@@ -118,6 +125,7 @@ export function normalizeExecutionNativeSlots(
             ? "pattern_anchor"
             : null),
       compression_layer: compressionLayer,
+      ...(firstContractTrust(anchor.contract_trust) ? { contract_trust: firstContractTrust(anchor.contract_trust) } : {}),
       task_signature: anchor.task_signature,
       ...(anchor.error_signature ? { error_signature: anchor.error_signature } : {}),
       ...(anchor.workflow_signature ? { workflow_signature: anchor.workflow_signature } : {}),
@@ -174,6 +182,7 @@ export function normalizeExecutionNativeSlots(
     );
     const filePath = firstString(out.file_path, resumeAnchor?.file_path, targetFiles[0] ?? null);
     const nextAction = firstString(out.next_action, executionPacket?.next_action, out.handoff_text);
+    const contractTrust = firstContractTrust(out.contract_trust, executionPacket?.contract_trust, executionState?.contract_trust);
     const taskFamily = firstString(out.task_family, out.task_kind, trajectoryCompileSummary?.task_family);
     const taskSignature = firstString(out.task_signature, trajectoryCompileSummary?.task_signature);
     const workflowSignature = firstString(out.workflow_signature, trajectoryCompileSummary?.workflow_signature);
@@ -188,6 +197,7 @@ export function normalizeExecutionNativeSlots(
       execution_kind: "execution_native",
       summary_kind: summaryKind ?? systemKind,
       compression_layer: compressionLayer ?? "L0",
+      ...(contractTrust ? { contract_trust: contractTrust } : {}),
       ...(taskFamily ? { task_family: taskFamily } : {}),
       ...(taskSignature ? { task_signature: taskSignature } : {}),
       ...(workflowSignature ? { workflow_signature: workflowSignature } : {}),

@@ -11,6 +11,7 @@ export type ActionRecallWorkflow = {
   title: string | null;
   summary: string | null;
   anchor_level: string;
+  contract_trust: "authoritative" | "advisory" | "observational" | null;
   promotion_state: "candidate" | "stable" | null;
   source_kind: string | null;
   distillation_origin: string | null;
@@ -128,6 +129,10 @@ function firstFinite(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function firstContractTrust(value: unknown): "authoritative" | "advisory" | "observational" | null {
+  return value === "authoritative" || value === "advisory" || value === "observational" ? value : null;
+}
+
 function mapExecutionKindToAnchorKind(executionKind: string | null): string | null {
   if (executionKind === "workflow_anchor") return "workflow";
   if (executionKind === "workflow_candidate") return "workflow";
@@ -159,6 +164,7 @@ export function recallAnchorMeta(node: NodeRow): {
   counterEvidenceOpen: boolean;
   trusted: boolean;
   selectedTool: string | null;
+  contractTrust: "authoritative" | "advisory" | "observational" | null;
 } {
   const slots = asRecord(node.slots);
   const executionNative = executionNativeRecord(slots);
@@ -188,6 +194,7 @@ export function recallAnchorMeta(node: NodeRow): {
           : "candidate";
   const trusted = anchorKind === "pattern" ? credibilityState === "trusted" : false;
   const selectedTool = firstString(executionNative?.selected_tool ?? anchor?.selected_tool);
+  const contractTrust = firstContractTrust(executionNative?.contract_trust ?? anchor?.contract_trust);
   return {
     slots,
     executionNative,
@@ -204,6 +211,7 @@ export function recallAnchorMeta(node: NodeRow): {
     counterEvidenceOpen,
     trusted,
     selectedTool,
+    contractTrust,
   };
 }
 
@@ -288,6 +296,7 @@ export function buildActionRecallPacket(args: {
         title: node.title ?? null,
         summary: firstString(anchor?.summary) ?? node.text_summary ?? node.title ?? null,
         anchor_level: anchorLevel,
+        contract_trust: meta.contractTrust,
         promotion_state: firstString(meta.workflowPromotion?.promotion_state) as any,
         source_kind: deriveWorkflowSourceKind({
           anchor,

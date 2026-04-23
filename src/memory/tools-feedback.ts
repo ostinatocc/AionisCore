@@ -18,6 +18,7 @@ import {
   PolicyContractSchema,
   ToolsFeedbackRequest,
   ToolsFeedbackResponseSchema,
+  type ContractTrust,
   type MemoryFormPatternSemanticReviewResult,
   type MemoryAnchorV1,
   type ToolsFeedbackInput,
@@ -178,6 +179,12 @@ type WorkflowFeedbackTarget = {
   serviceLifecycleConstraints: Array<Record<string, unknown>>;
 };
 
+function normalizeContractTrust(value: unknown): ContractTrust | null {
+  return value === "authoritative" || value === "advisory" || value === "observational"
+    ? value
+    : null;
+}
+
 function extractWorkflowFeedbackTarget(context: unknown): WorkflowFeedbackTarget {
   const ctx = asRecord(context);
   const task = asRecord(ctx?.task);
@@ -263,6 +270,20 @@ function extractWorkflowFeedbackTarget(context: unknown): WorkflowFeedbackTarget
   };
 }
 
+function extractFeedbackContractTrust(context: unknown): ContractTrust | null {
+  const ctx = asRecord(context);
+  const firstStep = asRecord(ctx?.first_step_recommendation);
+  const kickoff = asRecord(ctx?.kickoff_recommendation);
+  const policyContract = asRecord(ctx?.policy_contract);
+  const recoveryContract = asRecord(ctx?.recovery_contract_v1);
+  return normalizeContractTrust(ctx?.contract_trust)
+    ?? normalizeContractTrust(firstStep?.contract_trust)
+    ?? normalizeContractTrust(kickoff?.contract_trust)
+    ?? normalizeContractTrust(policyContract?.contract_trust)
+    ?? normalizeContractTrust(recoveryContract?.contract_trust)
+    ?? null;
+}
+
 function extractContextConsumerAgentId(context: unknown): string | null {
   const ctx = asRecord(context);
   const agent = asRecord(ctx?.agent);
@@ -314,6 +335,20 @@ export function buildMaterializationContextFromFeedback(args: {
   workflowFeedbackTarget: WorkflowFeedbackTarget;
 }) {
   const base = asRecord(args.context) ? { ...(args.context as Record<string, unknown>) } : {};
+  const contractTrust = extractFeedbackContractTrust(args.context);
+  if (contractTrust) {
+    base.contract_trust = contractTrust;
+  }
+  if (contractTrust === "observational") {
+    const recoveryContract = asRecord(base.recovery_contract_v1);
+    if (recoveryContract) {
+      base.recovery_contract_v1 = {
+        ...recoveryContract,
+        contract_trust: "observational",
+      };
+    }
+    return base;
+  }
   if (args.workflowFeedbackTarget.taskFamily) {
     base.task_family = nullableString(base.task_family) ?? args.workflowFeedbackTarget.taskFamily;
   }
@@ -356,6 +391,7 @@ export function buildMaterializationContextFromFeedback(args: {
     const recoveryBody = asRecord(recoveryContract?.contract);
     base.recovery_contract_v1 = {
       ...(recoveryContract ?? {}),
+      ...(contractTrust ? { contract_trust: contractTrust } : {}),
       ...(nullableString(recoveryContract?.task_family) || !args.workflowFeedbackTarget.taskFamily
         ? {}
         : { task_family: args.workflowFeedbackTarget.taskFamily }),
@@ -386,7 +422,13 @@ function mergeWorkflowFeedbackIntoPolicySurfaces(args: {
   policyContract: Record<string, unknown>;
   derivedPolicy: Record<string, unknown>;
   workflowFeedbackTarget: WorkflowFeedbackTarget;
+  contractTrust: ContractTrust | null;
 }) {
+  const contractTrust =
+    args.contractTrust
+    ?? normalizeContractTrust(args.policyContract.contract_trust)
+    ?? normalizeContractTrust(args.derivedPolicy.contract_trust)
+    ?? null;
   const targetFiles =
     stringList(args.policyContract.target_files, 24).length > 0
       ? stringList(args.policyContract.target_files, 24)
@@ -430,6 +472,8 @@ function mergeWorkflowFeedbackIntoPolicySurfaces(args: {
   return {
     policyContract: PolicyContractSchema.parse({
       ...args.policyContract,
+      ...(contractTrust ? { contract_trust: contractTrust } : {}),
+      ...(contractTrust === "advisory" ? { policy_state: "candidate", activation_mode: "hint" } : {}),
       ...(taskFamily ? { task_family: taskFamily } : {}),
       ...(workflowSignature ? { workflow_signature: workflowSignature } : {}),
       ...(filePath ? { file_path: filePath } : {}),
@@ -441,6 +485,8 @@ function mergeWorkflowFeedbackIntoPolicySurfaces(args: {
     }),
     derivedPolicy: DerivedPolicySurfaceSchema.parse({
       ...args.derivedPolicy,
+      ...(contractTrust ? { contract_trust: contractTrust } : {}),
+      ...(contractTrust === "advisory" ? { policy_state: "candidate" } : {}),
       ...(taskFamily ? { task_family: taskFamily } : {}),
       ...(workflowSignature ? { workflow_signature: workflowSignature } : {}),
       ...(filePath ? { file_path: filePath } : {}),
@@ -468,6 +514,8 @@ async function materializeLitePolicyMemoryFromFeedback(args: {
   opts: FeedbackOptions;
 }): Promise<ToolsFeedbackResponse["policy_memory"] | null> {
   if (!args.opts.liteWriteStore) return null;
+  const contractTrust = extractFeedbackContractTrust(args.parsed.context);
+  if (contractTrust === "observational") return null;
 
   const consumerAgentId = extractContextConsumerAgentId(args.parsed.context) ?? args.actor;
   const consumerTeamId = extractContextConsumerTeamId(args.parsed.context);
@@ -585,6 +633,7 @@ async function materializeLitePolicyMemoryFromFeedback(args: {
     policyContract: experience.policy_contract as Record<string, unknown>,
     derivedPolicy: experience.derived_policy as Record<string, unknown>,
     workflowFeedbackTarget: args.workflowFeedbackTarget,
+    contractTrust,
   });
 
   const persisted = await writePolicyMemorySnapshot({

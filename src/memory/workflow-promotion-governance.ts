@@ -2,6 +2,7 @@ import {
   MemoryPromoteRequest,
   WorkflowWriteProjectionGovernanceDecisionTraceSchema,
   WorkflowWriteProjectionGovernancePolicyEffectSchema,
+  type ContractTrust,
   type MemoryAdmissibilityResult,
   type MemoryPromoteSemanticReviewResult,
   type MemoryPromoteSemanticReviewPacket,
@@ -24,6 +25,7 @@ type WorkflowPromotionCandidateExample = PromoteMemoryCandidateExample;
 
 export function deriveWorkflowPromotionSemanticPolicyEffect(args: {
   basePromotionState: "candidate" | "stable";
+  contractTrust?: ContractTrust | null;
   review: MemoryPromoteSemanticReviewResult | null;
   admissibility: MemoryAdmissibilityResult | null;
   minPromotionConfidence?: number;
@@ -41,11 +43,18 @@ export function deriveWorkflowPromotionSemanticPolicyEffect(args: {
     applyReason: "high_confidence_workflow_promotion",
     noRaiseSuggestedState: args.basePromotionState,
     appliedState: "stable",
-    extraNoApplyGuards: [{
-      when: args.basePromotionState === "stable",
-      reason: "already_stable",
-      reviewSuggestedState: "stable",
-    }],
+    extraNoApplyGuards: [
+      {
+        when: args.contractTrust === "advisory" || args.contractTrust === "observational",
+        reason: "contract_trust_below_authoritative",
+        reviewSuggestedState: "stable",
+      },
+      {
+        when: args.basePromotionState === "stable",
+        reason: "already_stable",
+        reviewSuggestedState: "stable",
+      },
+    ],
     shouldApply: (review) =>
       review.adjudication.disposition === "recommend"
       && review.adjudication.target_kind === "workflow"
@@ -69,6 +78,7 @@ export async function buildWorkflowPromotionGovernancePreview(args: {
   inputText: string;
   inputSha256: string;
   candidateExamples: WorkflowPromotionCandidateExample[];
+  contractTrust?: ContractTrust | null;
   reviewResult?: MemoryPromoteSemanticReviewResult | null;
   reviewProvider?: PromoteMemoryGovernanceReviewProvider | null;
 }): Promise<{
@@ -101,6 +111,7 @@ export async function buildWorkflowPromotionGovernancePreview(args: {
       derivePolicyEffect: ({ review, admissibility }) =>
         deriveWorkflowPromotionSemanticPolicyEffect({
           basePromotionState: "candidate",
+          contractTrust: args.contractTrust ?? null,
           review,
           admissibility,
         }),

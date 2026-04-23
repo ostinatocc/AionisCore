@@ -330,6 +330,154 @@ async function seedStableWorkflowFixture(dbPath: string) {
   return { liteWriteStore, liteRecallStore };
 }
 
+async function seedWorkflowOnlyFixture(dbPath: string, contractTrust: "authoritative" | "advisory" | "observational") {
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  const [sharedEmbedding] = await FakeEmbeddingProvider.embed(["repair export failure in node tests"]);
+  const prepared = await prepareMemoryWrite(
+    {
+      tenant_id: "default",
+      scope: "default",
+      actor: "local-user",
+      input_text: "seed workflow-only fixture",
+      auto_embed: false,
+      memory_lane: "shared",
+      nodes: [
+        {
+          id: randomUUID(),
+          type: "procedure",
+          title: "Fix export failure",
+          text_summary: "Reusable workflow for export repair in node tests",
+          slots: {
+            summary_kind: "workflow_anchor",
+            compression_layer: "L2",
+            anchor_v1: {
+              anchor_kind: "workflow",
+              anchor_level: "L2",
+              contract_trust: contractTrust,
+              task_signature: "execution_task:repair-export",
+              task_class: "execution_write_projection",
+              workflow_signature: "execution_workflow:repair-export",
+              task_family: "task:repair_export",
+              summary: "Stable workflow for repairing export failures in node tests.",
+              tool_set: ["edit", "test"],
+              file_path: "src/routes/export.ts",
+              target_files: ["src/routes/export.ts"],
+              next_action: "Patch src/routes/export.ts and rerun export tests.",
+              workflow_steps: [
+                "Inspect src/routes/export.ts for export response handling.",
+                "Patch the export serialization logic with edit.",
+              ],
+              pattern_hints: [
+                "Prefer edit for route-level export repairs.",
+              ],
+              outcome: { status: "success", result_class: "execution_write_stable", success_score: 0.88 },
+              source: { source_kind: "execution_write", node_id: randomUUID(), run_id: null, playbook_id: null, commit_id: null },
+              payload_refs: { node_ids: [], decision_ids: [], run_ids: [], step_ids: [], commit_ids: [] },
+              rehydration: {
+                default_mode: "partial",
+                payload_cost_hint: "low",
+                recommended_when: ["workflow_summary_is_not_enough", "resume_anchor_requires_detail"],
+              },
+              metrics: { usage_count: 0, reuse_success_count: 0, reuse_failure_count: 0, distinct_run_count: 0, last_used_at: null },
+              maintenance: {
+                model: "lazy_online_v1",
+                maintenance_state: "retain",
+                offline_priority: "retain_workflow",
+                lazy_update_fields: ["usage_count", "last_used_at"],
+                last_maintenance_at: "2026-03-20T00:00:00Z",
+              },
+              workflow_promotion: {
+                promotion_state: "stable",
+                promotion_origin: "execution_write_auto_promotion",
+                required_observations: 2,
+                observed_count: 2,
+                last_transition: "promoted_to_stable",
+                last_transition_at: "2026-03-20T00:00:00Z",
+                source_status: null,
+              },
+              schema_version: "anchor_v1",
+            },
+            execution_native_v1: {
+              schema_version: "execution_native_v1",
+              execution_kind: "workflow_anchor",
+              summary_kind: "workflow_anchor",
+              compression_layer: "L2",
+              contract_trust: contractTrust,
+              task_signature: "execution_task:repair-export",
+              task_family: "task:repair_export",
+              workflow_signature: "execution_workflow:repair-export",
+              anchor_kind: "workflow",
+              anchor_level: "L2",
+              tool_set: ["edit", "test"],
+              file_path: "src/routes/export.ts",
+              target_files: ["src/routes/export.ts"],
+              next_action: "Patch src/routes/export.ts and rerun export tests.",
+              workflow_steps: [
+                "Inspect src/routes/export.ts for export response handling.",
+                "Patch the export serialization logic with edit.",
+              ],
+              pattern_hints: [
+                "Prefer edit for route-level export repairs.",
+              ],
+              workflow_promotion: {
+                promotion_state: "stable",
+                promotion_origin: "execution_write_auto_promotion",
+                required_observations: 2,
+                observed_count: 2,
+                last_transition: "promoted_to_stable",
+                last_transition_at: "2026-03-20T00:00:00Z",
+                source_status: null,
+              },
+              maintenance: {
+                model: "lazy_online_v1",
+                maintenance_state: "retain",
+                offline_priority: "retain_workflow",
+                lazy_update_fields: ["usage_count", "last_used_at"],
+                last_maintenance_at: "2026-03-20T00:00:00Z",
+              },
+              rehydration: {
+                default_mode: "partial",
+                payload_cost_hint: "low",
+                recommended_when: ["workflow_summary_is_not_enough", "resume_anchor_requires_detail"],
+              },
+            },
+            target_files: ["src/routes/export.ts"],
+          },
+          embedding: sharedEmbedding,
+          embedding_model: FakeEmbeddingProvider.name,
+          salience: 0.8,
+          importance: 0.9,
+          confidence: 0.9,
+        },
+      ],
+      edges: [],
+    },
+    "default",
+    "default",
+    {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+    },
+    null,
+  );
+
+  await liteWriteStore.withTx(() =>
+    applyMemoryWrite({} as any, prepared, {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+      shadowDualWriteEnabled: false,
+      shadowDualWriteStrict: false,
+      associativeLinkOrigin: "memory_write",
+      write_access: liteWriteStore,
+    }),
+  );
+
+  return { liteWriteStore, liteRecallStore };
+}
+
 test("experience intelligence route combines trusted tool memory with learned workflow path guidance", async () => {
   const app = Fastify();
   const { liteWriteStore, liteRecallStore } = await seedStableWorkflowFixture(tmpDbPath("stable-route"));
@@ -377,7 +525,7 @@ test("experience intelligence route combines trusted tool memory with learned wo
             signature: "node-export-mismatch",
           },
         },
-        candidates: ["bash", "edit", "test"],
+        candidates: ["edit", "test"],
       },
     });
 
@@ -447,6 +595,73 @@ test("experience intelligence route combines trusted tool memory with learned wo
     assert.match(body.rationale.summary, /trusted_patterns=1/);
     assert.match(body.rationale.summary, /stable_workflows=1/);
     assert.match(body.rationale.summary, /policy_contract=default:edit/);
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("experience intelligence keeps advisory workflow reuse as candidate hint policy", async () => {
+  const app = Fastify();
+  const { liteWriteStore, liteRecallStore } = await seedWorkflowOnlyFixture(tmpDbPath("stable-route-advisory"), "advisory");
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryAccessRoutes({
+      app,
+      env: {
+        AIONIS_EDITION: "lite",
+        APP_ENV: "test",
+        MEMORY_SCOPE: "default",
+        MEMORY_TENANT_ID: "default",
+        LITE_LOCAL_ACTOR_ID: "local-user",
+        MAX_TEXT_LEN: 10_000,
+        PII_REDACTION: false,
+        ALLOW_CROSS_SCOPE_EDGES: false,
+        MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+        MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+      } as any,
+      embedder: FakeEmbeddingProvider,
+      liteWriteStore,
+      liteRecallAccess: liteRecallStore.createRecallAccess(),
+      writeAccessShadowMirrorV2: false,
+      requireStoreFeatureCapability: () => {},
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/experience/intelligence",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "repair export failure in node tests",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        candidates: ["edit", "test"],
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = ExperienceIntelligenceResponseSchema.parse(response.json());
+    assert.equal(body.recommendation.path.source_kind, "recommended_workflow");
+    assert.equal((body.recommendation.path as any).contract_trust, "advisory");
+    assert.equal(body.derived_policy?.contract_trust, "advisory");
+    assert.equal(body.derived_policy?.policy_state, "candidate");
+    assert.equal(body.policy_contract?.contract_trust, "advisory");
+    assert.equal(body.policy_contract?.policy_state, "candidate");
+    assert.equal(body.policy_contract?.activation_mode, "hint");
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -965,6 +1180,7 @@ test("kickoff recommendation can recover file-level workflow guidance from host-
     assert.equal(response.statusCode, 200);
     const body = KickoffRecommendationResponseSchema.parse(response.json());
     assert.equal(body.kickoff_recommendation?.history_applied, true);
+    assert.equal(body.kickoff_recommendation?.contract_trust, "authoritative");
     assert.equal(body.kickoff_recommendation?.selected_tool, "edit");
     assert.equal(body.kickoff_recommendation?.source_kind, "experience_intelligence");
     assert.equal(body.kickoff_recommendation?.file_path, "src/routes/export.ts");
@@ -1327,6 +1543,7 @@ test("kickoff recommendation route can recover file-level guidance from family-l
     assert.deepEqual(body.kickoff_recommendation, {
       source_kind: "experience_intelligence",
       history_applied: true,
+      contract_trust: "authoritative",
       selected_tool: "edit",
       task_family: "task:repair_export",
       workflow_signature: "execution_workflow:repair-export",
@@ -1403,6 +1620,7 @@ test("kickoff recommendation route returns a host-consumable file-level kickoff 
     assert.deepEqual(body.kickoff_recommendation, {
       source_kind: "experience_intelligence",
       history_applied: true,
+      contract_trust: "authoritative",
       selected_tool: "edit",
       task_family: "task:repair_export",
       workflow_signature: "execution_workflow:repair-export",
@@ -1476,6 +1694,7 @@ test("kickoff recommendation route falls back to tool-only kickoff for unrelated
     assert.deepEqual(body.kickoff_recommendation, {
       source_kind: "tool_selection",
       history_applied: false,
+      contract_trust: "observational",
       selected_tool: "bash",
       task_family: null,
       workflow_signature: null,

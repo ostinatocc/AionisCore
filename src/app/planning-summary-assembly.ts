@@ -2,6 +2,7 @@ import { pickPreferredDelegationRecordsSummary } from "../memory/delegation-reco
 import type {
   ActionRetrievalUncertaintySummary,
   AssemblySummary,
+  ContractTrust,
   ExecutionPacketAssemblySummary,
   ExecutionSummary,
   PlannerPacketSummarySurface,
@@ -31,6 +32,7 @@ import { buildExecutionMemorySummaryBundle } from "./planning-summary-surfaces.j
 
 type ExperienceRecommendationProjection = {
   history_applied: boolean;
+  contract_trust: ContractTrust | null;
   selected_tool: string | null;
   task_family: string | null;
   workflow_signature: string | null;
@@ -78,6 +80,12 @@ function readActionRetrievalUncertainty(
         )
       : [],
   };
+}
+
+function readContractTrust(value: unknown): ContractTrust | null {
+  return value === "authoritative" || value === "advisory" || value === "observational"
+    ? value
+    : null;
 }
 
 function buildExecutionPacketAssemblySummary(
@@ -273,6 +281,9 @@ export function buildPlanningSummary(args: {
   const experienceSummary: ExperienceRecommendationProjection | null = experienceRecommendation
     ? {
         history_applied: experienceRecommendation.history_applied === true,
+        contract_trust: readContractTrust(experiencePath?.contract_trust)
+          ?? readContractTrust(experiencePolicyContract?.contract_trust)
+          ?? null,
         selected_tool: typeof experienceRecommendation.tool === "object" && experienceRecommendation.tool && typeof (experienceRecommendation.tool as any).selected_tool === "string"
           ? (experienceRecommendation.tool as any).selected_tool
           : null,

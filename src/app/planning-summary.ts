@@ -103,6 +103,7 @@ export type AssemblySummary = {
 export type FirstStepRecommendation = {
   source_kind: "experience_intelligence" | "tool_selection";
   history_applied: boolean;
+  contract_trust: ContractTrust;
   selected_tool: string | null;
   task_family: string | null;
   workflow_signature: string | null;
@@ -114,6 +115,7 @@ export type FirstStepRecommendation = {
 export type KickoffRecommendation = {
   source_kind: "experience_intelligence" | "tool_selection";
   history_applied: boolean;
+  contract_trust: ContractTrust;
   selected_tool: string | null;
   task_family: string | null;
   workflow_signature: string | null;
@@ -121,6 +123,8 @@ export type KickoffRecommendation = {
   file_path: string | null;
   next_action: string | null;
 };
+
+export type ContractTrust = "authoritative" | "advisory" | "observational";
 
 export type ActionRetrievalUncertaintySummary = {
   summary_version: "action_retrieval_uncertainty_v1";

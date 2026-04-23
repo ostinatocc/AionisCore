@@ -1,5 +1,5 @@
 import { ServiceLifecycleConstraintV1Schema, type ServiceLifecycleConstraintV1 } from "../execution/types.js";
-import { ExecutionNativeV1Schema } from "./schemas.js";
+import { ContractTrustSchema, ExecutionNativeV1Schema, type ContractTrust } from "./schemas.js";
 
 function asObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -62,6 +62,7 @@ function deriveTemplateKeySteps(stepsRaw: unknown): string[] {
 }
 
 export type ReplayWorkflowContract = {
+  contract_trust: ContractTrust | null;
   task_family: string | null;
   target_files: string[];
   next_action: string | null;
@@ -70,11 +71,21 @@ export type ReplayWorkflowContract = {
   service_lifecycle_constraints: ServiceLifecycleConstraintV1[];
 };
 
+function normalizeContractTrust(value: unknown): ContractTrust | null {
+  const parsed = ContractTrustSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
 export function deriveReplayWorkflowContractFromSlots(slots: Record<string, unknown>): ReplayWorkflowContract {
   const executionNativeParsed = ExecutionNativeV1Schema.safeParse(asObject(slots.execution_native_v1));
   const executionNative = executionNativeParsed.success ? executionNativeParsed.data : null;
   const executionResultSummary = asObject(slots.execution_result_summary);
   const trajectoryCompileSummary = asObject(executionResultSummary?.trajectory_compile_v1);
+  const recoveryContract = asObject(slots.recovery_contract_v1);
+  const policyContract =
+    asObject(slots.policy_contract_v1)
+    ?? asObject(slots.policy_contract)
+    ?? null;
 
   const targetFiles = uniqueStrings([
     ...stringList(slots.target_files),
@@ -97,6 +108,11 @@ export function deriveReplayWorkflowContractFromSlots(slots: Record<string, unkn
   ]);
 
   return {
+    contract_trust: normalizeContractTrust(slots.contract_trust)
+      ?? normalizeContractTrust(executionNative?.contract_trust)
+      ?? normalizeContractTrust(recoveryContract?.contract_trust)
+      ?? normalizeContractTrust(policyContract?.contract_trust)
+      ?? null,
     task_family: toStringOrNull(slots.task_family)
       ?? executionNative?.task_family
       ?? toStringOrNull(trajectoryCompileSummary?.task_family)

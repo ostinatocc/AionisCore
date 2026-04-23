@@ -1173,23 +1173,35 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const orderedActions = gateAction
       ? [gateAction, ...recommendedActions.filter((entry) => entry !== gateAction)]
       : recommendedActions;
+    const contractTrust =
+      firstStep?.contract_trust === "authoritative"
+      || firstStep?.contract_trust === "advisory"
+      || firstStep?.contract_trust === "observational"
+        ? firstStep.contract_trust
+        : "observational";
     const selectedTool = typeof firstStep?.selected_tool === "string" ? firstStep.selected_tool : null;
     const filePath = typeof firstStep?.file_path === "string" ? firstStep.file_path : null;
-    const taskFamily = readNullableString(
-      firstStep?.task_family,
-      pathRecommendation?.task_family,
-      policyContract?.task_family,
-    );
-    const workflowSignature = readNullableString(
-      firstStep?.workflow_signature,
-      pathRecommendation?.workflow_signature,
-      policyContract?.workflow_signature,
-    );
-    const policyMemoryId = readNullableString(
-      firstStep?.policy_memory_id,
-      policyContract?.policy_memory_id,
-      pathRecommendation?.policy_memory_id,
-    );
+    const taskFamily = contractTrust === "observational"
+      ? null
+      : readNullableString(
+          firstStep?.task_family,
+          pathRecommendation?.task_family,
+          policyContract?.task_family,
+        );
+    const workflowSignature = contractTrust === "observational"
+      ? null
+      : readNullableString(
+          firstStep?.workflow_signature,
+          pathRecommendation?.workflow_signature,
+          policyContract?.workflow_signature,
+        );
+    const policyMemoryId = contractTrust === "observational"
+      ? null
+      : readNullableString(
+          firstStep?.policy_memory_id,
+          policyContract?.policy_memory_id,
+          pathRecommendation?.policy_memory_id,
+        );
     const preferredRehydration = gate?.preferred_rehydration && typeof gate.preferred_rehydration === "object"
       ? (gate.preferred_rehydration as Record<string, unknown>)
       : null;
@@ -1226,7 +1238,11 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const actionHints = orderedActions.map((action, index) => ({
       summary_version: "context_operator_action_hint_v1" as const,
       action,
-      priority: index === 0 ? "required" as const : "recommended" as const,
+      priority:
+        index === 0 && contractTrust === "authoritative"
+          ? "required" as const
+          : "recommended" as const,
+      contract_trust: contractTrust,
       instruction:
         index === 0 && typeof gate?.instruction === "string"
           ? gate.instruction

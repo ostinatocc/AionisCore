@@ -3,6 +3,7 @@ import type {
   ActionRetrievalGateSummary,
   ActionRetrievalUncertaintySummary,
   ActionPacketSummary,
+  ContractTrust,
   FirstStepRecommendation,
   KickoffRecommendation,
   PlannerPacketSummarySurface,
@@ -22,6 +23,7 @@ type PatternSignalSummaryLike = {
 
 type ExperienceRecommendationProjectionLike = {
   history_applied: boolean;
+  contract_trust: ContractTrust | null;
   selected_tool: string | null;
   task_family: string | null;
   workflow_signature: string | null;
@@ -210,6 +212,101 @@ function buildUncertaintyAwareNextAction(args: {
   );
 }
 
+function hasStrongContractIdentity(args: {
+  taskFamily: string | null;
+  workflowSignature: string | null;
+  policyMemoryId: string | null;
+}): boolean {
+  return !!args.taskFamily || !!args.workflowSignature || !!args.policyMemoryId;
+}
+
+function resolveContractTrust(args: {
+  sourceKind: "experience_intelligence" | "tool_selection";
+  historyApplied: boolean;
+  explicitTrust: ContractTrust | null;
+  taskFamily: string | null;
+  workflowSignature: string | null;
+  policyMemoryId: string | null;
+  uncertainty: ActionRetrievalUncertaintySummary | null;
+}): ContractTrust {
+  const strongIdentity = hasStrongContractIdentity(args);
+  const computedTrust: ContractTrust =
+    args.uncertainty?.level === "high" && !strongIdentity
+      ? "observational"
+      : (
+          strongIdentity
+          && (
+            !args.uncertainty
+            || args.uncertainty.level === "low"
+            || (args.sourceKind === "experience_intelligence" && args.historyApplied)
+          )
+        )
+        ? "authoritative"
+        : "advisory";
+  if (!args.explicitTrust) return computedTrust;
+  const rank: Record<ContractTrust, number> = {
+    observational: 0,
+    advisory: 1,
+    authoritative: 2,
+  };
+  return rank[args.explicitTrust] < rank[computedTrust] ? args.explicitTrust : computedTrust;
+}
+
+function applyContractTrustGuard(args: {
+  sourceKind: "experience_intelligence" | "tool_selection";
+  historyApplied: boolean;
+  explicitTrust: ContractTrust | null;
+  selectedTool: string | null;
+  taskFamily: string | null;
+  workflowSignature: string | null;
+  policyMemoryId: string | null;
+  filePath: string | null;
+  nextAction: string | null;
+  uncertainty: ActionRetrievalUncertaintySummary | null;
+}): FirstStepRecommendation {
+  const contractTrust = resolveContractTrust({
+    sourceKind: args.sourceKind,
+    historyApplied: args.historyApplied,
+    explicitTrust: args.explicitTrust,
+    taskFamily: args.taskFamily,
+    workflowSignature: args.workflowSignature,
+    policyMemoryId: args.policyMemoryId,
+    uncertainty: args.uncertainty,
+  });
+
+  if (contractTrust !== "observational") {
+    return {
+      source_kind: args.sourceKind,
+      history_applied: args.historyApplied,
+      contract_trust: contractTrust,
+      selected_tool: args.selectedTool,
+      task_family: args.taskFamily,
+      workflow_signature: args.workflowSignature,
+      policy_memory_id: args.policyMemoryId,
+      file_path: args.filePath,
+      next_action: args.nextAction,
+    };
+  }
+
+  return {
+    source_kind: args.sourceKind,
+    history_applied: args.historyApplied,
+    contract_trust: contractTrust,
+    selected_tool: args.selectedTool,
+    task_family: null,
+    workflow_signature: null,
+    policy_memory_id: null,
+    file_path: null,
+    next_action: buildUncertaintyAwareNextAction({
+      sourceKind: args.sourceKind,
+      selectedTool: args.selectedTool,
+      filePath: null,
+      nextAction: null,
+      uncertainty: args.uncertainty,
+    }),
+  };
+}
+
 export function buildPlannerExplanation(args: {
   selectedTool: string | null;
   decision: Record<string, unknown>;
@@ -377,40 +474,44 @@ export function buildFirstStepRecommendation(args: {
     )
   ) {
     const selectedTool = experience.selected_tool ?? args.selectedTool ?? null;
-    return {
-      source_kind: "experience_intelligence",
-      history_applied: experience.history_applied,
-      selected_tool: selectedTool,
-      task_family: experience.task_family,
-      workflow_signature: experience.workflow_signature,
-      policy_memory_id: experience.policy_memory_id,
-      file_path: experience.file_path,
-      next_action: buildUncertaintyAwareNextAction({
+    return applyContractTrustGuard({
+      sourceKind: "experience_intelligence",
+      historyApplied: experience.history_applied,
+      explicitTrust: experience.contract_trust,
+      selectedTool,
+      taskFamily: experience.task_family,
+      workflowSignature: experience.workflow_signature,
+      policyMemoryId: experience.policy_memory_id,
+      filePath: experience.file_path,
+      nextAction: buildUncertaintyAwareNextAction({
         sourceKind: "experience_intelligence",
         selectedTool,
         filePath: experience.file_path,
         nextAction: experience.combined_next_action,
         uncertainty: experience.action_retrieval_uncertainty,
       }),
-    };
+      uncertainty: experience.action_retrieval_uncertainty,
+    });
   }
   if (!args.selectedTool) return null;
-  return {
-    source_kind: "tool_selection",
-    history_applied: false,
-    selected_tool: args.selectedTool,
-    task_family: null,
-    workflow_signature: null,
-    policy_memory_id: null,
-    file_path: null,
-    next_action: buildUncertaintyAwareNextAction({
+  return applyContractTrustGuard({
+    sourceKind: "tool_selection",
+    historyApplied: false,
+    explicitTrust: experience?.contract_trust ?? null,
+    selectedTool: args.selectedTool,
+    taskFamily: null,
+    workflowSignature: null,
+    policyMemoryId: null,
+    filePath: null,
+    nextAction: buildUncertaintyAwareNextAction({
       sourceKind: "tool_selection",
       selectedTool: args.selectedTool,
       filePath: null,
       nextAction: null,
       uncertainty: experience?.action_retrieval_uncertainty ?? null,
     }),
-  };
+    uncertainty: experience?.action_retrieval_uncertainty ?? null,
+  });
 }
 
 export function buildKickoffRecommendation(
@@ -420,6 +521,7 @@ export function buildKickoffRecommendation(
   return {
     source_kind: firstStepRecommendation.source_kind,
     history_applied: firstStepRecommendation.history_applied,
+    contract_trust: firstStepRecommendation.contract_trust,
     selected_tool: firstStepRecommendation.selected_tool,
     task_family: firstStepRecommendation.task_family,
     workflow_signature: firstStepRecommendation.workflow_signature,
@@ -431,6 +533,7 @@ export function buildKickoffRecommendation(
 
 export function buildKickoffRecommendationFromExperience(args: {
   historyApplied: boolean;
+  contractTrustHint: ContractTrust | null;
   selectedTool: string | null;
   taskFamily: string | null;
   workflowSignature: string | null;
@@ -440,20 +543,33 @@ export function buildKickoffRecommendationFromExperience(args: {
   uncertainty?: ActionRetrievalUncertaintySummary | null;
 }): KickoffRecommendation | null {
   if (!args.selectedTool && !args.filePath && !args.nextAction && !args.uncertainty) return null;
-  return {
-    source_kind: args.historyApplied ? "experience_intelligence" : "tool_selection",
-    history_applied: args.historyApplied,
-    selected_tool: args.selectedTool,
-    task_family: args.taskFamily,
-    workflow_signature: args.workflowSignature,
-    policy_memory_id: args.policyMemoryId,
-    file_path: args.filePath,
-    next_action: buildUncertaintyAwareNextAction({
+  const firstStep = applyContractTrustGuard({
+    sourceKind: args.historyApplied ? "experience_intelligence" : "tool_selection",
+    historyApplied: args.historyApplied,
+    explicitTrust: args.contractTrustHint,
+    selectedTool: args.selectedTool,
+    taskFamily: args.taskFamily,
+    workflowSignature: args.workflowSignature,
+    policyMemoryId: args.policyMemoryId,
+    filePath: args.filePath,
+    nextAction: buildUncertaintyAwareNextAction({
       sourceKind: args.historyApplied ? "experience_intelligence" : "tool_selection",
       selectedTool: args.selectedTool,
       filePath: args.filePath,
       nextAction: args.nextAction,
       uncertainty: args.uncertainty ?? null,
     }),
+    uncertainty: args.uncertainty ?? null,
+  });
+  return {
+    source_kind: firstStep.source_kind,
+    history_applied: firstStep.history_applied,
+    contract_trust: firstStep.contract_trust,
+    selected_tool: firstStep.selected_tool,
+    task_family: firstStep.task_family,
+    workflow_signature: firstStep.workflow_signature,
+    policy_memory_id: firstStep.policy_memory_id,
+    file_path: firstStep.file_path,
+    next_action: firstStep.next_action,
   };
 }

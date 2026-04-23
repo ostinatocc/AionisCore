@@ -260,6 +260,94 @@ test("stable replay playbook anchors are recallable through the procedure recall
   }
 });
 
+test("stable replay playbook recall surfaces persisted contract trust", async () => {
+  const dbPath = tmpDbPath("recall-contract-trust");
+  const playbookId = randomUUID();
+  const runId = randomUUID();
+  const { liteWriteStore, liteReplayStore } = await seedDraftPlaybook({
+    writeStorePath: dbPath,
+    playbookId,
+    runId,
+    slotOverrides: {
+      contract_trust: "advisory",
+      execution_native_v1: {
+        schema_version: "execution_native_v1",
+        execution_kind: "execution_native",
+        summary_kind: "handoff",
+        compression_layer: "L0",
+        contract_trust: "advisory",
+        task_family: "git_deploy_webserver",
+        target_files: ["/app/bin/install.sh"],
+        next_action: "Review the deploy hook and rerun the smoke test from a fresh shell.",
+      },
+    },
+  });
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  try {
+    const replayAccess = liteReplayStore.createReplayAccess();
+    const promoted = await replayPlaybookPromote({} as any, {
+      tenant_id: "default",
+      scope: "default",
+      actor: "local-user",
+      playbook_id: playbookId,
+      target_status: "active",
+    }, {
+      defaultScope: "default",
+      defaultTenantId: "default",
+      maxTextLen: 10000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+      shadowDualWriteEnabled: false,
+      shadowDualWriteStrict: false,
+      writeAccessShadowMirrorV2: false,
+      embedder: FakeEmbeddingProvider,
+      replayAccess,
+      replayMirror: liteReplayStore,
+      writeAccess: liteWriteStore,
+    });
+    const { rows } = await liteWriteStore.findNodes({
+      scope: "default",
+      id: promoted.playbook_node_id ?? "",
+      consumerAgentId: null,
+      consumerTeamId: null,
+      limit: 1,
+      offset: 0,
+    });
+    const promotedNode = rows[0];
+    assert.ok(promotedNode);
+    const anchor = promotedNode.slots.anchor_v1;
+    const [queryEmbedding] = await FakeEmbeddingProvider.embed([
+      `${promotedNode.title}\n${anchor.summary}\n${anchor.tool_set.join(" ")}\n${anchor.task_signature}`,
+    ]);
+
+    const recall = await memoryRecallParsed(
+      {} as any,
+      MemoryRecallRequest.parse({
+        tenant_id: "default",
+        scope: "default",
+        query_embedding: queryEmbedding,
+        limit: 5,
+        neighborhood_hops: 1,
+        max_nodes: 10,
+        max_edges: 10,
+        ranked_limit: 10,
+      }),
+      "default",
+      "default",
+      { allow_debug_embeddings: false },
+      undefined,
+      "planning_context",
+      { recall_access: liteRecallStore.createRecallAccess(), internal_allow_l4_selection: true },
+    );
+
+    assert.equal((recall as any).action_recall_packet.recommended_workflows[0]?.contract_trust, "advisory");
+  } finally {
+    await liteRecallStore.close();
+    await liteReplayStore.close();
+    await liteWriteStore.close();
+  }
+});
+
 test("replayPlaybookPromote preserves richer recovery contract fields on stable workflow anchors", async () => {
   const dbPath = tmpDbPath("promote-rich-contract");
   const playbookId = randomUUID();
@@ -269,6 +357,7 @@ test("replayPlaybookPromote preserves richer recovery contract fields on stable 
     playbookId,
     runId,
     slotOverrides: {
+      contract_trust: "advisory",
       task_family: "service_publish_validate",
       target_files: ["scripts/build_and_serve.py", "pyproject.toml"],
       next_action: "Update scripts/build_and_serve.py, restart the package index, and rerun validation from a fresh shell.",
@@ -303,6 +392,7 @@ test("replayPlaybookPromote preserves richer recovery contract fields on stable 
         execution_kind: "execution_native",
         summary_kind: "handoff",
         compression_layer: "L0",
+        contract_trust: "advisory",
         task_family: "service_publish_validate",
         target_files: ["scripts/build_and_serve.py", "pyproject.toml"],
         next_action: "Update scripts/build_and_serve.py, restart the package index, and rerun validation from a fresh shell.",
@@ -371,6 +461,7 @@ test("replayPlaybookPromote preserves richer recovery contract fields on stable 
     });
     const promoted = rows[0];
     assert.ok(promoted);
+    assert.equal(promoted.slots.anchor_v1.contract_trust, "advisory");
     assert.equal(promoted.slots.anchor_v1.task_family, "service_publish_validate");
     assert.deepEqual(promoted.slots.anchor_v1.target_files, ["scripts/build_and_serve.py", "pyproject.toml"]);
     assert.equal(
@@ -380,6 +471,7 @@ test("replayPlaybookPromote preserves richer recovery contract fields on stable 
     assert.ok(promoted.slots.anchor_v1.key_steps.includes("python scripts/build_and_serve.py --port 8080"));
     assert.ok(promoted.slots.anchor_v1.pattern_hints.includes("revalidate_service_from_fresh_shell"));
     assert.equal(promoted.slots.anchor_v1.service_lifecycle_constraints[0]?.must_survive_agent_exit, true);
+    assert.equal(promoted.slots.execution_native_v1.contract_trust, "advisory");
     assert.equal(promoted.slots.execution_native_v1.task_family, "service_publish_validate");
     assert.deepEqual(promoted.slots.execution_native_v1.target_files, ["scripts/build_and_serve.py", "pyproject.toml"]);
     assert.ok(promoted.slots.execution_native_v1.workflow_steps.includes("python scripts/build_and_serve.py --port 8080"));

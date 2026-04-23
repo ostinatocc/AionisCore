@@ -556,6 +556,7 @@ test("buildPlanningSummary makes first-step and planner explanation uncertainty-
   assert.deepEqual(summary.first_step_recommendation, {
     source_kind: "experience_intelligence",
     history_applied: true,
+    contract_trust: "advisory",
     selected_tool: "edit",
     task_family: null,
     workflow_signature: null,
@@ -567,6 +568,136 @@ test("buildPlanningSummary makes first-step and planner explanation uncertainty-
     summary.planner_explanation,
     "workflow guidance: Fix export failure; candidate workflows visible but not yet promoted: Replay Episode: Fix export failure; selected tool: edit; trusted pattern support: edit; contested patterns visible but not trusted: bash; rehydration available: Fix export failure; supporting knowledge appended: 1; action retrieval uncertainty: moderate; workflow guidance is still candidate-grade and has not stabilized yet; recommended follow-up: inspect_context",
   );
+});
+
+test("buildPlanningSummary downgrades high-uncertainty identity-poor guidance to observational trust", () => {
+  const summary = buildPlanningSummary({
+    rules: { considered: 3, matched: 1 },
+    tools: {
+      selection: { selected: "edit" },
+      decision: {
+        decision_id: "d_high_uncertainty",
+      },
+    },
+    layered_context: layeredContextFixture,
+    cost_signals: null,
+    context_est_tokens: 320,
+    context_compaction_profile: "balanced",
+    optimization_profile: "balanced",
+    recall_mode: "balanced",
+    experience_intelligence: {
+      recommendation: {
+        history_applied: true,
+        tool: {
+          selected_tool: "edit",
+        },
+        path: {
+          source_kind: "candidate_workflow",
+          file_path: "src/routes/export.ts",
+        },
+        combined_next_action: "Patch src/routes/export.ts and rerun export tests.",
+      },
+      action_retrieval: {
+        uncertainty: {
+          summary_version: "action_retrieval_uncertainty_v1",
+          level: "high",
+          confidence: 0.34,
+          evidence_gap_count: 4,
+          reasons: [
+            "workflow guidance is weak and the prior path lacks a stable identity",
+          ],
+          recommended_actions: ["inspect_context", "widen_recall"],
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(summary.first_step_recommendation, {
+    source_kind: "experience_intelligence",
+    history_applied: true,
+    contract_trust: "observational",
+    selected_tool: "edit",
+    task_family: null,
+    workflow_signature: null,
+    policy_memory_id: null,
+    file_path: null,
+    next_action: "Inspect the current context before starting with edit.",
+  });
+});
+
+test("buildPlanningSummary respects explicit advisory trust from persisted policy memory", () => {
+  const summary = buildPlanningSummary({
+    rules: { considered: 2, matched: 1 },
+    tools: {
+      selection: { selected: "edit" },
+      decision: {
+        decision_id: "d_advisory_policy",
+      },
+    },
+    layered_context: layeredContextFixture,
+    cost_signals: null,
+    context_est_tokens: 320,
+    context_compaction_profile: "balanced",
+    optimization_profile: "balanced",
+    recall_mode: "balanced",
+    experience_intelligence: {
+      recommendation: {
+        history_applied: true,
+        tool: {
+          selected_tool: "edit",
+        },
+        path: {
+          source_kind: "recommended_workflow",
+          workflow_signature: "fix-export-failure-workflow",
+          file_path: "src/routes/export.ts",
+          contract_trust: "advisory",
+        },
+        combined_next_action: "Patch src/routes/export.ts and rerun export tests.",
+      },
+      policy_contract: {
+        summary_version: "policy_contract_v1",
+        policy_kind: "tool_preference",
+        source_kind: "stable_workflow",
+        policy_state: "candidate",
+        contract_trust: "advisory",
+        activation_mode: "hint",
+        materialization_state: "persisted",
+        history_applied: true,
+        selected_tool: "edit",
+        avoid_tools: [],
+        task_family: "task:repair_export",
+        workflow_signature: "fix-export-failure-workflow",
+        file_path: "src/routes/export.ts",
+        target_files: ["src/routes/export.ts"],
+        next_action: "Patch src/routes/export.ts and rerun export tests.",
+        confidence: 0.72,
+        source_anchor_ids: ["wf_123"],
+        reason: "Advisory persisted policy memory suggests edit but should not strongly steer kickoff.",
+      },
+      action_retrieval: {
+        uncertainty: {
+          summary_version: "action_retrieval_uncertainty_v1",
+          level: "low",
+          confidence: 0.84,
+          evidence_gap_count: 0,
+          reasons: [],
+          recommended_actions: ["proceed"],
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(summary.first_step_recommendation, {
+    source_kind: "experience_intelligence",
+    history_applied: true,
+    contract_trust: "advisory",
+    selected_tool: "edit",
+    task_family: "task:repair_export",
+    workflow_signature: "fix-export-failure-workflow",
+    policy_memory_id: null,
+    file_path: "src/routes/export.ts",
+    next_action: "Patch src/routes/export.ts and rerun export tests.",
+  });
 });
 
 test("buildAssemblySummary surfaces semantic forgetting, relocation, and rehydration counts", () => {

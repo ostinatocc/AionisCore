@@ -38,6 +38,10 @@ export type ReplayLearningProjectionArtifacts = {
 
 export const REPLAY_LEARNING_WORKFLOW_REQUIRED_OBSERVATIONS = 2;
 
+function allowsStableReplayPromotion(contractTrust: unknown): boolean {
+  return contractTrust !== "advisory" && contractTrust !== "observational";
+}
+
 function stableNodeIdFromClientId(scope: string, clientId: string): string {
   return stableUuid(`${scope}:node:${clientId.trim()}`);
 }
@@ -136,6 +140,7 @@ function buildReplayLearningStableWorkflowAnchor(args: {
   return MemoryAnchorV1Schema.parse({
     anchor_kind: "workflow",
     anchor_level: "L2",
+    ...(workflowContract.contract_trust ? { contract_trust: workflowContract.contract_trust } : {}),
     task_signature: `replay_playbook:${args.playbookId}`,
     task_class: "replay_learning",
     ...(workflowContract.task_family ? { task_family: workflowContract.task_family } : {}),
@@ -224,6 +229,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
   const episodeClientId = `replay:learning:episode:${args.source.playbook_id}:v${args.source.playbook_version}`;
   const workflowClientId = `replay:learning:workflow:${args.source.playbook_id}:${args.workflowSignature}`;
   const workflowContract = deriveReplayWorkflowContractFromSlots(args.source.playbook_slots);
+  const shouldPromoteStableWorkflow = args.shouldPromoteStableWorkflow && allowsStableReplayPromotion(workflowContract.contract_trust);
   const nodes: Array<Record<string, unknown>> = [];
   const edges: Array<Record<string, unknown>> = [];
 
@@ -277,12 +283,12 @@ export function buildReplayLearningProjectionArtifacts(args: {
         ?? `Replay repair learning episode for playbook ${args.source.playbook_id} v${args.source.playbook_version}`,
       slots: {
         replay_learning_episode: true,
-        summary_kind: args.shouldPromoteStableWorkflow ? "replay_learning_episode" : "workflow_candidate",
+        summary_kind: shouldPromoteStableWorkflow ? "replay_learning_episode" : "workflow_candidate",
         compression_layer: "L1",
         lifecycle_state: "active",
         ttl_expires_at: args.ttlExpiresAt,
         archive_candidate: true,
-        ...(!args.shouldPromoteStableWorkflow
+        ...(!shouldPromoteStableWorkflow
           ? {
               execution_native_v1: {
                 ...ExecutionNativeV1Schema.parse({
@@ -290,6 +296,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
                   execution_kind: "workflow_candidate",
                   summary_kind: "workflow_candidate",
                   compression_layer: "L1",
+                  ...(workflowContract.contract_trust ? { contract_trust: workflowContract.contract_trust } : {}),
                   task_signature: `replay_playbook:${args.source.playbook_id}`,
                   ...(workflowContract.task_family ? { task_family: workflowContract.task_family } : {}),
                   workflow_signature: args.workflowSignature,
@@ -345,7 +352,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
     });
   }
 
-  if (args.shouldPromoteStableWorkflow) {
+  if (shouldPromoteStableWorkflow) {
     const episodeNodeId = args.shouldCreateEpisode ? stableNodeIdFromClientId(args.source.scope_key, episodeClientId) : null;
     const workflowAnchor = buildReplayLearningStableWorkflowAnchor({
       scopeKey: args.source.scope_key,
@@ -375,6 +382,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
           execution_kind: "workflow_anchor",
           summary_kind: "workflow_anchor",
           compression_layer: "L2",
+          ...(workflowContract.contract_trust ? { contract_trust: workflowContract.contract_trust } : {}),
           task_signature: workflowAnchor.task_signature,
           ...(workflowAnchor.task_family ? { task_family: workflowAnchor.task_family } : {}),
           workflow_signature: workflowAnchor.workflow_signature,
@@ -429,6 +437,6 @@ export function buildReplayLearningProjectionArtifacts(args: {
     workflowClientId,
     nodes,
     edges,
-    shouldPromoteStableWorkflow: args.shouldPromoteStableWorkflow,
+    shouldPromoteStableWorkflow,
   };
 }

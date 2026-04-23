@@ -763,6 +763,8 @@ function assertOperatorActionHintProjection(body: Record<string, unknown>, expec
   gate_action: string;
   instruction: string;
   tool_route: string | null;
+  priority: string;
+  contract_trust: string;
   selected_tool: string | null;
   file_path: string | null;
   task_family?: string | null;
@@ -779,6 +781,8 @@ function assertOperatorActionHintProjection(body: Record<string, unknown>, expec
   assert.ok(actionHints.length >= 1);
   assert.equal(actionHints[0]?.summary_version, "context_operator_action_hint_v1");
   assert.equal(actionHints[0]?.action, expected.gate_action);
+  assert.equal(actionHints[0]?.priority, expected.priority);
+  assert.equal(actionHints[0]?.contract_trust, expected.contract_trust);
   assert.equal(actionHints[0]?.instruction, expected.instruction);
   assert.equal(actionHints[0]?.tool_route ?? null, expected.tool_route);
   assert.equal(actionHints[0]?.selected_tool ?? null, expected.selected_tool);
@@ -1476,6 +1480,7 @@ test("planning_context returns aligned planner packet, action packet summary, an
     assert.deepEqual(body.planning_summary.first_step_recommendation, {
       source_kind: "experience_intelligence",
       history_applied: true,
+      contract_trust: "authoritative",
       selected_tool: body.planning_summary.selected_tool,
       task_family: null,
       workflow_signature: "fix-export-failure-workflow",
@@ -1897,6 +1902,8 @@ test("planning_context debug layered_context projects delegation learning withou
       gate_action: "inspect_context",
       instruction: "Inspect the current context before starting with edit.",
       tool_route: null,
+      priority: "required",
+      contract_trust: "authoritative",
       selected_tool: "edit",
       file_path: null,
       task_family: null,
@@ -2265,6 +2272,7 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     assert.deepEqual(body.assembly_summary.first_step_recommendation, {
       source_kind: "experience_intelligence",
       history_applied: true,
+      contract_trust: "authoritative",
       selected_tool: body.assembly_summary.selected_tool,
       task_family: null,
       workflow_signature: "fix-export-failure-workflow",
@@ -2410,6 +2418,8 @@ test("context_assemble can still return layered_context when explicitly requeste
       gate_action: "inspect_context",
       instruction: "Inspect the current context before starting with edit.",
       tool_route: null,
+      priority: "required",
+      contract_trust: "authoritative",
       selected_tool: "edit",
       file_path: null,
       task_family: null,

@@ -23,6 +23,7 @@ import {
   ExperienceIntelligenceResponseSchema,
   KickoffRecommendationResponseSchema,
   PolicyContractSchema,
+  type ContractTrust,
   type ExperienceIntelligenceResponse,
   type ExperienceIntelligenceInput,
   type DerivedPolicySurface,
@@ -55,6 +56,13 @@ function clamp01(value: number): number {
   return value;
 }
 
+function firstContractTrust(...values: unknown[]): ContractTrust | null {
+  for (const value of values) {
+    if (value === "authoritative" || value === "advisory" || value === "observational") return value;
+  }
+  return null;
+}
+
 function buildDerivedPolicySurface(args: {
   tools: ToolsSelectRouteContract;
   introspection: ExecutionMemoryIntrospectionResponse;
@@ -85,8 +93,16 @@ function buildDerivedPolicySurface(args: {
       : patternSupports
         ? "trusted_pattern"
         : "stable_workflow";
+  const workflowContractTrust = firstContractTrust(
+    (args.path as Record<string, unknown>).contract_trust,
+    selectedWorkflow?.contract_trust,
+  );
+  const policyContractTrust: ContractTrust =
+    patternSupports
+      ? "authoritative"
+      : workflowContractTrust ?? "authoritative";
   const policyState =
-    patternSupports || workflowPolicyState === "stable"
+    (patternSupports || workflowPolicyState === "stable") && policyContractTrust === "authoritative"
       ? "stable"
       : "candidate";
   const patternConfidence = patternSupports ? (preferredPattern?.confidence ?? 0.82) : 0;
@@ -119,6 +135,7 @@ function buildDerivedPolicySurface(args: {
     policy_kind: "tool_preference",
     source_kind: sourceKind,
     policy_state: policyState,
+    contract_trust: policyContractTrust,
     selected_tool: selectedTool,
     task_family: firstString((args.path as Record<string, unknown>).task_family, selectedWorkflow?.task_family, preferredPattern?.task_family),
     workflow_signature: firstString(selectedWorkflow?.workflow_signature),
@@ -319,7 +336,9 @@ function buildPolicyContract(args: {
         ? [args.derivedPolicy.file_path]
         : [];
   const activationMode =
-    args.derivedPolicy.policy_state === "stable" && args.historyApplied
+    args.derivedPolicy.policy_state === "stable"
+      && args.historyApplied
+      && args.derivedPolicy.contract_trust === "authoritative"
       ? "default"
       : "hint";
   const pathWorkflowSteps = Array.isArray(args.path.workflow_steps) ? args.path.workflow_steps : [];
@@ -350,6 +369,7 @@ function buildPolicyContract(args: {
     policy_kind: "tool_preference",
     source_kind: args.derivedPolicy.source_kind,
     policy_state: args.derivedPolicy.policy_state,
+    contract_trust: args.derivedPolicy.contract_trust ?? "authoritative",
     policy_memory_state: "active",
     activation_mode: activationMode,
     materialization_state: "computed",
@@ -591,6 +611,20 @@ export function buildKickoffRecommendationResponseFromExperience(
       (typeof actionRetrieval?.history_applied === "boolean" ? actionRetrieval.history_applied : undefined)
       ?? experience.recommendation?.history_applied
     ) === true,
+    contractTrustHint:
+      actionRetrieval?.contract_trust === "authoritative"
+      || actionRetrieval?.contract_trust === "advisory"
+      || actionRetrieval?.contract_trust === "observational"
+        ? actionRetrieval.contract_trust
+        : path?.contract_trust === "authoritative"
+          || path?.contract_trust === "advisory"
+          || path?.contract_trust === "observational"
+          ? path.contract_trust
+          : policyContract?.contract_trust === "authoritative"
+            || policyContract?.contract_trust === "advisory"
+            || policyContract?.contract_trust === "observational"
+            ? policyContract.contract_trust
+            : null,
     selectedTool: firstString(actionRetrieval?.selected_tool, tool?.selected_tool),
     taskFamily: firstString(path?.task_family, policyContract?.task_family),
     workflowSignature: firstString(path?.workflow_signature, policyContract?.workflow_signature),

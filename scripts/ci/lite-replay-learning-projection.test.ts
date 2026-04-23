@@ -127,8 +127,47 @@ test("replay-learning projection artifacts auto-promote to stable workflow when 
   assert.ok(plan.edges.some((edge) => (edge as any).src?.client_id === plan.workflowClientId && (edge as any).dst?.client_id === plan.episodeClientId));
 });
 
+test("replay-learning projection artifacts keep low-trust workflows at candidate level", () => {
+  const source = baseSource({
+    execution_native_v1: {
+      schema_version: "execution_native_v1",
+      execution_kind: "execution_native",
+      summary_kind: "handoff",
+      compression_layer: "L0",
+      contract_trust: "advisory",
+      task_family: "service_publish_validate",
+      target_files: ["scripts/build_and_serve.py"],
+      next_action: "Restart the package index and revalidate from a fresh shell.",
+    },
+  });
+  const plan = buildReplayLearningProjectionArtifacts({
+    source,
+    matcherFingerprint: "matcher-fp",
+    policyFingerprint: "policy-fp",
+    duplicateRuleNodeId: null,
+    workflowSignature: "replay-learning-workflow-sig",
+    preferTools: ["edit", "test"],
+    shouldCreateRule: true,
+    shouldCreateEpisode: true,
+    shouldPromoteStableWorkflow: true,
+    observedWorkflowCount: 2,
+    projectedAt: "2026-03-20T00:00:00Z",
+    ttlExpiresAt: "2026-04-19T00:00:00Z",
+  });
+
+  const episode = plan.nodes.find((node) => node.client_id === plan.episodeClientId) as Record<string, any> | undefined;
+  const workflow = plan.nodes.find((node) => node.client_id === plan.workflowClientId);
+  assert.ok(episode);
+  assert.equal(plan.shouldPromoteStableWorkflow, false);
+  assert.equal(workflow, undefined);
+  assert.equal(episode?.slots?.summary_kind, "workflow_candidate");
+  assert.equal(episode?.slots?.execution_native_v1?.contract_trust, "advisory");
+  assert.equal(episode?.slots?.execution_native_v1?.workflow_promotion?.promotion_state, "candidate");
+});
+
 test("replay-learning projection artifacts preserve richer recovery contract fields", () => {
   const source = baseSource({
+    contract_trust: "authoritative",
     task_family: "service_publish_validate",
     target_files: ["scripts/build_and_serve.py", "pyproject.toml"],
     next_action: "Update scripts/build_and_serve.py, restart the package index, and rerun validation from a fresh shell.",
@@ -159,6 +198,7 @@ test("replay-learning projection artifacts preserve richer recovery contract fie
       execution_kind: "execution_native",
       summary_kind: "handoff",
       compression_layer: "L0",
+      contract_trust: "authoritative",
       task_family: "service_publish_validate",
       target_files: ["scripts/build_and_serve.py", "pyproject.toml"],
       next_action: "Update scripts/build_and_serve.py, restart the package index, and rerun validation from a fresh shell.",
@@ -208,6 +248,7 @@ test("replay-learning projection artifacts preserve richer recovery contract fie
 
   const workflow = plan.nodes.find((node) => node.client_id === plan.workflowClientId) as Record<string, any> | undefined;
   assert.ok(workflow);
+  assert.equal(workflow?.slots?.anchor_v1?.contract_trust, "authoritative");
   assert.equal(workflow?.slots?.anchor_v1?.task_family, "service_publish_validate");
   assert.deepEqual(workflow?.slots?.anchor_v1?.target_files, ["scripts/build_and_serve.py", "pyproject.toml"]);
   assert.equal(
@@ -217,6 +258,7 @@ test("replay-learning projection artifacts preserve richer recovery contract fie
   assert.ok(workflow?.slots?.anchor_v1?.key_steps?.includes("python scripts/build_and_serve.py --port 8080"));
   assert.ok(workflow?.slots?.anchor_v1?.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
   assert.equal(workflow?.slots?.anchor_v1?.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);
+  assert.equal(workflow?.slots?.execution_native_v1?.contract_trust, "authoritative");
   assert.equal(workflow?.slots?.execution_native_v1?.task_family, "service_publish_validate");
   assert.deepEqual(workflow?.slots?.execution_native_v1?.target_files, ["scripts/build_and_serve.py", "pyproject.toml"]);
   assert.ok(workflow?.slots?.execution_native_v1?.workflow_steps?.includes("python scripts/build_and_serve.py --port 8080"));

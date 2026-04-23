@@ -104,6 +104,13 @@ function firstString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function firstContractTrust(...values: unknown[]): "authoritative" | "advisory" | "observational" | null {
+  for (const value of values) {
+    if (value === "authoritative" || value === "advisory" || value === "observational") return value;
+  }
+  return null;
+}
+
 function normalizeLabel(value: string | null | undefined): string | null {
   if (!value) return null;
   return value.trim().toLowerCase().replace(/\s+/g, " ");
@@ -159,6 +166,17 @@ function collectPatternHints(source: WriteProjectionSourceNode): string[] {
     ...stringList(firstRecord(source.slots)?.pattern_hints),
     ...stringList(firstRecord(source.slots?.execution_native_v1)?.pattern_hints),
   ]);
+}
+
+function deriveContractTrustFromSource(source: WriteProjectionSourceNode): "authoritative" | "advisory" | "observational" | null {
+  const slots = asRecord(source.slots);
+  const executionNative = asRecord(slots?.execution_native_v1);
+  const recoveryContract = asRecord(slots?.recovery_contract_v1);
+  return firstContractTrust(
+    slots?.contract_trust,
+    executionNative?.contract_trust,
+    recoveryContract?.contract_trust,
+  );
 }
 
 function collectServiceLifecycleConstraints(
@@ -568,6 +586,7 @@ function buildStableWorkflowAnchor(args: {
   workflowSteps: string[];
   patternHints: string[];
   serviceLifecycleConstraints: ExecutionStateV1["service_lifecycle_constraints"];
+  contractTrust: "authoritative" | "advisory" | "observational" | null;
   observedCount: number;
   supportingNodeIds: string[];
   promotedAt: string;
@@ -575,6 +594,7 @@ function buildStableWorkflowAnchor(args: {
   return MemoryAnchorV1Schema.parse({
     anchor_kind: "workflow",
     anchor_level: "L2",
+    ...(args.contractTrust ? { contract_trust: args.contractTrust } : {}),
     task_signature: args.taskSignature,
     task_class: "execution_write_projection",
     ...(args.taskFamily ? { task_family: args.taskFamily } : {}),
@@ -718,6 +738,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
     const workflowSteps = collectWorkflowSteps(source);
     const patternHints = collectPatternHints(source);
     const serviceLifecycleConstraints = collectServiceLifecycleConstraints(source, state, packet);
+    const contractTrust = deriveContractTrustFromSource(source);
     const toolSet = deriveWorkflowToolSet(state, packet);
     const distillationSourceKind = resolveWorkflowProjectionDistillationSourceKind(source);
 
@@ -726,6 +747,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
       execution_kind: "workflow_candidate",
       summary_kind: "workflow_candidate",
       compression_layer: "L1",
+      ...(contractTrust ? { contract_trust: contractTrust } : {}),
       task_signature: taskSignature,
       ...(taskFamily ? { task_family: taskFamily } : {}),
       workflow_signature: workflowSignature,
@@ -780,6 +802,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
             success_score: 0.5,
           },
         ],
+        contractTrust,
         reviewResult: (promoteMemoryGovernanceReview?.review_result ?? null) as any,
         reviewProvider: args.governanceReviewProviders?.promote_memory ?? undefined,
       });
@@ -802,6 +825,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         compression_layer: "L1",
         lifecycle_state: "active",
         archive_candidate: true,
+        ...(contractTrust ? { contract_trust: contractTrust } : {}),
         target_files: targetFiles,
         ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
         ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
@@ -830,7 +854,12 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
       dst_id: source.id,
     });
 
-    if (observedCount >= requiredObservations && governancePreview?.runtime_apply.promotion_state_override === "stable") {
+    if (
+      observedCount >= requiredObservations
+      && governancePreview?.runtime_apply.promotion_state_override === "stable"
+      && contractTrust !== "advisory"
+      && contractTrust !== "observational"
+    ) {
       const stableClientId = `workflow_projection:stable:${workflowSignature}`;
       const stableNodeId = stableUuid(`${args.scope}:node:${stableClientId}`);
       const stableAnchor = buildStableWorkflowAnchor({
@@ -849,6 +878,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         workflowSteps,
         patternHints,
         serviceLifecycleConstraints,
+        contractTrust,
         observedCount,
         supportingNodeIds: existingCandidates.rows.map((row) => row.id),
         promotedAt: now,
@@ -874,6 +904,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
             execution_kind: "workflow_anchor",
             summary_kind: "workflow_anchor",
             compression_layer: "L2",
+            ...(contractTrust ? { contract_trust: contractTrust } : {}),
             task_signature: stableAnchor.task_signature,
             ...(stableAnchor.task_family ? { task_family: stableAnchor.task_family } : {}),
             workflow_signature: stableAnchor.workflow_signature,
@@ -907,6 +938,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
             workflow_signature: workflowSignature,
             auto_promoted: true,
             observed_count: observedCount,
+            ...(contractTrust ? { contract_trust: contractTrust } : {}),
             ...(governancePreview.runtime_apply.promotion_state_override
               ? { governed_promotion_state_override: governancePreview.runtime_apply.promotion_state_override }
               : {}),

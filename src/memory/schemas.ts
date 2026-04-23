@@ -425,9 +425,13 @@ export const MemoryPolicyEvolutionSchema = z.object({
   last_transition_at: z.string().min(1).nullable().default(null),
 });
 
+export const ContractTrustSchema = z.enum(["authoritative", "advisory", "observational"]);
+export type ContractTrust = z.infer<typeof ContractTrustSchema>;
+
 export const MemoryAnchorV1Schema = z.object({
   anchor_kind: MemoryAnchorKind,
   anchor_level: MemoryAnchorLevel,
+  contract_trust: ContractTrustSchema.optional(),
   pattern_state: MemoryPatternState.optional(),
   credibility_state: MemoryPatternCredibilityState.optional(),
   task_signature: z.string().min(1).max(256),
@@ -475,6 +479,7 @@ export const ExecutionNativeV1Schema = z.object({
   execution_kind: ExecutionNativeKind,
   summary_kind: z.string().min(1).max(128).nullable().optional(),
   compression_layer: MemoryLayerId.optional(),
+  contract_trust: ContractTrustSchema.optional(),
   task_signature: z.string().min(1).max(256).optional(),
   task_family: z.string().min(1).max(128).optional(),
   error_signature: z.string().min(1).max(256).optional(),
@@ -1076,6 +1081,7 @@ export type ContinuityReviewPackResponse = z.infer<typeof ContinuityReviewPackRe
 export const ExperienceIntelligencePathRecommendationSchema = z.object({
   source_kind: z.enum(["recommended_workflow", "candidate_workflow", "none"]),
   anchor_id: z.string().nullable(),
+  contract_trust: ContractTrustSchema.optional(),
   task_family: z.string().nullable().optional(),
   workflow_signature: z.string().nullable(),
   title: z.string().nullable(),
@@ -1246,6 +1252,7 @@ export const DerivedPolicySurfaceSchema = z.object({
   policy_kind: z.literal("tool_preference"),
   source_kind: z.enum(["trusted_pattern", "stable_workflow", "blended"]),
   policy_state: z.enum(["candidate", "stable"]),
+  contract_trust: ContractTrustSchema.optional(),
   selected_tool: z.string(),
   task_family: z.string().nullable().optional(),
   workflow_signature: z.string().nullable(),
@@ -1273,6 +1280,7 @@ export const PolicyContractSchema = z.object({
   policy_kind: z.literal("tool_preference"),
   source_kind: z.enum(["trusted_pattern", "stable_workflow", "blended"]),
   policy_state: z.enum(["candidate", "stable"]),
+  contract_trust: ContractTrustSchema.optional(),
   policy_memory_state: z.enum(["active", "contested", "retired"]).default("active"),
   activation_mode: z.enum(["hint", "default"]),
   materialization_state: z.enum(["computed", "persisted"]).default("computed"),
@@ -1444,6 +1452,7 @@ export type KickoffRecommendationResponse = z.infer<typeof KickoffRecommendation
 export const FirstStepRecommendationSchema = z.object({
   source_kind: z.enum(["experience_intelligence", "tool_selection"]),
   history_applied: z.boolean(),
+  contract_trust: ContractTrustSchema,
   selected_tool: z.string().nullable(),
   task_family: z.string().nullable(),
   workflow_signature: z.string().nullable(),
@@ -1455,6 +1464,7 @@ export const FirstStepRecommendationSchema = z.object({
 export const KickoffRecommendationSchema = z.object({
   source_kind: z.enum(["experience_intelligence", "tool_selection"]),
   history_applied: z.boolean(),
+  contract_trust: ContractTrustSchema,
   selected_tool: z.string().nullable(),
   task_family: z.string().nullable(),
   workflow_signature: z.string().nullable(),
@@ -2368,6 +2378,7 @@ export const ContextOperatorProjectionSchema = z.object({
     summary_version: z.literal("context_operator_action_hint_v1"),
     action: ActionRetrievalGateActionSchema,
     priority: z.enum(["required", "recommended"]),
+    contract_trust: ContractTrustSchema,
     instruction: z.string().nullable(),
     selected_tool: z.string().nullable(),
     file_path: z.string().nullable(),
@@ -2642,6 +2653,7 @@ export const WorkflowWriteProjectionGovernancePolicyEffectSchema = z.object({
     "review_not_supplied",
     "review_not_admissible",
     "already_stable",
+    "contract_trust_below_authoritative",
     "review_did_not_raise_promotion_state",
     "high_confidence_workflow_promotion",
   ]),

@@ -28,6 +28,13 @@ function firstString(...values: unknown[]): string | null {
   return null;
 }
 
+function firstContractTrust(...values: unknown[]): "authoritative" | "advisory" | "observational" | null {
+  for (const value of values) {
+    if (value === "authoritative" || value === "advisory" || value === "observational") return value;
+  }
+  return null;
+}
+
 function toNodeUri(tenantId: string, scope: string, type: string, id: string): string {
   return `aionis://${tenantId}/${scope}/${type}/${id}`;
 }
@@ -153,6 +160,7 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     }),
     promotion_origin: firstString(workflowPromotion.promotion_origin),
     promotion_state: firstString(workflowPromotion.promotion_state),
+    contract_trust: firstContractTrust(execution.contract_trust, anchor.contract_trust, slots.contract_trust),
     task_family: firstString(execution.task_family, anchor.task_family, slots.task_kind),
     observed_count: Number.isFinite(observedCount) ? observedCount : null,
     required_observations: Number.isFinite(requiredObservations) ? requiredObservations : null,

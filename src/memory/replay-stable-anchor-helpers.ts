@@ -142,6 +142,7 @@ function buildReplayPlaybookAnchor(args: {
   return MemoryAnchorV1Schema.parse({
     anchor_kind: "workflow",
     anchor_level: "L2",
+    ...(workflowContract.contract_trust ? { contract_trust: workflowContract.contract_trust } : {}),
     task_signature: `replay_playbook:${args.playbookId}`,
     task_class: "replay_playbook",
     ...(workflowContract.task_family ? { task_family: workflowContract.task_family } : {}),
@@ -250,6 +251,7 @@ export async function buildStablePlaybookNodeFields(args: {
     execution_kind: "workflow_anchor",
     summary_kind: "workflow_anchor",
     compression_layer: "L2",
+    ...(workflowContract.contract_trust ? { contract_trust: workflowContract.contract_trust } : {}),
     task_signature: anchor.task_signature,
     task_class: anchor.task_class,
     ...(anchor.task_family ? { task_family: anchor.task_family } : {}),
