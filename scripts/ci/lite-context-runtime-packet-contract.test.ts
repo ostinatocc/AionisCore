@@ -765,6 +765,9 @@ function assertOperatorActionHintProjection(body: Record<string, unknown>, expec
   tool_route: string | null;
   selected_tool: string | null;
   file_path: string | null;
+  task_family?: string | null;
+  workflow_signature?: string | null;
+  policy_memory_id?: string | null;
 }) {
   const operatorProjection = body.operator_projection as Record<string, unknown>;
   const actionGate = operatorProjection.action_retrieval_gate as Record<string, unknown>;
@@ -780,6 +783,15 @@ function assertOperatorActionHintProjection(body: Record<string, unknown>, expec
   assert.equal(actionHints[0]?.tool_route ?? null, expected.tool_route);
   assert.equal(actionHints[0]?.selected_tool ?? null, expected.selected_tool);
   assert.equal(actionHints[0]?.file_path ?? null, expected.file_path);
+  if ("task_family" in expected) {
+    assert.equal(actionHints[0]?.task_family ?? null, expected.task_family ?? null);
+  }
+  if ("workflow_signature" in expected) {
+    assert.equal(actionHints[0]?.workflow_signature ?? null, expected.workflow_signature ?? null);
+  }
+  if ("policy_memory_id" in expected) {
+    assert.equal(actionHints[0]?.policy_memory_id ?? null, expected.policy_memory_id ?? null);
+  }
 }
 
 function tmpDbPath(name: string): string {
@@ -1465,6 +1477,9 @@ test("planning_context returns aligned planner packet, action packet summary, an
       source_kind: "experience_intelligence",
       history_applied: true,
       selected_tool: body.planning_summary.selected_tool,
+      task_family: null,
+      workflow_signature: "fix-export-failure-workflow",
+      policy_memory_id: null,
       file_path: null,
       next_action: "Inspect the current context before starting with edit.",
     });
@@ -1884,6 +1899,9 @@ test("planning_context debug layered_context projects delegation learning withou
       tool_route: null,
       selected_tool: "edit",
       file_path: null,
+      task_family: null,
+      workflow_signature: "fix-export-failure-workflow",
+      policy_memory_id: null,
     });
   } finally {
     await app.close();
@@ -2248,6 +2266,9 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
       source_kind: "experience_intelligence",
       history_applied: true,
       selected_tool: body.assembly_summary.selected_tool,
+      task_family: null,
+      workflow_signature: "fix-export-failure-workflow",
+      policy_memory_id: null,
       file_path: null,
       next_action: "Inspect the current context before starting with edit.",
     });
@@ -2391,6 +2412,9 @@ test("context_assemble can still return layered_context when explicitly requeste
       tool_route: null,
       selected_tool: "edit",
       file_path: null,
+      task_family: null,
+      workflow_signature: "fix-export-failure-workflow",
+      policy_memory_id: null,
     });
     assertExecutionKernelBundle(body as {
       layered_context: Record<string, unknown>;

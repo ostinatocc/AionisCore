@@ -1,5 +1,11 @@
 import stableStringify from "fast-json-stable-stringify";
-import { ExecutionPacketV1Schema, ExecutionStateV1Schema, type ExecutionPacketV1, type ExecutionStateV1 } from "../execution/types.js";
+import {
+  ExecutionPacketV1Schema,
+  ExecutionStateV1Schema,
+  ServiceLifecycleConstraintV1Schema,
+  type ExecutionPacketV1,
+  type ExecutionStateV1,
+} from "../execution/types.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema } from "./schemas.js";
 import {
   buildDistillationMetadata,
@@ -115,6 +121,59 @@ function stringList(value: unknown): string[] {
     .filter((item) => item.length > 0);
 }
 
+function uniqueLifecycleConstraints(
+  values: unknown[],
+  limit = 16,
+): ExecutionStateV1["service_lifecycle_constraints"] {
+  const out: ExecutionStateV1["service_lifecycle_constraints"] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const parsed = ServiceLifecycleConstraintV1Schema.safeParse(value);
+    if (!parsed.success) continue;
+    const key = [
+      parsed.data.label,
+      parsed.data.endpoint ?? "",
+      parsed.data.launch_reference ?? "",
+    ].join("::");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(parsed.data);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function firstRecord(value: unknown): Record<string, unknown> | null {
+  return asRecord(value);
+}
+
+function collectWorkflowSteps(source: WriteProjectionSourceNode): string[] {
+  return normalizeFileList([
+    ...stringList(firstRecord(source.slots)?.workflow_steps),
+    ...stringList(firstRecord(source.slots?.execution_native_v1)?.workflow_steps),
+  ]);
+}
+
+function collectPatternHints(source: WriteProjectionSourceNode): string[] {
+  return normalizeFileList([
+    ...stringList(firstRecord(source.slots)?.pattern_hints),
+    ...stringList(firstRecord(source.slots?.execution_native_v1)?.pattern_hints),
+  ]);
+}
+
+function collectServiceLifecycleConstraints(
+  source: WriteProjectionSourceNode,
+  state: ExecutionStateV1 | null,
+  packet: ExecutionPacketV1 | null,
+): ExecutionStateV1["service_lifecycle_constraints"] {
+  return uniqueLifecycleConstraints([
+    ...((firstRecord(source.slots)?.service_lifecycle_constraints as unknown[]) ?? []),
+    ...((firstRecord(source.slots?.execution_native_v1)?.service_lifecycle_constraints as unknown[]) ?? []),
+    ...(state?.service_lifecycle_constraints ?? []),
+    ...(packet?.service_lifecycle_constraints ?? []),
+  ]);
+}
+
 function synthesizePacketFromLightweightHandoff(source: WriteProjectionSourceNode): ExecutionPacketV1 | null {
   const slots = asRecord(source.slots);
   if (!slots) return null;
@@ -145,6 +204,10 @@ function synthesizePacketFromLightweightHandoff(source: WriteProjectionSourceNod
   const mustChange = stringList(slots.must_change);
   const mustRemove = stringList(slots.must_remove);
   const mustKeep = stringList(slots.must_keep);
+  const serviceLifecycleConstraints = uniqueLifecycleConstraints([
+    ...((slots.service_lifecycle_constraints as unknown[]) ?? []),
+    ...((firstRecord(slots.execution_native_v1)?.service_lifecycle_constraints as unknown[]) ?? []),
+  ]);
   const risk = firstString(slots.risk);
   const stateId = `handoff:${sha256Hex(stableStringify({
     source_node_id: source.id,
@@ -168,6 +231,7 @@ function synthesizePacketFromLightweightHandoff(source: WriteProjectionSourceNod
       pending_validations: acceptanceChecks,
       unresolved_blockers: risk ? [risk] : [],
       rollback_notes: mustKeep,
+      service_lifecycle_constraints: serviceLifecycleConstraints,
       review_contract: null,
       resume_anchor: anchor ? {
         anchor,
@@ -226,7 +290,15 @@ function deriveTaskSignatureFromInputs(state: ExecutionStateV1 | null, packet: E
 
 function deriveTaskFamilyFromSource(source: WriteProjectionSourceNode): string | null {
   const slots = asRecord(source.slots);
-  return firstString(slots?.task_family) ?? firstString(slots?.task_kind);
+  const executionNative = asRecord(slots?.execution_native_v1);
+  const executionResultSummary = asRecord(slots?.execution_result_summary);
+  const trajectoryCompileSummary = asRecord(executionResultSummary?.trajectory_compile_v1);
+  return firstString(
+    slots?.task_family,
+    executionNative?.task_family,
+    trajectoryCompileSummary?.task_family,
+    slots?.task_kind,
+  );
 }
 
 function resolveWorkflowProjectionDistillationSourceKind(
@@ -493,6 +565,9 @@ function buildStableWorkflowAnchor(args: {
   filePath: string | null;
   targetFiles: string[];
   nextAction: string | null;
+  workflowSteps: string[];
+  patternHints: string[];
+  serviceLifecycleConstraints: ExecutionStateV1["service_lifecycle_constraints"];
   observedCount: number;
   supportingNodeIds: string[];
   promotedAt: string;
@@ -509,6 +584,9 @@ function buildStableWorkflowAnchor(args: {
     file_path: args.filePath,
     target_files: args.targetFiles,
     next_action: args.nextAction,
+    ...(args.workflowSteps.length > 0 ? { key_steps: args.workflowSteps } : {}),
+    ...(args.patternHints.length > 0 ? { pattern_hints: args.patternHints } : {}),
+    ...(args.serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: args.serviceLifecycleConstraints } : {}),
     outcome: {
       status: "success",
       result_class: "execution_write_stable",
@@ -637,6 +715,9 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
     const targetFiles = collectTargetFilesFromInputs(state, packet);
     const filePath = firstString(packet?.resume_anchor?.file_path ?? null) ?? targetFiles[0] ?? null;
     const nextAction = firstString(packet?.next_action ?? null);
+    const workflowSteps = collectWorkflowSteps(source);
+    const patternHints = collectPatternHints(source);
+    const serviceLifecycleConstraints = collectServiceLifecycleConstraints(source, state, packet);
     const toolSet = deriveWorkflowToolSet(state, packet);
     const distillationSourceKind = resolveWorkflowProjectionDistillationSourceKind(source);
 
@@ -671,6 +752,9 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
       file_path: filePath,
       target_files: targetFiles,
       next_action: nextAction,
+      ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
+      ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
+      ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
     });
 
     const projectedNodeId = stableUuid(`${args.scope}:node:${projectionClientId}`);
@@ -719,6 +803,9 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         lifecycle_state: "active",
         archive_candidate: true,
         target_files: targetFiles,
+        ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
+        ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
+        ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
         execution_native_v1: executionNative,
         workflow_write_projection: {
           generated_by: "execution_write_projection_v1",
@@ -759,6 +846,9 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         filePath,
         targetFiles,
         nextAction,
+        workflowSteps,
+        patternHints,
+        serviceLifecycleConstraints,
         observedCount,
         supportingNodeIds: existingCandidates.rows.map((row) => row.id),
         promotedAt: now,
@@ -793,6 +883,11 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
             file_path: stableAnchor.file_path ?? null,
             target_files: stableAnchor.target_files ?? [],
             next_action: stableAnchor.next_action ?? null,
+            ...(stableAnchor.key_steps && stableAnchor.key_steps.length > 0 ? { workflow_steps: stableAnchor.key_steps } : {}),
+            ...(stableAnchor.pattern_hints && stableAnchor.pattern_hints.length > 0 ? { pattern_hints: stableAnchor.pattern_hints } : {}),
+            ...(stableAnchor.service_lifecycle_constraints && stableAnchor.service_lifecycle_constraints.length > 0
+              ? { service_lifecycle_constraints: stableAnchor.service_lifecycle_constraints }
+              : {}),
             workflow_promotion: stableAnchor.workflow_promotion,
             maintenance: stableAnchor.maintenance,
             rehydration: stableAnchor.rehydration,

@@ -12,8 +12,10 @@ import {
   uniqueRuleIds,
 } from "./execution-provenance.js";
 import {
+  DerivedPolicySurfaceSchema,
   ExperienceIntelligenceRequest,
   MemoryFormPatternRequest,
+  PolicyContractSchema,
   ToolsFeedbackRequest,
   ToolsFeedbackResponseSchema,
   type MemoryFormPatternSemanticReviewResult,
@@ -115,10 +117,65 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
+function stringList(value: unknown, limit = 24): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const next = nullableString(item);
+    if (!next || seen.has(next)) continue;
+    seen.add(next);
+    out.push(next);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function serviceLifecycleList(value: unknown, limit = 16): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  const out: Array<Record<string, unknown>> = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const record = asRecord(item);
+    if (!record) continue;
+    const key = [
+      nullableString(record.label) ?? "",
+      nullableString(record.endpoint) ?? "",
+      nullableString(record.launch_reference) ?? "",
+    ].join("::");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(record);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function mergeStringList(existing: unknown, incoming: string[], limit = 24): string[] {
+  return stringList([
+    ...stringList(existing, limit),
+    ...incoming,
+  ], limit);
+}
+
+function mergeServiceLifecycleList(existing: unknown, incoming: Array<Record<string, unknown>>, limit = 16): Array<Record<string, unknown>> {
+  return serviceLifecycleList([
+    ...serviceLifecycleList(existing, limit),
+    ...incoming,
+  ], limit);
+}
+
 type WorkflowFeedbackTarget = {
   taskSignature: string | null;
   errorSignature: string | null;
   workflowSignature: string | null;
+  taskFamily: string | null;
+  filePath: string | null;
+  targetFiles: string[];
+  nextAction: string | null;
+  workflowSteps: string[];
+  patternHints: string[];
+  serviceLifecycleConstraints: Array<Record<string, unknown>>;
 };
 
 function extractWorkflowFeedbackTarget(context: unknown): WorkflowFeedbackTarget {
@@ -127,10 +184,45 @@ function extractWorkflowFeedbackTarget(context: unknown): WorkflowFeedbackTarget
   const error = asRecord(ctx?.error);
   const workflow = asRecord(ctx?.workflow);
   const execution = asRecord(ctx?.execution);
+  const recoveryContract = asRecord(ctx?.recovery_contract_v1);
+  const recoveryContractBody = asRecord(recoveryContract?.contract);
+  const executionResultSummary = asRecord(ctx?.execution_result_summary);
+  const trajectoryCompile = asRecord(executionResultSummary?.trajectory_compile_v1);
+  const trajectoryContract = asRecord(trajectoryCompile?.contract);
+  const targetFiles = stringList([
+    ...stringList(ctx?.target_files, 24),
+    ...stringList(workflow?.target_files, 24),
+    ...stringList(execution?.target_files, 24),
+    ...stringList(recoveryContractBody?.target_files, 24),
+    ...stringList(trajectoryContract?.target_files, 24),
+  ], 24);
+  const workflowSteps = stringList([
+    ...stringList(ctx?.workflow_steps, 24),
+    ...stringList(workflow?.workflow_steps, 24),
+    ...stringList(execution?.workflow_steps, 24),
+    ...stringList(recoveryContractBody?.workflow_steps, 24),
+    ...stringList(trajectoryContract?.workflow_steps, 24),
+  ], 24);
+  const patternHints = stringList([
+    ...stringList(ctx?.pattern_hints, 24),
+    ...stringList(workflow?.pattern_hints, 24),
+    ...stringList(execution?.pattern_hints, 24),
+    ...stringList(recoveryContractBody?.pattern_hints, 24),
+    ...stringList(trajectoryContract?.pattern_hints, 24),
+  ], 24);
+  const serviceLifecycleConstraints = [
+    ...serviceLifecycleList(ctx?.service_lifecycle_constraints, 16),
+    ...serviceLifecycleList(workflow?.service_lifecycle_constraints, 16),
+    ...serviceLifecycleList(execution?.service_lifecycle_constraints, 16),
+    ...serviceLifecycleList(recoveryContractBody?.service_lifecycle_constraints, 16),
+    ...serviceLifecycleList(trajectoryContract?.service_lifecycle_constraints, 16),
+  ].slice(0, 16);
   return {
     taskSignature:
       nullableString(ctx?.task_signature)
       ?? nullableString(task?.signature)
+      ?? nullableString(recoveryContract?.task_signature)
+      ?? nullableString(trajectoryCompile?.task_signature)
       ?? nullableString(execution?.task_signature),
     errorSignature:
       nullableString(ctx?.error_signature)
@@ -140,7 +232,34 @@ function extractWorkflowFeedbackTarget(context: unknown): WorkflowFeedbackTarget
     workflowSignature:
       nullableString(ctx?.workflow_signature)
       ?? nullableString(workflow?.signature)
+      ?? nullableString(recoveryContract?.workflow_signature)
+      ?? nullableString(trajectoryCompile?.workflow_signature)
       ?? nullableString(execution?.workflow_signature),
+    taskFamily:
+      nullableString(ctx?.task_family)
+      ?? nullableString(task?.family)
+      ?? nullableString(recoveryContract?.task_family)
+      ?? nullableString(trajectoryCompile?.task_family)
+      ?? nullableString(execution?.task_family)
+      ?? nullableString(ctx?.task_kind),
+    filePath:
+      nullableString(ctx?.file_path)
+      ?? nullableString(workflow?.file_path)
+      ?? nullableString(execution?.file_path)
+      ?? nullableString(recoveryContractBody?.file_path)
+      ?? nullableString(trajectoryContract?.file_path)
+      ?? targetFiles[0]
+      ?? null,
+    targetFiles,
+    nextAction:
+      nullableString(ctx?.next_action)
+      ?? nullableString(workflow?.next_action)
+      ?? nullableString(execution?.next_action)
+      ?? nullableString(recoveryContractBody?.next_action)
+      ?? nullableString(trajectoryContract?.next_action),
+    workflowSteps,
+    patternHints,
+    serviceLifecycleConstraints,
   };
 }
 
@@ -161,6 +280,7 @@ function buildExperienceQueryTextFromFeedback(args: {
   inputText: string | null;
   note: string | null;
   selectedTool: string;
+  workflowFeedbackTarget: WorkflowFeedbackTarget;
 }): string {
   const ctx = asRecord(args.context);
   const task = asRecord(ctx?.task);
@@ -172,14 +292,164 @@ function buildExperienceQueryTextFromFeedback(args: {
     nullableString(task?.objective),
     nullableString(ctx?.task_signature),
     nullableString(task?.signature),
+    args.workflowFeedbackTarget.taskFamily,
     nullableString(ctx?.workflow_signature),
+    args.workflowFeedbackTarget.workflowSignature,
+    args.workflowFeedbackTarget.filePath,
+    args.workflowFeedbackTarget.nextAction,
+    args.workflowFeedbackTarget.targetFiles.join(" "),
+    args.workflowFeedbackTarget.workflowSteps.join(" "),
+    args.workflowFeedbackTarget.patternHints.join(" "),
     nullableString(error?.signature),
     nullableString(error?.code),
     args.note,
     args.inputText,
   ].filter((value): value is string => typeof value === "string" && value.length > 0);
   if (values.length === 0) return `feedback policy snapshot for ${args.selectedTool}`;
-  return values.slice(0, 4).join(" | ");
+  return values.slice(0, 8).join(" | ");
+}
+
+export function buildMaterializationContextFromFeedback(args: {
+  context: unknown;
+  workflowFeedbackTarget: WorkflowFeedbackTarget;
+}) {
+  const base = asRecord(args.context) ? { ...(args.context as Record<string, unknown>) } : {};
+  if (args.workflowFeedbackTarget.taskFamily) {
+    base.task_family = nullableString(base.task_family) ?? args.workflowFeedbackTarget.taskFamily;
+  }
+  if (args.workflowFeedbackTarget.workflowSignature) {
+    base.workflow_signature = nullableString(base.workflow_signature) ?? args.workflowFeedbackTarget.workflowSignature;
+  }
+  if (args.workflowFeedbackTarget.filePath) {
+    base.file_path = nullableString(base.file_path) ?? args.workflowFeedbackTarget.filePath;
+  }
+  if (args.workflowFeedbackTarget.targetFiles.length > 0) {
+    base.target_files = mergeStringList(base.target_files, args.workflowFeedbackTarget.targetFiles, 24);
+  }
+  if (args.workflowFeedbackTarget.nextAction) {
+    base.next_action = nullableString(base.next_action) ?? args.workflowFeedbackTarget.nextAction;
+  }
+  if (args.workflowFeedbackTarget.workflowSteps.length > 0) {
+    base.workflow_steps = mergeStringList(base.workflow_steps, args.workflowFeedbackTarget.workflowSteps, 24);
+  }
+  if (args.workflowFeedbackTarget.patternHints.length > 0) {
+    base.pattern_hints = mergeStringList(base.pattern_hints, args.workflowFeedbackTarget.patternHints, 24);
+  }
+  if (args.workflowFeedbackTarget.serviceLifecycleConstraints.length > 0) {
+    base.service_lifecycle_constraints = mergeServiceLifecycleList(
+      base.service_lifecycle_constraints,
+      args.workflowFeedbackTarget.serviceLifecycleConstraints,
+      16,
+    );
+  }
+  if (
+    args.workflowFeedbackTarget.taskFamily
+    || args.workflowFeedbackTarget.taskSignature
+    || args.workflowFeedbackTarget.workflowSignature
+    || args.workflowFeedbackTarget.targetFiles.length > 0
+    || args.workflowFeedbackTarget.nextAction
+    || args.workflowFeedbackTarget.workflowSteps.length > 0
+    || args.workflowFeedbackTarget.patternHints.length > 0
+    || args.workflowFeedbackTarget.serviceLifecycleConstraints.length > 0
+  ) {
+    const recoveryContract = asRecord(base.recovery_contract_v1);
+    const recoveryBody = asRecord(recoveryContract?.contract);
+    base.recovery_contract_v1 = {
+      ...(recoveryContract ?? {}),
+      ...(nullableString(recoveryContract?.task_family) || !args.workflowFeedbackTarget.taskFamily
+        ? {}
+        : { task_family: args.workflowFeedbackTarget.taskFamily }),
+      ...(nullableString(recoveryContract?.task_signature) || !args.workflowFeedbackTarget.taskSignature
+        ? {}
+        : { task_signature: args.workflowFeedbackTarget.taskSignature }),
+      ...(nullableString(recoveryContract?.workflow_signature) || !args.workflowFeedbackTarget.workflowSignature
+        ? {}
+        : { workflow_signature: args.workflowFeedbackTarget.workflowSignature }),
+      contract: {
+        ...(recoveryBody ?? {}),
+        target_files: mergeStringList(recoveryBody?.target_files, args.workflowFeedbackTarget.targetFiles, 24),
+        next_action: nullableString(recoveryBody?.next_action) ?? args.workflowFeedbackTarget.nextAction,
+        workflow_steps: mergeStringList(recoveryBody?.workflow_steps, args.workflowFeedbackTarget.workflowSteps, 24),
+        pattern_hints: mergeStringList(recoveryBody?.pattern_hints, args.workflowFeedbackTarget.patternHints, 24),
+        service_lifecycle_constraints: mergeServiceLifecycleList(
+          recoveryBody?.service_lifecycle_constraints,
+          args.workflowFeedbackTarget.serviceLifecycleConstraints,
+          16,
+        ),
+      },
+    };
+  }
+  return base;
+}
+
+function mergeWorkflowFeedbackIntoPolicySurfaces(args: {
+  policyContract: Record<string, unknown>;
+  derivedPolicy: Record<string, unknown>;
+  workflowFeedbackTarget: WorkflowFeedbackTarget;
+}) {
+  const targetFiles =
+    stringList(args.policyContract.target_files, 24).length > 0
+      ? stringList(args.policyContract.target_files, 24)
+      : stringList(args.derivedPolicy.target_files, 24).length > 0
+        ? stringList(args.derivedPolicy.target_files, 24)
+        : args.workflowFeedbackTarget.targetFiles;
+  const filePath =
+    nullableString(args.policyContract.file_path)
+    ?? nullableString(args.derivedPolicy.file_path)
+    ?? args.workflowFeedbackTarget.filePath;
+  const nextAction =
+    nullableString(args.policyContract.next_action)
+    ?? args.workflowFeedbackTarget.nextAction;
+  const workflowSignature =
+    nullableString(args.policyContract.workflow_signature)
+    ?? nullableString(args.derivedPolicy.workflow_signature)
+    ?? args.workflowFeedbackTarget.workflowSignature;
+  const taskFamily =
+    nullableString(args.policyContract.task_family)
+    ?? nullableString(args.derivedPolicy.task_family)
+    ?? args.workflowFeedbackTarget.taskFamily;
+  const workflowSteps =
+    stringList(args.policyContract.workflow_steps, 24).length > 0
+      ? stringList(args.policyContract.workflow_steps, 24)
+      : Array.isArray(args.derivedPolicy.workflow_steps)
+        ? stringList(args.derivedPolicy.workflow_steps, 24)
+        : args.workflowFeedbackTarget.workflowSteps;
+  const patternHints =
+    Array.isArray(args.policyContract.pattern_hints) && args.policyContract.pattern_hints.length > 0
+      ? stringList(args.policyContract.pattern_hints, 24)
+      : Array.isArray(args.derivedPolicy.pattern_hints)
+        ? stringList(args.derivedPolicy.pattern_hints, 24)
+        : args.workflowFeedbackTarget.patternHints;
+  const serviceLifecycleConstraints =
+    Array.isArray(args.policyContract.service_lifecycle_constraints) && args.policyContract.service_lifecycle_constraints.length > 0
+      ? serviceLifecycleList(args.policyContract.service_lifecycle_constraints, 16)
+      : Array.isArray(args.derivedPolicy.service_lifecycle_constraints) && args.derivedPolicy.service_lifecycle_constraints.length > 0
+        ? serviceLifecycleList(args.derivedPolicy.service_lifecycle_constraints, 16)
+        : args.workflowFeedbackTarget.serviceLifecycleConstraints;
+
+  return {
+    policyContract: PolicyContractSchema.parse({
+      ...args.policyContract,
+      ...(taskFamily ? { task_family: taskFamily } : {}),
+      ...(workflowSignature ? { workflow_signature: workflowSignature } : {}),
+      ...(filePath ? { file_path: filePath } : {}),
+      target_files: targetFiles,
+      ...(nextAction ? { next_action: nextAction } : {}),
+      ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
+      ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
+      ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
+    }),
+    derivedPolicy: DerivedPolicySurfaceSchema.parse({
+      ...args.derivedPolicy,
+      ...(taskFamily ? { task_family: taskFamily } : {}),
+      ...(workflowSignature ? { workflow_signature: workflowSignature } : {}),
+      ...(filePath ? { file_path: filePath } : {}),
+      target_files: targetFiles,
+      ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
+      ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
+      ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
+    }),
+  };
 }
 
 async function materializeLitePolicyMemoryFromFeedback(args: {
@@ -206,6 +476,11 @@ async function materializeLitePolicyMemoryFromFeedback(args: {
     inputText: args.inputText,
     note: args.note,
     selectedTool: args.selectedTool,
+    workflowFeedbackTarget: args.workflowFeedbackTarget,
+  });
+  const materializationContext = buildMaterializationContextFromFeedback({
+    context: args.parsed.context,
+    workflowFeedbackTarget: args.workflowFeedbackTarget,
   });
   const experienceParsed = ExperienceIntelligenceRequest.parse({
     tenant_id: args.tenancy.tenant_id,
@@ -214,7 +489,7 @@ async function materializeLitePolicyMemoryFromFeedback(args: {
     consumer_team_id: consumerTeamId ?? undefined,
     run_id: args.parsed.run_id,
     query_text: queryText,
-    context: args.parsed.context,
+    context: materializationContext,
     candidates: args.normalizedCandidates,
     include_shadow: args.parsed.include_shadow,
     rules_limit: args.parsed.rules_limit,
@@ -306,6 +581,11 @@ async function materializeLitePolicyMemoryFromFeedback(args: {
   if (!experience.policy_contract || !experience.derived_policy) return null;
   if (experience.policy_contract.selected_tool !== args.selectedTool) return null;
   if (experience.policy_contract.policy_state !== "stable") return null;
+  const enrichedPolicy = mergeWorkflowFeedbackIntoPolicySurfaces({
+    policyContract: experience.policy_contract as Record<string, unknown>,
+    derivedPolicy: experience.derived_policy as Record<string, unknown>,
+    workflowFeedbackTarget: args.workflowFeedbackTarget,
+  });
 
   const persisted = await writePolicyMemorySnapshot({
     tenant_id: args.tenancy.tenant_id,
@@ -316,8 +596,8 @@ async function materializeLitePolicyMemoryFromFeedback(args: {
     task_signature: args.workflowFeedbackTarget.taskSignature,
     error_signature: args.workflowFeedbackTarget.errorSignature,
     workflow_signature: args.workflowFeedbackTarget.workflowSignature,
-    policy_contract: experience.policy_contract,
-    derived_policy: experience.derived_policy,
+    policy_contract: enrichedPolicy.policyContract,
+    derived_policy: enrichedPolicy.derivedPolicy,
     feedback_commit_id: args.commitId,
   }, {
     defaultScope: args.defaultScope,

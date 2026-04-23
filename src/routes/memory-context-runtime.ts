@@ -33,6 +33,7 @@ import {
   MemoryRecallTextRequest,
   PlanningContextRequest,
   type ExperienceIntelligenceResponse,
+  type StaticContextBlock,
 } from "../memory/schemas.js";
 import {
   resolveExecutionPacketAssembly,
@@ -45,6 +46,9 @@ import { evaluateRules } from "../memory/rules-evaluate.js";
 import { selectTools } from "../memory/tools-select.js";
 import { estimateTokenCountFromText } from "../memory/context.js";
 import { assembleLayeredContext, extractPlannerPacketSurface } from "../memory/context-orchestrator.js";
+import {
+  augmentTrajectoryAwareRequest,
+} from "../memory/trajectory-compile-runtime.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { LiteFindNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
@@ -242,6 +246,24 @@ function executionPacketToStaticBlocks(packet: ExecutionPacketV1): Array<{
           packet.resume_anchor.symbol ? `symbol=${packet.resume_anchor.symbol}` : null,
           packet.resume_anchor.repo_root ? `repo_root=${packet.resume_anchor.repo_root}` : null,
         ].filter(Boolean).join("; "),
+      ),
+    );
+  }
+
+  if (packet.service_lifecycle_constraints.length > 0) {
+    blocks.push(
+      toStaticContextBlock(
+        `execution-packet-${packet.state_id}-service-lifecycle`,
+        "Service Lifecycle Constraints",
+        packet.service_lifecycle_constraints.map((constraint) => [
+          `label=${constraint.label}`,
+          `service_kind=${constraint.service_kind}`,
+          constraint.endpoint ? `endpoint=${constraint.endpoint}` : null,
+          `must_survive_agent_exit=${constraint.must_survive_agent_exit ? "true" : "false"}`,
+          `revalidate_from_fresh_shell=${constraint.revalidate_from_fresh_shell ? "true" : "false"}`,
+          `detach_then_probe=${constraint.detach_then_probe ? "true" : "false"}`,
+          constraint.health_checks.length > 0 ? `health_checks=${constraint.health_checks.join(" | ")}` : null,
+        ].filter(Boolean).join("; ")).join("\n"),
       ),
     );
   }
@@ -1106,6 +1128,26 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const firstStep = args.firstStepRecommendation && typeof args.firstStepRecommendation === "object"
       ? args.firstStepRecommendation
       : null;
+    const pathRecommendation =
+      args.experienceIntelligence?.recommendation?.path
+      && typeof args.experienceIntelligence.recommendation.path === "object"
+      && !Array.isArray(args.experienceIntelligence.recommendation.path)
+        ? args.experienceIntelligence.recommendation.path as Record<string, unknown>
+        : null;
+    const policyContract =
+      args.experienceIntelligence?.policy_contract
+      && typeof args.experienceIntelligence.policy_contract === "object"
+      && !Array.isArray(args.experienceIntelligence.policy_contract)
+        ? args.experienceIntelligence.policy_contract as Record<string, unknown>
+        : null;
+    const readNullableString = (...values: unknown[]) => {
+      for (const value of values) {
+        if (typeof value !== "string") continue;
+        const trimmed = value.trim();
+        if (trimmed.length > 0) return trimmed;
+      }
+      return null;
+    };
     const gate = args.actionRetrievalGate && typeof args.actionRetrievalGate === "object"
       ? args.actionRetrievalGate
       : null;
@@ -1133,6 +1175,21 @@ export function registerMemoryContextRuntimeRoutes(args: {
       : recommendedActions;
     const selectedTool = typeof firstStep?.selected_tool === "string" ? firstStep.selected_tool : null;
     const filePath = typeof firstStep?.file_path === "string" ? firstStep.file_path : null;
+    const taskFamily = readNullableString(
+      firstStep?.task_family,
+      pathRecommendation?.task_family,
+      policyContract?.task_family,
+    );
+    const workflowSignature = readNullableString(
+      firstStep?.workflow_signature,
+      pathRecommendation?.workflow_signature,
+      policyContract?.workflow_signature,
+    );
+    const policyMemoryId = readNullableString(
+      firstStep?.policy_memory_id,
+      policyContract?.policy_memory_id,
+      pathRecommendation?.policy_memory_id,
+    );
     const preferredRehydration = gate?.preferred_rehydration && typeof gate.preferred_rehydration === "object"
       ? (gate.preferred_rehydration as Record<string, unknown>)
       : null;
@@ -1176,6 +1233,9 @@ export function registerMemoryContextRuntimeRoutes(args: {
           : buildFallbackInstruction(action),
       selected_tool: selectedTool,
       file_path: filePath,
+      task_family: taskFamily,
+      workflow_signature: workflowSignature,
+      policy_memory_id: policyMemoryId,
       tool_route: action === "rehydrate_payload" ? "/v1/memory/tools/rehydrate_payload" : null,
       tool_method: action === "rehydrate_payload" ? "POST" as const : null,
       example_call:
@@ -1601,6 +1661,12 @@ export function registerMemoryContextRuntimeRoutes(args: {
         : env.MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT,
     );
     parsed = PlanningContextRequest.parse(planningOptimization.parsed);
+    parsed = augmentTrajectoryAwareRequest({
+      parsed,
+      parse: PlanningContextRequest.parse,
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+    }).parsed;
     const planningExecutionContext = buildExecutionContinuityContext(parsed);
 
     let out: PlanningContextRouteOutput;
@@ -1887,6 +1953,12 @@ export function registerMemoryContextRuntimeRoutes(args: {
         : env.MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT,
     );
     parsed = ContextAssembleRequest.parse(assembleOptimization.parsed);
+    parsed = augmentTrajectoryAwareRequest({
+      parsed,
+      parse: ContextAssembleRequest.parse,
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+    }).parsed;
     const executionContext = buildExecutionContinuityContext(parsed);
 
     let out: ContextAssembleRouteOutput;

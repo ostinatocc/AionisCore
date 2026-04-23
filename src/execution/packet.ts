@@ -25,6 +25,7 @@ export function buildExecutionPacketV1(input: ExecutionPacketBuildInput): Execut
     pending_validations: state.pending_validations,
     unresolved_blockers: state.unresolved_blockers,
     rollback_notes: state.rollback_notes,
+    service_lifecycle_constraints: state.service_lifecycle_constraints,
     review_contract: state.reviewer_contract,
     resume_anchor: state.resume_anchor,
     artifact_refs: input.artifact_refs ?? [],

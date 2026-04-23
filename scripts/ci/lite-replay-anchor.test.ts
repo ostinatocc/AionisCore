@@ -24,6 +24,7 @@ async function seedDraftPlaybook(args: {
   playbookId: string;
   runId: string;
   status?: "draft" | "shadow" | "active";
+  slotOverrides?: Record<string, unknown>;
 }) {
   const liteWriteStore = createLiteWriteStore(args.writeStorePath);
   const liteReplayStore = createLiteReplayStore(args.writeStorePath);
@@ -76,6 +77,7 @@ async function seedDraftPlaybook(args: {
               source_run_status: "success",
               steps_total: 2,
             },
+            ...(args.slotOverrides ?? {}),
           },
         },
       ],
@@ -253,6 +255,137 @@ test("stable replay playbook anchors are recallable through the procedure recall
     assert.ok((recall as any).action_recall_packet.rehydration_candidates.some((entry: any) => entry.anchor_id === promoted.playbook_node_id));
   } finally {
     await liteRecallStore.close();
+    await liteReplayStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("replayPlaybookPromote preserves richer recovery contract fields on stable workflow anchors", async () => {
+  const dbPath = tmpDbPath("promote-rich-contract");
+  const playbookId = randomUUID();
+  const runId = randomUUID();
+  const { liteWriteStore, liteReplayStore } = await seedDraftPlaybook({
+    writeStorePath: dbPath,
+    playbookId,
+    runId,
+    slotOverrides: {
+      task_family: "service_publish_validate",
+      target_files: ["scripts/build_and_serve.py", "pyproject.toml"],
+      next_action: "Update scripts/build_and_serve.py, restart the package index, and rerun validation from a fresh shell.",
+      workflow_steps: [
+        "python scripts/build_and_serve.py --port 8080",
+        "curl http://localhost:8080/simple/vectorops/",
+        "pip install --index-url http://localhost:8080/simple vectorops==0.1.0",
+      ],
+      pattern_hints: [
+        "publish_then_install_from_clean_client_path",
+        "revalidate_service_from_fresh_shell",
+      ],
+      service_lifecycle_constraints: [
+        {
+          version: 1,
+          service_kind: "http",
+          label: "service:http://localhost:8080/simple/vectorops/",
+          launch_reference: "python scripts/build_and_serve.py --port 8080",
+          endpoint: "http://localhost:8080/simple/vectorops/",
+          must_survive_agent_exit: true,
+          revalidate_from_fresh_shell: true,
+          detach_then_probe: true,
+          health_checks: [
+            "curl http://localhost:8080/simple/vectorops/",
+            "pip install --index-url http://localhost:8080/simple vectorops==0.1.0",
+          ],
+          teardown_notes: [],
+        },
+      ],
+      execution_native_v1: {
+        schema_version: "execution_native_v1",
+        execution_kind: "execution_native",
+        summary_kind: "handoff",
+        compression_layer: "L0",
+        task_family: "service_publish_validate",
+        target_files: ["scripts/build_and_serve.py", "pyproject.toml"],
+        next_action: "Update scripts/build_and_serve.py, restart the package index, and rerun validation from a fresh shell.",
+        workflow_steps: [
+          "python scripts/build_and_serve.py --port 8080",
+          "curl http://localhost:8080/simple/vectorops/",
+        ],
+        pattern_hints: [
+          "publish_then_install_from_clean_client_path",
+          "revalidate_service_from_fresh_shell",
+        ],
+        service_lifecycle_constraints: [
+          {
+            version: 1,
+            service_kind: "http",
+            label: "service:http://localhost:8080/simple/vectorops/",
+            launch_reference: "python scripts/build_and_serve.py --port 8080",
+            endpoint: "http://localhost:8080/simple/vectorops/",
+            must_survive_agent_exit: true,
+            revalidate_from_fresh_shell: true,
+            detach_then_probe: true,
+            health_checks: [
+              "curl http://localhost:8080/simple/vectorops/",
+            ],
+            teardown_notes: [],
+          },
+        ],
+      },
+      execution_result_summary: {
+        trajectory_compile_v1: {
+          task_family: "service_publish_validate",
+        },
+      },
+    },
+  });
+  try {
+    const replayAccess = liteReplayStore.createReplayAccess();
+    const out = await replayPlaybookPromote({} as any, {
+      tenant_id: "default",
+      scope: "default",
+      actor: "local-user",
+      playbook_id: playbookId,
+      target_status: "active",
+    }, {
+      defaultScope: "default",
+      defaultTenantId: "default",
+      maxTextLen: 10000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+      shadowDualWriteEnabled: false,
+      shadowDualWriteStrict: false,
+      writeAccessShadowMirrorV2: false,
+      embedder: FakeEmbeddingProvider,
+      replayAccess,
+      replayMirror: liteReplayStore,
+      writeAccess: liteWriteStore,
+    });
+
+    const { rows } = await liteWriteStore.findNodes({
+      scope: "default",
+      id: out.playbook_node_id ?? "",
+      consumerAgentId: null,
+      consumerTeamId: null,
+      limit: 1,
+      offset: 0,
+    });
+    const promoted = rows[0];
+    assert.ok(promoted);
+    assert.equal(promoted.slots.anchor_v1.task_family, "service_publish_validate");
+    assert.deepEqual(promoted.slots.anchor_v1.target_files, ["scripts/build_and_serve.py", "pyproject.toml"]);
+    assert.equal(
+      promoted.slots.anchor_v1.next_action,
+      "Update scripts/build_and_serve.py, restart the package index, and rerun validation from a fresh shell.",
+    );
+    assert.ok(promoted.slots.anchor_v1.key_steps.includes("python scripts/build_and_serve.py --port 8080"));
+    assert.ok(promoted.slots.anchor_v1.pattern_hints.includes("revalidate_service_from_fresh_shell"));
+    assert.equal(promoted.slots.anchor_v1.service_lifecycle_constraints[0]?.must_survive_agent_exit, true);
+    assert.equal(promoted.slots.execution_native_v1.task_family, "service_publish_validate");
+    assert.deepEqual(promoted.slots.execution_native_v1.target_files, ["scripts/build_and_serve.py", "pyproject.toml"]);
+    assert.ok(promoted.slots.execution_native_v1.workflow_steps.includes("python scripts/build_and_serve.py --port 8080"));
+    assert.ok(promoted.slots.execution_native_v1.pattern_hints.includes("publish_then_install_from_clean_client_path"));
+    assert.equal(promoted.slots.execution_native_v1.service_lifecycle_constraints[0]?.revalidate_from_fresh_shell, true);
+  } finally {
     await liteReplayStore.close();
     await liteWriteStore.close();
   }

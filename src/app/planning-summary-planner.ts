@@ -23,6 +23,9 @@ type PatternSignalSummaryLike = {
 type ExperienceRecommendationProjectionLike = {
   history_applied: boolean;
   selected_tool: string | null;
+  task_family: string | null;
+  workflow_signature: string | null;
+  policy_memory_id: string | null;
   path_source_kind: "recommended_workflow" | "candidate_workflow" | "none";
   file_path: string | null;
   combined_next_action: string | null;
@@ -152,6 +155,15 @@ function buildUncertaintyAwareNextAction(args: {
     return args.selectedTool
       ? `Request operator review before committing to ${args.selectedTool}.`
       : "Request operator review before committing to the next step.";
+  }
+  if (
+    recommendedActions.has("widen_recall")
+    && args.sourceKind === "experience_intelligence"
+    && !!args.filePath
+    && !!args.nextAction
+    && !recommendedActions.has("rehydrate_payload")
+  ) {
+    return args.nextAction;
   }
   if (recommendedActions.has("inspect_context") && (!args.selectedTool || !args.filePath)) {
     if (args.selectedTool) {
@@ -369,6 +381,9 @@ export function buildFirstStepRecommendation(args: {
       source_kind: "experience_intelligence",
       history_applied: experience.history_applied,
       selected_tool: selectedTool,
+      task_family: experience.task_family,
+      workflow_signature: experience.workflow_signature,
+      policy_memory_id: experience.policy_memory_id,
       file_path: experience.file_path,
       next_action: buildUncertaintyAwareNextAction({
         sourceKind: "experience_intelligence",
@@ -384,6 +399,9 @@ export function buildFirstStepRecommendation(args: {
     source_kind: "tool_selection",
     history_applied: false,
     selected_tool: args.selectedTool,
+    task_family: null,
+    workflow_signature: null,
+    policy_memory_id: null,
     file_path: null,
     next_action: buildUncertaintyAwareNextAction({
       sourceKind: "tool_selection",
@@ -403,6 +421,9 @@ export function buildKickoffRecommendation(
     source_kind: firstStepRecommendation.source_kind,
     history_applied: firstStepRecommendation.history_applied,
     selected_tool: firstStepRecommendation.selected_tool,
+    task_family: firstStepRecommendation.task_family,
+    workflow_signature: firstStepRecommendation.workflow_signature,
+    policy_memory_id: firstStepRecommendation.policy_memory_id,
     file_path: firstStepRecommendation.file_path,
     next_action: firstStepRecommendation.next_action,
   };
@@ -411,6 +432,9 @@ export function buildKickoffRecommendation(
 export function buildKickoffRecommendationFromExperience(args: {
   historyApplied: boolean;
   selectedTool: string | null;
+  taskFamily: string | null;
+  workflowSignature: string | null;
+  policyMemoryId: string | null;
   filePath: string | null;
   nextAction: string | null;
   uncertainty?: ActionRetrievalUncertaintySummary | null;
@@ -420,6 +444,9 @@ export function buildKickoffRecommendationFromExperience(args: {
     source_kind: args.historyApplied ? "experience_intelligence" : "tool_selection",
     history_applied: args.historyApplied,
     selected_tool: args.selectedTool,
+    task_family: args.taskFamily,
+    workflow_signature: args.workflowSignature,
+    policy_memory_id: args.policyMemoryId,
     file_path: args.filePath,
     next_action: buildUncertaintyAwareNextAction({
       sourceKind: args.historyApplied ? "experience_intelligence" : "tool_selection",

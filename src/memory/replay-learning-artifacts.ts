@@ -6,7 +6,8 @@ import {
   buildWorkflowMaintenanceMetadata,
   buildWorkflowPromotionMetadata,
 } from "./evolution-operators.js";
-import { MemoryAnchorV1Schema } from "./schemas.js";
+import { ExecutionNativeV1Schema, MemoryAnchorV1Schema } from "./schemas.js";
+import { deriveReplayWorkflowContractFromSlots } from "./replay-workflow-contract.js";
 
 export type ReplayLearningProjectionSource = {
   tenant_id: string;
@@ -120,6 +121,7 @@ function buildReplayLearningStableWorkflowAnchor(args: {
   promotedAt: string;
 }) {
   const toolSet = derivePreferredTools(args.playbookSlots, 64);
+  const workflowContract = deriveReplayWorkflowContractFromSlots(args.playbookSlots);
   const sourceRunId = toStringOrNull(args.playbookSlots.source_run_id);
   const createdFromRunIds = Array.isArray(args.playbookSlots.created_from_run_ids)
     ? args.playbookSlots.created_from_run_ids.map((value) => String(value ?? "").trim()).filter(Boolean)
@@ -136,10 +138,17 @@ function buildReplayLearningStableWorkflowAnchor(args: {
     anchor_level: "L2",
     task_signature: `replay_playbook:${args.playbookId}`,
     task_class: "replay_learning",
+    ...(workflowContract.task_family ? { task_family: workflowContract.task_family } : {}),
     workflow_signature: args.workflowSignature,
     summary,
     tool_set: toolSet,
-    key_steps: deriveReplayLearningKeySteps(args.playbookSlots),
+    key_steps: workflowContract.workflow_steps.length > 0 ? workflowContract.workflow_steps : deriveReplayLearningKeySteps(args.playbookSlots),
+    ...(workflowContract.target_files.length > 0 ? { target_files: workflowContract.target_files } : {}),
+    ...(workflowContract.next_action ? { next_action: workflowContract.next_action } : {}),
+    ...(workflowContract.pattern_hints.length > 0 ? { pattern_hints: workflowContract.pattern_hints } : {}),
+    ...(workflowContract.service_lifecycle_constraints.length > 0
+      ? { service_lifecycle_constraints: workflowContract.service_lifecycle_constraints }
+      : {}),
     outcome: {
       status: "success",
       result_class: "replay_learning_stable",
@@ -214,6 +223,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
   const ruleClientId = `replay:learning:rule:${args.source.playbook_id}:${args.matcherFingerprint}:${args.policyFingerprint}`;
   const episodeClientId = `replay:learning:episode:${args.source.playbook_id}:v${args.source.playbook_version}`;
   const workflowClientId = `replay:learning:workflow:${args.source.playbook_id}:${args.workflowSignature}`;
+  const workflowContract = deriveReplayWorkflowContractFromSlots(args.source.playbook_slots);
   const nodes: Array<Record<string, unknown>> = [];
   const edges: Array<Record<string, unknown>> = [];
 
@@ -275,31 +285,41 @@ export function buildReplayLearningProjectionArtifacts(args: {
         ...(!args.shouldPromoteStableWorkflow
           ? {
               execution_native_v1: {
-                schema_version: "execution_native_v1",
-                execution_kind: "workflow_candidate",
-                summary_kind: "workflow_candidate",
-                compression_layer: "L1",
-                task_signature: `replay_playbook:${args.source.playbook_id}`,
-                workflow_signature: args.workflowSignature,
-                anchor_kind: "workflow",
-                anchor_level: "L1",
-                workflow_promotion: buildWorkflowPromotionMetadata({
-                  promotion_state: "candidate",
-                  promotion_origin: "replay_learning_episode",
-                  required_observations: REPLAY_LEARNING_WORKFLOW_REQUIRED_OBSERVATIONS,
-                  observed_count: args.observedWorkflowCount,
-                  source_status: null,
-                  at: args.projectedAt,
-                }),
-                maintenance: buildWorkflowMaintenanceMetadata({
-                  promotion_state: "candidate",
-                  at: args.projectedAt,
-                }),
-                distillation: buildDistillationMetadata({
-                  source_kind: "replay_learning",
-                  distillation_kind: "workflow_candidate",
-                  at: args.projectedAt,
-                  source_node_id: args.source.playbook_node_id,
+                ...ExecutionNativeV1Schema.parse({
+                  schema_version: "execution_native_v1",
+                  execution_kind: "workflow_candidate",
+                  summary_kind: "workflow_candidate",
+                  compression_layer: "L1",
+                  task_signature: `replay_playbook:${args.source.playbook_id}`,
+                  ...(workflowContract.task_family ? { task_family: workflowContract.task_family } : {}),
+                  workflow_signature: args.workflowSignature,
+                  anchor_kind: "workflow",
+                  anchor_level: "L1",
+                  ...(workflowContract.target_files.length > 0 ? { target_files: workflowContract.target_files } : {}),
+                  ...(workflowContract.next_action ? { next_action: workflowContract.next_action } : {}),
+                  ...(workflowContract.workflow_steps.length > 0 ? { workflow_steps: workflowContract.workflow_steps } : {}),
+                  ...(workflowContract.pattern_hints.length > 0 ? { pattern_hints: workflowContract.pattern_hints } : {}),
+                  ...(workflowContract.service_lifecycle_constraints.length > 0
+                    ? { service_lifecycle_constraints: workflowContract.service_lifecycle_constraints }
+                    : {}),
+                  workflow_promotion: buildWorkflowPromotionMetadata({
+                    promotion_state: "candidate",
+                    promotion_origin: "replay_learning_episode",
+                    required_observations: REPLAY_LEARNING_WORKFLOW_REQUIRED_OBSERVATIONS,
+                    observed_count: args.observedWorkflowCount,
+                    source_status: null,
+                    at: args.projectedAt,
+                  }),
+                  maintenance: buildWorkflowMaintenanceMetadata({
+                    promotion_state: "candidate",
+                    at: args.projectedAt,
+                  }),
+                  distillation: buildDistillationMetadata({
+                    source_kind: "replay_learning",
+                    distillation_kind: "workflow_candidate",
+                    at: args.projectedAt,
+                    source_node_id: args.source.playbook_node_id,
+                  }),
                 }),
               },
             }
@@ -350,15 +370,23 @@ export function buildReplayLearningProjectionArtifacts(args: {
         summary_kind: "workflow_anchor",
         compression_layer: "L2",
         anchor_v1: workflowAnchor,
-        execution_native_v1: {
+        execution_native_v1: ExecutionNativeV1Schema.parse({
           schema_version: "execution_native_v1",
           execution_kind: "workflow_anchor",
           summary_kind: "workflow_anchor",
           compression_layer: "L2",
           task_signature: workflowAnchor.task_signature,
+          ...(workflowAnchor.task_family ? { task_family: workflowAnchor.task_family } : {}),
           workflow_signature: workflowAnchor.workflow_signature,
           anchor_kind: "workflow",
           anchor_level: "L2",
+          ...(workflowAnchor.target_files ? { target_files: workflowAnchor.target_files } : {}),
+          ...(workflowAnchor.next_action !== undefined ? { next_action: workflowAnchor.next_action } : {}),
+          ...(workflowAnchor.key_steps ? { workflow_steps: workflowAnchor.key_steps } : {}),
+          ...(workflowAnchor.pattern_hints ? { pattern_hints: workflowAnchor.pattern_hints } : {}),
+          ...(workflowAnchor.service_lifecycle_constraints
+            ? { service_lifecycle_constraints: workflowAnchor.service_lifecycle_constraints }
+            : {}),
           workflow_promotion: workflowAnchor.workflow_promotion,
           maintenance: workflowAnchor.maintenance,
           rehydration: workflowAnchor.rehydration,
@@ -368,7 +396,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
             at: args.projectedAt,
             source_node_id: args.source.playbook_node_id,
           }),
-        },
+        }),
         replay_learning: {
           generated_by: "replay_learning_v1",
           source_playbook_id: args.source.playbook_id,

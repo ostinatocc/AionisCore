@@ -8,6 +8,23 @@ export type ExecutionRole = z.infer<typeof ExecutionRole>;
 
 const StringList = z.array(z.string().min(1)).default([]);
 
+export const ServiceLifecycleKind = z.enum(["generic", "http", "tcp", "process"]);
+export type ServiceLifecycleKind = z.infer<typeof ServiceLifecycleKind>;
+
+export const ServiceLifecycleConstraintV1Schema = z.object({
+  version: z.literal(1),
+  service_kind: ServiceLifecycleKind.default("generic"),
+  label: z.string().trim().min(1),
+  launch_reference: z.string().trim().min(1).nullable().default(null),
+  endpoint: z.string().trim().min(1).nullable().default(null),
+  must_survive_agent_exit: z.boolean().default(false),
+  revalidate_from_fresh_shell: z.boolean().default(false),
+  detach_then_probe: z.boolean().default(false),
+  health_checks: StringList,
+  teardown_notes: StringList,
+});
+export type ServiceLifecycleConstraintV1 = z.infer<typeof ServiceLifecycleConstraintV1Schema>;
+
 export const ReviewerContractSchema = z.object({
   standard: z.string().trim().min(1),
   required_outputs: StringList,
@@ -38,6 +55,7 @@ export const ExecutionStateV1Schema = z.object({
   rejected_paths: StringList,
   unresolved_blockers: StringList,
   rollback_notes: StringList,
+  service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema).max(16).default([]),
   reviewer_contract: ReviewerContractSchema.nullable().default(null),
   resume_anchor: ResumeAnchorSchema.nullable().default(null),
   updated_at: z.string().datetime(),
@@ -59,6 +77,7 @@ export const ExecutionPacketV1Schema = z.object({
   pending_validations: StringList,
   unresolved_blockers: StringList,
   rollback_notes: StringList,
+  service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema).max(16).default([]),
   review_contract: ReviewerContractSchema.nullable().default(null),
   resume_anchor: ResumeAnchorSchema.nullable().default(null),
   artifact_refs: StringList,

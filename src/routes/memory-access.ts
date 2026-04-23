@@ -24,6 +24,7 @@ import { rehydrateAnchorPayloadLite } from "../memory/rehydrate-anchor.js";
 import { memoryResolveLite } from "../memory/resolve.js";
 import { createSession, listSessions, listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
 import { writeDelegationRecords } from "../memory/delegation-records.js";
+import { buildTrajectoryCompileLite } from "../memory/trajectory-compile.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
@@ -45,6 +46,7 @@ type MemoryAccessRequestKind =
   | "delegation_records_write"
   | "delegation_records_find"
   | "delegation_records_aggregate"
+  | "trajectory_compile"
   | "kickoff_recommendation";
 type MemoryAccessInflightKind = "write" | "recall";
 
@@ -250,6 +252,18 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     requiredCapability: "packs_import",
     bodyFactory: (request) => request.body ?? {},
     execute: (body) => importMemoryPack({} as pg.PoolClient, body, writeDefaults),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/trajectory/compile",
+    requestKind: "trajectory_compile",
+    inflightKind: "recall",
+    execute: (body) =>
+      Promise.resolve(buildTrajectoryCompileLite(body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      })),
   });
 
   registerMemoryAccessRoute({

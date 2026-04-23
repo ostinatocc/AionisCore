@@ -11,6 +11,7 @@ import {
   type ToolsSelectRouteContract,
 } from "./schemas.js";
 import { buildExecutionMemoryIntrospectionLite } from "./execution-introspection.js";
+import { augmentTrajectoryAwareRequest } from "./trajectory-compile-runtime.js";
 import { selectTools } from "./tools-select.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
@@ -26,6 +27,9 @@ export type WorkflowEntry = {
   target_files?: string[];
   file_path?: string | null;
   next_action?: string | null;
+  workflow_steps?: string[];
+  pattern_hints?: string[];
+  service_lifecycle_constraints?: Array<Record<string, unknown>>;
   confidence?: number | null;
   feedback_quality?: number | null;
   usage_count?: number | null;
@@ -55,6 +59,7 @@ type RankedWorkflow = {
   score: number;
   overlap: number;
   tool_aligned: boolean;
+  family_match: boolean;
   relevant: boolean;
 };
 
@@ -64,6 +69,7 @@ export type PolicyHintEntryLike = {
   summary?: string | null;
   confidence?: number | null;
   selected_tool?: string | null;
+  task_family?: string | null;
   workflow_signature?: string | null;
   file_path?: string | null;
   target_files?: string[];
@@ -134,18 +140,77 @@ function buildCueTokens(queryText: string, context: unknown): Set<string> {
   const ctx = asRecord(context);
   const task = asRecord(ctx?.task);
   const error = asRecord(ctx?.error);
+  const recoveryContract = asRecord(ctx?.recovery_contract_v1);
+  const recoveryContractBody = asRecord(recoveryContract?.contract);
+  const executionResultSummary = asRecord(ctx?.execution_result_summary);
+  const trajectoryCompile = asRecord(executionResultSummary?.trajectory_compile_v1);
+  const serviceLifecycleHints = [
+    ...((Array.isArray(recoveryContractBody?.service_lifecycle_constraints)
+      ? recoveryContractBody?.service_lifecycle_constraints
+      : []) as unknown[]),
+    ...((Array.isArray(trajectoryCompile?.service_lifecycle_constraints)
+      ? trajectoryCompile?.service_lifecycle_constraints
+      : []) as unknown[]),
+  ].flatMap((entry) => {
+    const constraint = asRecord(entry);
+    return [
+      firstString(constraint?.label),
+      firstString(constraint?.endpoint),
+      firstString(constraint?.launch_reference),
+      ...stringList(constraint?.health_checks, 8),
+      ...stringList(constraint?.teardown_notes, 8),
+    ];
+  });
   const values = [
     queryText,
     firstString(ctx?.task_kind),
+    firstString(ctx?.task_family),
+    firstString(ctx?.host_tool_profile),
+    firstString(ctx?.host_preferred_tool),
     firstString(ctx?.goal),
     firstString(ctx?.objective),
     firstString(task?.signature),
+    firstString(task?.family),
     firstString(task?.goal),
     firstString(task?.objective),
     firstString(error?.signature),
     firstString(error?.code),
+    firstString(recoveryContract?.task_signature),
+    firstString(recoveryContract?.task_family),
+    firstString(recoveryContract?.workflow_signature),
+    firstString(recoveryContractBody?.next_action),
+    stringList(recoveryContractBody?.target_files, 24).join(" "),
+    stringList(recoveryContractBody?.workflow_steps, 24).join(" "),
+    stringList(recoveryContractBody?.pattern_hints, 24).join(" "),
+    firstString(trajectoryCompile?.task_signature),
+    firstString(trajectoryCompile?.task_family),
+    firstString(trajectoryCompile?.workflow_signature),
+    firstString(trajectoryCompile?.next_action),
+    stringList(trajectoryCompile?.target_files, 24).join(" "),
+    stringList(trajectoryCompile?.workflow_steps, 24).join(" "),
+    stringList(trajectoryCompile?.pattern_hints, 24).join(" "),
+    ...serviceLifecycleHints,
   ].filter((value): value is string => typeof value === "string" && value.length > 0);
   return new Set(values.flatMap((value) => normalizeTokens(value)));
+}
+
+function resolveTaskFamilyFromContext(context: unknown): string | null {
+  const ctx = asRecord(context);
+  const task = asRecord(ctx?.task);
+  const workflow = asRecord(ctx?.workflow);
+  const recoveryContract = asRecord(ctx?.recovery_contract_v1);
+  const execution = asRecord(ctx?.execution);
+  const executionResultSummary = asRecord(ctx?.execution_result_summary);
+  const trajectoryCompile = asRecord(executionResultSummary?.trajectory_compile_v1);
+  return firstString(
+    ctx?.task_family,
+    task?.family,
+    workflow?.task_family,
+    recoveryContract?.task_family,
+    trajectoryCompile?.task_family,
+    execution?.task_family,
+    ctx?.task_kind,
+  );
 }
 
 function parsePersistedPolicyContract(value: unknown, nodeId: string): PolicyContract | null {
@@ -212,6 +277,7 @@ export function readPersistedPolicyMemory(args: {
   );
   const currentTaskSignature = firstString(ctx?.task_signature, task?.signature);
   const currentErrorSignature = firstString(ctx?.error_signature, error?.signature, error?.code);
+  const currentTaskFamily = resolveTaskFamilyFromContext(args.context);
 
   let best: PersistedPolicyMemory | null = null;
   for (const rawEntry of supportingKnowledge) {
@@ -224,6 +290,7 @@ export function readPersistedPolicyMemory(args: {
     if (!contract || contract.policy_memory_state !== "active") continue;
     const derivedPolicy = parsePersistedDerivedPolicy(entry.derived_policy_v1);
     const entryWorkflowSignature = firstString(contract.workflow_signature, entry.workflow_signature);
+    const entryTaskFamily = firstString(contract.task_family, derivedPolicy?.task_family, entry.task_family);
     const entryFilePath = firstString(contract.file_path, entry.file_path);
     const entryTaskSignature = firstString(entry.task_signature);
     const entryErrorSignature = firstString(entry.error_signature);
@@ -241,6 +308,7 @@ export function readPersistedPolicyMemory(args: {
       entryFilePath,
       entryTaskSignature,
       entryErrorSignature,
+      entryTaskFamily,
       ...Array.from(entryTargetFiles),
     ].filter((value): value is string => typeof value === "string" && value.length > 0);
     const textTokens = new Set(textValues.flatMap((value) => normalizeTokens(value)));
@@ -254,6 +322,7 @@ export function readPersistedPolicyMemory(args: {
     if (args.selectedTool && contract.selected_tool === args.selectedTool) score += 90;
     else if (args.selectedTool) score -= 40;
     if (currentWorkflowSignature && entryWorkflowSignature === currentWorkflowSignature) score += 70;
+    if (currentTaskFamily && entryTaskFamily === currentTaskFamily) score += 55;
     if (currentFilePath && entryFilePath === currentFilePath) score += 50;
     if (currentTaskSignature && entryTaskSignature === currentTaskSignature) score += 35;
     if (currentErrorSignature && entryErrorSignature === currentErrorSignature) score += 25;
@@ -283,6 +352,7 @@ function scoreWorkflow(args: {
   kind: "recommended_workflow" | "candidate_workflow";
   selectedTool: string | null;
   cueTokens: Set<string>;
+  currentTaskFamily: string | null;
 }): RankedWorkflow {
   const toolSet = Array.isArray(args.workflow.tool_set) ? args.workflow.tool_set : [];
   const targetFiles = Array.isArray(args.workflow.target_files) ? args.workflow.target_files : [];
@@ -302,6 +372,8 @@ function scoreWorkflow(args: {
   for (const token of args.cueTokens) {
     if (textTokens.has(token)) overlap += 1;
   }
+  const workflowTaskFamily = firstString(args.workflow.task_family);
+  const familyMatch = !!args.currentTaskFamily && workflowTaskFamily === args.currentTaskFamily;
   const toolAligned = !!args.selectedTool && toolSet.includes(args.selectedTool);
   const usageCount = Math.max(0, Number(args.workflow.usage_count ?? 0));
   const reuseSuccessCount = Math.max(0, Number(args.workflow.reuse_success_count ?? 0));
@@ -311,6 +383,7 @@ function scoreWorkflow(args: {
     : 0;
   let score = args.kind === "recommended_workflow" ? 200 : 120;
   if (toolAligned) score += 60;
+  if (familyMatch) score += 55;
   if (targetFiles.length > 0) score += 35;
   if (args.workflow.file_path) score += 20;
   if (args.workflow.next_action) score += 15;
@@ -326,7 +399,8 @@ function scoreWorkflow(args: {
     score,
     overlap,
     tool_aligned: toolAligned,
-    relevant: overlap > 0,
+    family_match: familyMatch,
+    relevant: overlap > 0 || familyMatch,
   };
 }
 
@@ -338,6 +412,7 @@ export function choosePathRecommendation(args: {
   candidateWorkflows: WorkflowEntry[];
 }) {
   const cueTokens = buildCueTokens(args.queryText, args.context);
+  const currentTaskFamily = resolveTaskFamilyFromContext(args.context);
   const ranked = [
     ...args.recommendedWorkflows.map((workflow) =>
       scoreWorkflow({
@@ -345,6 +420,7 @@ export function choosePathRecommendation(args: {
         kind: "recommended_workflow",
         selectedTool: args.selectedTool,
         cueTokens,
+        currentTaskFamily,
       })),
     ...args.candidateWorkflows.map((workflow) =>
       scoreWorkflow({
@@ -352,6 +428,7 @@ export function choosePathRecommendation(args: {
         kind: "candidate_workflow",
         selectedTool: args.selectedTool,
         cueTokens,
+        currentTaskFamily,
       })),
   ].sort((a, b) => b.score - a.score || a.workflow.anchor_id.localeCompare(b.workflow.anchor_id));
 
@@ -366,6 +443,9 @@ export function choosePathRecommendation(args: {
       file_path: null,
       target_files: [],
       next_action: null,
+      workflow_steps: [],
+      pattern_hints: [],
+      service_lifecycle_constraints: [],
       confidence: null,
       tool_set: [],
       reason: null,
@@ -385,17 +465,24 @@ export function choosePathRecommendation(args: {
   return {
     source_kind: top.kind,
     anchor_id: top.workflow.anchor_id,
+    task_family: firstString(top.workflow.task_family),
     workflow_signature: firstString(top.workflow.workflow_signature),
     title,
     summary,
     file_path: filePath,
     target_files: targetFiles,
     next_action: nextAction,
+    workflow_steps: stringList(top.workflow.workflow_steps, 24),
+    pattern_hints: stringList(top.workflow.pattern_hints, 24),
+    service_lifecycle_constraints: Array.isArray(top.workflow.service_lifecycle_constraints)
+      ? top.workflow.service_lifecycle_constraints.slice(0, 16)
+      : [],
     confidence: Number.isFinite(top.workflow.confidence) ? (top.workflow.confidence ?? null) : null,
     tool_set: stringList(top.workflow.tool_set),
     reason: [
       top.kind === "recommended_workflow" ? "stable workflow memory matched this request" : "candidate workflow memory matched this request",
       top.tool_aligned && args.selectedTool ? `tool alignment=${args.selectedTool}` : null,
+      top.family_match && currentTaskFamily ? `task_family=${currentTaskFamily}` : null,
       top.overlap > 0 ? `token_overlap=${top.overlap}` : null,
       ...workflowEvidenceParts(top.workflow),
       targetFiles.length > 0 ? `targets=${targetFiles.join(", ")}` : null,
@@ -414,6 +501,7 @@ export function toPolicyHintEntry(value: unknown): PolicyHintEntryLike | null {
     summary: firstString(record?.summary),
     confidence: Number.isFinite(Number(record?.confidence)) ? Number(record?.confidence) : null,
     selected_tool: firstString(record?.selected_tool),
+    task_family: firstString(record?.task_family),
     workflow_signature: firstString(record?.workflow_signature),
     file_path: firstString(record?.file_path),
     target_files: stringList(record?.target_files, 24),
@@ -613,18 +701,76 @@ export function buildActionRetrievalResponse(args: {
           : workflowSupportsForRetrieval
             ? "stable_workflow"
             : "tools_select";
+  const recommendedFilePath = firstString(
+    path.file_path,
+    persistedPolicy?.contract.file_path,
+    selectedWorkflow?.file_path,
+    preferredPattern?.file_path,
+  );
+  const recommendedTaskFamily = firstString(
+    (path as Record<string, unknown>).task_family,
+    persistedPolicy?.contract.task_family,
+    selectedWorkflow?.task_family,
+  );
+  const recommendedTargetFiles = stringList(
+    path.target_files.length > 0
+      ? path.target_files
+      : Array.isArray(selectedWorkflow?.target_files) && selectedWorkflow.target_files.length > 0
+        ? selectedWorkflow.target_files
+        : Array.isArray(persistedPolicy?.contract.target_files)
+          ? persistedPolicy.contract.target_files
+          : recommendedFilePath
+            ? [recommendedFilePath]
+            : [],
+    24,
+  );
+  const recommendedWorkflowSteps = Array.isArray((path as Record<string, unknown>).workflow_steps)
+    && (path as Record<string, unknown>).workflow_steps.length > 0
+    ? ((path as Record<string, unknown>).workflow_steps as string[])
+    : Array.isArray(selectedWorkflow?.workflow_steps) && selectedWorkflow.workflow_steps.length > 0
+      ? selectedWorkflow.workflow_steps
+      : Array.isArray(persistedPolicy?.contract.workflow_steps)
+        ? persistedPolicy.contract.workflow_steps
+        : [];
+  const recommendedPatternHints = Array.isArray((path as Record<string, unknown>).pattern_hints)
+    && (path as Record<string, unknown>).pattern_hints.length > 0
+    ? ((path as Record<string, unknown>).pattern_hints as string[])
+    : Array.isArray(selectedWorkflow?.pattern_hints) && selectedWorkflow.pattern_hints.length > 0
+      ? selectedWorkflow.pattern_hints
+      : Array.isArray(persistedPolicy?.contract.pattern_hints)
+        ? persistedPolicy.contract.pattern_hints
+        : [];
+  const recommendedServiceLifecycleConstraints = Array.isArray((path as Record<string, unknown>).service_lifecycle_constraints)
+    && (path as Record<string, unknown>).service_lifecycle_constraints.length > 0
+    ? ((path as Record<string, unknown>).service_lifecycle_constraints as Array<Record<string, unknown>>)
+    : Array.isArray(selectedWorkflow?.service_lifecycle_constraints) && selectedWorkflow.service_lifecycle_constraints.length > 0
+      ? selectedWorkflow.service_lifecycle_constraints
+      : Array.isArray(persistedPolicy?.contract.service_lifecycle_constraints)
+        ? persistedPolicy.contract.service_lifecycle_constraints
+        : [];
   const combinedNextAction = firstString(
     path.next_action,
-    path.file_path && selectedTool ? `Use ${selectedTool} on ${path.file_path} as the next learned step.` : null,
+    persistedPolicy?.contract.next_action,
+    recommendedFilePath && selectedTool ? `Use ${selectedTool} on ${recommendedFilePath} as the next learned step.` : null,
   );
   const evidenceEntries = [
     ...(persistedPolicy ? [{
       source_kind: "persisted_policy_memory" as const,
       anchor_id: persistedPolicy.node_id,
       selected_tool: persistedPolicy.contract.selected_tool,
+      task_family: firstString(persistedPolicy.contract.task_family, persistedPolicy.derived_policy?.task_family),
       workflow_signature: persistedPolicy.contract.workflow_signature,
       file_path: persistedPolicy.contract.file_path,
-      target_files: persistedPolicy.contract.target_files,
+      target_files: stringList(persistedPolicy.contract.target_files, 24),
+      workflow_steps: Array.isArray(persistedPolicy.contract.workflow_steps)
+        ? persistedPolicy.contract.workflow_steps
+        : [],
+      pattern_hints: Array.isArray(persistedPolicy.contract.pattern_hints)
+        ? persistedPolicy.contract.pattern_hints
+        : [],
+      service_lifecycle_constraints: Array.isArray(persistedPolicy.contract.service_lifecycle_constraints)
+        ? persistedPolicy.contract.service_lifecycle_constraints
+        : [],
       confidence: persistedPolicy.contract.confidence,
       reason: persistedPolicy.contract.reason,
     }] : []),
@@ -632,6 +778,7 @@ export function buildActionRetrievalResponse(args: {
       source_kind: "trusted_pattern" as const,
       anchor_id: preferredPattern.anchor_id,
       selected_tool: preferredPattern.selected_tool ?? null,
+      task_family: null,
       workflow_signature: preferredPattern.workflow_signature ?? null,
       file_path: preferredPattern.file_path ?? null,
       target_files: preferredPattern.target_files ?? [],
@@ -642,9 +789,19 @@ export function buildActionRetrievalResponse(args: {
       source_kind: path.source_kind === "recommended_workflow" ? "stable_workflow" as const : "candidate_workflow" as const,
       anchor_id: path.anchor_id,
       selected_tool: selectedTool,
+      task_family: firstString((path as Record<string, unknown>).task_family),
       workflow_signature: path.workflow_signature,
       file_path: path.file_path,
       target_files: path.target_files,
+      workflow_steps: Array.isArray((path as Record<string, unknown>).workflow_steps)
+        ? (path as Record<string, unknown>).workflow_steps
+        : [],
+      pattern_hints: Array.isArray((path as Record<string, unknown>).pattern_hints)
+        ? (path as Record<string, unknown>).pattern_hints
+        : [],
+      service_lifecycle_constraints: Array.isArray((path as Record<string, unknown>).service_lifecycle_constraints)
+        ? (path as Record<string, unknown>).service_lifecycle_constraints
+        : [],
       confidence: path.confidence,
       reason: firstString(path.reason) ?? "workflow memory matched this request",
     }] : []),
@@ -655,6 +812,7 @@ export function buildActionRetrievalResponse(args: {
         source_kind: "contested_pattern" as const,
         anchor_id: entry.anchor_id,
         selected_tool: entry.selected_tool ?? null,
+        task_family: null,
         workflow_signature: entry.workflow_signature ?? null,
         file_path: entry.file_path ?? null,
         target_files: entry.target_files ?? [],
@@ -665,6 +823,7 @@ export function buildActionRetrievalResponse(args: {
       source_kind: "rehydration_candidate" as const,
       anchor_id: entry.anchor_id,
       selected_tool: entry.selected_tool ?? null,
+      task_family: null,
       workflow_signature: entry.workflow_signature ?? null,
       file_path: entry.file_path ?? null,
       target_files: entry.target_files ?? [],
@@ -698,7 +857,7 @@ export function buildActionRetrievalResponse(args: {
     history_applied: historyApplied,
     tool_source_kind: toolSourceKind,
     selected_tool: selectedTool,
-    recommended_file_path: path.file_path,
+    recommended_file_path: recommendedFilePath,
     recommended_next_action: combinedNextAction,
     tool: {
       selected_tool: selectedTool,
@@ -718,12 +877,16 @@ export function buildActionRetrievalResponse(args: {
     path: {
       source_kind: path.source_kind,
       anchor_id: path.anchor_id,
+      task_family: recommendedTaskFamily,
       workflow_signature: path.workflow_signature,
       title: path.title,
       summary: path.summary,
-      file_path: path.file_path,
-      target_files: path.target_files,
-      next_action: path.next_action,
+      file_path: recommendedFilePath,
+      target_files: recommendedTargetFiles,
+      next_action: combinedNextAction,
+      workflow_steps: recommendedWorkflowSteps,
+      pattern_hints: recommendedPatternHints,
+      service_lifecycle_constraints: recommendedServiceLifecycleConstraints,
       confidence: path.confidence,
       tool_set: path.tool_set,
     },
@@ -753,7 +916,12 @@ export async function buildActionRetrievalLite(args: {
   defaultTenantId: string;
   defaultActorId: string;
 }): Promise<ActionRetrievalResponse> {
-  const parsed = ActionRetrievalRequest.parse(args.body);
+  const parsed = augmentTrajectoryAwareRequest({
+    parsed: ActionRetrievalRequest.parse(args.body),
+    parse: ActionRetrievalRequest.parse,
+    defaultScope: args.defaultScope,
+    defaultTenantId: args.defaultTenantId,
+  }).parsed;
   const introspection = await buildExecutionMemoryIntrospectionLite(
     args.liteWriteStore,
     {

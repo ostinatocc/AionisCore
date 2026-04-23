@@ -557,6 +557,9 @@ test("buildPlanningSummary makes first-step and planner explanation uncertainty-
     source_kind: "experience_intelligence",
     history_applied: true,
     selected_tool: "edit",
+    task_family: null,
+    workflow_signature: null,
+    policy_memory_id: null,
     file_path: "src/routes/export.ts",
     next_action: "Inspect src/routes/export.ts and the current context before using edit.",
   });

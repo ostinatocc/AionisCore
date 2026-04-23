@@ -28,6 +28,11 @@ import {
   type ReviewerContract,
   type ResumeAnchor,
 } from "../execution/index.js";
+import {
+  applyTrajectoryCompileExecutionKernel,
+  maybeBuildTrajectoryCompile,
+  mergeTrajectoryCompileSummary,
+} from "./trajectory-compile-runtime.js";
 import { HttpError } from "../util/http.js";
 
 type LiteWriteStoreLike = {
@@ -406,6 +411,19 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
   const producerAgentId = normalizeOptionalString(typeof raw.producer_agent_id === "string" ? raw.producer_agent_id : undefined);
   const ownerAgentId = normalizeOptionalString(typeof raw.owner_agent_id === "string" ? raw.owner_agent_id : undefined);
   const ownerTeamId = normalizeOptionalString(typeof raw.owner_team_id === "string" ? raw.owner_team_id : undefined);
+  const compiledTrajectory = maybeBuildTrajectoryCompile({
+    tenantId: parsed.tenant_id ?? null,
+    scope: parsed.scope ?? null,
+    actor: parsed.actor ?? null,
+    queryText: [parsed.title, parsed.summary, parsed.handoff_text].filter((value): value is string => typeof value === "string" && value.trim().length > 0).join("\n"),
+    trajectory: parsed.trajectory ?? null,
+    trajectoryHints: parsed.trajectory_hints ?? null,
+    defaultScope: parsed.scope ?? "default",
+    defaultTenantId: parsed.tenant_id ?? "default",
+  });
+  const compiledTargetFiles = compiledTrajectory?.contract.target_files ?? [];
+  const compiledAcceptanceChecks = compiledTrajectory?.contract.acceptance_checks ?? [];
+  const compiledNextAction = compiledTrajectory?.contract.next_action ?? null;
   const promptSafe = buildStoredPromptSafeHandoff({
     anchor: parsed.anchor,
     handoff_kind: parsed.handoff_kind,
@@ -415,7 +433,7 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
     summary: parsed.summary,
     handoff_text: parsed.handoff_text,
     risk: parsed.risk ?? null,
-    acceptance_checks: parsed.acceptance_checks ?? [],
+    acceptance_checks: uniqueStrings([...(parsed.acceptance_checks ?? []), ...compiledAcceptanceChecks], 24),
     tags: parsed.tags ?? [],
   });
   const executionReady = buildStoredExecutionReadyHandoff({
@@ -427,9 +445,9 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
     summary: parsed.summary,
     handoff_text: parsed.handoff_text,
     risk: parsed.risk ?? null,
-    acceptance_checks: parsed.acceptance_checks ?? [],
-    target_files: parsed.target_files ?? [],
-    next_action: parsed.next_action ?? parsed.handoff_text,
+    acceptance_checks: uniqueStrings([...(parsed.acceptance_checks ?? []), ...compiledAcceptanceChecks], 24),
+    target_files: uniqueStrings([...(parsed.target_files ?? []), ...compiledTargetFiles], 24),
+    next_action: parsed.next_action ?? compiledNextAction ?? parsed.handoff_text,
     must_change: parsed.must_change ?? [],
     must_remove: parsed.must_remove ?? [],
     must_keep: parsed.must_keep ?? [],
@@ -445,17 +463,39 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
     promptSafe,
     executionReady,
   );
-  const effectiveExecutionProjection = readInlineExecutionProjection(raw, executionReady) ?? executionProjection;
+  const inlineExecutionProjection = readInlineExecutionProjection(raw, executionReady);
+  const baseExecutionProjection = inlineExecutionProjection ?? executionProjection;
+  const trajectoryExecutionProjection = compiledTrajectory
+    ? applyTrajectoryCompileExecutionKernel({
+        compiled: compiledTrajectory,
+        queryText: parsed.summary,
+        executionState: baseExecutionProjection.execution_state_v1,
+        executionPacket: baseExecutionProjection.execution_packet_v1,
+        controlProfile: baseExecutionProjection.control_profile_v1,
+        repoRoot: parsed.repo_root ?? parsed.trajectory_hints?.repo_root ?? null,
+        stateIdPrefix: "handoff",
+      })
+    : null;
+  const effectiveExecutionProjection = trajectoryExecutionProjection
+    ? {
+        execution_state_v1: trajectoryExecutionProjection.execution_state_v1,
+        execution_packet_v1: trajectoryExecutionProjection.execution_packet_v1,
+        control_profile_v1: trajectoryExecutionProjection.control_profile_v1 ?? baseExecutionProjection.control_profile_v1,
+      }
+    : baseExecutionProjection;
   const executionTransitions = Array.isArray(raw.execution_transitions_v1)
     ? raw.execution_transitions_v1.map((transition) => ExecutionStateTransitionV1Schema.parse(transition))
     : buildHandoffStoreExecutionTransitions(effectiveExecutionProjection.execution_state_v1);
   const executionArtifacts = safeRecordArray(parsed.execution_artifacts);
   const executionEvidence = safeRecordArray(parsed.execution_evidence);
+  const executionResultSummary = compiledTrajectory
+    ? mergeTrajectoryCompileSummary(parsed.execution_result_summary ?? null, compiledTrajectory)
+    : (parsed.execution_result_summary ?? null);
   const delegationRecords = buildStoredDelegationRecords({
     raw,
     executionReady,
     executionProjection: effectiveExecutionProjection,
-    executionResultSummary: parsed.execution_result_summary ?? null,
+    executionResultSummary: executionResultSummary,
     executionArtifacts,
     executionEvidence,
   });
@@ -468,12 +508,12 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
     parsed.risk ? `risk=${parsed.risk}` : null,
     `summary=${parsed.summary}`,
     `handoff=${parsed.handoff_text}`,
-    parsed.next_action ? `next_action=${parsed.next_action}` : null,
-    parsed.target_files && parsed.target_files.length > 0 ? `target_files=${parsed.target_files.join(" | ")}` : null,
+    executionReady.next_action ? `next_action=${executionReady.next_action}` : null,
+    executionReady.target_files.length > 0 ? `target_files=${executionReady.target_files.join(" | ")}` : null,
     parsed.must_change && parsed.must_change.length > 0 ? `must_change=${parsed.must_change.join(" | ")}` : null,
     parsed.must_remove && parsed.must_remove.length > 0 ? `must_remove=${parsed.must_remove.join(" | ")}` : null,
     parsed.must_keep && parsed.must_keep.length > 0 ? `must_keep=${parsed.must_keep.join(" | ")}` : null,
-    stringifyChecks(parsed.acceptance_checks) ? `acceptance_checks=${stringifyChecks(parsed.acceptance_checks)}` : null,
+    stringifyChecks(executionReady.acceptance_checks) ? `acceptance_checks=${stringifyChecks(executionReady.acceptance_checks)}` : null,
   ]
     .filter(Boolean)
     .join("; ");
@@ -497,21 +537,27 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
           summary_kind: "handoff",
           handoff_kind: parsed.handoff_kind,
           anchor: parsed.anchor,
+          ...(compiledTrajectory?.task_family ? { task_family: compiledTrajectory.task_family } : {}),
+          ...(compiledTrajectory?.task_signature ? { task_signature: compiledTrajectory.task_signature } : {}),
+          ...(compiledTrajectory?.workflow_signature ? { workflow_signature: compiledTrajectory.workflow_signature } : {}),
           file_path: parsed.file_path ?? null,
           repo_root: parsed.repo_root,
           symbol: parsed.symbol,
           risk: parsed.risk,
           handoff_text: parsed.handoff_text,
-          acceptance_checks: parsed.acceptance_checks ?? [],
+          acceptance_checks: executionReady.acceptance_checks,
           tags: parsed.tags ?? [],
-          target_files: parsed.target_files ?? [],
-          next_action: parsed.next_action ?? parsed.handoff_text,
+          target_files: executionReady.target_files,
+          next_action: executionReady.next_action,
           must_change: parsed.must_change ?? [],
           must_remove: parsed.must_remove ?? [],
           must_keep: parsed.must_keep ?? [],
-          execution_result_summary: parsed.execution_result_summary ?? null,
+          execution_result_summary: executionResultSummary,
           execution_artifacts: executionArtifacts,
           execution_evidence: executionEvidence,
+          workflow_steps: compiledTrajectory?.contract.workflow_steps ?? [],
+          pattern_hints: compiledTrajectory?.contract.pattern_hints ?? [],
+          service_lifecycle_constraints: compiledTrajectory?.contract.service_lifecycle_constraints ?? [],
           execution_state_v1: effectiveExecutionProjection.execution_state_v1,
           execution_packet_v1: effectiveExecutionProjection.execution_packet_v1,
           control_profile_v1: effectiveExecutionProjection.control_profile_v1,

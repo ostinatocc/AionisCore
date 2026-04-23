@@ -32,6 +32,9 @@ import { buildExecutionMemorySummaryBundle } from "./planning-summary-surfaces.j
 type ExperienceRecommendationProjection = {
   history_applied: boolean;
   selected_tool: string | null;
+  task_family: string | null;
+  workflow_signature: string | null;
+  policy_memory_id: string | null;
   path_source_kind: "recommended_workflow" | "candidate_workflow" | "none";
   file_path: string | null;
   combined_next_action: string | null;
@@ -263,12 +266,32 @@ export function buildPlanningSummary(args: {
     experienceRecommendation?.path && typeof experienceRecommendation.path === "object"
       ? (experienceRecommendation.path as Record<string, unknown>)
       : null;
+  const experiencePolicyContract =
+    args.experience_intelligence && typeof args.experience_intelligence === "object"
+      ? ((args.experience_intelligence as Record<string, unknown>).policy_contract as Record<string, unknown> | undefined)
+      : undefined;
   const experienceSummary: ExperienceRecommendationProjection | null = experienceRecommendation
     ? {
         history_applied: experienceRecommendation.history_applied === true,
         selected_tool: typeof experienceRecommendation.tool === "object" && experienceRecommendation.tool && typeof (experienceRecommendation.tool as any).selected_tool === "string"
           ? (experienceRecommendation.tool as any).selected_tool
           : null,
+        task_family:
+          typeof experiencePath?.task_family === "string"
+            ? experiencePath.task_family
+            : typeof experiencePolicyContract?.task_family === "string"
+              ? experiencePolicyContract.task_family
+              : null,
+        workflow_signature:
+          typeof experiencePath?.workflow_signature === "string"
+            ? experiencePath.workflow_signature
+            : typeof experiencePolicyContract?.workflow_signature === "string"
+              ? experiencePolicyContract.workflow_signature
+              : null,
+        policy_memory_id:
+          typeof experiencePolicyContract?.policy_memory_id === "string"
+            ? experiencePolicyContract.policy_memory_id
+            : null,
         path_source_kind:
           experiencePath?.source_kind === "recommended_workflow" || experiencePath?.source_kind === "candidate_workflow"
             ? experiencePath.source_kind

@@ -104,6 +104,9 @@ export type FirstStepRecommendation = {
   source_kind: "experience_intelligence" | "tool_selection";
   history_applied: boolean;
   selected_tool: string | null;
+  task_family: string | null;
+  workflow_signature: string | null;
+  policy_memory_id: string | null;
   file_path: string | null;
   next_action: string | null;
 };
@@ -112,6 +115,9 @@ export type KickoffRecommendation = {
   source_kind: "experience_intelligence" | "tool_selection";
   history_applied: boolean;
   selected_tool: string | null;
+  task_family: string | null;
+  workflow_signature: string | null;
+  policy_memory_id: string | null;
   file_path: string | null;
   next_action: string | null;
 };

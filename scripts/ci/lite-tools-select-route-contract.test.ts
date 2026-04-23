@@ -16,6 +16,7 @@ import {
   ToolsSelectRouteContractSchema,
 } from "../../src/memory/schemas.ts";
 import { updateRuleState } from "../../src/memory/rules.ts";
+import { buildMaterializationContextFromFeedback } from "../../src/memory/tools-feedback.ts";
 import { applyMemoryWrite, prepareMemoryWrite } from "../../src/memory/write.ts";
 import { registerMemoryFeedbackToolRoutes } from "../../src/routes/memory-feedback-tools.ts";
 import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
@@ -83,6 +84,78 @@ function buildLiteEnv(overrides: Record<string, unknown> = {}) {
     ...overrides,
   } as any;
 }
+
+test("feedback materialization upgrades thin recovery contract placeholders", () => {
+  const merged = buildMaterializationContextFromFeedback({
+    context: {
+      task_family: null,
+      workflow_signature: null,
+      file_path: null,
+      target_files: [],
+      next_action: null,
+      workflow_steps: [],
+      pattern_hints: [],
+      service_lifecycle_constraints: [],
+      recovery_contract_v1: {
+        task_family: null,
+        task_signature: null,
+        workflow_signature: null,
+        contract: {
+          target_files: [],
+          next_action: null,
+          workflow_steps: [],
+          pattern_hints: [],
+          service_lifecycle_constraints: [],
+        },
+      },
+    },
+    workflowFeedbackTarget: {
+      taskSignature: "repair-export-route",
+      errorSignature: null,
+      workflowSignature: "execution_workflow:repair-export",
+      taskFamily: "task:repair_export",
+      filePath: "src/routes/export.ts",
+      targetFiles: ["src/routes/export.ts"],
+      nextAction: "Patch src/routes/export.ts and rerun export tests.",
+      workflowSteps: [
+        "Inspect src/routes/export.ts for the export mismatch.",
+        "Patch the route export serialization.",
+      ],
+      patternHints: ["prefer_edit_for_route_level_repairs"],
+      serviceLifecycleConstraints: [
+        {
+          version: 1,
+          service_kind: "http",
+          label: "service:http://localhost:8080/healthz",
+          launch_reference: "nohup node scripts/dev-server.js >/tmp/dev-server.log 2>&1 &",
+          endpoint: "http://localhost:8080/healthz",
+          must_survive_agent_exit: true,
+          revalidate_from_fresh_shell: true,
+          detach_then_probe: true,
+          health_checks: ["curl -fsS http://localhost:8080/healthz"],
+          teardown_notes: [],
+        },
+      ],
+    },
+  }) as Record<string, unknown>;
+
+  const recoveryContract = merged.recovery_contract_v1 as Record<string, unknown>;
+  const recoveryBody = recoveryContract.contract as Record<string, unknown>;
+  assert.equal(merged.task_family, "task:repair_export");
+  assert.equal(merged.workflow_signature, "execution_workflow:repair-export");
+  assert.deepEqual(merged.target_files, ["src/routes/export.ts"]);
+  assert.equal(merged.next_action, "Patch src/routes/export.ts and rerun export tests.");
+  assert.equal(recoveryContract.task_signature, "repair-export-route");
+  assert.equal(recoveryContract.workflow_signature, "execution_workflow:repair-export");
+  assert.deepEqual(recoveryBody.target_files, ["src/routes/export.ts"]);
+  assert.equal(recoveryBody.next_action, "Patch src/routes/export.ts and rerun export tests.");
+  assert.deepEqual(recoveryBody.workflow_steps, [
+    "Inspect src/routes/export.ts for the export mismatch.",
+    "Patch the route export serialization.",
+  ]);
+  assert.deepEqual(recoveryBody.pattern_hints, ["prefer_edit_for_route_level_repairs"]);
+  assert.equal((recoveryBody.service_lifecycle_constraints as Array<Record<string, unknown>>)[0]?.revalidate_from_fresh_shell, true);
+});
 
 async function insertAndActivateRule(
   liteWriteStore: ReturnType<typeof createLiteWriteStore>,
@@ -708,7 +781,43 @@ test("tools feedback route can use internal static form_pattern provider without
     const runId = randomUUID();
     const context = {
       task_kind: "repair_export",
+      task_family: "task:repair_export",
+      workflow_signature: "execution_workflow:repair-export",
       goal: "repair export failure in node tests",
+      target_files: ["src/routes/export.ts"],
+      next_action: "Patch src/routes/export.ts and rerun export tests.",
+      recovery_contract_v1: {
+        task_family: "task:repair_export",
+        task_signature: "repair-export-route",
+        workflow_signature: "execution_workflow:repair-export",
+        contract: {
+          target_files: ["src/routes/export.ts"],
+          next_action: "Patch src/routes/export.ts and rerun export tests.",
+          workflow_steps: [
+            "Inspect src/routes/export.ts for the export mismatch.",
+            "Patch the route export serialization.",
+            "Rerun export-focused tests before handoff.",
+          ],
+          pattern_hints: [
+            "prefer_edit_for_route_level_repairs",
+            "keep_changes_scoped_to_export_route",
+          ],
+          service_lifecycle_constraints: [
+            {
+              version: 1,
+              service_kind: "generic",
+              label: "export test verification shell",
+              launch_reference: null,
+              endpoint: null,
+              must_survive_agent_exit: false,
+              revalidate_from_fresh_shell: true,
+              detach_then_probe: false,
+              health_checks: ["npm run -s test:lite -- export"],
+              teardown_notes: [],
+            },
+          ],
+        },
+      },
       error: {
         signature: "node-export-mismatch",
       },
@@ -792,9 +901,45 @@ test("policy governance apply route can retire and reactivate persisted policy m
     const runId = randomUUID();
     const context = {
       task_kind: "repair_export",
+      task_family: "task:repair_export",
+      workflow_signature: "execution_workflow:repair-export",
       goal: "repair export failure in node tests",
+      target_files: ["src/routes/export.ts"],
+      next_action: "Patch src/routes/export.ts and rerun export tests.",
       error: {
         signature: "node-export-mismatch",
+      },
+      recovery_contract_v1: {
+        task_family: "task:repair_export",
+        task_signature: "repair-export-route",
+        workflow_signature: "execution_workflow:repair-export",
+        contract: {
+          target_files: ["src/routes/export.ts"],
+          next_action: "Patch src/routes/export.ts and rerun export tests.",
+          workflow_steps: [
+            "Inspect src/routes/export.ts for the export mismatch.",
+            "Patch the route export serialization.",
+            "Rerun export-focused tests before handoff.",
+          ],
+          pattern_hints: [
+            "prefer_edit_for_route_level_repairs",
+            "keep_changes_scoped_to_export_route",
+          ],
+          service_lifecycle_constraints: [
+            {
+              version: 1,
+              service_kind: "generic",
+              label: "export test verification shell",
+              launch_reference: null,
+              endpoint: null,
+              must_survive_agent_exit: false,
+              revalidate_from_fresh_shell: true,
+              detach_then_probe: false,
+              healthcheck_commands: ["npm test -- export"],
+              notes: ["rerun export tests from a fresh shell before handoff"],
+            },
+          ],
+        },
       },
     };
 
@@ -839,6 +984,19 @@ test("policy governance apply route can retire and reactivate persisted policy m
     assert.equal(feedback.policy_memory?.selected_tool, "edit");
     assert.equal(feedback.policy_memory?.policy_memory_state, "active");
     assert.equal(feedback.policy_memory?.policy_contract.materialization_state, "persisted");
+    assert.deepEqual(feedback.policy_memory?.policy_contract.target_files, ["src/routes/export.ts"]);
+    assert.equal(feedback.policy_memory?.policy_contract.file_path, "src/routes/export.ts");
+    assert.equal(feedback.policy_memory?.policy_contract.next_action, "Patch src/routes/export.ts and rerun export tests.");
+    assert.deepEqual(feedback.policy_memory?.policy_contract.workflow_steps, [
+      "Inspect src/routes/export.ts for the export mismatch.",
+      "Patch the route export serialization.",
+      "Rerun export-focused tests before handoff.",
+    ]);
+    assert.deepEqual(feedback.policy_memory?.policy_contract.pattern_hints, [
+      "prefer_edit_for_route_level_repairs",
+      "keep_changes_scoped_to_export_route",
+    ]);
+    assert.equal(feedback.policy_memory?.policy_contract.service_lifecycle_constraints?.[0]?.revalidate_from_fresh_shell, true);
     const policyMemoryId = feedback.policy_memory?.node_id;
     assert.ok(policyMemoryId);
 

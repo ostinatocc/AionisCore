@@ -2,6 +2,20 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
+function recoveryContext(context: unknown): {
+  recoveryContract: Record<string, unknown> | null;
+  trajectoryCompile: Record<string, unknown> | null;
+} {
+  const ctx = asRecord(context);
+  const recoveryContract = asRecord(ctx?.recovery_contract_v1);
+  const executionResultSummary = asRecord(ctx?.execution_result_summary);
+  const trajectoryCompile = asRecord(executionResultSummary?.trajectory_compile_v1);
+  return {
+    recoveryContract,
+    trajectoryCompile,
+  };
+}
+
 function firstNonEmptyString(values: unknown[]): string | null {
   for (const value of values) {
     if (typeof value !== "string") continue;
@@ -26,6 +40,10 @@ function truncate(value: string, limit: number): string {
 
 function normalizeFamilyLabel(value: string | null | undefined, fallbackPrefix: string): string | null {
   if (!value) return null;
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed.startsWith(`${fallbackPrefix}:`)) {
+    return truncate(trimmed, 128);
+  }
   const tokens = words(value.toLowerCase(), 6)
     .map((part) => part.replace(/[^a-z0-9_-]/g, ""))
     .filter(Boolean);
@@ -42,17 +60,23 @@ export function extractTaskCue(
   const task = asRecord(ctx?.task);
   const issue = asRecord(ctx?.issue);
   const error = asRecord(ctx?.error);
+  const { recoveryContract } = recoveryContext(context);
+  const contract = asRecord(recoveryContract?.contract);
   return firstNonEmptyString([
     ctx?.task_signature,
     task?.signature,
+    recoveryContract?.task_signature,
     ctx?.goal,
     task?.goal,
     ctx?.objective,
     task?.objective,
+    recoveryContract?.task_family,
     ctx?.query,
     task?.query,
     ctx?.task_kind,
     issue?.kind,
+    contract?.next_action,
+    Array.isArray(contract?.target_files) ? (contract?.target_files as string[]).join(" ") : null,
     error?.signature,
     error?.code,
     note,
@@ -76,9 +100,12 @@ export function extractTaskFamily(context: unknown, taskCue: string | null): str
   const ctx = asRecord(context);
   const task = asRecord(ctx?.task);
   const issue = asRecord(ctx?.issue);
+  const { recoveryContract, trajectoryCompile } = recoveryContext(context);
   return normalizeFamilyLabel(
     firstNonEmptyString([
       ctx?.task_family,
+      recoveryContract?.task_family,
+      trajectoryCompile?.task_family,
       task?.family,
       ctx?.task_kind,
       task?.kind,

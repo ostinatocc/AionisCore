@@ -177,6 +177,17 @@ function buildHandoffPayload(args: {
   title: string;
   summary: string;
   filePath: string;
+  trajectory?: {
+    run_id?: string;
+    title?: string;
+    task_family?: string;
+    steps: Array<Record<string, unknown>>;
+  };
+  trajectoryHints?: {
+    repo_root?: string;
+    target_files?: string[];
+    acceptance_checks?: string[];
+  };
 }) {
   const updatedAt = "2026-03-21T12:00:00.000Z";
   return {
@@ -240,6 +251,8 @@ function buildHandoffPayload(args: {
       artifact_refs: [],
       evidence_refs: [],
     },
+    ...(args.trajectory ? { trajectory: args.trajectory } : {}),
+    ...(args.trajectoryHints ? { trajectory_hints: args.trajectoryHints } : {}),
   };
 }
 
@@ -369,6 +382,172 @@ test("handoff/store projects workflow memory into planner guidance through the g
     assert.equal(introspectBody.distillation_signal_summary.origin_counts.handoff_continuity_carrier, 1);
     assert.ok(introspectBody.demo_surface.sections.workflows.some((line) => line.includes("distillation=handoff_continuity_carrier")));
     assert.match(introspectBody.demo_surface.merged_text, /Fix export failure/i);
+  } finally {
+    await app.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("trajectory-backed handoff promotion preserves recovery compiler fields into workflow memory", async () => {
+  const dbPath = tmpDbPath("handoff-trajectory-projection");
+  const app = Fastify();
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  try {
+    registerApp({
+      app,
+      liteWriteStore,
+      liteRecallStore,
+      envOverrides: {
+        WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+      },
+    });
+
+    const payload = buildHandoffPayload({
+      stateId: `state:${randomUUID()}`,
+      title: "Preview server recovery handoff",
+      summary: "Repair preview server and keep validation alive after agent exit",
+      filePath: "scripts/export-preview.ts",
+      trajectory: {
+        run_id: `run:${randomUUID()}`,
+        title: "Preview server failed validation",
+        task_family: "service_publish_validate",
+        steps: [
+          {
+            role: "assistant",
+            kind: "analysis",
+            text: "Update scripts/export-preview.ts and package.json, then rerun the preview validation path.",
+          },
+          {
+            role: "tool",
+            tool_name: "bash",
+            command: "python -m http.server 8080 --directory dist &",
+          },
+          {
+            role: "tool",
+            tool_name: "bash",
+            command: "curl http://localhost:8080/health",
+          },
+          {
+            role: "tool",
+            tool_name: "bash",
+            command: "npm test -- export-preview",
+          },
+        ],
+      },
+      trajectoryHints: {
+        repo_root: "/Volumes/ziel/Aionisgo",
+        target_files: ["scripts/export-preview.ts", "package.json"],
+        acceptance_checks: [
+          "curl http://localhost:8080/health",
+          "npm test -- export-preview",
+        ],
+      },
+    });
+
+    const firstStore = await app.inject({
+      method: "POST",
+      url: "/v1/handoff/store",
+      payload,
+    });
+    assert.equal(firstStore.statusCode, 200);
+
+    const continuityRows = await liteWriteStore.findExecutionNativeNodes({
+      scope: "default",
+      consumerAgentId: "local-user",
+      executionKind: "execution_native",
+      compressionLayer: "L0",
+      limit: 10,
+      offset: 0,
+    });
+    const storedHandoff = continuityRows.rows.find((row) => row.execution_native_v1.summary_kind === "handoff");
+    assert.ok(storedHandoff);
+    assert.equal(storedHandoff?.execution_native_v1.task_family, "service_publish_validate");
+    assert.ok(storedHandoff?.execution_native_v1.task_signature);
+    assert.ok(storedHandoff?.execution_native_v1.workflow_signature);
+    assert.deepEqual(storedHandoff?.execution_native_v1.target_files, ["scripts/export-preview.ts", "package.json"]);
+    assert.ok(storedHandoff?.execution_native_v1.workflow_steps?.some((step) => step.includes("python -m http.server 8080")));
+    assert.ok(storedHandoff?.execution_native_v1.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
+    assert.equal(storedHandoff?.execution_native_v1.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);
+    assert.equal(storedHandoff?.execution_native_v1.service_lifecycle_constraints?.[0]?.revalidate_from_fresh_shell, true);
+
+    const firstPlanning = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "repair preview server and keep validation alive after agent exit",
+        context: {
+          goal: "repair preview server and keep validation alive after agent exit",
+        },
+        tool_candidates: ["bash", "edit", "test"],
+      },
+    });
+    assert.equal(firstPlanning.statusCode, 200);
+
+    const projectedRows = await liteWriteStore.findExecutionNativeNodes({
+      scope: "default",
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      executionKind: "workflow_candidate",
+      limit: 8,
+      offset: 0,
+    });
+    assert.equal(projectedRows.rows.length, 1);
+    assert.equal(projectedRows.rows[0]?.execution_native_v1.task_family, "service_publish_validate");
+    assert.deepEqual(projectedRows.rows[0]?.execution_native_v1.target_files, ["package.json", "scripts/export-preview.ts"]);
+    assert.ok(projectedRows.rows[0]?.execution_native_v1.workflow_steps?.some((step) => step.includes("python -m http.server 8080")));
+    assert.ok(projectedRows.rows[0]?.execution_native_v1.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
+    assert.equal(projectedRows.rows[0]?.execution_native_v1.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);
+
+    const secondStore = await app.inject({
+      method: "POST",
+      url: "/v1/handoff/store",
+      payload: buildHandoffPayload({
+        stateId: `state:${randomUUID()}`,
+        title: "Preview server recovery handoff second run",
+        summary: "Repair preview server and keep validation alive after agent exit",
+        filePath: "scripts/export-preview.ts",
+        trajectory: payload.trajectory,
+        trajectoryHints: payload.trajectory_hints,
+      }),
+    });
+    assert.equal(secondStore.statusCode, 200);
+
+    const secondPlanning = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "repair preview server and keep validation alive after agent exit",
+        context: {
+          goal: "repair preview server and keep validation alive after agent exit",
+        },
+        tool_candidates: ["bash", "edit", "test"],
+      },
+    });
+    assert.equal(secondPlanning.statusCode, 200);
+
+    const stableRows = await liteWriteStore.findExecutionNativeNodes({
+      scope: "default",
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      executionKind: "workflow_anchor",
+      limit: 8,
+      offset: 0,
+    });
+    assert.equal(stableRows.rows.length, 1);
+    assert.equal(stableRows.rows[0]?.execution_native_v1.task_family, "service_publish_validate");
+    assert.deepEqual(stableRows.rows[0]?.execution_native_v1.target_files, ["package.json", "scripts/export-preview.ts"]);
+    assert.ok(stableRows.rows[0]?.execution_native_v1.workflow_steps?.some((step) => step.includes("python -m http.server 8080")));
+    assert.ok(stableRows.rows[0]?.execution_native_v1.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
+    assert.equal(stableRows.rows[0]?.execution_native_v1.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);
+    assert.equal(
+      ((stableRows.rows[0]?.slots?.anchor_v1 as any)?.service_lifecycle_constraints?.[0]?.detach_then_probe) ?? false,
+      true,
+    );
   } finally {
     await app.close();
     await liteWriteStore.close();

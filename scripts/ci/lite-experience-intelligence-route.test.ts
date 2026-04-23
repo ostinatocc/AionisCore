@@ -184,11 +184,35 @@ async function seedStableWorkflowFixture(dbPath: string) {
               task_signature: "execution_task:repair-export",
               task_class: "execution_write_projection",
               workflow_signature: "execution_workflow:repair-export",
+              task_family: "task:repair_export",
               summary: "Stable workflow for repairing export failures in node tests.",
               tool_set: ["edit", "test"],
               file_path: "src/routes/export.ts",
               target_files: ["src/routes/export.ts"],
               next_action: "Patch src/routes/export.ts and rerun export tests.",
+              workflow_steps: [
+                "Inspect src/routes/export.ts for export response handling.",
+                "Patch the export serialization logic with edit.",
+                "Rerun export-focused tests before handing off.",
+              ],
+              pattern_hints: [
+                "Prefer edit for route-level export repairs.",
+                "Keep response serialization changes scoped to src/routes/export.ts.",
+              ],
+              service_lifecycle_constraints: [
+                {
+                  version: 1,
+                  service_kind: "generic",
+                  label: "export test verification shell",
+                  launch_reference: null,
+                  endpoint: null,
+                  must_survive_agent_exit: false,
+                  revalidate_from_fresh_shell: true,
+                  detach_then_probe: false,
+                  health_checks: ["npm test -- export"],
+                  teardown_notes: [],
+                },
+              ],
               outcome: { status: "success", result_class: "execution_write_stable", success_score: 0.88 },
               source: { source_kind: "execution_write", node_id: randomUUID(), run_id: null, playbook_id: null, commit_id: null },
               payload_refs: { node_ids: [], decision_ids: [], run_ids: [], step_ids: [], commit_ids: [] },
@@ -222,6 +246,7 @@ async function seedStableWorkflowFixture(dbPath: string) {
               summary_kind: "workflow_anchor",
               compression_layer: "L2",
               task_signature: "execution_task:repair-export",
+              task_family: "task:repair_export",
               workflow_signature: "execution_workflow:repair-export",
               anchor_kind: "workflow",
               anchor_level: "L2",
@@ -229,6 +254,29 @@ async function seedStableWorkflowFixture(dbPath: string) {
               file_path: "src/routes/export.ts",
               target_files: ["src/routes/export.ts"],
               next_action: "Patch src/routes/export.ts and rerun export tests.",
+              workflow_steps: [
+                "Inspect src/routes/export.ts for export response handling.",
+                "Patch the export serialization logic with edit.",
+                "Rerun export-focused tests before handing off.",
+              ],
+              pattern_hints: [
+                "Prefer edit for route-level export repairs.",
+                "Keep response serialization changes scoped to src/routes/export.ts.",
+              ],
+              service_lifecycle_constraints: [
+                {
+                  version: 1,
+                  service_kind: "generic",
+                  label: "export test verification shell",
+                  launch_reference: null,
+                  endpoint: null,
+                  must_survive_agent_exit: false,
+                  revalidate_from_fresh_shell: true,
+                  detach_then_probe: false,
+                  health_checks: ["npm test -- export"],
+                  teardown_notes: [],
+                },
+              ],
               workflow_promotion: {
                 promotion_state: "stable",
                 promotion_origin: "execution_write_auto_promotion",
@@ -343,9 +391,50 @@ test("experience intelligence route combines trusted tool memory with learned wo
     assert.deepEqual(body.recommendation.path.target_files, ["src/routes/export.ts"]);
     assert.match(body.recommendation.combined_next_action ?? "", /src\/routes\/export\.ts/);
     assert.equal(body.policy_hints.total_hints >= 2, true);
+    const workflowReuseHint = body.policy_hints.hints.find((entry) => entry.hint_kind === "workflow_reuse");
+    assert.deepEqual(body.recommendation.path.workflow_steps, [
+      "Inspect src/routes/export.ts for export response handling.",
+      "Patch the export serialization logic with edit.",
+      "Rerun export-focused tests before handing off.",
+    ]);
+    assert.deepEqual(body.recommendation.path.pattern_hints, [
+      "Prefer edit for route-level export repairs.",
+      "Keep response serialization changes scoped to src/routes/export.ts.",
+    ]);
     assert.equal(body.derived_policy?.selected_tool, "edit");
+    assert.deepEqual(body.derived_policy?.workflow_steps, [
+      "Inspect src/routes/export.ts for export response handling.",
+      "Patch the export serialization logic with edit.",
+      "Rerun export-focused tests before handing off.",
+    ]);
+    assert.deepEqual(body.derived_policy?.pattern_hints, [
+      "Prefer edit for route-level export repairs.",
+      "Keep response serialization changes scoped to src/routes/export.ts.",
+    ]);
+    assert.equal(body.derived_policy?.service_lifecycle_constraints?.[0]?.label, "export test verification shell");
     assert.equal(body.policy_contract?.selected_tool, "edit");
     assert.equal(body.policy_contract?.materialization_state, "computed");
+    assert.deepEqual(body.policy_contract?.workflow_steps, [
+      "Inspect src/routes/export.ts for export response handling.",
+      "Patch the export serialization logic with edit.",
+      "Rerun export-focused tests before handing off.",
+    ]);
+    assert.deepEqual(body.policy_contract?.pattern_hints, [
+      "Prefer edit for route-level export repairs.",
+      "Keep response serialization changes scoped to src/routes/export.ts.",
+    ]);
+    assert.equal(body.policy_contract?.service_lifecycle_constraints?.[0]?.revalidate_from_fresh_shell, true);
+    assert.ok(workflowReuseHint);
+    assert.deepEqual(workflowReuseHint?.workflow_steps, [
+      "Inspect src/routes/export.ts for export response handling.",
+      "Patch the export serialization logic with edit.",
+      "Rerun export-focused tests before handing off.",
+    ]);
+    assert.deepEqual(workflowReuseHint?.pattern_hints, [
+      "Prefer edit for route-level export repairs.",
+      "Keep response serialization changes scoped to src/routes/export.ts.",
+    ]);
+    assert.equal(workflowReuseHint?.service_lifecycle_constraints?.[0]?.label, "export test verification shell");
     assert.deepEqual(body.learning_summary, {
       task_family: "task:repair_export",
       matched_records: 0,
@@ -1000,9 +1089,45 @@ test("experience intelligence route learns a stronger next recommendation after 
       query_text: "repair export failure in node tests",
       context: {
         task_kind: "repair_export",
+        task_family: "task:repair_export",
+        workflow_signature: "execution_workflow:repair-export",
         goal: "repair export failure in node tests",
+        target_files: ["src/routes/export.ts"],
+        next_action: "Patch src/routes/export.ts and rerun export tests.",
         error: {
           signature: "node-export-mismatch",
+        },
+        recovery_contract_v1: {
+          task_family: "task:repair_export",
+          task_signature: "repair-export-route",
+          workflow_signature: "execution_workflow:repair-export",
+          contract: {
+            target_files: ["src/routes/export.ts"],
+            next_action: "Patch src/routes/export.ts and rerun export tests.",
+            workflow_steps: [
+              "Inspect src/routes/export.ts for the export mismatch.",
+              "Patch the route export serialization.",
+              "Rerun export-focused tests before handoff.",
+            ],
+            pattern_hints: [
+              "prefer_edit_for_route_level_repairs",
+              "keep_changes_scoped_to_export_route",
+            ],
+            service_lifecycle_constraints: [
+              {
+                version: 1,
+                service_kind: "generic",
+                label: "export test verification shell",
+                launch_reference: null,
+                endpoint: null,
+                must_survive_agent_exit: false,
+                revalidate_from_fresh_shell: true,
+                detach_then_probe: false,
+                healthcheck_commands: ["npm test -- export"],
+                notes: ["rerun export tests from a fresh shell before handoff"],
+              },
+            ],
+          },
         },
       },
       candidates: ["bash", "edit", "test"],
@@ -1053,8 +1178,167 @@ test("experience intelligence route learns a stronger next recommendation after 
     assert.equal(after.policy_contract?.materialization_state, "persisted");
     assert.equal(after.policy_contract?.policy_memory_state, "active");
     assert.ok(typeof after.policy_contract?.policy_memory_id === "string" && after.policy_contract.policy_memory_id.length > 0);
+    assert.equal(after.policy_contract?.task_family, "task:repair_export");
+    assert.deepEqual(after.policy_contract?.target_files, ["src/routes/export.ts"]);
+    assert.equal(after.policy_contract?.file_path, "src/routes/export.ts");
+    assert.equal(after.policy_contract?.next_action, "Patch src/routes/export.ts and rerun export tests.");
+    assert.deepEqual(after.policy_contract?.workflow_steps, [
+      "Inspect src/routes/export.ts for the export mismatch.",
+      "Patch the route export serialization.",
+      "Rerun export-focused tests before handoff.",
+    ]);
+    assert.deepEqual(after.policy_contract?.pattern_hints, [
+      "prefer_edit_for_route_level_repairs",
+      "keep_changes_scoped_to_export_route",
+    ]);
+    assert.equal(after.policy_contract?.service_lifecycle_constraints?.[0]?.revalidate_from_fresh_shell, true);
     assert.match(after.rationale.summary, /persisted_policy_memory=/);
     assert.match(after.rationale.summary, /trusted pattern support/i);
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("kickoff recommendation route can recover file-level guidance from family-level persisted policy memory", async () => {
+  const app = Fastify();
+  const dbPath = tmpDbPath("kickoff-route-persisted-policy-memory");
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryAccessRoutes({
+      app,
+      env: {
+        AIONIS_EDITION: "lite",
+        APP_ENV: "test",
+        MEMORY_SCOPE: "default",
+        MEMORY_TENANT_ID: "default",
+        LITE_LOCAL_ACTOR_ID: "local-user",
+        MAX_TEXT_LEN: 10_000,
+        PII_REDACTION: false,
+        ALLOW_CROSS_SCOPE_EDGES: false,
+        MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+        MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+      } as any,
+      embedder: FakeEmbeddingProvider,
+      liteWriteStore,
+      liteRecallAccess: liteRecallStore.createRecallAccess(),
+      writeAccessShadowMirrorV2: false,
+      requireStoreFeatureCapability: () => {},
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const feedbackContext = {
+      task_kind: "repair_export",
+      task_family: "task:repair_export",
+      workflow_signature: "execution_workflow:repair-export",
+      goal: "repair export failure in node tests",
+      target_files: ["src/routes/export.ts"],
+      next_action: "Patch src/routes/export.ts and rerun export tests.",
+      error: {
+        signature: "node-export-mismatch",
+      },
+      recovery_contract_v1: {
+        task_family: "task:repair_export",
+        task_signature: "repair-export-route",
+        workflow_signature: "execution_workflow:repair-export",
+        contract: {
+          target_files: ["src/routes/export.ts"],
+          next_action: "Patch src/routes/export.ts and rerun export tests.",
+          workflow_steps: [
+            "Inspect src/routes/export.ts for the export mismatch.",
+            "Patch the route export serialization.",
+            "Rerun export-focused tests before handoff.",
+          ],
+          pattern_hints: [
+            "prefer_edit_for_route_level_repairs",
+            "keep_changes_scoped_to_export_route",
+          ],
+          service_lifecycle_constraints: [
+            {
+              version: 1,
+              service_kind: "generic",
+              label: "export test verification shell",
+              launch_reference: null,
+              endpoint: null,
+              must_survive_agent_exit: false,
+              revalidate_from_fresh_shell: true,
+              detach_then_probe: false,
+              healthcheck_commands: ["npm test -- export"],
+              notes: ["rerun export tests from a fresh shell before handoff"],
+            },
+          ],
+        },
+      },
+    };
+
+    for (let i = 0; i < 3; i += 1) {
+      await liteWriteStore.withTx(() =>
+        toolSelectionFeedback(null, {
+          tenant_id: "default",
+          scope: "default",
+          actor: "local-user",
+          run_id: randomUUID(),
+          outcome: "positive",
+          context: feedbackContext,
+          candidates: ["bash", "edit", "test"],
+          selected_tool: "edit",
+          target: "tool",
+          note: "Edit solved the export repair path and should persist as reusable guidance.",
+          input_text: "repair export failure in node tests",
+        }, "default", "default", {
+          maxTextLen: 10_000,
+          piiRedaction: false,
+          embedder: FakeEmbeddingProvider,
+          liteWriteStore,
+        }),
+      );
+    }
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/kickoff/recommendation",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "Repository repair request: fix the export mismatch and verify the fix.",
+        context: {
+          task_kind: "repair_export",
+          task_family: "task:repair_export",
+          host_tool_profile: "Repository-repair request detected; inspect current failure state first, patch the broken export path, then verify from a fresh shell.",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        candidates: ["bash", "edit", "test"],
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = KickoffRecommendationResponseSchema.parse(response.json());
+    assert.deepEqual(body.kickoff_recommendation, {
+      source_kind: "experience_intelligence",
+      history_applied: true,
+      selected_tool: "edit",
+      task_family: "task:repair_export",
+      workflow_signature: "execution_workflow:repair-export",
+      policy_memory_id: body.policy_contract?.policy_memory_id ?? null,
+      file_path: "src/routes/export.ts",
+      next_action: "Patch src/routes/export.ts and rerun export tests.",
+    });
+    assert.equal(body.policy_contract?.materialization_state, "persisted");
+    assert.equal(body.policy_contract?.task_family, "task:repair_export");
+    assert.deepEqual(body.policy_contract?.target_files, ["src/routes/export.ts"]);
+    assert.equal(body.policy_contract?.service_lifecycle_constraints?.[0]?.revalidate_from_fresh_shell, true);
+    assert.match(body.rationale.summary, /persisted_policy_memory=/);
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -1120,6 +1404,9 @@ test("kickoff recommendation route returns a host-consumable file-level kickoff 
       source_kind: "experience_intelligence",
       history_applied: true,
       selected_tool: "edit",
+      task_family: "task:repair_export",
+      workflow_signature: "execution_workflow:repair-export",
+      policy_memory_id: null,
       file_path: "src/routes/export.ts",
       next_action: "Patch src/routes/export.ts and rerun export tests.",
     });
@@ -1190,6 +1477,9 @@ test("kickoff recommendation route falls back to tool-only kickoff for unrelated
       source_kind: "tool_selection",
       history_applied: false,
       selected_tool: "bash",
+      task_family: null,
+      workflow_signature: null,
+      policy_memory_id: null,
       file_path: null,
       next_action: "Inspect the current context before starting with bash.",
     });

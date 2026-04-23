@@ -8,6 +8,7 @@ import { FakeEmbeddingProvider } from "../../src/embeddings/fake.ts";
 import { updateRuleState } from "../../src/memory/rules.ts";
 import { MemoryAnchorV1Schema, MemoryRecallRequest, ToolsFeedbackResponseSchema } from "../../src/memory/schemas.ts";
 import { suppressPatternAnchorLite } from "../../src/memory/pattern-operator-override.ts";
+import { extractTaskFamily, resolvePatternTaskAffinity } from "../../src/memory/pattern-trust-shaping.ts";
 import { memoryRecallParsed } from "../../src/memory/recall.ts";
 import { selectTools } from "../../src/memory/tools-select.ts";
 import { toolSelectionFeedback } from "../../src/memory/tools-feedback.ts";
@@ -119,6 +120,45 @@ async function seedActiveRules(
   }
   return { liteWriteStore, ruleNodeIds };
 }
+
+test("extractTaskFamily derives family from recovery contract when plain task_family is absent", () => {
+  const taskFamily = extractTaskFamily({
+    goal: "recover deploy hook and rerun smoke checks",
+    recovery_contract_v1: {
+      task_family: "task:git-deploy-webserver",
+      contract: {
+        next_action: "Fix the git post-receive hook and rerun the web smoke test.",
+        target_files: ["/srv/git/hooks/post-receive"],
+      },
+    },
+  }, null);
+
+  assert.equal(taskFamily, "task:git-deploy-webserver");
+});
+
+test("resolvePatternTaskAffinity uses trajectory compile task family when direct task family is missing", () => {
+  const affinity = resolvePatternTaskAffinity({
+    context: {
+      goal: "recover a package index server after a failed publish attempt",
+      execution_result_summary: {
+        trajectory_compile_v1: {
+          task_family: "task:package-index-server",
+          contract: {
+            next_action: "Restart the package index server and verify install from a fresh shell.",
+            target_files: ["/app/scripts/build_and_serve.py"],
+          },
+        },
+      },
+    },
+    selectedTool: "edit",
+    storedTaskFamily: "task:package-index-server",
+    storedTaskSignature: null,
+    storedErrorFamily: null,
+  });
+
+  assert.equal(affinity.level, "same_task_family");
+  assert.equal(affinity.current_task_family, "task:package-index-server");
+});
 
 test("recall ranking prefers stable pattern anchors over counter-evidence-open candidates", async () => {
   const dbPath = tmpDbPath("pattern-recall-ranking");

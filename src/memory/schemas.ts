@@ -5,6 +5,7 @@ import {
   ExecutionDelegationPacketRecordV1Schema,
   ExecutionDelegationReturnRecordV1Schema,
   ExecutionPacketV1Schema,
+  ServiceLifecycleConstraintV1Schema,
   ExecutionStateV1Schema,
 } from "../execution/types.js";
 import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
@@ -443,6 +444,8 @@ export const MemoryAnchorV1Schema = z.object({
   target_files: z.array(z.string().min(1).max(2048)).max(64).optional(),
   next_action: z.string().min(1).max(400).nullable().optional(),
   key_steps: MemoryAnchorStringList.optional(),
+  pattern_hints: MemoryAnchorStringList.optional(),
+  service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema).max(16).optional(),
   outcome: MemoryAnchorOutcomeSchema,
   source: MemoryAnchorSourceSchema,
   payload_refs: MemoryAnchorPayloadRefsSchema,
@@ -487,6 +490,9 @@ export const ExecutionNativeV1Schema = z.object({
   file_path: z.string().min(1).max(2048).nullable().optional(),
   target_files: z.array(z.string().min(1).max(2048)).max(64).optional(),
   next_action: z.string().min(1).max(400).nullable().optional(),
+  workflow_steps: MemoryAnchorStringList.optional(),
+  pattern_hints: MemoryAnchorStringList.optional(),
+  service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema).max(16).optional(),
   workflow_promotion: MemoryWorkflowPromotionSchema.optional(),
   promotion: MemoryPatternPromotionSchema.optional(),
   trust_hardening: MemoryPatternTrustHardeningSchema.optional(),
@@ -772,6 +778,40 @@ export const StaticInjectionPolicy = z.object({
   include_selection_trace: z.boolean().default(true),
 });
 
+export const TrajectoryCompileStepSchema = z.object({
+  step_id: z.string().min(1).max(256).optional(),
+  role: z.string().min(1).max(64).optional(),
+  kind: z.string().min(1).max(64).optional(),
+  title: z.string().min(1).max(400).optional(),
+  text: z.string().min(1).max(20000).optional(),
+  content: z.string().min(1).max(20000).optional(),
+  summary: z.string().min(1).max(4000).optional(),
+  tool_name: z.string().min(1).max(128).optional(),
+  command: z.string().min(1).max(20000).optional(),
+  tool_input: z.unknown().optional(),
+  observation: z.unknown().optional(),
+  result: z.unknown().optional(),
+  exit_code: z.number().int().optional(),
+  file_paths: z.array(z.string().min(1).max(2048)).max(64).optional(),
+  urls: z.array(z.string().min(1).max(2048)).max(32).optional(),
+}).passthrough();
+
+export const TrajectoryCompileSourceSchema = z.object({
+  run_id: z.string().min(1).max(256).optional(),
+  title: z.string().min(1).max(400).optional(),
+  task_family: z.string().min(1).max(128).optional(),
+  steps: z.array(TrajectoryCompileStepSchema).min(1).max(500),
+});
+
+export const TrajectoryCompileHintsSchema = z.object({
+  repo_root: z.string().min(1).max(2048).optional(),
+  target_files: z.array(z.string().min(1).max(2048)).max(64).optional(),
+  acceptance_checks: z.array(z.string().min(1).max(400)).max(64).optional(),
+});
+
+export type TrajectoryCompileSourceInput = z.infer<typeof TrajectoryCompileSourceSchema>;
+export type TrajectoryCompileHintsInput = z.infer<typeof TrajectoryCompileHintsSchema>;
+
 export const PlanningContextRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
@@ -816,6 +856,8 @@ export const PlanningContextRequest = z.object({
   execution_evidence: z.array(z.record(z.unknown())).optional(),
   execution_state_v1: ExecutionStateV1Schema.optional(),
   execution_packet_v1: ExecutionPacketV1Schema.optional(),
+  trajectory: TrajectoryCompileSourceSchema.optional(),
+  trajectory_hints: TrajectoryCompileHintsSchema.optional(),
 });
 
 export type ContextLayerConfigInput = z.infer<typeof ContextLayerConfig>;
@@ -863,6 +905,8 @@ export const ContextAssembleRequest = z.object({
   execution_evidence: z.array(z.record(z.unknown())).optional(),
   execution_state_v1: ExecutionStateV1Schema.optional(),
   execution_packet_v1: ExecutionPacketV1Schema.optional(),
+  trajectory: TrajectoryCompileSourceSchema.optional(),
+  trajectory_hints: TrajectoryCompileHintsSchema.optional(),
 });
 
 export type ContextAssembleInput = z.infer<typeof ContextAssembleRequest>;
@@ -896,11 +940,67 @@ export const ExperienceIntelligenceRequest = z.object({
   execution_artifacts: z.array(z.record(z.unknown())).optional(),
   execution_evidence: z.array(z.record(z.unknown())).optional(),
   execution_state_v1: ExecutionStateV1Schema.optional(),
+  trajectory: TrajectoryCompileSourceSchema.optional(),
+  trajectory_hints: TrajectoryCompileHintsSchema.optional(),
   policy_governance_apply_mode: z.enum(["manual", "auto_apply"]).optional(),
   workflow_limit: z.number().int().positive().max(32).default(8),
 });
 
 export type ExperienceIntelligenceInput = z.infer<typeof ExperienceIntelligenceRequest>;
+
+export const TrajectoryCompileRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  query_text: z.string().min(1).max(20000),
+  trajectory: TrajectoryCompileSourceSchema,
+  hints: TrajectoryCompileHintsSchema.optional(),
+});
+
+export type TrajectoryCompileInput = z.infer<typeof TrajectoryCompileRequest>;
+
+export const TrajectoryCompileContractSchema = z.object({
+  target_files: z.array(z.string()),
+  acceptance_checks: z.array(z.string()),
+  next_action: z.string().nullable(),
+  workflow_steps: z.array(z.string()),
+  pattern_hints: z.array(z.string()),
+  likely_tool: z.string().nullable(),
+  service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema),
+  noise_markers: z.array(z.string()),
+}).passthrough();
+
+export const TrajectoryCompilePromotionSeedSchema = z.object({
+  task_family: z.string().nullable(),
+  task_signature: z.string().nullable(),
+  workflow_signature: z.string().nullable(),
+  key_steps: z.array(z.string()),
+  recall_keywords: z.array(z.string()),
+}).passthrough();
+
+export const TrajectoryCompileResponseSchema = z.object({
+  summary_version: z.literal("trajectory_compile_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  query_text: z.string(),
+  compiler_version: z.literal("trajectory_compile_v1"),
+  task_family: z.string().nullable(),
+  task_signature: z.string().nullable(),
+  workflow_signature: z.string().nullable(),
+  contract: TrajectoryCompileContractSchema,
+  promotion_seed: TrajectoryCompilePromotionSeedSchema,
+  diagnostics: z.object({
+    step_count: z.number().int().min(0),
+    command_count: z.number().int().min(0),
+    target_file_count: z.number().int().min(0),
+    acceptance_check_count: z.number().int().min(0),
+    workflow_step_count: z.number().int().min(0),
+    service_constraint_count: z.number().int().min(0),
+    noise_marker_count: z.number().int().min(0),
+  }).passthrough(),
+}).passthrough();
+
+export type TrajectoryCompileResponse = z.infer<typeof TrajectoryCompileResponseSchema>;
 
 export const ActionRetrievalRequest = ExperienceIntelligenceRequest;
 
@@ -976,12 +1076,16 @@ export type ContinuityReviewPackResponse = z.infer<typeof ContinuityReviewPackRe
 export const ExperienceIntelligencePathRecommendationSchema = z.object({
   source_kind: z.enum(["recommended_workflow", "candidate_workflow", "none"]),
   anchor_id: z.string().nullable(),
+  task_family: z.string().nullable().optional(),
   workflow_signature: z.string().nullable(),
   title: z.string().nullable(),
   summary: z.string().nullable(),
   file_path: z.string().nullable(),
   target_files: z.array(z.string()),
   next_action: z.string().nullable(),
+  workflow_steps: z.array(z.string()).optional(),
+  pattern_hints: z.array(z.string()).optional(),
+  service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema).max(16).optional(),
   confidence: z.number().nullable(),
   tool_set: z.array(z.string()),
 }).passthrough();
@@ -1007,6 +1111,7 @@ export const ActionRetrievalEvidenceEntrySchema = z.object({
   ]),
   anchor_id: z.string().nullable(),
   selected_tool: z.string().nullable(),
+  task_family: z.string().nullable().optional(),
   workflow_signature: z.string().nullable(),
   file_path: z.string().nullable(),
   target_files: z.array(z.string()),
@@ -1111,9 +1216,13 @@ export const PolicyHintEntrySchema = z.object({
   source_anchor_id: z.string(),
   source_anchor_level: z.string().nullable(),
   selected_tool: z.string().nullable(),
+  task_family: z.string().nullable().optional(),
   workflow_signature: z.string().nullable(),
   file_path: z.string().nullable(),
   target_files: z.array(z.string()),
+  workflow_steps: z.array(z.string()).optional(),
+  pattern_hints: z.array(z.string()).optional(),
+  service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema).max(16).optional(),
   rehydration_mode: z.string().nullable(),
   confidence: z.number().nullable(),
   priority: z.number().int().min(0),
@@ -1138,9 +1247,13 @@ export const DerivedPolicySurfaceSchema = z.object({
   source_kind: z.enum(["trusted_pattern", "stable_workflow", "blended"]),
   policy_state: z.enum(["candidate", "stable"]),
   selected_tool: z.string(),
+  task_family: z.string().nullable().optional(),
   workflow_signature: z.string().nullable(),
   file_path: z.string().nullable(),
   target_files: z.array(z.string()),
+  workflow_steps: z.array(z.string()).optional(),
+  pattern_hints: z.array(z.string()).optional(),
+  service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema).max(16).optional(),
   confidence: z.number().min(0).max(1),
   supporting_anchor_ids: z.array(z.string()),
   reason: z.string(),
@@ -1166,10 +1279,14 @@ export const PolicyContractSchema = z.object({
   history_applied: z.boolean(),
   selected_tool: z.string(),
   avoid_tools: z.array(z.string()),
+  task_family: z.string().nullable().optional(),
   workflow_signature: z.string().nullable(),
   file_path: z.string().nullable(),
   target_files: z.array(z.string()),
   next_action: z.string().nullable(),
+  workflow_steps: z.array(z.string()).optional(),
+  pattern_hints: z.array(z.string()).optional(),
+  service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema).max(16).optional(),
   rehydration_mode: z.string().nullable(),
   confidence: z.number().min(0).max(1),
   source_anchor_ids: z.array(z.string()),
@@ -1328,6 +1445,9 @@ export const FirstStepRecommendationSchema = z.object({
   source_kind: z.enum(["experience_intelligence", "tool_selection"]),
   history_applied: z.boolean(),
   selected_tool: z.string().nullable(),
+  task_family: z.string().nullable(),
+  workflow_signature: z.string().nullable(),
+  policy_memory_id: z.string().nullable(),
   file_path: z.string().nullable(),
   next_action: z.string().nullable(),
 });
@@ -1336,6 +1456,9 @@ export const KickoffRecommendationSchema = z.object({
   source_kind: z.enum(["experience_intelligence", "tool_selection"]),
   history_applied: z.boolean(),
   selected_tool: z.string().nullable(),
+  task_family: z.string().nullable(),
+  workflow_signature: z.string().nullable(),
+  policy_memory_id: z.string().nullable(),
   file_path: z.string().nullable(),
   next_action: z.string().nullable(),
 });
@@ -2248,6 +2371,9 @@ export const ContextOperatorProjectionSchema = z.object({
     instruction: z.string().nullable(),
     selected_tool: z.string().nullable(),
     file_path: z.string().nullable(),
+    task_family: z.string().nullable(),
+    workflow_signature: z.string().nullable(),
+    policy_memory_id: z.string().nullable(),
     tool_route: z.string().nullable(),
     tool_method: z.enum(["POST"]).nullable(),
     example_call: z.string().nullable(),
@@ -2681,6 +2807,8 @@ export const HandoffStoreRequest = z.object({
   execution_packet_v1: ExecutionPacketV1Schema.optional(),
   control_profile_v1: ControlProfileV1Schema.optional(),
   execution_transitions_v1: z.array(ExecutionStateTransitionV1Schema).optional(),
+  trajectory: TrajectoryCompileSourceSchema.optional(),
+  trajectory_hints: TrajectoryCompileHintsSchema.optional(),
 }).superRefine((value, ctx) => {
   if (value.handoff_kind !== "task_handoff" && !value.file_path) {
     ctx.addIssue({

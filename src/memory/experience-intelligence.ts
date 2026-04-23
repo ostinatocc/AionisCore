@@ -38,6 +38,7 @@ import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { buildKickoffRecommendationFromExperience } from "../app/planning-summary.js";
+import { augmentTrajectoryAwareRequest } from "./trajectory-compile-runtime.js";
 
 type ExperienceLiteStore = LiteWriteStore;
 
@@ -107,6 +108,11 @@ function buildDerivedPolicySurface(args: {
     workflowSupports ? `stable workflow supports ${selectedTool}` : null,
     workflowSupports && selectedWorkflow ? workflowEvidenceParts(selectedWorkflow).join("; ") : null,
   ].filter((value): value is string => !!value).join("; ");
+  const workflowSteps = stringList(selectedWorkflow?.workflow_steps, 24);
+  const patternHints = stringList(selectedWorkflow?.pattern_hints, 24);
+  const serviceLifecycleConstraints = Array.isArray(selectedWorkflow?.service_lifecycle_constraints)
+    ? selectedWorkflow!.service_lifecycle_constraints!.slice(0, 16)
+    : [];
 
   return DerivedPolicySurfaceSchema.parse({
     summary_version: "derived_policy_v1",
@@ -114,9 +120,13 @@ function buildDerivedPolicySurface(args: {
     source_kind: sourceKind,
     policy_state: policyState,
     selected_tool: selectedTool,
+    task_family: firstString((args.path as Record<string, unknown>).task_family, selectedWorkflow?.task_family, preferredPattern?.task_family),
     workflow_signature: firstString(selectedWorkflow?.workflow_signature),
     file_path: firstString(selectedWorkflow?.file_path, preferredPattern?.file_path),
     target_files: stringList(selectedWorkflow?.target_files, 24),
+    ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
+    ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
+    ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
     confidence,
     supporting_anchor_ids: supportingAnchorIds,
     reason,
@@ -158,6 +168,7 @@ function buildPolicyHintPack(args: {
       source_anchor_id: preferredPattern.anchor_id,
       source_anchor_level: preferredPattern.anchor_level ?? null,
       selected_tool: preferredPattern.selected_tool,
+      task_family: preferredPattern.task_family ?? null,
       workflow_signature: null,
       file_path: preferredPattern.file_path ?? null,
       target_files: preferredPattern.target_files ?? [],
@@ -181,9 +192,15 @@ function buildPolicyHintPack(args: {
       source_anchor_id: selectedWorkflow!.anchor_id,
       source_anchor_level: "L2",
       selected_tool: selectedTool,
+      task_family: firstString(selectedWorkflow!.task_family),
       workflow_signature: firstString(selectedWorkflow!.workflow_signature),
       file_path: firstString(selectedWorkflow!.file_path),
       target_files: stringList(selectedWorkflow!.target_files, 24),
+      workflow_steps: stringList(selectedWorkflow!.workflow_steps, 24),
+      pattern_hints: stringList(selectedWorkflow!.pattern_hints, 24),
+      service_lifecycle_constraints: Array.isArray(selectedWorkflow!.service_lifecycle_constraints)
+        ? selectedWorkflow!.service_lifecycle_constraints.slice(0, 16)
+        : [],
       rehydration_mode: null,
       confidence: Number.isFinite(selectedWorkflow!.confidence ?? Number.NaN) ? (selectedWorkflow!.confidence ?? null) : null,
       priority: preferredPattern?.selected_tool === selectedTool ? 85 : 95,
@@ -201,6 +218,7 @@ function buildPolicyHintPack(args: {
       source_anchor_id: entry.anchor_id,
       source_anchor_level: entry.anchor_level ?? null,
       selected_tool: entry.selected_tool,
+      task_family: entry.task_family ?? null,
       workflow_signature: null,
       file_path: entry.file_path ?? null,
       target_files: entry.target_files ?? [],
@@ -212,6 +230,17 @@ function buildPolicyHintPack(args: {
   }
 
   if (args.path.anchor_id) {
+    const workflowSteps = Array.isArray(args.path.workflow_steps) && args.path.workflow_steps.length > 0
+      ? args.path.workflow_steps
+      : stringList(selectedWorkflow?.workflow_steps, 24);
+    const patternHints = Array.isArray(args.path.pattern_hints) && args.path.pattern_hints.length > 0
+      ? args.path.pattern_hints
+      : stringList(selectedWorkflow?.pattern_hints, 24);
+    const serviceLifecycleConstraints = Array.isArray(args.path.service_lifecycle_constraints) && args.path.service_lifecycle_constraints.length > 0
+      ? args.path.service_lifecycle_constraints
+      : Array.isArray(selectedWorkflow?.service_lifecycle_constraints)
+        ? selectedWorkflow!.service_lifecycle_constraints!.slice(0, 16)
+        : [];
     hints.push({
       hint_id: `workflow_reuse:${args.path.anchor_id}`,
       source_kind: "stable_workflow",
@@ -220,9 +249,13 @@ function buildPolicyHintPack(args: {
       source_anchor_id: args.path.anchor_id,
       source_anchor_level: "L2",
       selected_tool: selectedTool,
+      task_family: firstString((args.path as Record<string, unknown>).task_family, selectedWorkflow?.task_family),
       workflow_signature: args.path.workflow_signature,
       file_path: args.path.file_path,
       target_files: args.path.target_files,
+      workflow_steps: workflowSteps,
+      pattern_hints: patternHints,
+      service_lifecycle_constraints: serviceLifecycleConstraints,
       rehydration_mode: null,
       confidence: args.path.confidence,
       priority: 90,
@@ -240,6 +273,7 @@ function buildPolicyHintPack(args: {
       source_anchor_id: rehydrationHint.anchor_id,
       source_anchor_level: rehydrationHint.anchor_level ?? null,
       selected_tool: rehydrationHint.selected_tool ?? null,
+      task_family: rehydrationHint.task_family ?? null,
       workflow_signature: rehydrationHint.workflow_signature ?? null,
       file_path: rehydrationHint.file_path ?? null,
       target_files: rehydrationHint.target_files ?? [],
@@ -288,6 +322,23 @@ function buildPolicyContract(args: {
     args.derivedPolicy.policy_state === "stable" && args.historyApplied
       ? "default"
       : "hint";
+  const pathWorkflowSteps = Array.isArray(args.path.workflow_steps) ? args.path.workflow_steps : [];
+  const pathServiceLifecycleConstraints = Array.isArray(args.path.service_lifecycle_constraints)
+    ? args.path.service_lifecycle_constraints
+    : [];
+  const workflowSteps = pathWorkflowSteps.length > 0
+    ? pathWorkflowSteps
+    : Array.isArray(args.derivedPolicy.workflow_steps)
+      ? args.derivedPolicy.workflow_steps
+      : [];
+  const patternHints = Array.isArray(args.derivedPolicy.pattern_hints)
+    ? args.derivedPolicy.pattern_hints
+    : [];
+  const serviceLifecycleConstraints = pathServiceLifecycleConstraints.length > 0
+    ? pathServiceLifecycleConstraints
+    : Array.isArray(args.derivedPolicy.service_lifecycle_constraints)
+      ? args.derivedPolicy.service_lifecycle_constraints
+      : [];
   const reason = [
     args.derivedPolicy.reason,
     avoidTools.length > 0 ? `avoid=${avoidTools.join(", ")}` : null,
@@ -305,10 +356,14 @@ function buildPolicyContract(args: {
     history_applied: args.historyApplied,
     selected_tool: args.derivedPolicy.selected_tool,
     avoid_tools: avoidTools,
+    task_family: firstString((args.path as Record<string, unknown>).task_family, args.derivedPolicy.task_family),
     workflow_signature: firstString(args.path.workflow_signature, args.derivedPolicy.workflow_signature),
     file_path: firstString(args.path.file_path, args.derivedPolicy.file_path),
     target_files: targetFiles,
     next_action: firstString(args.nextAction, args.path.next_action),
+    ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
+    ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
+    ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
     rehydration_mode: rehydrationMode,
     confidence: args.derivedPolicy.confidence,
     source_anchor_ids: args.derivedPolicy.supporting_anchor_ids,
@@ -447,7 +502,12 @@ export async function buildExperienceIntelligenceLite(args: {
   defaultTenantId: string;
   defaultActorId: string;
 }): Promise<ExperienceIntelligenceResponse> {
-  const parsed = ExperienceIntelligenceRequest.parse(args.body);
+  const parsed = augmentTrajectoryAwareRequest({
+    parsed: ExperienceIntelligenceRequest.parse(args.body),
+    parse: ExperienceIntelligenceRequest.parse,
+    defaultScope: args.defaultScope,
+    defaultTenantId: args.defaultTenantId,
+  }).parsed;
   const introspection = await buildExecutionMemoryIntrospectionLite(
     args.liteWriteStore,
     {
@@ -523,14 +583,30 @@ export function buildKickoffRecommendationResponseFromExperience(
   const actionRetrieval = asRecord(experience.action_retrieval);
   const tool = asRecord(actionRetrieval?.tool ?? experience.recommendation?.tool);
   const path = asRecord(actionRetrieval?.path ?? experience.recommendation?.path);
+  const policyContract = asRecord(experience.policy_contract);
+  const pathTargetFiles = Array.isArray(path?.target_files) ? path.target_files : [];
+  const policyTargetFiles = Array.isArray(policyContract?.target_files) ? policyContract.target_files : [];
   const kickoffRecommendation = buildKickoffRecommendationFromExperience({
     historyApplied: (
       (typeof actionRetrieval?.history_applied === "boolean" ? actionRetrieval.history_applied : undefined)
       ?? experience.recommendation?.history_applied
     ) === true,
     selectedTool: firstString(actionRetrieval?.selected_tool, tool?.selected_tool),
-    filePath: firstString(actionRetrieval?.recommended_file_path, path?.file_path),
-    nextAction: firstString(actionRetrieval?.recommended_next_action, experience.recommendation?.combined_next_action),
+    taskFamily: firstString(path?.task_family, policyContract?.task_family),
+    workflowSignature: firstString(path?.workflow_signature, policyContract?.workflow_signature),
+    policyMemoryId: firstString(policyContract?.policy_memory_id),
+    filePath: firstString(
+      actionRetrieval?.recommended_file_path,
+      path?.file_path,
+      policyContract?.file_path,
+      typeof pathTargetFiles[0] === "string" ? pathTargetFiles[0] : null,
+      typeof policyTargetFiles[0] === "string" ? policyTargetFiles[0] : null,
+    ),
+    nextAction: firstString(
+      actionRetrieval?.recommended_next_action,
+      experience.recommendation?.combined_next_action,
+      policyContract?.next_action,
+    ),
     uncertainty:
       actionRetrieval?.uncertainty && typeof actionRetrieval.uncertainty === "object"
         ? (actionRetrieval.uncertainty as any)

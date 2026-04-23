@@ -10,6 +10,7 @@ import { buildWorkflowMaintenanceMetadata, buildWorkflowPromotionMetadata } from
 import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema } from "./schemas.js";
 import type { ReplayMirrorNodeRecord, ReplayWriteMirror } from "./replay-write.js";
+import { deriveReplayWorkflowContractFromSlots } from "./replay-workflow-contract.js";
 
 function asObject(v: unknown): Record<string, unknown> | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
@@ -134,6 +135,7 @@ function buildReplayPlaybookAnchor(args: {
   const stepsTotal = stepsTemplate.length;
   const anchorNodeId = replayWriteNodeId(args.scopeKey, args.clientId);
   const summary = args.textSummary ?? args.title ?? `Replay playbook ${args.playbookId}`;
+  const workflowContract = deriveReplayWorkflowContractFromSlots(args.slots);
   const payloadCostHint: "low" | "medium" | "high" =
     stepsTotal <= 4 ? "low" : stepsTotal <= 10 ? "medium" : "high";
   const promotionAt = new Date().toISOString();
@@ -142,10 +144,17 @@ function buildReplayPlaybookAnchor(args: {
     anchor_level: "L2",
     task_signature: `replay_playbook:${args.playbookId}`,
     task_class: "replay_playbook",
+    ...(workflowContract.task_family ? { task_family: workflowContract.task_family } : {}),
     workflow_signature: deriveReplayWorkflowSignature(args.playbookId, stepsTemplate),
     summary,
     tool_set: toolSet,
-    key_steps: keySteps,
+    key_steps: workflowContract.workflow_steps.length > 0 ? workflowContract.workflow_steps : keySteps,
+    ...(workflowContract.target_files.length > 0 ? { target_files: workflowContract.target_files } : {}),
+    ...(workflowContract.next_action ? { next_action: workflowContract.next_action } : {}),
+    ...(workflowContract.pattern_hints.length > 0 ? { pattern_hints: workflowContract.pattern_hints } : {}),
+    ...(workflowContract.service_lifecycle_constraints.length > 0
+      ? { service_lifecycle_constraints: workflowContract.service_lifecycle_constraints }
+      : {}),
     outcome: {
       status: "success",
       result_class: args.status,
@@ -235,6 +244,7 @@ export async function buildStablePlaybookNodeFields(args: {
   });
   const existingExecutionNative = asObject(asObject(args.slots)?.execution_native_v1);
   const existingDistillation = asObject(existingExecutionNative?.distillation);
+  const workflowContract = deriveReplayWorkflowContractFromSlots(args.slots);
   const executionNative = ExecutionNativeV1Schema.parse({
     schema_version: "execution_native_v1",
     execution_kind: "workflow_anchor",
@@ -242,10 +252,19 @@ export async function buildStablePlaybookNodeFields(args: {
     compression_layer: "L2",
     task_signature: anchor.task_signature,
     task_class: anchor.task_class,
+    ...(anchor.task_family ? { task_family: anchor.task_family } : {}),
     workflow_signature: anchor.workflow_signature,
     anchor_kind: "workflow",
     anchor_level: "L2",
     tool_set: anchor.tool_set,
+    ...(anchor.file_path !== undefined ? { file_path: anchor.file_path } : {}),
+    ...(workflowContract.target_files.length > 0 ? { target_files: workflowContract.target_files } : {}),
+    ...(workflowContract.next_action ? { next_action: workflowContract.next_action } : {}),
+    ...(anchor.key_steps && anchor.key_steps.length > 0 ? { workflow_steps: anchor.key_steps } : {}),
+    ...(workflowContract.pattern_hints.length > 0 ? { pattern_hints: workflowContract.pattern_hints } : {}),
+    ...(workflowContract.service_lifecycle_constraints.length > 0
+      ? { service_lifecycle_constraints: workflowContract.service_lifecycle_constraints }
+      : {}),
     workflow_promotion: anchor.workflow_promotion,
     maintenance: anchor.maintenance,
     rehydration: anchor.rehydration,

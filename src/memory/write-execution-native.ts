@@ -19,7 +19,7 @@ export function restoreStableSystemSlots(
   redacted: Record<string, unknown>,
 ): Record<string, unknown> {
   const out = { ...redacted };
-  for (const key of ["summary_kind", "handoff_kind", "anchor", "file_path", "repo_root", "symbol"]) {
+  for (const key of ["summary_kind", "handoff_kind", "task_kind", "task_family", "anchor", "file_path", "repo_root", "symbol"]) {
     if (key in original) out[key] = original[key];
   }
   return out;
@@ -50,6 +50,18 @@ function stringList(value: unknown, limit = 24): string[] {
     if (out.length >= limit) break;
   }
   return out;
+}
+
+function serviceLifecycleList(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object" && !Array.isArray(entry)))
+    .slice(0, 16);
+}
+
+function readTrajectoryCompileSummary(value: unknown): Record<string, unknown> | null {
+  const summary = asRecord(value);
+  return asRecord(summary?.trajectory_compile_v1);
 }
 
 function normalizeExecutionNativeSignatureLabel(value: string | null | undefined): string | null {
@@ -113,6 +125,12 @@ export function normalizeExecutionNativeSlots(
       anchor_kind: anchor.anchor_kind,
       anchor_level: anchor.anchor_level,
       tool_set: anchor.tool_set,
+      ...(anchor.file_path !== undefined ? { file_path: anchor.file_path } : {}),
+      ...(anchor.target_files ? { target_files: anchor.target_files } : {}),
+      ...(anchor.next_action !== undefined ? { next_action: anchor.next_action } : {}),
+      ...(anchor.key_steps ? { workflow_steps: anchor.key_steps } : {}),
+      ...(anchor.pattern_hints ? { pattern_hints: anchor.pattern_hints } : {}),
+      ...(anchor.service_lifecycle_constraints ? { service_lifecycle_constraints: anchor.service_lifecycle_constraints } : {}),
       ...(anchor.pattern_state ? { pattern_state: anchor.pattern_state } : {}),
       ...(anchor.credibility_state ? { credibility_state: anchor.credibility_state } : {}),
       ...(anchor.selected_tool !== undefined ? { selected_tool: anchor.selected_tool } : {}),
@@ -143,6 +161,7 @@ export function normalizeExecutionNativeSlots(
   } else if (summaryKind === "handoff" || systemKind === "session_event" || systemKind === "session") {
     const executionState = asRecord(out.execution_state_v1);
     const executionPacket = asRecord(out.execution_packet_v1);
+    const trajectoryCompileSummary = readTrajectoryCompileSummary(out.execution_result_summary);
     const resumeAnchor = asRecord(executionState?.resume_anchor) ?? asRecord(executionPacket?.resume_anchor);
     const targetFiles = stringList(
       [
@@ -155,15 +174,29 @@ export function normalizeExecutionNativeSlots(
     );
     const filePath = firstString(out.file_path, resumeAnchor?.file_path, targetFiles[0] ?? null);
     const nextAction = firstString(out.next_action, executionPacket?.next_action, out.handoff_text);
+    const taskFamily = firstString(out.task_family, out.task_kind, trajectoryCompileSummary?.task_family);
+    const taskSignature = firstString(out.task_signature, trajectoryCompileSummary?.task_signature);
+    const workflowSignature = firstString(out.workflow_signature, trajectoryCompileSummary?.workflow_signature);
+    const patternHints = stringList(out.pattern_hints, 24);
+    const workflowSteps = stringList(out.workflow_steps, 24);
+    const serviceLifecycleConstraints = serviceLifecycleList(
+      out.service_lifecycle_constraints ?? executionPacket?.service_lifecycle_constraints ?? executionState?.service_lifecycle_constraints,
+    );
     executionNative = {
       ...(executionNative ?? {}),
       schema_version: "execution_native_v1",
       execution_kind: "execution_native",
       summary_kind: summaryKind ?? systemKind,
       compression_layer: compressionLayer ?? "L0",
+      ...(taskFamily ? { task_family: taskFamily } : {}),
+      ...(taskSignature ? { task_signature: taskSignature } : {}),
+      ...(workflowSignature ? { workflow_signature: workflowSignature } : {}),
       ...(filePath ? { file_path: filePath } : {}),
       ...(targetFiles.length > 0 ? { target_files: targetFiles } : {}),
       ...(nextAction ? { next_action: nextAction } : {}),
+      ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
+      ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
+      ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
     };
   } else if (existingParsed.success) {
     executionNative = {

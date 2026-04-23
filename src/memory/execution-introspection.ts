@@ -63,6 +63,18 @@ function stringList(value: unknown, limit = 16): string[] {
   return out;
 }
 
+function serviceLifecycleList(value: unknown, limit = 16): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  const out: Array<Record<string, unknown>> = [];
+  for (const item of value) {
+    const record = asRecord(item);
+    if (!record) continue;
+    out.push(record);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 function deriveWorkflowSourceKind(args: {
   anchor: Record<string, unknown>;
   workflowPromotion: Record<string, unknown>;
@@ -114,6 +126,11 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
   const targetFiles = Array.from(new Set([...executionTargetFiles, ...anchorTargetFiles, ...slotTargetFiles]));
   const filePath = firstString(execution.file_path, anchor.file_path, targetFiles[0] ?? null);
   const nextAction = firstString(execution.next_action, anchor.next_action);
+  const workflowSteps = stringList(execution.workflow_steps, 24).length > 0
+    ? stringList(execution.workflow_steps, 24)
+    : stringList(anchor.key_steps, 24);
+  const patternHints = stringList(execution.pattern_hints, 24);
+  const serviceLifecycleConstraints = serviceLifecycleList(execution.service_lifecycle_constraints, 16);
   const observedCount = Number(workflowPromotion.observed_count ?? Number.NaN);
   const requiredObservations = Number(workflowPromotion.required_observations ?? Number.NaN);
   const promotionReady =
@@ -157,6 +174,9 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     file_path: filePath,
     target_files: targetFiles,
     next_action: nextAction,
+    workflow_steps: workflowSteps,
+    pattern_hints: patternHints,
+    service_lifecycle_constraints: serviceLifecycleConstraints,
     projection_generated_by: projectionMeta?.generated_by ?? null,
     projection_source_node_id: projectionMeta?.source_node_id ?? null,
     projection_source_client_id: projectionMeta?.source_client_id ?? null,

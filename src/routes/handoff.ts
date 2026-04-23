@@ -155,6 +155,15 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
     const writeNode = firstNode<HandoffWriteBodyNodeLike>(args.writeBody.nodes);
     const writeSlots = asSlots(writeNode?.slots);
     const continuitySlots = handoffSlots ?? writeSlots;
+    const effectiveAcceptanceChecks = Array.isArray(readSlot(continuitySlots, "acceptance_checks"))
+      ? (readSlot(continuitySlots, "acceptance_checks") as unknown[]).filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : (args.body.acceptance_checks ?? []);
+    const effectiveTargetFiles = Array.isArray(readSlot(continuitySlots, "target_files"))
+      ? (readSlot(continuitySlots, "target_files") as unknown[]).filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : (args.body.target_files ?? []);
+    const effectiveNextAction = typeof readSlot(continuitySlots, "next_action") === "string"
+      ? String(readSlot(continuitySlots, "next_action"))
+      : (args.body.next_action ?? args.body.handoff_text);
     return {
       tenant_id: args.out.tenant_id,
       scope: args.out.scope,
@@ -174,10 +183,10 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
             summary: args.body.summary,
             handoff_text: args.body.handoff_text,
             risk: args.body.risk ?? null,
-            acceptance_checks: args.body.acceptance_checks ?? [],
+            acceptance_checks: effectiveAcceptanceChecks,
             tags: args.body.tags ?? [],
-            target_files: args.body.target_files ?? [],
-            next_action: args.body.next_action ?? args.body.handoff_text,
+            target_files: effectiveTargetFiles,
+            next_action: effectiveNextAction,
             must_change: args.body.must_change ?? [],
             must_remove: args.body.must_remove ?? [],
             must_keep: args.body.must_keep ?? [],

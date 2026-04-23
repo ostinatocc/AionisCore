@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { buildReplayLearningProjectionArtifacts, buildReplayLearningProjectionDefaults } from "../../src/memory/replay-learning.ts";
 
-function baseSource() {
+function baseSource(playbookSlotOverrides: Record<string, unknown> = {}) {
   return {
     tenant_id: "default",
     scope: "default",
@@ -36,6 +36,7 @@ function baseSource() {
           safety_level: "observe_only",
         },
       ],
+      ...playbookSlotOverrides,
     },
     source_commit_id: randomUUID(),
     metrics: {
@@ -124,4 +125,101 @@ test("replay-learning projection artifacts auto-promote to stable workflow when 
   assert.equal(workflow?.slots?.execution_native_v1?.distillation?.distillation_origin, "replay_learning_episode");
   assert.equal(workflow?.slots?.execution_native_v1?.distillation?.preferred_promotion_target, "workflow");
   assert.ok(plan.edges.some((edge) => (edge as any).src?.client_id === plan.workflowClientId && (edge as any).dst?.client_id === plan.episodeClientId));
+});
+
+test("replay-learning projection artifacts preserve richer recovery contract fields", () => {
+  const source = baseSource({
+    task_family: "service_publish_validate",
+    target_files: ["scripts/build_and_serve.py", "pyproject.toml"],
+    next_action: "Update scripts/build_and_serve.py, restart the package index, and rerun validation from a fresh shell.",
+    workflow_steps: [
+      "python scripts/build_and_serve.py --port 8080",
+      "curl http://localhost:8080/simple/vectorops/",
+    ],
+    pattern_hints: [
+      "publish_then_install_from_clean_client_path",
+      "revalidate_service_from_fresh_shell",
+    ],
+    service_lifecycle_constraints: [
+      {
+        version: 1,
+        service_kind: "http",
+        label: "service:http://localhost:8080/simple/vectorops/",
+        launch_reference: "python scripts/build_and_serve.py --port 8080",
+        endpoint: "http://localhost:8080/simple/vectorops/",
+        must_survive_agent_exit: true,
+        revalidate_from_fresh_shell: true,
+        detach_then_probe: true,
+        health_checks: ["curl http://localhost:8080/simple/vectorops/"],
+        teardown_notes: [],
+      },
+    ],
+    execution_native_v1: {
+      schema_version: "execution_native_v1",
+      execution_kind: "execution_native",
+      summary_kind: "handoff",
+      compression_layer: "L0",
+      task_family: "service_publish_validate",
+      target_files: ["scripts/build_and_serve.py", "pyproject.toml"],
+      next_action: "Update scripts/build_and_serve.py, restart the package index, and rerun validation from a fresh shell.",
+      workflow_steps: [
+        "python scripts/build_and_serve.py --port 8080",
+        "pip install --index-url http://localhost:8080/simple vectorops==0.1.0",
+      ],
+      pattern_hints: [
+        "publish_then_install_from_clean_client_path",
+        "revalidate_service_from_fresh_shell",
+      ],
+      service_lifecycle_constraints: [
+        {
+          version: 1,
+          service_kind: "http",
+          label: "service:http://localhost:8080/simple/vectorops/",
+          launch_reference: "python scripts/build_and_serve.py --port 8080",
+          endpoint: "http://localhost:8080/simple/vectorops/",
+          must_survive_agent_exit: true,
+          revalidate_from_fresh_shell: true,
+          detach_then_probe: true,
+          health_checks: ["curl http://localhost:8080/simple/vectorops/"],
+          teardown_notes: [],
+        },
+      ],
+    },
+    execution_result_summary: {
+      trajectory_compile_v1: {
+        task_family: "service_publish_validate",
+      },
+    },
+  });
+  const plan = buildReplayLearningProjectionArtifacts({
+    source,
+    matcherFingerprint: "matcher-fp",
+    policyFingerprint: "policy-fp",
+    duplicateRuleNodeId: null,
+    workflowSignature: "replay-learning-workflow-sig",
+    preferTools: ["edit", "test"],
+    shouldCreateRule: true,
+    shouldCreateEpisode: true,
+    shouldPromoteStableWorkflow: true,
+    observedWorkflowCount: 2,
+    projectedAt: "2026-03-20T00:00:00Z",
+    ttlExpiresAt: "2026-04-19T00:00:00Z",
+  });
+
+  const workflow = plan.nodes.find((node) => node.client_id === plan.workflowClientId) as Record<string, any> | undefined;
+  assert.ok(workflow);
+  assert.equal(workflow?.slots?.anchor_v1?.task_family, "service_publish_validate");
+  assert.deepEqual(workflow?.slots?.anchor_v1?.target_files, ["scripts/build_and_serve.py", "pyproject.toml"]);
+  assert.equal(
+    workflow?.slots?.anchor_v1?.next_action,
+    "Update scripts/build_and_serve.py, restart the package index, and rerun validation from a fresh shell.",
+  );
+  assert.ok(workflow?.slots?.anchor_v1?.key_steps?.includes("python scripts/build_and_serve.py --port 8080"));
+  assert.ok(workflow?.slots?.anchor_v1?.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
+  assert.equal(workflow?.slots?.anchor_v1?.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);
+  assert.equal(workflow?.slots?.execution_native_v1?.task_family, "service_publish_validate");
+  assert.deepEqual(workflow?.slots?.execution_native_v1?.target_files, ["scripts/build_and_serve.py", "pyproject.toml"]);
+  assert.ok(workflow?.slots?.execution_native_v1?.workflow_steps?.includes("python scripts/build_and_serve.py --port 8080"));
+  assert.ok(workflow?.slots?.execution_native_v1?.pattern_hints?.includes("publish_then_install_from_clean_client_path"));
+  assert.equal(workflow?.slots?.execution_native_v1?.service_lifecycle_constraints?.[0]?.revalidate_from_fresh_shell, true);
 });
