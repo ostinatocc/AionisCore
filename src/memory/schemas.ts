@@ -1582,6 +1582,24 @@ export const WorkflowMaintenanceSummarySchema = z.object({
 
 export type WorkflowMaintenanceSummary = z.infer<typeof WorkflowMaintenanceSummarySchema>;
 
+export const AuthorityVisibilitySummarySchema = z.object({
+  summary_version: z.literal("runtime_authority_visibility_summary_v1"),
+  surface_count: z.number().int().min(0),
+  sufficient_count: z.number().int().min(0),
+  insufficient_count: z.number().int().min(0),
+  authoritative_allowed_count: z.number().int().min(0),
+  authoritative_blocked_count: z.number().int().min(0),
+  stable_promotion_allowed_count: z.number().int().min(0),
+  stable_promotion_blocked_count: z.number().int().min(0),
+  execution_evidence_failed_count: z.number().int().min(0),
+  execution_evidence_incomplete_count: z.number().int().min(0),
+  false_confidence_count: z.number().int().min(0),
+  reason_counts: z.record(z.number().int().min(0)),
+  top_blockers: z.array(z.string()),
+}).passthrough();
+
+export type AuthorityVisibilitySummary = z.infer<typeof AuthorityVisibilitySummarySchema>;
+
 export const DistillationSignalSummarySchema = z.object({
   distilled_evidence_count: z.number().int().min(0),
   distilled_fact_count: z.number().int().min(0),
@@ -1704,6 +1722,7 @@ export const ExecutionKernelPacketSummarySchema = z.object({
   workflow_signal_summary: WorkflowSignalSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
   workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  authority_visibility_summary: AuthorityVisibilitySummarySchema,
   distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
@@ -1955,6 +1974,7 @@ export const ExecutionSummaryV1Schema = z.object({
   workflow_signal_summary: WorkflowSignalSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
   workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  authority_visibility_summary: AuthorityVisibilitySummarySchema,
   distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
@@ -2016,6 +2036,7 @@ export const ExecutionMemoryIntrospectionResponseSchema = z.object({
   workflow_signal_summary: WorkflowSignalSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
   workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  authority_visibility_summary: AuthorityVisibilitySummarySchema,
   distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
@@ -2386,6 +2407,7 @@ export const PlanningSummaryContractSchema = z.object({
   action_packet_summary: ActionPacketSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
   workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  authority_visibility_summary: AuthorityVisibilitySummarySchema,
   distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
@@ -2411,6 +2433,7 @@ export const AssemblySummaryContractSchema = z.object({
   action_packet_summary: ActionPacketSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
   workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  authority_visibility_summary: AuthorityVisibilitySummarySchema,
   distillation_signal_summary: DistillationSignalSummarySchema,
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,

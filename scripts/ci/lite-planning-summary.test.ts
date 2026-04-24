@@ -11,6 +11,7 @@ import {
   summarizeWorkflowSignalSurface,
   summarizeWorkflowLifecycleSurface,
   summarizeWorkflowMaintenanceSurface,
+  summarizeAuthorityVisibilitySurface,
   summarizePatternSignals,
 } from "../../src/app/planning-summary.ts";
 import { resolveContractTrustForSteering } from "../../src/memory/contract-trust.ts";
@@ -425,6 +426,63 @@ test("workflow signal summary separates stable, promotion-ready, and observing w
     promotion_ready_workflow_titles: [],
     observing_workflow_titles: ["Replay Episode: Fix export failure"],
   });
+});
+
+test("authority visibility summary exposes blocked authoritative workflow evidence", () => {
+  const authorityFixture = structuredClone(layeredContextFixture);
+  const candidateWorkflow = (authorityFixture.action_recall_packet.candidate_workflows as any[])[0];
+  candidateWorkflow.authority_visibility = {
+    surface_version: "runtime_authority_visibility_v1",
+    node_id: "wf_candidate_1",
+    node_kind: "workflow",
+    title: "Replay Episode: Fix export failure",
+    requested_trust: "authoritative",
+    effective_trust: "advisory",
+    status: "insufficient",
+    allows_authoritative: false,
+    allows_stable_promotion: false,
+    authority_blocked: true,
+    stable_promotion_blocked: true,
+    primary_blocker: "execution_evidence:after_exit_revalidation_failed",
+    authority_reasons: ["execution_evidence:after_exit_revalidation_failed"],
+    outcome_contract_reasons: [],
+    execution_evidence_reasons: ["after_exit_revalidation_failed"],
+    execution_evidence_status: "failed",
+    false_confidence_detected: true,
+  };
+
+  const directSummary = summarizeAuthorityVisibilitySurface({
+    candidate_workflows: authorityFixture.action_recall_packet.candidate_workflows,
+  });
+  assert.equal(directSummary.surface_count, 1);
+  assert.equal(directSummary.authoritative_blocked_count, 1);
+  assert.equal(directSummary.stable_promotion_blocked_count, 1);
+  assert.equal(directSummary.execution_evidence_failed_count, 1);
+  assert.equal(directSummary.false_confidence_count, 1);
+  assert.deepEqual(directSummary.top_blockers, ["execution_evidence:after_exit_revalidation_failed"]);
+
+  const planning = buildPlanningSummary({
+    tools: {
+      selection: { selected: "edit" },
+      decision: {
+        decision_id: "d_authority_visibility",
+        pattern_summary: {
+          used_trusted_pattern_tools: ["edit"],
+          skipped_contested_pattern_tools: ["bash"],
+        },
+      },
+    },
+    layered_context: authorityFixture,
+    cost_signals: null,
+    context_est_tokens: 320,
+    context_compaction_profile: "balanced",
+    optimization_profile: "balanced",
+    recall_mode: "balanced",
+  });
+  assert.equal(planning.authority_visibility_summary.authoritative_blocked_count, 1);
+  assert.equal(planning.authority_visibility_summary.execution_evidence_failed_count, 1);
+  assert.match(planning.planner_explanation ?? "", /authority blocked: 1; blocker=execution_evidence:after_exit_revalidation_failed/);
+  assert.match(planning.planner_explanation ?? "", /execution evidence failed: 1/);
 });
 
 test("policy lifecycle and maintenance summaries reflect persisted policy memory state", () => {

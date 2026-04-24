@@ -132,6 +132,7 @@ function buildPlanningSurface(args: {
     contested_patterns: args.layeredContext.contested_patterns ?? actionRecallPacket.contested_patterns,
     rehydration_candidates: args.layeredContext.rehydration_candidates ?? actionRecallPacket.rehydration_candidates,
     supporting_knowledge: args.layeredContext.supporting_knowledge ?? actionRecallPacket.supporting_knowledge,
+    authority_visibility_summary: args.layeredContext.authority_visibility_summary ?? actionRecallPacket.authority_visibility_summary,
   };
 }
 
@@ -255,6 +256,7 @@ export function buildPlanningSummary(args: {
   const actionPacketSummary = summaryBundle.action_packet_summary;
   const workflowLifecycleSummary = summaryBundle.workflow_lifecycle_summary;
   const workflowMaintenanceSummary = summaryBundle.workflow_maintenance_summary;
+  const authorityVisibilitySummary = summaryBundle.authority_visibility_summary;
   const distillationSignalSummary = summaryBundle.distillation_signal_summary;
   const patternLifecycleSummary = summaryBundle.pattern_lifecycle_summary;
   const patternMaintenanceSummary = summaryBundle.pattern_maintenance_summary;
@@ -365,6 +367,7 @@ export function buildPlanningSummary(args: {
       plannerSurface,
       actionPacketSummary,
       workflowLifecycleSummary,
+      authorityVisibilitySummary,
       actionRetrievalUncertainty,
     }),
     selected_tool: selectedTool,
@@ -389,6 +392,7 @@ export function buildPlanningSummary(args: {
     action_packet_summary: actionPacketSummary,
     workflow_lifecycle_summary: workflowLifecycleSummary,
     workflow_maintenance_summary: workflowMaintenanceSummary,
+    authority_visibility_summary: authorityVisibilitySummary,
     distillation_signal_summary: distillationSignalSummary,
     pattern_lifecycle_summary: patternLifecycleSummary,
     pattern_maintenance_summary: patternMaintenanceSummary,
@@ -454,6 +458,7 @@ export function buildAssemblySummary(args: {
     action_packet_summary: planning.action_packet_summary,
     workflow_lifecycle_summary: planning.workflow_lifecycle_summary,
     workflow_maintenance_summary: planning.workflow_maintenance_summary,
+    authority_visibility_summary: planning.authority_visibility_summary,
     distillation_signal_summary: planning.distillation_signal_summary,
     pattern_lifecycle_summary: planning.pattern_lifecycle_summary,
     pattern_maintenance_summary: planning.pattern_maintenance_summary,

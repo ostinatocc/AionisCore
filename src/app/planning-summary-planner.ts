@@ -3,6 +3,7 @@ import type {
   ActionRetrievalGateSummary,
   ActionRetrievalUncertaintySummary,
   ActionPacketSummary,
+  AuthorityVisibilitySummary,
   ContractTrust,
   FirstStepRecommendation,
   KickoffRecommendation,
@@ -326,6 +327,7 @@ export function buildPlannerExplanation(args: {
   plannerSurface: PlannerPacketSummarySurface;
   actionPacketSummary: ActionPacketSummary;
   workflowLifecycleSummary: WorkflowLifecycleSummary;
+  authorityVisibilitySummary?: AuthorityVisibilitySummary | null;
   actionRetrievalUncertainty?: ActionRetrievalUncertaintySummary | null;
 }): string | null {
   const patternSummary =
@@ -417,6 +419,13 @@ export function buildPlannerExplanation(args: {
   }
   if (args.actionPacketSummary.supporting_knowledge_count > 0) {
     parts.push(`supporting knowledge appended: ${args.actionPacketSummary.supporting_knowledge_count}`);
+  }
+  if (args.authorityVisibilitySummary && args.authorityVisibilitySummary.authoritative_blocked_count > 0) {
+    const blocker = args.authorityVisibilitySummary.top_blockers[0] ?? "unknown";
+    parts.push(`authority blocked: ${args.authorityVisibilitySummary.authoritative_blocked_count}; blocker=${blocker}`);
+  }
+  if (args.authorityVisibilitySummary && args.authorityVisibilitySummary.execution_evidence_failed_count > 0) {
+    parts.push(`execution evidence failed: ${args.authorityVisibilitySummary.execution_evidence_failed_count}`);
   }
   if (args.actionRetrievalUncertainty && args.actionRetrievalUncertainty.level !== "low") {
     const uncertaintyLead = [

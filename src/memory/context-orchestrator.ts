@@ -170,6 +170,7 @@ export type PlannerPacketSurface = {
   supporting_knowledge: unknown[];
   pattern_signals: unknown[];
   workflow_signals: unknown[];
+  authority_visibility_summary?: unknown;
 };
 
 function collectPatternSignals(recall: any): PatternSignal[] {
@@ -233,6 +234,7 @@ function collectWorkflowSignals(packet: ReturnType<typeof normalizeActionRecallP
         maintenance_state: String(entry?.maintenance_state || "").trim() || null,
         offline_priority: String(entry?.offline_priority || "").trim() || null,
         last_maintenance_at: String(entry?.last_maintenance_at || "").trim() || null,
+        authority_visibility: entry?.authority_visibility ?? null,
       };
     })
     .filter((entry: any) => entry.anchor_id);
@@ -265,6 +267,7 @@ function collectWorkflowSignals(packet: ReturnType<typeof normalizeActionRecallP
         maintenance_state: String(entry?.maintenance_state || "").trim() || null,
         offline_priority: String(entry?.offline_priority || "").trim() || null,
         last_maintenance_at: String(entry?.last_maintenance_at || "").trim() || null,
+        authority_visibility: entry?.authority_visibility ?? null,
       };
     })
     .filter((entry) => entry.anchor_id);
@@ -408,6 +411,10 @@ export function extractPlannerPacketSurface(args: { layeredContext?: unknown; re
     ? args.recall as Record<string, unknown>
     : null;
   const normalizedPacket = recall ? normalizeActionRecallPacket(recall) : null;
+  const rawActionRecallPacket =
+    recall?.action_recall_packet && typeof recall.action_recall_packet === "object"
+      ? recall.action_recall_packet as Record<string, unknown>
+      : null;
   const derivedPlannerPacket = normalizedPacket ? buildPlannerPacketText(normalizedPacket) : undefined;
   const derivedPatternSignals = recall ? collectPatternSignals(recall) : [];
   const derivedWorkflowSignals = normalizedPacket ? collectWorkflowSignals(normalizedPacket) : [];
@@ -417,8 +424,8 @@ export function extractPlannerPacketSurface(args: { layeredContext?: unknown; re
         ? layered.planner_packet
         : derivedPlannerPacket,
     action_recall_packet:
-      recall?.action_recall_packet && typeof recall.action_recall_packet === "object"
-        ? recall.action_recall_packet
+      rawActionRecallPacket
+        ? rawActionRecallPacket
         : layered?.action_recall_packet && typeof layered.action_recall_packet === "object"
           ? layered.action_recall_packet
           : undefined,
@@ -452,6 +459,10 @@ export function extractPlannerPacketSurface(args: { layeredContext?: unknown; re
         : normalizedPacket?.supporting_knowledge ?? [],
     pattern_signals: Array.isArray(layered?.pattern_signals) ? layered.pattern_signals : derivedPatternSignals,
     workflow_signals: Array.isArray(layered?.workflow_signals) ? layered.workflow_signals : derivedWorkflowSignals,
+    authority_visibility_summary:
+      layered?.authority_visibility_summary
+      ?? recall?.authority_visibility_summary
+      ?? rawActionRecallPacket?.authority_visibility_summary,
   };
 }
 
@@ -472,6 +483,9 @@ function buildPlannerPacketText(packet: ReturnType<typeof normalizeActionRecallP
       String(entry?.last_transition || "").trim() ? `transition=${String(entry.last_transition).trim()}` : null,
       String(entry?.maintenance_state || "").trim() ? `maintenance=${String(entry.maintenance_state).trim()}` : null,
       String(entry?.offline_priority || "").trim() ? `priority=${String(entry.offline_priority).trim()}` : null,
+      entry?.authority_visibility?.authority_blocked === true
+        ? `authority_blocked=${String(entry.authority_visibility.primary_blocker || "unknown").trim()}`
+        : null,
     ])
   );
   const candidateWorkflows = packet.candidate_workflows.slice(0, 6).map((entry: any) =>
@@ -489,6 +503,9 @@ function buildPlannerPacketText(packet: ReturnType<typeof normalizeActionRecallP
       String(entry?.last_transition || "").trim() ? `transition=${String(entry.last_transition).trim()}` : null,
       String(entry?.maintenance_state || "").trim() ? `maintenance=${String(entry.maintenance_state).trim()}` : null,
       String(entry?.offline_priority || "").trim() ? `priority=${String(entry.offline_priority).trim()}` : null,
+      entry?.authority_visibility?.authority_blocked === true
+        ? `authority_blocked=${String(entry.authority_visibility.primary_blocker || "unknown").trim()}`
+        : null,
     ])
   );
   const candidatePatterns = packet.candidate_patterns.slice(0, 6).map((entry: any) =>

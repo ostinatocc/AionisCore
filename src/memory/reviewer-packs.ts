@@ -27,6 +27,10 @@ function stringList(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
 }
 
+function safeArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
 function toContinuityFocusItem(handoff: Record<string, unknown> | null | undefined) {
   if (!handoff) return null;
   return {
@@ -155,6 +159,11 @@ export async function buildEvolutionReviewPackLite(args: {
     ?? null;
   const trustedPattern = (trustedPatterns[0] as Record<string, unknown> | undefined) ?? null;
   const contestedPattern = (contestedPatterns[0] as Record<string, unknown> | undefined) ?? null;
+  const authorityVisibilitySummary = asRecord(introspection.authority_visibility_summary);
+  const authorityBlockers = [...recommendedWorkflows, ...candidateWorkflows, ...safeArray(introspection.supporting_knowledge)]
+    .map((entry) => asRecord(asRecord(entry).authority_visibility))
+    .filter((entry) => entry.authority_blocked === true || entry.stable_promotion_blocked === true)
+    .slice(0, 8);
   const promotionReadyAnchorIds = [...recommendedWorkflows, ...candidateWorkflows]
     .filter((entry) => asRecord(entry).promotion_ready === true)
     .map((entry) => firstString(asRecord(entry).anchor_id))
@@ -191,6 +200,8 @@ export async function buildEvolutionReviewPackLite(args: {
       policy_governance_contract: computed.policyGovernanceContract,
       policy_governance_apply_payload: computed.policyGovernanceApplyPayload,
       policy_governance_apply_result: computed.policyGovernanceApplyResult,
+      authority_visibility_summary: Object.keys(authorityVisibilitySummary).length > 0 ? authorityVisibilitySummary : null,
+      authority_blockers: authorityBlockers,
       review_contract: {
         execution_contract_v1: executionContract,
         selected_tool: selectedTool,
@@ -208,6 +219,8 @@ export async function buildEvolutionReviewPackLite(args: {
         suppressed_pattern_anchor_ids: Array.isArray(experience.recommendation?.tool?.suppressed_pattern_anchor_ids)
           ? experience.recommendation.tool.suppressed_pattern_anchor_ids
           : [],
+        authority_visibility_summary: Object.keys(authorityVisibilitySummary).length > 0 ? authorityVisibilitySummary : null,
+        authority_blockers: authorityBlockers,
       },
       learning_summary: experience.learning_summary,
       learning_recommendations: experience.learning_recommendations,

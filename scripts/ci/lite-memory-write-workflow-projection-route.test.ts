@@ -849,6 +849,32 @@ test("memory/write stable workflow governance blocks promotion when execution ev
     assert.ok((decisionTrace.reason_codes as string[]).includes("execution_evidence_insufficient"));
     assert.ok((decisionTrace.reason_codes as string[]).includes("execution_evidence:after_exit_revalidation_failed"));
     assert.equal(decisionTrace.runtime_apply_changed_promotion_state, false);
+
+    const planning = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "fix service publish validation",
+        context: {
+          goal: "fix service publish validation",
+        },
+        tool_candidates: ["bash", "edit", "test"],
+      },
+    });
+    assert.equal(planning.statusCode, 200);
+    const planningBody = PlanningContextRouteContractSchema.parse(planning.json());
+    assert.equal(planningBody.planning_summary.authority_visibility_summary.authoritative_blocked_count, 1);
+    assert.equal(planningBody.planning_summary.authority_visibility_summary.execution_evidence_failed_count, 1);
+    assert.match(
+      planningBody.planning_summary.planner_explanation ?? "",
+      /authority blocked: 1; blocker=execution_evidence:after_exit_revalidation_failed/,
+    );
+    const blockedWorkflow = planningBody.workflow_signals.find((entry: any) =>
+      entry?.authority_visibility?.primary_blocker === "execution_evidence:after_exit_revalidation_failed"
+    ) as any;
+    assert.equal(blockedWorkflow?.authority_visibility?.execution_evidence_status, "failed");
   } finally {
     await app.close();
     await liteWriteStore.close();
