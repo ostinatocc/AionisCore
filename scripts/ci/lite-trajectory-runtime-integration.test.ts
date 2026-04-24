@@ -257,8 +257,18 @@ test("trajectory-aware augmentation upgrades thin placeholders and refreshes sta
     ((executionContract.outcome as Record<string, unknown>).must_hold_after_exit as string[])
       .some((entry) => entry.includes("service_survives_agent_exit")),
   );
+  assert.ok(
+    ((executionContract.outcome as Record<string, unknown>).dependency_requirements as string[])
+      .some((entry) => entry.includes("package artifacts and index metadata")),
+  );
+  assert.ok(
+    ((executionContract.outcome as Record<string, unknown>).environment_assumptions as string[])
+      .includes("validation_can_run_from_fresh_shell"),
+  );
   assert.equal(summary.task_family, "package_publish_validate");
   assert.equal(contractSummary.task_family, "package_publish_validate");
+  assert.ok(Number(contractSummary.dependency_requirement_count) > 0);
+  assert.ok(Number(contractSummary.environment_assumption_count) > 0);
   assert.notEqual(summary.workflow_signature, "stale-workflow");
 });
 
@@ -377,6 +387,9 @@ test("handoff/store compiles trajectory into effective contract and lifecycle co
     assert.equal(body.execution_contract_v1.schema_version, "execution_contract_v1");
     assert.equal(body.execution_contract_v1.task_family, "package_publish_validate");
     assert.ok(Array.isArray(body.execution_contract_v1.outcome.acceptance_checks));
+    assert.ok(body.execution_contract_v1.outcome.success_invariants.includes("clean_client_install_succeeds"));
+    assert.ok(body.execution_contract_v1.outcome.dependency_requirements.some((entry: string) => entry.includes("package artifacts and index metadata")));
+    assert.ok(body.execution_contract_v1.outcome.environment_assumptions.includes("validation_can_run_from_fresh_shell"));
     assert.ok(body.execution_contract_v1.outcome.must_hold_after_exit.some((entry: string) => entry.includes("service_survives_agent_exit")));
     assert.equal(body.execution_packet_v1.service_lifecycle_constraints.length, 1);
     assert.equal(body.execution_packet_v1.service_lifecycle_constraints[0].must_survive_agent_exit, true);

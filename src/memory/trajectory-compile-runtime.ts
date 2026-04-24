@@ -377,6 +377,8 @@ export function mergeTrajectoryCompileSummary(
     target_file_count: contract.target_files.length,
     acceptance_check_count: contract.outcome.acceptance_checks.length,
     success_invariant_count: contract.outcome.success_invariants.length,
+    dependency_requirement_count: contract.outcome.dependency_requirements.length,
+    environment_assumption_count: contract.outcome.environment_assumptions.length,
     must_hold_after_exit_count: contract.outcome.must_hold_after_exit.length,
     external_visibility_requirement_count: contract.outcome.external_visibility_requirements.length,
     selected_tool: contract.selected_tool,
