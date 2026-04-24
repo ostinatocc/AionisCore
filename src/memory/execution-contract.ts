@@ -272,6 +272,34 @@ function hasExecutionContractSignal(contract: ExecutionContractV1 | null): boole
   );
 }
 
+export function hasExecutionContractSurfaceSignal(slots: Record<string, unknown> | null): boolean {
+  if (!slots) return false;
+  const executionResultSummary = asObject(slots.execution_result_summary);
+  return Boolean(
+    parseExecutionContract(slots.execution_contract_v1)
+    || asObject(slots.recovery_contract_v1)
+    || asObject(slots.policy_contract_v1)
+    || asObject(slots.policy_contract)
+    || asObject(slots.derived_policy_v1)
+    || asObject(slots.execution_native_v1)
+    || asObject(slots.anchor_v1)
+    || asObject(executionResultSummary?.trajectory_compile_v1)
+    || firstNonEmptyString(
+      slots.task_signature,
+      slots.workflow_signature,
+      slots.selected_tool,
+      slots.file_path,
+      slots.next_action,
+      slots.contract_trust,
+    )
+    || stringList(slots.target_files, 24).length > 0
+    || stringList(slots.acceptance_checks, 24).length > 0
+    || stringList(slots.workflow_steps, 24).length > 0
+    || stringList(slots.pattern_hints, 24).length > 0
+    || (Array.isArray(slots.service_lifecycle_constraints) && slots.service_lifecycle_constraints.length > 0)
+  );
+}
+
 export function deriveExecutionContractFromSlots(args: {
   slots: Record<string, unknown> | null;
   provenance?: {

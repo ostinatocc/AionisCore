@@ -14,6 +14,7 @@ import {
 import {
   buildExecutionContractFromProjection,
   deriveExecutionContractFromSlots,
+  hasExecutionContractSurfaceSignal,
   mergeExecutionContractsWithActionSurface,
   parseExecutionContract,
   type ExecutionContractV1,
@@ -244,31 +245,7 @@ function mergeExecutionContractCandidate(
 function resolveContextExecutionContract(context: unknown): ExecutionContractV1 | null {
   const ctx = asRecord(context);
   if (!ctx) return null;
-  const executionResultSummary = asRecord(ctx.execution_result_summary);
-  const hasExplicitContinuitySurface = Boolean(
-    parseExecutionContract(ctx.execution_contract_v1)
-    || asRecord(ctx.recovery_contract_v1)
-    || asRecord(ctx.policy_contract_v1)
-    || asRecord(ctx.policy_contract)
-    || asRecord(ctx.derived_policy_v1)
-    || asRecord(ctx.execution_native_v1)
-    || asRecord(ctx.anchor_v1)
-    || asRecord(executionResultSummary?.trajectory_compile_v1)
-    || firstString(
-      ctx.task_signature,
-      ctx.workflow_signature,
-      ctx.selected_tool,
-      ctx.file_path,
-      ctx.next_action,
-      ctx.contract_trust,
-    )
-    || stringList(ctx.target_files, 24).length > 0
-    || stringList(ctx.acceptance_checks, 24).length > 0
-    || stringList(ctx.workflow_steps, 24).length > 0
-    || stringList(ctx.pattern_hints, 24).length > 0
-    || (Array.isArray(ctx.service_lifecycle_constraints) && ctx.service_lifecycle_constraints.length > 0)
-  );
-  if (!hasExplicitContinuitySurface) return null;
+  if (!hasExecutionContractSurfaceSignal(ctx)) return null;
   return deriveExecutionContractFromSlots({
     slots: ctx,
     provenance: {
