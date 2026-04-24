@@ -100,6 +100,10 @@ function uniqueStrings(values: Array<string | null | undefined>, limit = 64): st
   return out;
 }
 
+function compileCorpus(queryText: string, steps: NormalizedStep[]): string {
+  return `${queryText}\n${steps.flatMap((step) => [...step.texts, ...step.commands]).join("\n")}`.toLowerCase();
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -130,9 +134,7 @@ function splitCandidateLines(value: string): string[] {
 function isProbablyCommand(line: string): boolean {
   if (!line) return false;
   if (line.startsWith("$ ")) return true;
-  return /^(?:\.{0,2}\/)?(?:python|python3|pytest|npm|pnpm|yarn|curl|wget|pip|go|cargo|git|uv|node|bash|sh|nohup|setsid|docker|serve|nc|npx)\b/i.test(line)
-    || VALIDATION_COMMAND_PATTERNS.some((pattern) => pattern.test(line))
-    || SERVICE_COMMAND_PATTERNS.some((pattern) => pattern.test(line));
+  return /^(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*(?:\.{0,2}\/)?(?:python|python3|pytest|npm|pnpm|yarn|curl|wget|pip|go|cargo|git|uv|node|bash|sh|nohup|setsid|docker|serve|nc|npx|sqlite3)\b/i.test(line);
 }
 
 function extractFilePathsFromText(value: string): string[] {
@@ -148,6 +150,10 @@ function extractFilePathsFromText(value: string): string[] {
       .filter((entry) => !/^https?:\/\//i.test(entry))
       .filter((entry) => !/^(localhost|127\.0\.0\.1)$/i.test(entry))
       .filter((entry) => !entry.startsWith("--"))
+      .filter((entry) => !/^\d+(?:\.\d+){1,3}(?:[-+][\w.-]+)?$/.test(entry))
+      .filter((entry) => !/^\/(?:tmp|var\/tmp)\//.test(entry))
+      .filter((entry) => !/\.(?:log|pid|sock|tmp)$/i.test(entry))
+      .filter((entry) => !new RegExp(`--(?:directory|dir|output|out|cache-dir)\\s+${escapeRegExp(entry)}(?:\\s|$)`, "i").test(sanitized))
       .filter((entry) => !new RegExp(`\\b(?:python|python3)\\s+-m\\s+${escapeRegExp(entry)}(?:\\s|$)`, "i").test(sanitized)),
     64,
   );
@@ -299,6 +305,142 @@ function extractServiceLifecycleConstraints(steps: NormalizedStep[], acceptanceC
   ];
 }
 
+function hasFreshShellSignal(corpus: string, acceptanceChecks: string[], serviceConstraints: ServiceLifecycleConstraintV1[]): boolean {
+  return /\bfresh\s+shell\b|\bnew\s+shell\b|\bclean\s+(?:client|shell|environment)\b/i.test(corpus)
+    || acceptanceChecks.some((check) => /\bpip\s+install\b|\bcurl\b|\bwget\b|\bnc\b/i.test(check))
+    || serviceConstraints.some((constraint) => constraint.revalidate_from_fresh_shell);
+}
+
+function hasAfterExitSignal(corpus: string, serviceConstraints: ServiceLifecycleConstraintV1[]): boolean {
+  return /\bafter\b.*\b(?:exit|worker exits|agent exits|session ends)\b|\bsurvive\b.*\b(?:exit|agent|session|worker)\b/i.test(corpus)
+    || serviceConstraints.some((constraint) => constraint.must_survive_agent_exit);
+}
+
+function extractDependencyRequirements(args: {
+  queryText: string;
+  steps: NormalizedStep[];
+  taskFamily: string | null;
+  serviceConstraints: ServiceLifecycleConstraintV1[];
+  hintRequirements?: string[];
+}): string[] {
+  const corpus = compileCorpus(args.queryText, args.steps);
+  const out: Array<string | null> = [...(args.hintRequirements ?? [])];
+  if (/\b(pip\s+install|pypi|package index|simple\/|wheel|pyproject\.toml)\b/i.test(corpus)) {
+    out.push("package artifacts and index metadata must exist before clean-client install validation");
+    out.push("install validation must use the intended package index, not ambient cached packages");
+  }
+  if (/\b(git)\b/i.test(corpus) && /\b(webserver|hook|deploy|receive\.denycurrentbranch|post-receive|updateinstead|document root|\/var\/www)\b/i.test(corpus)) {
+    out.push("git deploy or hook path must publish into the externally served document root");
+    out.push("webserver content must come from the deployed revision under validation");
+  }
+  if (/\b(sqlite|database|db|wal|integrity_check)\b/i.test(corpus)) {
+    out.push("database files and journal state must be consistent before declaring recovery complete");
+  }
+  if (args.serviceConstraints.length > 0) {
+    out.push("service launch must not depend on the agent shell remaining attached");
+  }
+  if (args.taskFamily === "service_publish_validate") {
+    out.push("service must be reachable through its published validation endpoint");
+  }
+  return uniqueStrings(out, 24);
+}
+
+function extractEnvironmentAssumptions(args: {
+  queryText: string;
+  steps: NormalizedStep[];
+  repoRoot?: string | null;
+  acceptanceChecks: string[];
+  serviceConstraints: ServiceLifecycleConstraintV1[];
+  hintAssumptions?: string[];
+}): string[] {
+  const corpus = compileCorpus(args.queryText, args.steps);
+  const out: Array<string | null> = [
+    ...(args.hintAssumptions ?? []),
+    args.repoRoot ? `repo_root:${args.repoRoot}` : null,
+  ];
+  for (const constraint of args.serviceConstraints) {
+    if (constraint.endpoint) out.push(`local_endpoint:${constraint.endpoint}`);
+    if (constraint.detach_then_probe) out.push("detached_process_supported");
+    if (constraint.revalidate_from_fresh_shell) out.push("fresh_shell_available_for_revalidation");
+  }
+  if (hasFreshShellSignal(corpus, args.acceptanceChecks, args.serviceConstraints)) {
+    out.push("validation_can_run_from_fresh_shell");
+  }
+  if (/\blocalhost\b|\b127\.0\.0\.1\b/i.test(corpus)) {
+    out.push("localhost_reachable_from_validation_environment");
+  }
+  return uniqueStrings(out, 24);
+}
+
+function extractSuccessInvariants(args: {
+  queryText: string;
+  steps: NormalizedStep[];
+  taskFamily: string | null;
+  targetFiles: string[];
+  acceptanceChecks: string[];
+  serviceConstraints: ServiceLifecycleConstraintV1[];
+  hintInvariants?: string[];
+}): string[] {
+  const corpus = compileCorpus(args.queryText, args.steps);
+  const out: Array<string | null> = [...(args.hintInvariants ?? [])];
+  if (args.targetFiles.length > 0) out.push("target_files_reflect_the_intended_change_surface");
+  if (args.acceptanceChecks.length > 0) out.push("all_acceptance_checks_pass");
+  if (hasFreshShellSignal(corpus, args.acceptanceChecks, args.serviceConstraints)) out.push("fresh_shell_revalidation_passes");
+  if (/\bpip\s+install\b/i.test(corpus)) out.push("clean_client_install_succeeds");
+  if (args.taskFamily === "git_deploy_webserver") out.push("deployed_web_content_visible_from_served_endpoint");
+  if (/\bintegrity_check\b|\bsqlite\b|\bdatabase\b|\bwal\b/i.test(corpus)) out.push("database_integrity_check_passes");
+  for (const constraint of args.serviceConstraints) {
+    if (constraint.endpoint) out.push(`service_endpoint_reachable:${constraint.endpoint}`);
+  }
+  return uniqueStrings(out, 24);
+}
+
+function extractMustHoldAfterExit(args: {
+  queryText: string;
+  steps: NormalizedStep[];
+  acceptanceChecks: string[];
+  serviceConstraints: ServiceLifecycleConstraintV1[];
+  hintMustHold?: string[];
+}): string[] {
+  const corpus = compileCorpus(args.queryText, args.steps);
+  const out: Array<string | null> = [...(args.hintMustHold ?? [])];
+  const afterExitRequired = hasAfterExitSignal(corpus, args.serviceConstraints);
+  for (const constraint of args.serviceConstraints) {
+    if (!constraint.must_survive_agent_exit) continue;
+    out.push(`service_survives_agent_exit:${constraint.label}`);
+    if (constraint.endpoint) out.push(`service_endpoint_still_serves_after_exit:${constraint.endpoint}`);
+  }
+  if (afterExitRequired) {
+    out.push("task_result_remains_valid_after_agent_exit");
+  }
+  if (afterExitRequired && hasFreshShellSignal(corpus, args.acceptanceChecks, args.serviceConstraints)) {
+    out.push("fresh_shell_revalidation_still_passes_after_agent_exit");
+  }
+  return uniqueStrings(out, 24);
+}
+
+function extractExternalVisibilityRequirements(args: {
+  queryText: string;
+  steps: NormalizedStep[];
+  taskFamily: string | null;
+  acceptanceChecks: string[];
+  serviceConstraints: ServiceLifecycleConstraintV1[];
+  hintRequirements?: string[];
+}): string[] {
+  const corpus = compileCorpus(args.queryText, args.steps);
+  const out: Array<string | null> = [...(args.hintRequirements ?? [])];
+  for (const constraint of args.serviceConstraints) {
+    if (constraint.endpoint) out.push(`endpoint_reachable:${constraint.endpoint}`);
+    out.push(...constraint.health_checks.map((check) => `health_check:${check}`));
+  }
+  if (/\bpip\s+install\b/i.test(corpus)) out.push("package_install_visible_to_clean_client");
+  if (args.taskFamily === "git_deploy_webserver") out.push("served_web_content_matches_deployed_revision");
+  for (const check of args.acceptanceChecks) {
+    if (/\bcurl\b|\bwget\b|\bnc\b/i.test(check)) out.push(`external_probe:${check}`);
+  }
+  return uniqueStrings(out, 24);
+}
+
 function extractPatternHints(args: {
   taskFamily: string | null;
   targetFiles: string[];
@@ -381,6 +523,45 @@ export function buildTrajectoryCompileLite(body: unknown, defaults: {
   const likelyTool = inferLikelyTool(steps);
   const workflowSteps = extractWorkflowSteps(steps);
   const taskFamily = inferTaskFamily(parsed.query_text, steps, parsed.trajectory.task_family ?? null);
+  const successInvariants = extractSuccessInvariants({
+    queryText: parsed.query_text,
+    steps,
+    taskFamily,
+    targetFiles,
+    acceptanceChecks,
+    serviceConstraints,
+    hintInvariants: parsed.hints?.success_invariants ?? [],
+  });
+  const dependencyRequirements = extractDependencyRequirements({
+    queryText: parsed.query_text,
+    steps,
+    taskFamily,
+    serviceConstraints,
+    hintRequirements: parsed.hints?.dependency_requirements ?? [],
+  });
+  const environmentAssumptions = extractEnvironmentAssumptions({
+    queryText: parsed.query_text,
+    steps,
+    repoRoot: parsed.hints?.repo_root ?? null,
+    acceptanceChecks,
+    serviceConstraints,
+    hintAssumptions: parsed.hints?.environment_assumptions ?? [],
+  });
+  const mustHoldAfterExit = extractMustHoldAfterExit({
+    queryText: parsed.query_text,
+    steps,
+    acceptanceChecks,
+    serviceConstraints,
+    hintMustHold: parsed.hints?.must_hold_after_exit ?? [],
+  });
+  const externalVisibilityRequirements = extractExternalVisibilityRequirements({
+    queryText: parsed.query_text,
+    steps,
+    taskFamily,
+    acceptanceChecks,
+    serviceConstraints,
+    hintRequirements: parsed.hints?.external_visibility_requirements ?? [],
+  });
   const patternHints = extractPatternHints({
     taskFamily,
     targetFiles,
@@ -426,6 +607,11 @@ export function buildTrajectoryCompileLite(body: unknown, defaults: {
     contract: {
       target_files: targetFiles,
       acceptance_checks: acceptanceChecks,
+      success_invariants: successInvariants,
+      dependency_requirements: dependencyRequirements,
+      environment_assumptions: environmentAssumptions,
+      must_hold_after_exit: mustHoldAfterExit,
+      external_visibility_requirements: externalVisibilityRequirements,
       next_action: nextAction,
       workflow_steps: workflowSteps,
       pattern_hints: patternHints,

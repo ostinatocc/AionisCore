@@ -814,6 +814,11 @@ export const TrajectoryCompileHintsSchema = z.object({
   repo_root: z.string().min(1).max(2048).optional(),
   target_files: z.array(z.string().min(1).max(2048)).max(64).optional(),
   acceptance_checks: z.array(z.string().min(1).max(400)).max(64).optional(),
+  success_invariants: z.array(z.string().min(1).max(400)).max(64).optional(),
+  dependency_requirements: z.array(z.string().min(1).max(400)).max(64).optional(),
+  environment_assumptions: z.array(z.string().min(1).max(400)).max(64).optional(),
+  must_hold_after_exit: z.array(z.string().min(1).max(400)).max(64).optional(),
+  external_visibility_requirements: z.array(z.string().min(1).max(400)).max(64).optional(),
 });
 
 export type TrajectoryCompileSourceInput = z.infer<typeof TrajectoryCompileSourceSchema>;
@@ -969,6 +974,11 @@ export type TrajectoryCompileInput = z.infer<typeof TrajectoryCompileRequest>;
 export const TrajectoryCompileContractSchema = z.object({
   target_files: z.array(z.string()),
   acceptance_checks: z.array(z.string()),
+  success_invariants: z.array(z.string()),
+  dependency_requirements: z.array(z.string()),
+  environment_assumptions: z.array(z.string()),
+  must_hold_after_exit: z.array(z.string()),
+  external_visibility_requirements: z.array(z.string()),
   next_action: z.string().nullable(),
   workflow_steps: z.array(z.string()),
   pattern_hints: z.array(z.string()),

@@ -485,6 +485,11 @@ export function buildExecutionContractFromTrajectoryCompile(compiled: Trajectory
     pattern_hints: compiled.contract.pattern_hints,
     service_lifecycle_constraints: compiled.contract.service_lifecycle_constraints,
     acceptance_checks: compiled.contract.acceptance_checks,
+    success_invariants: compiled.contract.success_invariants,
+    dependency_requirements: compiled.contract.dependency_requirements,
+    environment_assumptions: compiled.contract.environment_assumptions,
+    must_hold_after_exit: compiled.contract.must_hold_after_exit,
+    external_visibility_requirements: compiled.contract.external_visibility_requirements,
     provenance: {
       source_kind: "trajectory_compile",
       source_summary_version: compiled.summary_version,
@@ -649,6 +654,16 @@ export function buildExecutionContractFromHandoff(args: {
     args.repoRoot ? `repo_root:${args.repoRoot}` : null,
     ...(base?.outcome.environment_assumptions ?? []),
   ], 24);
+  const derivedOutcome = deriveOutcomeFromInputs({
+    acceptanceChecks: uniqueStrings([
+      ...(args.acceptanceChecks ?? []),
+      ...(base?.outcome.acceptance_checks ?? []),
+    ], 24),
+    targetFiles,
+    serviceLifecycleConstraints,
+    environmentAssumptions,
+    dependencyRequirements: base?.outcome.dependency_requirements ?? [],
+  });
   return ExecutionContractV1Schema.parse({
     schema_version: "execution_contract_v1",
     contract_trust: base?.contract_trust ?? null,
@@ -669,16 +684,29 @@ export function buildExecutionContractFromHandoff(args: {
       ...(base?.pattern_hints ?? []),
     ], 24),
     service_lifecycle_constraints: serviceLifecycleConstraints,
-    outcome: deriveOutcomeFromInputs({
-      acceptanceChecks: uniqueStrings([
-        ...(args.acceptanceChecks ?? []),
-        ...(base?.outcome.acceptance_checks ?? []),
+    outcome: {
+      acceptance_checks: derivedOutcome.acceptance_checks,
+      success_invariants: uniqueStrings([
+        ...(base?.outcome.success_invariants ?? []),
+        ...derivedOutcome.success_invariants,
       ], 24),
-      targetFiles,
-      serviceLifecycleConstraints,
-      environmentAssumptions,
-      dependencyRequirements: base?.outcome.dependency_requirements ?? [],
-    }),
+      dependency_requirements: uniqueStrings([
+        ...(base?.outcome.dependency_requirements ?? []),
+        ...derivedOutcome.dependency_requirements,
+      ], 24),
+      environment_assumptions: uniqueStrings([
+        ...environmentAssumptions,
+        ...derivedOutcome.environment_assumptions,
+      ], 24),
+      must_hold_after_exit: uniqueStrings([
+        ...(base?.outcome.must_hold_after_exit ?? []),
+        ...derivedOutcome.must_hold_after_exit,
+      ], 24),
+      external_visibility_requirements: uniqueStrings([
+        ...(base?.outcome.external_visibility_requirements ?? []),
+        ...derivedOutcome.external_visibility_requirements,
+      ], 24),
+    },
     provenance: {
       source_kind: "handoff_store",
       source_summary_version: base?.provenance.source_summary_version ?? null,
