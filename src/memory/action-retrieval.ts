@@ -23,6 +23,10 @@ import { buildExecutionMemoryIntrospectionLite } from "./execution-introspection
 import { augmentTrajectoryAwareRequest } from "./trajectory-compile-runtime.js";
 import { selectTools } from "./tools-select.js";
 import { buildOutcomeContractGate } from "./contract-trust.js";
+import {
+  runtimeAuthorityVisibilityFromEntry,
+  type RuntimeAuthorityVisibilityV1,
+} from "./authority-visibility.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { LiteWriteStore } from "../store/lite-write-store.js";
@@ -44,6 +48,7 @@ export type WorkflowEntry = {
   workflow_steps?: string[];
   pattern_hints?: string[];
   service_lifecycle_constraints?: Array<Record<string, unknown>>;
+  authority_visibility?: RuntimeAuthorityVisibilityV1 | Record<string, unknown> | null;
   confidence?: number | null;
   feedback_quality?: number | null;
   usage_count?: number | null;
@@ -146,12 +151,17 @@ export function workflowEvidenceParts(workflow: WorkflowEntry): string[] {
   const reuseSuccessCount = Math.max(0, Number(workflow.reuse_success_count ?? 0));
   const reuseFailureCount = Math.max(0, Number(workflow.reuse_failure_count ?? 0));
   const feedbackQuality = numeric(workflow.feedback_quality);
+  const authorityVisibility = authorityVisibilityFromValue(workflow);
+  const authorityBlocker = authorityVisibilityRequiresInspection(authorityVisibility)
+    ? authorityVisibilityPrimaryBlocker(authorityVisibility)
+    : null;
   return [
     usageCount > 0 ? `usage_count=${usageCount}` : null,
     reuseSuccessCount > 0 ? `reuse_success=${reuseSuccessCount}` : null,
     reuseFailureCount > 0 ? `reuse_failure=${reuseFailureCount}` : null,
     feedbackQuality != null ? `feedback_quality=${feedbackQuality.toFixed(2)}` : null,
     workflow.contract_trust ? `contract_trust=${workflow.contract_trust}` : null,
+    authorityBlocker ? `authority_blocked=${authorityBlocker}` : null,
   ].filter((value): value is string => !!value);
 }
 
@@ -160,6 +170,94 @@ function firstContractTrust(...values: unknown[]): ContractTrust | null {
     if (value === "authoritative" || value === "advisory" || value === "observational") return value;
   }
   return null;
+}
+
+function authorityVisibilityFromValue(value: unknown): RuntimeAuthorityVisibilityV1 | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  if (record.surface_version === "runtime_authority_visibility_v1") {
+    return runtimeAuthorityVisibilityFromEntry({ authority_visibility: record });
+  }
+  return runtimeAuthorityVisibilityFromEntry(record);
+}
+
+function authorityVisibilityRequiresInspection(
+  visibility: RuntimeAuthorityVisibilityV1 | null | undefined,
+): boolean {
+  return visibility?.authority_blocked === true
+    || visibility?.stable_promotion_blocked === true
+    || visibility?.execution_evidence_status === "failed";
+}
+
+function authorityVisibilityPrimaryBlocker(
+  visibility: RuntimeAuthorityVisibilityV1 | null | undefined,
+): string | null {
+  if (!visibility) return null;
+  return firstString(
+    visibility.primary_blocker,
+    visibility.authority_reasons[0] ?? null,
+    visibility.execution_evidence_status === "failed" ? "execution_evidence:failed" : null,
+    visibility.stable_promotion_blocked ? "stable_promotion_blocked" : null,
+    visibility.authority_blocked ? "authority_blocked" : null,
+  );
+}
+
+function demoteContractTrustForAuthorityVisibility(
+  trust: ContractTrust | null,
+  visibility: RuntimeAuthorityVisibilityV1 | null | undefined,
+): ContractTrust | null {
+  if (!authorityVisibilityRequiresInspection(visibility)) return trust;
+  if (trust === "observational") return "observational";
+  return "advisory";
+}
+
+function buildAuthorityInspectionNextAction(args: {
+  selectedTool: string | null;
+  filePath: string | null;
+  nextAction: string | null;
+  blocker: string | null;
+}): string | null {
+  const blocker = args.blocker ?? "authority_visibility_blocked";
+  if (args.selectedTool && args.filePath) {
+    return `Inspect ${args.filePath} and revalidate current context before reusing ${args.selectedTool}; authority blocked by ${blocker}.`;
+  }
+  if (args.filePath) {
+    return `Inspect ${args.filePath} and revalidate current context before reusing the learned workflow; authority blocked by ${blocker}.`;
+  }
+  if (args.selectedTool) {
+    return `Inspect current context before reusing ${args.selectedTool}; authority blocked by ${blocker}.`;
+  }
+  return args.nextAction
+    ? `Inspect current context before following the learned next action; authority blocked by ${blocker}.`
+    : `Inspect current context before reusing this memory; authority blocked by ${blocker}.`;
+}
+
+function demoteExecutionContractForAuthorityVisibility(args: {
+  contract: ExecutionContractV1;
+  visibility: RuntimeAuthorityVisibilityV1 | null | undefined;
+  selectedTool: string | null;
+  filePath: string | null;
+}): ExecutionContractV1 {
+  if (!authorityVisibilityRequiresInspection(args.visibility)) return args.contract;
+  const blocker = authorityVisibilityPrimaryBlocker(args.visibility);
+  const parsed = parseExecutionContract({
+    ...args.contract,
+    contract_trust: demoteContractTrustForAuthorityVisibility(args.contract.contract_trust, args.visibility),
+    next_action: buildAuthorityInspectionNextAction({
+      selectedTool: args.selectedTool ?? args.contract.selected_tool,
+      filePath: args.filePath ?? args.contract.file_path,
+      nextAction: args.contract.next_action,
+      blocker,
+    }),
+    provenance: {
+      ...args.contract.provenance,
+      notes: Array.from(new Set([
+        ...args.contract.provenance.notes,
+        `authority_visibility_requires_inspection:${blocker ?? "unknown"}`,
+      ])).slice(0, 16),
+    },
+  });
+  return parsed ?? args.contract;
 }
 
 function normalizeTokens(value: string): string[] {
@@ -298,13 +396,23 @@ function buildExecutionContractFromWorkflowEntry(args: {
   summaryVersion: string;
 }): ExecutionContractV1 {
   const projected = buildExecutionContractFromProjection({
-    contract_trust: args.workflow.contract_trust ?? null,
+    contract_trust: demoteContractTrustForAuthorityVisibility(
+      args.workflow.contract_trust ?? null,
+      authorityVisibilityFromValue(args.workflow),
+    ),
     task_family: args.workflow.task_family ?? null,
     workflow_signature: args.workflow.workflow_signature ?? null,
     selected_tool: args.selectedTool ?? null,
     file_path: args.workflow.file_path ?? null,
     target_files: args.workflow.target_files ?? [],
-    next_action: args.workflow.next_action ?? null,
+    next_action: authorityVisibilityRequiresInspection(authorityVisibilityFromValue(args.workflow))
+      ? buildAuthorityInspectionNextAction({
+          selectedTool: args.selectedTool,
+          filePath: firstString(args.workflow.file_path, args.workflow.target_files?.[0] ?? null),
+          nextAction: args.workflow.next_action ?? null,
+          blocker: authorityVisibilityPrimaryBlocker(authorityVisibilityFromValue(args.workflow)),
+        })
+      : args.workflow.next_action ?? null,
     workflow_steps: args.workflow.workflow_steps ?? [],
     pattern_hints: args.workflow.pattern_hints ?? [],
     service_lifecycle_constraints: args.workflow.service_lifecycle_constraints ?? [],
@@ -317,9 +425,15 @@ function buildExecutionContractFromWorkflowEntry(args: {
     },
   });
   const existing = parseExecutionContract(args.workflow.execution_contract_v1);
-  return existing
+  const merged = existing
     ? mergeExecutionContractsWithActionSurface({ existing, incoming: projected, preference: "existing" })
     : projected;
+  return demoteExecutionContractForAuthorityVisibility({
+    contract: merged,
+    visibility: authorityVisibilityFromValue(args.workflow),
+    selectedTool: args.selectedTool,
+    filePath: firstString(args.workflow.file_path, args.workflow.target_files?.[0] ?? null),
+  });
 }
 
 function buildExecutionContractFromPathRecommendation(args: {
@@ -482,6 +596,7 @@ export function readPersistedPolicyMemory(args: {
       contract,
       derivedPolicy,
     });
+    if (authorityVisibilityRequiresInspection(authorityVisibilityFromValue(entry))) continue;
     const outcomeContractGate = buildOutcomeContractGate({
       executionContract,
       requestedTrust: firstContractTrust(contract.contract_trust, executionContract.contract_trust),
@@ -587,6 +702,8 @@ function scoreWorkflow(args: {
     ? Math.max(-1, Math.min(1, Number(args.workflow.feedback_quality)))
     : 0;
   const contractTrust = firstContractTrust(args.workflow.contract_trust);
+  const authorityVisibility = authorityVisibilityFromValue(args.workflow);
+  const requiresAuthorityInspection = authorityVisibilityRequiresInspection(authorityVisibility);
   let score = args.kind === "recommended_workflow" ? 200 : 120;
   if (toolAligned) score += 60;
   if (familyMatch) score += 55;
@@ -602,6 +719,7 @@ function scoreWorkflow(args: {
   else if (contractTrust === "advisory") score -= 10;
   else if (contractTrust === "observational") score -= 72;
   else score -= 24;
+  if (requiresAuthorityInspection) score -= 95;
   score += overlap * 12;
   return {
     kind: args.kind,
@@ -659,6 +777,9 @@ export function choosePathRecommendation(args: {
       service_lifecycle_constraints: [],
       confidence: null,
       tool_set: [],
+      authority_visibility: null,
+      authority_blocked: false,
+      authority_primary_blocker: null,
       reason: null,
     };
   }
@@ -667,16 +788,29 @@ export function choosePathRecommendation(args: {
   const filePath = firstString(top.workflow.file_path, targetFiles[0] ?? null);
   const summary = firstString(top.workflow.summary);
   const title = firstString(top.workflow.title);
-  const nextAction = firstString(
+  const authorityVisibility = authorityVisibilityFromValue(top.workflow);
+  const authorityBlocked = authorityVisibilityRequiresInspection(authorityVisibility);
+  const authorityBlocker = authorityVisibilityPrimaryBlocker(authorityVisibility);
+  const rawContractTrust = firstContractTrust(top.workflow.contract_trust);
+  const contractTrust = demoteContractTrustForAuthorityVisibility(rawContractTrust, authorityVisibility);
+  const rawNextAction = firstString(
     top.workflow.next_action,
     filePath && args.selectedTool ? `Use ${args.selectedTool} on ${filePath} and continue along the learned workflow.` : null,
     filePath ? `Continue with ${filePath} as the next working target.` : null,
   );
+  const nextAction = authorityBlocked
+    ? buildAuthorityInspectionNextAction({
+        selectedTool: args.selectedTool,
+        filePath,
+        nextAction: rawNextAction,
+        blocker: authorityBlocker,
+      })
+    : rawNextAction;
 
   return {
     source_kind: top.kind,
     anchor_id: top.workflow.anchor_id,
-    contract_trust: firstContractTrust(top.workflow.contract_trust),
+    contract_trust: contractTrust,
     task_family: firstString(top.workflow.task_family),
     workflow_signature: firstString(top.workflow.workflow_signature),
     title,
@@ -691,12 +825,16 @@ export function choosePathRecommendation(args: {
       : [],
     confidence: Number.isFinite(top.workflow.confidence) ? (top.workflow.confidence ?? null) : null,
     tool_set: stringList(top.workflow.tool_set),
+    authority_visibility: authorityVisibility,
+    authority_blocked: authorityBlocked,
+    authority_primary_blocker: authorityBlocker,
     reason: [
       top.kind === "recommended_workflow" ? "stable workflow memory matched this request" : "candidate workflow memory matched this request",
       top.tool_aligned && args.selectedTool ? `tool alignment=${args.selectedTool}` : null,
       top.family_match && currentTaskFamily ? `task_family=${currentTaskFamily}` : null,
       top.overlap > 0 ? `token_overlap=${top.overlap}` : null,
       ...workflowEvidenceParts(top.workflow),
+      authorityBlocked ? "requires_inspection_before_reuse" : null,
       targetFiles.length > 0 ? `targets=${targetFiles.join(", ")}` : null,
       summary ? `summary=${summary}` : null,
     ].filter(Boolean).join("; "),
@@ -822,6 +960,7 @@ export function workflowToolPreferenceState(args: {
 }): "none" | "candidate" | "stable" {
   const selectedTool = firstString(args.selectedTool);
   if (!selectedTool || !args.workflow) return "none";
+  if (authorityVisibilityRequiresInspection(authorityVisibilityFromValue(args.workflow))) return "none";
   const toolSet = stringList(args.workflow.tool_set, 24);
   if (!toolSet.includes(selectedTool)) return "none";
   const contractTrust = firstContractTrust(args.workflow.contract_trust);
@@ -876,6 +1015,10 @@ function buildActionRetrievalUncertainty(args: {
   const recommendedActions = new Set<"proceed" | "widen_recall" | "rehydrate_payload" | "inspect_context" | "request_operator_review">();
   const contestedSelected = !!args.selectedTool
     && args.contestedPatterns.some((entry) => entry.selected_tool === args.selectedTool);
+  const pathAuthorityVisibility = authorityVisibilityFromValue((args.path as Record<string, unknown>).authority_visibility)
+    ?? authorityVisibilityFromValue(args.selectedWorkflow);
+  const pathAuthorityBlocked = authorityVisibilityRequiresInspection(pathAuthorityVisibility);
+  const pathAuthorityBlocker = authorityVisibilityPrimaryBlocker(pathAuthorityVisibility);
 
   if (!args.selectedTool) {
     reasons.push("no tool selection was available for this request");
@@ -895,6 +1038,10 @@ function buildActionRetrievalUncertainty(args: {
     reasons.push(`selected tool ${args.selectedTool} has contested execution evidence`);
     recommendedActions.add("request_operator_review");
   }
+  if (pathAuthorityBlocked) {
+    reasons.push(`selected workflow authority is blocked: ${pathAuthorityBlocker ?? "unknown"}`);
+    recommendedActions.add("inspect_context");
+  }
   if (args.rehydrationCandidates.length > 0 && args.path.source_kind !== "recommended_workflow") {
     reasons.push("payload rehydration may be needed before taking the next step");
     recommendedActions.add("rehydrate_payload");
@@ -912,6 +1059,7 @@ function buildActionRetrievalUncertainty(args: {
   if (args.persistedPolicy) confidence += 0.28;
   confidence += clamp01(numeric(args.path.confidence) ?? 0) * 0.12;
   if (contestedSelected) confidence -= 0.18;
+  if (pathAuthorityBlocked) confidence -= 0.22;
   if (!args.selectedTool) confidence -= 0.1;
   confidence = clamp01(confidence);
 
@@ -1014,7 +1162,11 @@ export function buildActionRetrievalResponse(args: {
     buildExecutionContractFromToolSelection(selectedTool),
     "existing",
   );
+  const selectedWorkflowAuthorityVisibility = authorityVisibilityFromValue(selectedWorkflow)
+    ?? authorityVisibilityFromValue((path as Record<string, unknown>).authority_visibility);
+  const selectedWorkflowAuthorityBlocked = authorityVisibilityRequiresInspection(selectedWorkflowAuthorityVisibility);
   const workflowSupportsForRetrieval = !!selectedTool
+    && !selectedWorkflowAuthorityBlocked
     && (
       stringList(selectedWorkflow?.tool_set, 24).includes(selectedTool)
       || path.tool_set.includes(selectedTool)
@@ -1106,6 +1258,9 @@ export function buildActionRetrievalResponse(args: {
         ? pathExecutionContract?.service_lifecycle_constraints
         : [],
       confidence: path.confidence,
+      authority_visibility: path.authority_visibility,
+      authority_blocked: path.authority_blocked,
+      authority_primary_blocker: path.authority_primary_blocker,
       reason: firstString(path.reason) ?? "workflow memory matched this request",
     }] : []),
     ...contestedPatterns
@@ -1208,6 +1363,9 @@ export function buildActionRetrievalResponse(args: {
       service_lifecycle_constraints: recommendedServiceLifecycleConstraints,
       confidence: path.confidence,
       tool_set: path.tool_set,
+      authority_visibility: path.authority_visibility,
+      authority_blocked: path.authority_blocked,
+      authority_primary_blocker: path.authority_primary_blocker,
     },
     evidence: {
       stable_workflow_count: recommendedWorkflows.length,

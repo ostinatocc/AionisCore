@@ -36,6 +36,8 @@ type ExperienceRecommendationProjectionLike = {
   file_path: string | null;
   combined_next_action: string | null;
   action_retrieval_uncertainty: ActionRetrievalUncertaintySummary | null;
+  authority_blocked: boolean;
+  authority_primary_blocker: string | null;
 };
 
 type RehydrationCandidateLike = {
@@ -216,6 +218,24 @@ function buildUncertaintyAwareNextAction(args: {
   );
 }
 
+function buildAuthorityBlockedNextAction(args: {
+  selectedTool: string | null;
+  filePath: string | null;
+  blocker: string | null;
+}): string {
+  const blocker = args.blocker ?? "authority_visibility_blocked";
+  if (args.selectedTool && args.filePath) {
+    return `Inspect ${args.filePath} and revalidate current context before reusing ${args.selectedTool}; authority blocked by ${blocker}.`;
+  }
+  if (args.filePath) {
+    return `Inspect ${args.filePath} and revalidate current context before reusing learned execution memory; authority blocked by ${blocker}.`;
+  }
+  if (args.selectedTool) {
+    return `Inspect current context before reusing ${args.selectedTool}; authority blocked by ${blocker}.`;
+  }
+  return `Inspect current context before reusing learned execution memory; authority blocked by ${blocker}.`;
+}
+
 function hasStrongContractIdentity(args: {
   taskFamily: string | null;
   workflowSignature: string | null;
@@ -233,6 +253,7 @@ function resolveContractTrust(args: {
   policyMemoryId: string | null;
   executionContract: ExecutionContractV1 | null;
   uncertainty: ActionRetrievalUncertaintySummary | null;
+  authorityBlocked: boolean;
 }): ContractTrust {
   const strongIdentity = hasStrongContractIdentity(args);
   const computedTrust: ContractTrust =
@@ -248,11 +269,12 @@ function resolveContractTrust(args: {
         )
         ? "authoritative"
         : "advisory";
-  return resolveContractTrustForSteering({
+  const resolvedTrust = resolveContractTrustForSteering({
     computedTrust,
     explicitTrust: args.explicitTrust,
     executionContract: args.executionContract,
   });
+  return args.authorityBlocked && resolvedTrust === "authoritative" ? "advisory" : resolvedTrust;
 }
 
 function applyContractTrustGuard(args: {
@@ -267,7 +289,17 @@ function applyContractTrustGuard(args: {
   executionContract: ExecutionContractV1 | null;
   nextAction: string | null;
   uncertainty: ActionRetrievalUncertaintySummary | null;
+  authorityBlocked?: boolean;
+  authorityPrimaryBlocker?: string | null;
 }): FirstStepRecommendation {
+  const authorityBlocked = args.authorityBlocked === true;
+  const effectiveNextAction = authorityBlocked
+    ? buildAuthorityBlockedNextAction({
+        selectedTool: args.selectedTool,
+        filePath: args.filePath,
+        blocker: args.authorityPrimaryBlocker ?? null,
+      })
+    : args.nextAction;
   const contractTrust = resolveContractTrust({
     sourceKind: args.sourceKind,
     historyApplied: args.historyApplied,
@@ -277,23 +309,37 @@ function applyContractTrustGuard(args: {
     policyMemoryId: args.policyMemoryId,
     executionContract: args.executionContract,
     uncertainty: args.uncertainty,
+    authorityBlocked,
   });
+  const guardedContract = guardExecutionContractForHost({
+    contract: args.executionContract,
+    trust: contractTrust,
+  });
+  const trustGuardedContract = guardedContract
+    ? {
+        ...guardedContract,
+        contract_trust: contractTrust,
+      }
+    : null;
+  const effectiveExecutionContract = authorityBlocked && trustGuardedContract
+    ? {
+        ...trustGuardedContract,
+        next_action: effectiveNextAction,
+      }
+    : trustGuardedContract;
 
   if (contractTrust !== "observational") {
     return {
       source_kind: args.sourceKind,
       history_applied: args.historyApplied,
       contract_trust: contractTrust,
-      execution_contract_v1: guardExecutionContractForHost({
-        contract: args.executionContract,
-        trust: contractTrust,
-      }),
+      execution_contract_v1: effectiveExecutionContract,
       selected_tool: args.selectedTool,
       task_family: args.taskFamily,
       workflow_signature: args.workflowSignature,
       policy_memory_id: args.policyMemoryId,
       file_path: args.filePath,
-      next_action: args.nextAction,
+      next_action: effectiveNextAction,
     };
   }
 
@@ -301,10 +347,7 @@ function applyContractTrustGuard(args: {
     source_kind: args.sourceKind,
     history_applied: args.historyApplied,
     contract_trust: contractTrust,
-    execution_contract_v1: guardExecutionContractForHost({
-      contract: args.executionContract,
-      trust: contractTrust,
-    }),
+    execution_contract_v1: effectiveExecutionContract,
     selected_tool: args.selectedTool,
     task_family: null,
     workflow_signature: null,
@@ -513,6 +556,8 @@ export function buildFirstStepRecommendation(args: {
         uncertainty: experience.action_retrieval_uncertainty,
       }),
       uncertainty: experience.action_retrieval_uncertainty,
+      authorityBlocked: experience.authority_blocked,
+      authorityPrimaryBlocker: experience.authority_primary_blocker,
     });
   }
   if (!args.selectedTool) return null;
@@ -534,6 +579,8 @@ export function buildFirstStepRecommendation(args: {
       uncertainty: experience?.action_retrieval_uncertainty ?? null,
     }),
     uncertainty: experience?.action_retrieval_uncertainty ?? null,
+    authorityBlocked: experience?.authority_blocked ?? false,
+    authorityPrimaryBlocker: experience?.authority_primary_blocker ?? null,
   });
 }
 
