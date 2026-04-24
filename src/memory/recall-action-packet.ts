@@ -6,15 +6,20 @@ import {
   type ExecutionContractV1,
 } from "./execution-contract.js";
 import {
-  parseNodeAnchor,
-  parseNodeExecutionNative,
+  resolveNodeAnchorSummary,
   resolveNodeAnchorKind,
   resolveNodeAnchorLevel,
+  resolveNodeDistillationSurface,
   resolveNodeExecutionContract,
   resolveNodeExecutionContractTrust,
   resolveNodeExecutionKind,
+  resolveNodeMaintenanceSurface,
   resolveNodePatternExecutionSurface,
-  resolveNodeRehydrationDefaultMode,
+  resolveNodeRehydrationSurface,
+  resolveNodeToolSet,
+  resolveNodeWorkflowPromotionSurface,
+  resolveNodeWorkflowSignature,
+  resolveNodeWorkflowSourceKind,
 } from "./node-execution-surface.js";
 
 type NodeRow = RecallNodeRow;
@@ -148,26 +153,27 @@ function firstFinite(value: unknown): number | null {
 
 export function recallAnchorMeta(node: NodeRow): {
   slots: Record<string, unknown> | null;
-  executionNative: Record<string, unknown> | null;
-  anchor: Record<string, unknown> | null;
+  anchorSummary: string | null;
   executionContract: ExecutionContractV1 | null;
   anchorKind: string | null;
   anchorLevel: string | null;
   executionKind: string | null;
+  workflowSignature: string | null;
+  workflowSourceKind: string | null;
   patternState: "provisional" | "stable";
   credibilityState: "candidate" | "trusted" | "contested";
   workflowPromotion: Record<string, unknown> | null;
   promotion: Record<string, unknown> | null;
   maintenance: Record<string, unknown> | null;
   rehydration: Record<string, unknown> | null;
+  distillation: Record<string, unknown> | null;
   counterEvidenceOpen: boolean;
   trusted: boolean;
   selectedTool: string | null;
+  toolSet: string[];
   contractTrust: "authoritative" | "advisory" | "observational" | null;
 } {
   const slots = asRecord(node.slots);
-  const executionNative = parseNodeExecutionNative(slots);
-  const anchor = parseNodeAnchor(slots);
   const executionContract = resolveNodeExecutionContract({ slots });
   const anchorKind = resolveNodeAnchorKind(slots);
   const anchorLevel = resolveNodeAnchorLevel(slots);
@@ -175,13 +181,17 @@ export function recallAnchorMeta(node: NodeRow): {
   const patternSurface = resolveNodePatternExecutionSurface({ slots });
   const patternState =
     patternSurface.pattern_state === "stable" ? "stable" : "provisional";
-  const workflowPromotion = asRecord(executionNative?.workflow_promotion) ?? asRecord(anchor?.workflow_promotion);
-  const promotion = asRecord(executionNative?.promotion) ?? asRecord(anchor?.promotion);
-  const maintenance = asRecord(executionNative?.maintenance) ?? asRecord(anchor?.maintenance);
-  const rehydration = asRecord(anchor?.rehydration)
-    ?? (resolveNodeRehydrationDefaultMode(slots)
-      ? { default_mode: resolveNodeRehydrationDefaultMode(slots) }
-      : null);
+  const workflowPromotion = resolveNodeWorkflowPromotionSurface(slots);
+  const promotion = {
+    distinct_run_count: patternSurface.promotion.distinct_run_count,
+    required_distinct_runs: patternSurface.promotion.required_distinct_runs,
+    counter_evidence_count: patternSurface.promotion.counter_evidence_count,
+    counter_evidence_open: patternSurface.promotion.counter_evidence_open,
+    last_transition: patternSurface.promotion.last_transition,
+  };
+  const maintenance = patternSurface.maintenance ?? resolveNodeMaintenanceSurface(slots);
+  const rehydration = resolveNodeRehydrationSurface(slots);
+  const distillation = resolveNodeDistillationSurface(slots);
   const counterEvidenceOpen = patternSurface.promotion.counter_evidence_open;
   const credibilityState = patternSurface.credibility_state ?? (patternState === "stable" ? "trusted" : "candidate");
   const trusted = anchorKind === "pattern" ? credibilityState === "trusted" : false;
@@ -189,21 +199,24 @@ export function recallAnchorMeta(node: NodeRow): {
   const contractTrust = resolveNodeExecutionContractTrust({ slots });
   return {
     slots,
-    executionNative,
-    anchor,
+    anchorSummary: resolveNodeAnchorSummary(slots),
     executionContract,
     anchorKind,
     anchorLevel,
     executionKind,
+    workflowSignature: resolveNodeWorkflowSignature({ slots }),
+    workflowSourceKind: resolveNodeWorkflowSourceKind(slots),
     patternState,
     credibilityState,
     workflowPromotion,
     promotion,
     maintenance,
     rehydration,
+    distillation,
     counterEvidenceOpen,
     trusted,
     selectedTool,
+    toolSet: resolveNodeToolSet({ slots }),
     contractTrust,
   };
 }
@@ -220,27 +233,6 @@ function stringList(value: unknown, limit = 16): string[] {
     if (out.length >= limit) break;
   }
   return out;
-}
-
-function deriveWorkflowSourceKind(args: {
-  anchor: Record<string, unknown> | null;
-  workflowPromotion: Record<string, unknown> | null;
-  executionKind: string | null;
-}): string | null {
-  const explicitSourceKind = firstString(args.anchor?.source && asRecord(args.anchor.source)?.source_kind);
-  if (explicitSourceKind) return explicitSourceKind;
-  const promotionOrigin = firstString(args.workflowPromotion?.promotion_origin);
-  if (
-    promotionOrigin === "replay_promote"
-    || promotionOrigin === "replay_stable_normalization"
-    || promotionOrigin === "replay_learning_episode"
-    || promotionOrigin === "replay_learning_auto_promotion"
-    || args.executionKind === "workflow_candidate"
-    || args.executionKind === "workflow_anchor"
-  ) {
-    return "playbook";
-  }
-  return null;
 }
 
 export function isWorkflowPromotionReady(workflowPromotion: Record<string, unknown> | null): boolean {
@@ -270,7 +262,6 @@ export function buildActionRecallPacket(args: {
 
   for (const node of args.nodes) {
     const meta = recallAnchorMeta(node);
-    const anchor = meta.anchor;
     const anchorKind = meta.anchorKind;
     const anchorLevel = meta.anchorLevel;
     if (!anchorKind || !anchorLevel) continue;
@@ -279,7 +270,7 @@ export function buildActionRecallPacket(args: {
       : null;
     actionAnchorIds.add(node.id);
     if (anchorKind === "workflow") {
-      const distillation = asRecord(meta.executionNative?.distillation ?? anchor?.distillation);
+      const distillation = meta.distillation;
       const semanticForgetting = asRecord(node.slots?.semantic_forgetting_v1);
       const archiveRelocation = asRecord(node.slots?.archive_relocation_v1);
       const workflowEntry: ActionRecallWorkflow = {
@@ -287,31 +278,23 @@ export function buildActionRecallPacket(args: {
         uri,
         type: node.type,
         title: node.title ?? null,
-        summary: firstString(anchor?.summary) ?? node.text_summary ?? node.title ?? null,
+        summary: meta.anchorSummary ?? node.text_summary ?? node.title ?? null,
         anchor_level: anchorLevel,
         execution_contract_v1: meta.executionContract,
         contract_trust: meta.contractTrust,
         promotion_state: firstString(meta.workflowPromotion?.promotion_state) as any,
-        source_kind: deriveWorkflowSourceKind({
-          anchor,
-          workflowPromotion: meta.workflowPromotion,
-          executionKind: meta.executionKind,
-        }),
+        source_kind: meta.workflowSourceKind,
         distillation_origin: firstString(distillation?.distillation_origin),
         preferred_promotion_target: firstString(distillation?.preferred_promotion_target) as any,
         promotion_origin: firstString(meta.workflowPromotion?.promotion_origin) as any,
         required_observations: firstFinite(meta.workflowPromotion?.required_observations),
         observed_count: firstFinite(meta.workflowPromotion?.observed_count),
         promotion_ready: isWorkflowPromotionReady(meta.workflowPromotion),
-        workflow_signature: meta.executionContract?.workflow_signature
-          ?? firstString(meta.executionNative?.workflow_signature ?? anchor?.workflow_signature),
+        workflow_signature: meta.workflowSignature,
         last_transition: firstString(meta.workflowPromotion?.last_transition) as any,
         last_transition_at: firstString(meta.workflowPromotion?.last_transition_at),
         rehydration_default_mode: firstString(meta.rehydration?.default_mode) as any,
-        tool_set:
-          stringList(meta.executionNative?.tool_set).length > 0
-            ? stringList(meta.executionNative?.tool_set)
-            : stringList(anchor?.tool_set),
+        tool_set: meta.toolSet,
         maintenance_state: firstString(meta.maintenance?.maintenance_state) as any,
         offline_priority: firstString(meta.maintenance?.offline_priority) as any,
         last_maintenance_at: firstString(meta.maintenance?.last_maintenance_at),
@@ -336,10 +319,10 @@ export function buildActionRecallPacket(args: {
         uri,
         type: node.type,
         title: node.title ?? null,
-        summary: firstString(anchor?.summary) ?? node.text_summary ?? node.title ?? null,
+        summary: meta.anchorSummary ?? node.text_summary ?? node.title ?? null,
         anchor_level: anchorLevel,
         selected_tool: meta.selectedTool,
-        tool_set: stringList(anchor?.tool_set),
+        tool_set: meta.toolSet,
         pattern_state: meta.patternState,
         credibility_state: meta.credibilityState,
         trusted: meta.trusted,

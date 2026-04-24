@@ -1,11 +1,11 @@
 import type { MemoryLayerId, MemoryLayerPolicy } from "./layer-policy.js";
 import {
-  parseNodeExecutionNative,
   resolveNodeAnchorKind,
   resolveNodeCompressionLayer,
   resolveNodeExecutionKind,
   resolveNodeRehydrationDefaultMode,
   resolveNodeSummaryKind,
+  resolveNodeTaskSignature,
 } from "./node-execution-surface.js";
 import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
 
@@ -654,9 +654,7 @@ export function buildContext(
       } else if (isExecutionNativeWorkflowProcedure(n)) {
         const summaryKind = resolveSummaryKind(n) ?? "workflow_anchor";
         const layer = resolveCompressionLayer(n) ?? "unknown";
-        const taskSignature = typeof parseNodeExecutionNative(n.slots ?? null)?.task_signature === "string"
-          ? parseNodeExecutionNative(n.slots ?? null)?.task_signature as string
-          : null;
+        const taskSignature = resolveNodeTaskSignature({ slots: n.slots ?? null });
         addLine(
           "topics",
           `- ${label}${summary} (node:${n.id}, ${summaryKind}, level=${layer}${taskSignature ? `, task=${taskSignature}` : ""})`,

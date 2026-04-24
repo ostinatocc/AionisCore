@@ -31,7 +31,6 @@ import {
 import type { RecallStoreAccess, RecallNodeRow } from "../store/recall-access.js";
 import { resolvePatternTaskAffinity, type PatternAffinityLevel } from "./pattern-trust-shaping.js";
 import {
-  resolveNodeExecutionContract,
   resolveNodePatternExecutionSurface,
 } from "./node-execution-surface.js";
 
@@ -240,22 +239,17 @@ async function recallToolSelectionPatterns(args: {
   for (const row of rows) {
     if (row.type !== "concept") continue;
     const slots = asRecord(row.slots);
-    const anchor = asRecord(slots?.anchor_v1);
-    if (!anchor) continue;
-    const executionNative = asRecord(slots?.execution_native_v1);
-    const executionContract = resolveNodeExecutionContract({ slots });
     const patternSurface = resolveNodePatternExecutionSurface({ slots });
     const anchorKind = patternSurface.anchor_kind;
     const anchorLevel = patternSurface.anchor_level;
     const selectedTool = patternSurface.selected_tool;
-    const taskSignature = firstString([executionContract?.task_signature, executionNative?.task_signature, anchor.task_signature]);
-    const taskFamily = firstString([executionContract?.task_family, executionNative?.task_family, anchor.task_family]);
-    const errorFamily = firstString([executionNative?.error_family, anchor.error_family]);
+    const taskSignature = patternSurface.task_signature;
+    const taskFamily = patternSurface.task_family;
+    const errorFamily = patternSurface.error_family;
     const patternState = patternSurface.pattern_state === "stable" ? "stable" : "provisional";
-    const toolSet = uniqueStrings(Array.isArray(anchor.tool_set) ? (anchor.tool_set as Array<string | null | undefined>) : []);
-    const promotion = asRecord(executionNative?.promotion) ?? asRecord(anchor.promotion);
-    const trustHardening = asRecord(executionNative?.trust_hardening) ?? asRecord(anchor.trust_hardening);
-    const maintenance = asRecord(executionNative?.maintenance) ?? asRecord(anchor.maintenance);
+    const toolSet = patternSurface.tool_set;
+    const trustHardening = patternSurface.trust_hardening;
+    const maintenance = patternSurface.maintenance;
     const operatorOverride = readPatternOperatorOverride(slots ?? {});
     const suppressed = isPatternSuppressed(operatorOverride);
     const distinctRunCount = Number(patternSurface.promotion.distinct_run_count ?? 0);

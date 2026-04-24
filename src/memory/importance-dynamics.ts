@@ -1,12 +1,13 @@
 import {
+  resolveNodeAnchorMetricsSurface,
   resolveNodeCompressionLayer,
   resolveNodeCredibilityState,
   resolveNodeExecutionContractTrust,
+  resolveNodePatternExecutionSurface,
   resolveNodeSummaryKind,
   resolveNodeAnchorKind,
-  parseNodeAnchor,
-  parseNodeExecutionNative,
   resolveNodePolicyMemoryState,
+  resolveNodeWorkflowPromotionSurface,
 } from "./node-execution-surface.js";
 
 type NodePriorityValue = {
@@ -160,11 +161,9 @@ function extractFeedbackQuality(slots: Record<string, unknown> | null): number {
 }
 
 function deriveAnchorMetrics(slots: Record<string, unknown> | null) {
-  const anchor = parseNodeAnchor(slots);
-  const execution = parseNodeExecutionNative(slots);
-  const metrics = asRecord(anchor?.metrics) ?? asRecord(slots?.metrics);
-  const promotion = asRecord(anchor?.promotion) ?? asRecord(execution?.promotion);
-  const workflowPromotion = asRecord(anchor?.workflow_promotion) ?? asRecord(execution?.workflow_promotion);
+  const metrics = resolveNodeAnchorMetricsSurface(slots);
+  const patternPromotion = resolveNodePatternExecutionSurface({ slots }).promotion;
+  const workflowPromotion = resolveNodeWorkflowPromotionSurface(slots);
   return {
     usage_count: Math.max(0, numeric(metrics?.usage_count) ?? 0),
     reuse_success_count: Math.max(0, numeric(metrics?.reuse_success_count) ?? 0),
@@ -173,7 +172,7 @@ function deriveAnchorMetrics(slots: Record<string, unknown> | null) {
       0,
       numeric(metrics?.distinct_run_count)
       ?? numeric(workflowPromotion?.observed_count)
-      ?? numeric(promotion?.distinct_run_count)
+      ?? numeric(patternPromotion.distinct_run_count)
       ?? 0,
     ),
     last_used_at: firstString(metrics?.last_used_at, slots?.last_feedback_at, slots?.last_activated, slots?.last_activated_at),
@@ -203,8 +202,6 @@ function derivePriorityProfile(args: ResolveNodePriorityProfileArgs): NodePriori
   profile = addProfile(profile, LAYER_BONUS[deriveCompressionLayer(slots) ?? ""]);
   profile = addProfile(profile, SUMMARY_KIND_BONUS[deriveSummaryKind(slots) ?? ""]);
 
-  const anchor = parseNodeAnchor(slots);
-  const execution = parseNodeExecutionNative(slots);
   const anchorKind = resolveNodeAnchorKind(slots);
   if (anchorKind === "workflow") {
     profile = addProfile(profile, { salience: 0.02, importance: 0.03, confidence: 0.03 });
@@ -221,7 +218,7 @@ function derivePriorityProfile(args: ResolveNodePriorityProfileArgs): NodePriori
     }
   }
 
-  const workflowPromotion = asRecord(anchor?.workflow_promotion) ?? asRecord(execution?.workflow_promotion);
+  const workflowPromotion = resolveNodeWorkflowPromotionSurface(slots);
   if (firstString(workflowPromotion?.promotion_state) === "stable") {
     profile = addProfile(profile, { salience: 0.04, importance: 0.05, confidence: 0.05 });
   }
