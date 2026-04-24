@@ -10,6 +10,8 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.equal(result.summary.false_confidence_rate, 0);
   assert.equal(result.summary.after_exit_correct_rate, 1);
   assert.equal(result.summary.wasted_step_count, 0);
+  assert.equal(result.summary.gate_false_positive_rate, 0);
+  assert.equal(result.summary.gate_false_negative_rate, 0);
 
   const serviceScenario = result.scenarios.find((scenario) => scenario.id === "service_after_exit");
   assert.ok(serviceScenario);
@@ -21,4 +23,11 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.ok(deployScenario);
   assert.equal(deployScenario.task_family, "git_deploy_webserver");
   assert.ok(deployScenario.compiled.outcome.dependency_requirements.some((entry) => entry.includes("git deploy or hook path")));
+
+  const thinServiceScenario = result.scenarios.find((scenario) => scenario.id === "thin_service_missing_detach");
+  assert.ok(thinServiceScenario);
+  assert.equal(thinServiceScenario.metrics.outcome_gate_allows_authoritative, false);
+  assert.equal(thinServiceScenario.metrics.false_confidence_risk, false);
+  assert.equal(thinServiceScenario.metrics.after_exit_correct, false);
+  assert.ok(thinServiceScenario.compiled.outcome_contract_gate.reasons.includes("missing_service_detach_then_probe"));
 });

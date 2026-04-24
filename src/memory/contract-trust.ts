@@ -18,6 +18,11 @@ export const OutcomeContractGateSchema = z.object({
     must_hold_after_exit_count: z.number().int().min(0),
     external_visibility_requirement_count: z.number().int().min(0),
     service_lifecycle_constraint_count: z.number().int().min(0),
+    durable_service_lifecycle_constraint_count: z.number().int().min(0),
+    service_must_survive_agent_exit_count: z.number().int().min(0),
+    service_revalidate_from_fresh_shell_count: z.number().int().min(0),
+    service_detach_then_probe_count: z.number().int().min(0),
+    service_health_check_count: z.number().int().min(0),
   }),
 });
 export type OutcomeContractGate = z.infer<typeof OutcomeContractGateSchema>;
@@ -43,6 +48,32 @@ function stringList(value: unknown): string[] {
     .filter((item): item is string => typeof item === "string")
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+}
+
+function nonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function booleanField(value: Record<string, unknown>, field: string): boolean {
+  return value[field] === true;
+}
+
+function serviceConstraintRecords(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(asRecord)
+    .filter((entry): entry is Record<string, unknown> => !!entry);
+}
+
+function isDurableServiceLifecycleConstraint(constraint: Record<string, unknown>): boolean {
+  const serviceKind = nonEmptyString(constraint.service_kind) ?? "generic";
+  return serviceKind === "http"
+    || serviceKind === "tcp"
+    || serviceKind === "process"
+    || !!nonEmptyString(constraint.endpoint)
+    || !!nonEmptyString(constraint.launch_reference);
 }
 
 function withAdditionalGateReasons(gate: OutcomeContractGate, reasons: string[]): OutcomeContractGate {
@@ -83,9 +114,19 @@ export function buildOutcomeContractGate(args: {
   const externalVisibilityRequirements = stringList(
     outcome?.external_visibility_requirements ?? parsedContract?.external_visibility_requirements,
   );
-  const serviceLifecycleConstraints = Array.isArray(parsedContract?.service_lifecycle_constraints)
-    ? parsedContract.service_lifecycle_constraints
-    : [];
+  const serviceLifecycleConstraints = serviceConstraintRecords(parsedContract?.service_lifecycle_constraints);
+  const durableServiceLifecycleConstraints = serviceLifecycleConstraints.filter(isDurableServiceLifecycleConstraint);
+  const serviceMustSurviveCount = durableServiceLifecycleConstraints
+    .filter((constraint) => booleanField(constraint, "must_survive_agent_exit"))
+    .length;
+  const serviceFreshShellCount = durableServiceLifecycleConstraints
+    .filter((constraint) => booleanField(constraint, "revalidate_from_fresh_shell"))
+    .length;
+  const serviceDetachThenProbeCount = durableServiceLifecycleConstraints
+    .filter((constraint) => booleanField(constraint, "detach_then_probe"))
+    .length;
+  const serviceHealthCheckCount = durableServiceLifecycleConstraints
+    .reduce((sum, constraint) => sum + stringList(constraint.health_checks).length, 0);
 
   const meaningfulSuccessInvariantCount = successInvariants.filter(
     (invariant) => !GENERIC_SUCCESS_INVARIANTS.has(invariant),
@@ -99,7 +140,7 @@ export function buildOutcomeContractGate(args: {
     || acceptanceChecksBindSuccess
     || (mustHoldAfterExit.length > 0 && externalVisibilityRequirements.length > 0);
 
-  const requiresServiceLifecycleOutcome = serviceLifecycleConstraints.length > 0;
+  const requiresServiceLifecycleOutcome = durableServiceLifecycleConstraints.length > 0;
   const reasons: string[] = [];
   if (!hasVerifiableOutcome) reasons.push("missing_verifiable_success_outcome");
   if (requiresServiceLifecycleOutcome && mustHoldAfterExit.length === 0) {
@@ -107,6 +148,27 @@ export function buildOutcomeContractGate(args: {
   }
   if (requiresServiceLifecycleOutcome && externalVisibilityRequirements.length === 0) {
     reasons.push("missing_external_visibility_requirements");
+  }
+  if (
+    requiresServiceLifecycleOutcome
+    && serviceMustSurviveCount < durableServiceLifecycleConstraints.length
+  ) {
+    reasons.push("missing_service_must_survive_agent_exit");
+  }
+  if (
+    requiresServiceLifecycleOutcome
+    && serviceFreshShellCount < durableServiceLifecycleConstraints.length
+  ) {
+    reasons.push("missing_service_revalidate_from_fresh_shell");
+  }
+  if (
+    requiresServiceLifecycleOutcome
+    && serviceDetachThenProbeCount < durableServiceLifecycleConstraints.length
+  ) {
+    reasons.push("missing_service_detach_then_probe");
+  }
+  if (requiresServiceLifecycleOutcome && serviceHealthCheckCount === 0) {
+    reasons.push("missing_service_health_check");
   }
   const requestedTrust = normalizeContractTrust(args.requestedTrust ?? parsedContract?.contract_trust);
   const allowsAuthoritative = requestedTrust === "authoritative" && reasons.length === 0;
@@ -130,6 +192,11 @@ export function buildOutcomeContractGate(args: {
       must_hold_after_exit_count: mustHoldAfterExit.length,
       external_visibility_requirement_count: externalVisibilityRequirements.length,
       service_lifecycle_constraint_count: serviceLifecycleConstraints.length,
+      durable_service_lifecycle_constraint_count: durableServiceLifecycleConstraints.length,
+      service_must_survive_agent_exit_count: serviceMustSurviveCount,
+      service_revalidate_from_fresh_shell_count: serviceFreshShellCount,
+      service_detach_then_probe_count: serviceDetachThenProbeCount,
+      service_health_check_count: serviceHealthCheckCount,
     },
   });
 }
