@@ -65,6 +65,38 @@ function firstContractTrust(...values: unknown[]): ContractTrust | null {
   return null;
 }
 
+function outcomeFieldsFromContract(contract: ExecutionContractV1 | null | undefined): Record<string, string[]> {
+  if (!contract) return {};
+  return {
+    ...(contract.outcome.acceptance_checks.length > 0 ? { acceptance_checks: contract.outcome.acceptance_checks } : {}),
+    ...(contract.outcome.success_invariants.length > 0 ? { success_invariants: contract.outcome.success_invariants } : {}),
+    ...(contract.outcome.dependency_requirements.length > 0 ? { dependency_requirements: contract.outcome.dependency_requirements } : {}),
+    ...(contract.outcome.environment_assumptions.length > 0 ? { environment_assumptions: contract.outcome.environment_assumptions } : {}),
+    ...(contract.outcome.must_hold_after_exit.length > 0 ? { must_hold_after_exit: contract.outcome.must_hold_after_exit } : {}),
+    ...(contract.outcome.external_visibility_requirements.length > 0
+      ? { external_visibility_requirements: contract.outcome.external_visibility_requirements }
+      : {}),
+  };
+}
+
+function outcomeFieldsFromPolicy(policy: DerivedPolicySurface | PolicyContract | null | undefined): Record<string, string[]> {
+  if (!policy) return {};
+  const acceptanceChecks = stringList((policy as Record<string, unknown>).acceptance_checks, 24);
+  const successInvariants = stringList((policy as Record<string, unknown>).success_invariants, 24);
+  const dependencyRequirements = stringList((policy as Record<string, unknown>).dependency_requirements, 24);
+  const environmentAssumptions = stringList((policy as Record<string, unknown>).environment_assumptions, 24);
+  const mustHoldAfterExit = stringList((policy as Record<string, unknown>).must_hold_after_exit, 24);
+  const externalVisibilityRequirements = stringList((policy as Record<string, unknown>).external_visibility_requirements, 24);
+  return {
+    ...(acceptanceChecks.length > 0 ? { acceptance_checks: acceptanceChecks } : {}),
+    ...(successInvariants.length > 0 ? { success_invariants: successInvariants } : {}),
+    ...(dependencyRequirements.length > 0 ? { dependency_requirements: dependencyRequirements } : {}),
+    ...(environmentAssumptions.length > 0 ? { environment_assumptions: environmentAssumptions } : {}),
+    ...(mustHoldAfterExit.length > 0 ? { must_hold_after_exit: mustHoldAfterExit } : {}),
+    ...(externalVisibilityRequirements.length > 0 ? { external_visibility_requirements: externalVisibilityRequirements } : {}),
+  };
+}
+
 function buildDerivedPolicySurface(args: {
   tools: ToolsSelectRouteContract;
   introspection: ExecutionMemoryIntrospectionResponse;
@@ -174,6 +206,7 @@ function buildDerivedPolicySurface(args: {
         : preferredPattern?.target_files,
     24,
   );
+  const outcomeFields = outcomeFieldsFromContract(steeringExecutionContract);
 
   return DerivedPolicySurfaceSchema.parse({
     summary_version: "derived_policy_v1",
@@ -194,6 +227,7 @@ function buildDerivedPolicySurface(args: {
     ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
     ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
     ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
+    ...outcomeFields,
     confidence,
     supporting_anchor_ids: supportingAnchorIds,
     reason,
@@ -430,6 +464,10 @@ function buildPolicyContract(args: {
     avoidTools.length > 0 ? `avoid=${avoidTools.join(", ")}` : null,
     rehydrationMode ? `rehydration=${rehydrationMode}` : null,
   ].filter((value): value is string => !!value).join("; ");
+  const outcomeFields = {
+    ...outcomeFieldsFromPolicy(args.derivedPolicy),
+    ...outcomeFieldsFromContract(args.executionContract),
+  };
 
   return PolicyContractSchema.parse({
     summary_version: "policy_contract_v1",
@@ -451,6 +489,7 @@ function buildPolicyContract(args: {
     ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
     ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
     ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
+    ...outcomeFields,
     rehydration_mode: rehydrationMode,
     confidence: args.derivedPolicy.confidence,
     source_anchor_ids: args.derivedPolicy.supporting_anchor_ids,

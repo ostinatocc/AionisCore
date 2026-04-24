@@ -303,6 +303,12 @@ function buildPolicyExecutionContract(args: {
     workflow_steps: args.contract.workflow_steps,
     pattern_hints: args.contract.pattern_hints,
     service_lifecycle_constraints: args.contract.service_lifecycle_constraints,
+    acceptance_checks: args.contract.acceptance_checks,
+    success_invariants: args.contract.success_invariants,
+    dependency_requirements: args.contract.dependency_requirements,
+    environment_assumptions: args.contract.environment_assumptions,
+    must_hold_after_exit: args.contract.must_hold_after_exit,
+    external_visibility_requirements: args.contract.external_visibility_requirements,
     provenance: {
       source_kind: "policy_contract",
       source_summary_version: args.contract.summary_version,
