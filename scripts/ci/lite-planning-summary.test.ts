@@ -206,9 +206,61 @@ const layeredContextFixture = {
 };
 
 test("contract trust steering requires explicit authoritative trust and outcome signal", () => {
+  const targetOnlyContract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    target_files: ["src/routes/export.ts"],
+    provenance: {
+      source_kind: "manual_context",
+    },
+  });
   const outcomeContract = buildExecutionContractFromProjection({
     contract_trust: "authoritative",
     target_files: ["src/routes/export.ts"],
+    acceptance_checks: ["npm run -s test:lite -- export"],
+    provenance: {
+      source_kind: "manual_context",
+    },
+  });
+  const incompleteServiceContract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    service_lifecycle_constraints: [
+      {
+        version: 1,
+        service_kind: "process",
+        label: "background package index",
+        launch_reference: "python -m pypi_server -p 8080 ./packages",
+        endpoint: null,
+        must_survive_agent_exit: false,
+        revalidate_from_fresh_shell: true,
+        detach_then_probe: true,
+        health_checks: [],
+        teardown_notes: [],
+      },
+    ],
+    success_invariants: ["service_process_started"],
+    provenance: {
+      source_kind: "manual_context",
+    },
+  });
+  const serviceOutcomeContract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    service_lifecycle_constraints: [
+      {
+        version: 1,
+        service_kind: "http",
+        label: "local package index",
+        launch_reference: "python -m pypi_server -p 8080 ./packages",
+        endpoint: "http://localhost:8080/simple/",
+        must_survive_agent_exit: true,
+        revalidate_from_fresh_shell: true,
+        detach_then_probe: true,
+        health_checks: ["curl -fsS http://localhost:8080/simple/"],
+        teardown_notes: [],
+      },
+    ],
+    success_invariants: ["clean_client_install_succeeds"],
+    must_hold_after_exit: ["service_survives_agent_exit:local package index"],
+    external_visibility_requirements: ["endpoint_reachable:http://localhost:8080/simple/"],
     provenance: {
       source_kind: "manual_context",
     },
@@ -241,7 +293,31 @@ test("contract trust steering requires explicit authoritative trust and outcome 
     resolveContractTrustForSteering({
       computedTrust: "authoritative",
       explicitTrust: "authoritative",
+      executionContract: targetOnlyContract,
+    }),
+    "advisory",
+  );
+  assert.equal(
+    resolveContractTrustForSteering({
+      computedTrust: "authoritative",
+      explicitTrust: "authoritative",
       executionContract: outcomeContract,
+    }),
+    "authoritative",
+  );
+  assert.equal(
+    resolveContractTrustForSteering({
+      computedTrust: "authoritative",
+      explicitTrust: "authoritative",
+      executionContract: incompleteServiceContract,
+    }),
+    "advisory",
+  );
+  assert.equal(
+    resolveContractTrustForSteering({
+      computedTrust: "authoritative",
+      explicitTrust: "authoritative",
+      executionContract: serviceOutcomeContract,
     }),
     "authoritative",
   );

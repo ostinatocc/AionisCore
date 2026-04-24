@@ -235,10 +235,11 @@ function resolveTaskFamilyFromContext(context: unknown): string | null {
 function mergeExecutionContractCandidate(
   current: ExecutionContractV1 | null,
   candidate: ExecutionContractV1 | null,
+  preference: "existing" | "incoming" = "incoming",
 ): ExecutionContractV1 | null {
   if (!candidate) return current;
   return current
-    ? mergeExecutionContractsWithActionSurface({ existing: current, incoming: candidate, preference: "incoming" })
+    ? mergeExecutionContractsWithActionSurface({ existing: current, incoming: candidate, preference })
     : candidate;
 }
 
@@ -273,6 +274,12 @@ function buildExecutionContractFromPersistedPolicyMemory(args: {
     workflow_steps: args.contract.workflow_steps,
     pattern_hints: args.contract.pattern_hints,
     service_lifecycle_constraints: args.contract.service_lifecycle_constraints,
+    acceptance_checks: args.contract.acceptance_checks,
+    success_invariants: args.contract.success_invariants,
+    dependency_requirements: args.contract.dependency_requirements,
+    environment_assumptions: args.contract.environment_assumptions,
+    must_hold_after_exit: args.contract.must_hold_after_exit,
+    external_visibility_requirements: args.contract.external_visibility_requirements,
     provenance: {
       source_kind: "policy_contract",
       source_summary_version: args.contract.summary_version,
@@ -289,7 +296,7 @@ function buildExecutionContractFromWorkflowEntry(args: {
   sourceKind: "workflow_projection" | "action_retrieval";
   summaryVersion: string;
 }): ExecutionContractV1 {
-  return buildExecutionContractFromProjection({
+  const projected = buildExecutionContractFromProjection({
     contract_trust: args.workflow.contract_trust ?? null,
     task_family: args.workflow.task_family ?? null,
     workflow_signature: args.workflow.workflow_signature ?? null,
@@ -308,6 +315,10 @@ function buildExecutionContractFromWorkflowEntry(args: {
       notes: [args.workflow.summary ?? args.workflow.title ?? "workflow memory projection"],
     },
   });
+  const existing = parseExecutionContract(args.workflow.execution_contract_v1);
+  return existing
+    ? mergeExecutionContractsWithActionSurface({ existing, incoming: projected, preference: "existing" })
+    : projected;
 }
 
 function buildExecutionContractFromPathRecommendation(args: {
@@ -989,10 +1000,12 @@ export function buildActionRetrievalResponse(args: {
   executionContract = mergeExecutionContractCandidate(
     executionContract,
     pathExecutionContract,
+    "existing",
   );
   executionContract = mergeExecutionContractCandidate(
     executionContract,
     buildExecutionContractFromToolSelection(selectedTool),
+    "existing",
   );
   const workflowSupportsForRetrieval = !!selectedTool
     && (

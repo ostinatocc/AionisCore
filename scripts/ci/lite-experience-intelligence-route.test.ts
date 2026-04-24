@@ -98,6 +98,8 @@ async function seedStableWorkflowFixture(dbPath: string) {
       },
     ],
     acceptance_checks: ["npm test -- export"],
+    must_hold_after_exit: ["verification_result_revalidated_from_fresh_shell"],
+    external_visibility_requirements: ["health_check:npm test -- export"],
     provenance: {
       source_kind: "workflow_projection",
       source_summary_version: "lite-experience-intelligence-fixture",
@@ -1239,7 +1241,7 @@ test("kickoff recommendation can recover file-level workflow guidance from host-
     assert.equal(response.statusCode, 200);
     const body = KickoffRecommendationResponseSchema.parse(response.json());
     assert.equal(body.kickoff_recommendation?.history_applied, true);
-    assert.equal(body.kickoff_recommendation?.contract_trust, "advisory");
+    assert.equal(body.kickoff_recommendation?.contract_trust, "authoritative");
     assert.equal(body.kickoff_recommendation?.selected_tool, "edit");
     assert.equal(body.kickoff_recommendation?.source_kind, "experience_intelligence");
     assert.equal(body.kickoff_recommendation?.file_path, "src/routes/export.ts");
@@ -1249,7 +1251,7 @@ test("kickoff recommendation can recover file-level workflow guidance from host-
     assert.ok((body.action_retrieval_uncertainty?.confidence ?? 0) >= 0.48);
     assert.ok(!(body.action_retrieval_uncertainty?.recommended_actions ?? []).includes("request_operator_review"));
     assert.equal(body.policy_contract?.selected_tool, "edit");
-    assert.equal(body.policy_contract?.materialization_state, "computed");
+    assert.equal(body.policy_contract?.materialization_state, "persisted");
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -1379,6 +1381,10 @@ test("experience intelligence route learns a stronger next recommendation after 
           workflow_signature: "execution_workflow:repair-export",
           contract: {
             target_files: ["src/routes/export.ts"],
+            acceptance_checks: ["npm run -s test:lite -- export"],
+            success_invariants: ["all_acceptance_checks_pass"],
+            must_hold_after_exit: ["verification_result_revalidated_from_fresh_shell"],
+            external_visibility_requirements: ["health_check:npm run -s test:lite -- export"],
             next_action: "Patch src/routes/export.ts and rerun export tests.",
             workflow_steps: [
               "Inspect src/routes/export.ts for the export mismatch.",
@@ -1529,6 +1535,10 @@ test("kickoff recommendation route can recover file-level guidance from family-l
         workflow_signature: "execution_workflow:repair-export",
         contract: {
           target_files: ["src/routes/export.ts"],
+          acceptance_checks: ["npm run -s test:lite -- export"],
+          success_invariants: ["all_acceptance_checks_pass"],
+          must_hold_after_exit: ["verification_result_revalidated_from_fresh_shell"],
+          external_visibility_requirements: ["health_check:npm run -s test:lite -- export"],
           next_action: "Patch src/routes/export.ts and rerun export tests.",
           workflow_steps: [
             "Inspect src/routes/export.ts for the export mismatch.",

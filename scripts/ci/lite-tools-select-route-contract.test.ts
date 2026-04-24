@@ -104,6 +104,8 @@ test("feedback materialization upgrades thin recovery contract placeholders", ()
         workflow_signature: null,
         contract: {
           target_files: [],
+          acceptance_checks: ["curl -fsS http://localhost:8080/healthz"],
+          success_invariants: ["all_acceptance_checks_pass"],
           next_action: null,
           workflow_steps: [],
           pattern_hints: [],
@@ -849,6 +851,10 @@ test("tools feedback route can use internal static form_pattern provider without
         workflow_signature: "execution_workflow:repair-export",
         contract: {
           target_files: ["src/routes/export.ts"],
+          acceptance_checks: ["npm run -s test:lite -- export"],
+          success_invariants: ["all_acceptance_checks_pass"],
+          must_hold_after_exit: ["verification_result_revalidated_from_fresh_shell"],
+          external_visibility_requirements: ["health_check:npm run -s test:lite -- export"],
           next_action: "Patch src/routes/export.ts and rerun export tests.",
           workflow_steps: [
             "Inspect src/routes/export.ts for the export mismatch.",
@@ -974,6 +980,10 @@ test("policy governance apply route can retire and reactivate persisted policy m
         workflow_signature: "execution_workflow:repair-export",
         contract: {
           target_files: ["src/routes/export.ts"],
+          acceptance_checks: ["npm run -s test:lite -- export"],
+          success_invariants: ["all_acceptance_checks_pass"],
+          must_hold_after_exit: ["verification_result_revalidated_from_fresh_shell"],
+          external_visibility_requirements: ["health_check:npm run -s test:lite -- export"],
           next_action: "Patch src/routes/export.ts and rerun export tests.",
           workflow_steps: [
             "Inspect src/routes/export.ts for the export mismatch.",
@@ -1340,6 +1350,116 @@ test("tools feedback materializes advisory trust as hint-only candidate policy m
     const persistedSlots = (persisted.rows[0]?.slots ?? {}) as Record<string, unknown>;
     assert.equal((persistedSlots.execution_contract_v1 as Record<string, unknown>)?.schema_version, "execution_contract_v1");
     assert.equal((persistedSlots.execution_contract_v1 as Record<string, unknown>)?.policy_memory_id, policyMemoryId);
+    assert.equal((persistedSlots.execution_contract_v1 as Record<string, unknown>)?.contract_trust, "advisory");
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("tools feedback downgrades authoritative trust without sufficient outcome contract", async () => {
+  const app = Fastify();
+  const dbPath = tmpDbPath("policy-materialization-authoritative-thin");
+  const { liteWriteStore, liteRecallStore } = await seedPolicyMemoryGovernanceFixture(dbPath);
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryFeedbackToolRoutes({
+      app,
+      env: buildLiteEnv(),
+      embedder: FakeEmbeddingProvider,
+      embeddedRuntime: null,
+      liteRecallAccess: liteRecallStore.createRecallAccess(),
+      liteWriteStore,
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const runId = randomUUID();
+    const context = {
+      contract_trust: "authoritative",
+      task_kind: "repair_export",
+      task_family: "task:repair_export",
+      workflow_signature: "execution_workflow:repair-export",
+      goal: "repair export failure in node tests",
+      target_files: ["src/routes/export.ts"],
+      next_action: "Patch src/routes/export.ts and rerun export tests.",
+      error: {
+        signature: "node-export-mismatch",
+      },
+      recovery_contract_v1: {
+        contract_trust: "authoritative",
+        task_family: "task:repair_export",
+        task_signature: "repair-export-route",
+        workflow_signature: "execution_workflow:repair-export",
+        contract: {
+          target_files: ["src/routes/export.ts"],
+          next_action: "Patch src/routes/export.ts and rerun export tests.",
+          workflow_steps: [
+            "Inspect src/routes/export.ts for the export mismatch.",
+            "Patch the route export serialization.",
+          ],
+        },
+      },
+    };
+
+    const selectionResponse = await app.inject({
+      method: "POST",
+      url: "/v1/memory/tools/select",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        run_id: runId,
+        context,
+        candidates: ["bash", "edit", "test"],
+        include_shadow: false,
+        rules_limit: 20,
+        strict: true,
+        reorder_candidates: false,
+      },
+    });
+    assert.equal(selectionResponse.statusCode, 200);
+    const selection = ToolsSelectRouteContractSchema.parse(selectionResponse.json());
+
+    const feedbackResponse = await app.inject({
+      method: "POST",
+      url: "/v1/memory/tools/feedback",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        run_id: runId,
+        decision_id: selection.decision.decision_id,
+        outcome: "positive",
+        context,
+        candidates: ["bash", "edit", "test"],
+        selected_tool: "edit",
+        target: "tool",
+        note: "Thin authoritative continuity may persist only as hint-level policy memory.",
+        input_text: "repair export failure in node tests",
+      },
+    });
+    assert.equal(feedbackResponse.statusCode, 200, feedbackResponse.body);
+    const feedback = ToolsFeedbackResponseSchema.parse(feedbackResponse.json());
+    assert.equal(feedback.policy_memory?.policy_contract.contract_trust, "advisory");
+    assert.equal(feedback.policy_memory?.policy_memory_state, "contested");
+    assert.equal(feedback.policy_memory?.policy_contract.activation_mode, "hint");
+    assert.equal(feedback.policy_memory?.policy_contract.policy_state, "candidate");
+    const policyMemoryId = feedback.policy_memory?.node_id;
+    assert.ok(policyMemoryId);
+    const persisted = await liteWriteStore.findNodes({
+      scope: "default",
+      id: policyMemoryId!,
+      type: "concept",
+      limit: 1,
+      offset: 0,
+    });
+    const persistedSlots = (persisted.rows[0]?.slots ?? {}) as Record<string, unknown>;
     assert.equal((persistedSlots.execution_contract_v1 as Record<string, unknown>)?.contract_trust, "advisory");
   } finally {
     await app.close();

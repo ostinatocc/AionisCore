@@ -43,6 +43,10 @@ import { buildAionisUri, parseAionisUri } from "./uri.js";
 import { writeToolsDecisionPatternAnchor } from "./tools-pattern-anchor.js";
 import { applyPolicyMemoryFeedbackLite, writePolicyMemorySnapshot } from "./policy-memory.js";
 import {
+  normalizeContractTrust as normalizeContractTrustValue,
+  resolveContractTrustForSteering,
+} from "./contract-trust.js";
+import {
   buildGovernedStateDecisionTrace,
   buildGovernanceDecisionTraceBase,
   appendGovernanceRuntimePolicyAppliedStage,
@@ -187,9 +191,7 @@ type WorkflowFeedbackTarget = {
 };
 
 function normalizeContractTrust(value: unknown): ContractTrust | null {
-  return value === "authoritative" || value === "advisory" || value === "observational"
-    ? value
-    : null;
+  return normalizeContractTrustValue(value);
 }
 
 function resolveFeedbackExecutionContract(context: unknown) {
@@ -289,6 +291,16 @@ function extractFeedbackContractTrust(context: unknown): ContractTrust | null {
     ?? null;
 }
 
+function resolveFeedbackContractTrustForMaterialization(context: unknown): ContractTrust | null {
+  const explicitTrust = extractFeedbackContractTrust(context);
+  if (!explicitTrust) return null;
+  return resolveContractTrustForSteering({
+    computedTrust: explicitTrust,
+    explicitTrust,
+    executionContract: resolveFeedbackExecutionContract(context),
+  });
+}
+
 function extractContextConsumerAgentId(context: unknown): string | null {
   const ctx = asRecord(context);
   const agent = asRecord(ctx?.agent);
@@ -341,7 +353,7 @@ export function buildMaterializationContextFromFeedback(args: {
 }) {
   const base = asRecord(args.context) ? { ...(args.context as Record<string, unknown>) } : {};
   const existingExecutionContract = resolveFeedbackExecutionContract(base);
-  const contractTrust = extractFeedbackContractTrust(args.context);
+  const contractTrust = resolveFeedbackContractTrustForMaterialization(args.context);
   if (contractTrust) {
     base.contract_trust = contractTrust;
   }
@@ -541,7 +553,7 @@ async function materializeLitePolicyMemoryFromFeedback(args: {
   opts: FeedbackOptions;
 }): Promise<ToolsFeedbackResponse["policy_memory"] | null> {
   if (!args.opts.liteWriteStore) return null;
-  const contractTrust = extractFeedbackContractTrust(args.parsed.context);
+  const contractTrust = resolveFeedbackContractTrustForMaterialization(args.parsed.context);
   if (contractTrust === "observational") return null;
 
   const consumerAgentId = extractContextConsumerAgentId(args.parsed.context) ?? args.actor;

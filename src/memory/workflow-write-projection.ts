@@ -32,6 +32,7 @@ import { sha256Hex } from "../util/crypto.js";
 import { stableUuid } from "../util/uuid.js";
 import type { PromoteMemoryGovernanceReviewProvider } from "./governance-provider-types.js";
 import { buildWorkflowPromotionGovernancePreview } from "./workflow-promotion-governance.js";
+import { evaluateAuthoritativeOutcomeContract } from "./contract-trust.js";
 
 type WriteProjectionSourceNode = {
   id: string;
@@ -182,6 +183,14 @@ function deriveContractTrustFromSource(source: WriteProjectionSourceNode): "auth
   return resolveNodeExecutionContractTrust({ slots: source.slots });
 }
 
+function resolveWorkflowProjectionContractTrust(
+  sourceTrust: "authoritative" | "advisory" | "observational" | null,
+  executionContract: unknown,
+): "authoritative" | "advisory" | "observational" | null {
+  if (sourceTrust) return sourceTrust;
+  return evaluateAuthoritativeOutcomeContract(executionContract).ok ? "authoritative" : null;
+}
+
 function collectServiceLifecycleConstraints(
   source: WriteProjectionSourceNode,
   state: ExecutionStateV1 | null,
@@ -285,6 +294,16 @@ function collectTargetFiles(state: ExecutionStateV1, packet: ExecutionPacketV1 |
 function collectTargetFilesFromInputs(state: ExecutionStateV1 | null, packet: ExecutionPacketV1 | null): string[] {
   if (state) return collectTargetFiles(state, packet);
   return normalizeFileList(Array.isArray(packet?.target_files) ? packet.target_files : []);
+}
+
+function collectAcceptanceChecks(state: ExecutionStateV1 | null, packet: ExecutionPacketV1 | null): string[] {
+  return normalizeFileList([
+    ...(state?.pending_validations ?? []),
+    ...(state?.completed_validations ?? []),
+    ...(state?.reviewer_contract?.acceptance_checks ?? []),
+    ...(packet?.pending_validations ?? []),
+    ...(packet?.review_contract?.acceptance_checks ?? []),
+  ]);
 }
 
 function deriveWorkflowSignatureFromInputs(state: ExecutionStateV1 | null, packet: ExecutionPacketV1 | null): string {
@@ -448,6 +467,7 @@ function buildWorkflowProjectionExecutionContract(args: {
   workflowSignature: string;
   filePath: string | null;
   targetFiles: string[];
+  acceptanceChecks: string[];
   nextAction: string | null;
   workflowSteps: string[];
   patternHints: string[];
@@ -460,6 +480,7 @@ function buildWorkflowProjectionExecutionContract(args: {
     workflow_signature: args.workflowSignature,
     file_path: args.filePath,
     target_files: args.targetFiles,
+    acceptance_checks: args.acceptanceChecks,
     next_action: args.nextAction,
     workflow_steps: args.workflowSteps,
     pattern_hints: args.patternHints,
@@ -768,6 +789,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
     const taskFamily = deriveTaskFamilyFromSource(source);
     const sourceTargetFiles = resolveNodeTargetFiles({ slots: source.slots });
     const targetFiles = sourceTargetFiles.length > 0 ? sourceTargetFiles : collectTargetFilesFromInputs(state, packet);
+    const acceptanceChecks = collectAcceptanceChecks(state, packet);
     const filePath = resolveNodeFilePath({ slots: source.slots })
       ?? firstString(packet?.resume_anchor?.file_path ?? null)
       ?? targetFiles[0]
@@ -777,21 +799,39 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
     const workflowSteps = collectWorkflowSteps(source);
     const patternHints = collectPatternHints(source);
     const serviceLifecycleConstraints = collectServiceLifecycleConstraints(source, state, packet);
-    const contractTrust = deriveContractTrustFromSource(source);
+    const sourceContractTrust = deriveContractTrustFromSource(source);
     const toolSet = deriveWorkflowToolSet(state, packet);
-    const executionContract = buildWorkflowProjectionExecutionContract({
+    let executionContract = buildWorkflowProjectionExecutionContract({
       source,
-      contractTrust,
+      contractTrust: sourceContractTrust,
       taskSignature,
       taskFamily,
       workflowSignature,
       filePath,
       targetFiles,
+      acceptanceChecks,
       nextAction,
       workflowSteps,
       patternHints,
       serviceLifecycleConstraints,
     });
+    const contractTrust = resolveWorkflowProjectionContractTrust(sourceContractTrust, executionContract);
+    if (contractTrust !== sourceContractTrust) {
+      executionContract = buildWorkflowProjectionExecutionContract({
+        source,
+        contractTrust,
+        taskSignature,
+        taskFamily,
+        workflowSignature,
+        filePath,
+        targetFiles,
+        acceptanceChecks,
+        nextAction,
+        workflowSteps,
+        patternHints,
+        serviceLifecycleConstraints,
+      });
+    }
     const distillationSourceKind = resolveWorkflowProjectionDistillationSourceKind(source);
 
     const executionNative = ExecutionNativeV1Schema.parse({
@@ -855,6 +895,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
           },
         ],
         contractTrust,
+        executionContract,
         reviewResult: (promoteMemoryGovernanceReview?.review_result ?? null) as any,
         reviewProvider: args.governanceReviewProviders?.promote_memory ?? undefined,
       });
@@ -910,8 +951,8 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
     if (
       observedCount >= requiredObservations
       && governancePreview?.runtime_apply.promotion_state_override === "stable"
-      && contractTrust !== "advisory"
-      && contractTrust !== "observational"
+      && contractTrust === "authoritative"
+      && evaluateAuthoritativeOutcomeContract(executionContract).ok
     ) {
       const stableClientId = `workflow_projection:stable:${workflowSignature}`;
       const stableNodeId = stableUuid(`${args.scope}:node:${stableClientId}`);
@@ -944,6 +985,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         workflowSignature: stableAnchor.workflow_signature,
         filePath: stableAnchor.file_path ?? null,
         targetFiles: stableAnchor.target_files ?? [],
+        acceptanceChecks,
         nextAction: stableAnchor.next_action ?? null,
         workflowSteps: stableAnchor.key_steps ?? [],
         patternHints: stableAnchor.pattern_hints ?? [],
