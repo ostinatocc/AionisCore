@@ -1251,7 +1251,8 @@ test("kickoff recommendation can recover file-level workflow guidance from host-
     assert.ok((body.action_retrieval_uncertainty?.confidence ?? 0) >= 0.48);
     assert.ok(!(body.action_retrieval_uncertainty?.recommended_actions ?? []).includes("request_operator_review"));
     assert.equal(body.policy_contract?.selected_tool, "edit");
-    assert.equal(body.policy_contract?.materialization_state, "persisted");
+    assert.equal(body.policy_contract?.materialization_state, "computed");
+    assert.equal(body.policy_contract?.policy_memory_id, null);
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -1411,6 +1412,15 @@ test("experience intelligence route learns a stronger next recommendation after 
             ],
           },
         },
+        execution_evidence_v1: {
+          schema_version: "execution_evidence_v1",
+          validation_passed: true,
+          after_exit_revalidated: true,
+          fresh_shell_probe_passed: true,
+          failure_reason: null,
+          false_confidence_detected: false,
+          evidence_refs: ["test:export-feedback-fresh-shell"],
+        },
       },
       candidates: ["bash", "edit", "test"],
     };
@@ -1564,6 +1574,15 @@ test("kickoff recommendation route can recover file-level guidance from family-l
             },
           ],
         },
+      },
+      execution_evidence_v1: {
+        schema_version: "execution_evidence_v1",
+        validation_passed: true,
+        after_exit_revalidated: true,
+        fresh_shell_probe_passed: true,
+        failure_reason: null,
+        false_confidence_detected: false,
+        evidence_refs: ["test:kickoff-policy-memory-fresh-shell"],
       },
     };
 

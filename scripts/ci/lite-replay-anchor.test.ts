@@ -433,6 +433,15 @@ test("replayPlaybookPromote preserves richer recovery contract fields on stable 
           task_family: "service_publish_validate",
         },
       },
+      execution_evidence_v1: {
+        schema_version: "execution_evidence_v1",
+        validation_passed: true,
+        after_exit_revalidated: true,
+        fresh_shell_probe_passed: true,
+        failure_reason: null,
+        false_confidence_detected: false,
+        evidence_refs: ["test:package-index-fresh-shell"],
+      },
     },
   });
   try {

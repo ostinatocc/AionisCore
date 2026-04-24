@@ -36,6 +36,7 @@ import {
 } from "./schemas.js";
 import { parseExecutionContract, type ExecutionContractV1 } from "./execution-contract.js";
 import { resolveContractTrustForSteering } from "./contract-trust.js";
+import { extractExecutionEvidenceFromSlots } from "./execution-evidence.js";
 import { selectTools } from "./tools-select.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
@@ -585,6 +586,19 @@ export function buildExperienceIntelligenceResponse(args: {
         nextAction: combinedNextAction,
         executionContract,
       });
+  const liveExecutionEvidence = extractExecutionEvidenceFromSlots({
+    slots: {
+      ...(asRecord(args.parsed.context) ?? {}),
+      ...(args.parsed.execution_result_summary ? { execution_result_summary: args.parsed.execution_result_summary } : {}),
+      ...(args.parsed.execution_evidence ? { execution_evidence: args.parsed.execution_evidence } : {}),
+    },
+  });
+  const policyContractWithEvidence = policyContract && liveExecutionEvidence
+    ? PolicyContractSchema.parse({
+        ...policyContract,
+        execution_evidence_v1: liveExecutionEvidence,
+      })
+    : policyContract;
   const delegationLearning = args.delegationLearning ?? {
     task_family: null,
     matched_records: 0,
@@ -610,7 +624,7 @@ export function buildExperienceIntelligenceResponse(args: {
     },
     policy_hints: policyHints,
     derived_policy: derivedPolicy,
-    policy_contract: policyContract,
+    policy_contract: policyContractWithEvidence,
     learning_summary: {
       task_family: delegationLearning.task_family,
       matched_records: delegationLearning.matched_records,
@@ -624,7 +638,7 @@ export function buildExperienceIntelligenceResponse(args: {
       summary: [
         actionRetrieval.rationale.summary,
         derivedPolicy ? `derived_policy=${derivedPolicy.source_kind}:${derivedPolicy.selected_tool}` : null,
-        policyContract ? `policy_contract=${policyContract.activation_mode}:${policyContract.selected_tool}` : null,
+        policyContractWithEvidence ? `policy_contract=${policyContractWithEvidence.activation_mode}:${policyContractWithEvidence.selected_tool}` : null,
         persistedPolicy ? `persisted_policy_memory=${persistedPolicy.node_id}` : null,
         learningReason,
       ].filter(Boolean).join(" | "),

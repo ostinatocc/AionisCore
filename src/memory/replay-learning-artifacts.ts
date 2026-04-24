@@ -13,9 +13,9 @@ import {
 } from "./replay-workflow-contract.js";
 import { buildOutcomeContractGate } from "./contract-trust.js";
 import {
-  assessExecutionEvidence,
-  extractExecutionEvidenceFromSlots,
-} from "./execution-evidence.js";
+  buildRuntimeAuthorityGate,
+  downgradeAuthoritativeTrust,
+} from "./authority-gate.js";
 
 export type ReplayLearningProjectionSource = {
   tenant_id: string;
@@ -242,20 +242,21 @@ export function buildReplayLearningProjectionArtifacts(args: {
     source_anchor: episodeClientId,
     notes: ["replay_learning_candidate_projection"],
   });
-  const executionEvidence = extractExecutionEvidenceFromSlots({
+  const initialAuthority = buildRuntimeAuthorityGate({
+    executionContract: initialCandidateExecutionContract,
+    requestedTrust: rawWorkflowContract.contract_trust,
     slots: args.source.playbook_slots,
     metrics: args.source.metrics,
   });
-  const executionEvidenceAssessment = assessExecutionEvidence({
-    executionContract: initialCandidateExecutionContract,
-    evidence: executionEvidence,
+  const effectiveWorkflowTrust = downgradeAuthoritativeTrust({
     requestedTrust: rawWorkflowContract.contract_trust,
+    authorityGate: initialAuthority.authorityGate,
   });
   const workflowContract =
-    rawWorkflowContract.contract_trust === "authoritative" && !executionEvidenceAssessment.allows_authoritative
+    rawWorkflowContract.contract_trust !== effectiveWorkflowTrust
       ? {
           ...rawWorkflowContract,
-          contract_trust: executionEvidenceAssessment.effective_trust,
+          contract_trust: effectiveWorkflowTrust,
         }
       : rawWorkflowContract;
   const candidateExecutionContract = workflowContract === rawWorkflowContract
@@ -270,14 +271,24 @@ export function buildReplayLearningProjectionArtifacts(args: {
           "execution_evidence_downgraded_authoritative_contract",
         ],
       });
-  const outcomeContractGate = buildOutcomeContractGate({
-    executionContract: candidateExecutionContract,
-    requestedTrust: workflowContract.contract_trust,
-  });
+  const finalAuthority = workflowContract === rawWorkflowContract
+    ? initialAuthority
+    : buildRuntimeAuthorityGate({
+        executionContract: candidateExecutionContract,
+        requestedTrust: workflowContract.contract_trust,
+        slots: args.source.playbook_slots,
+        metrics: args.source.metrics,
+      });
+  const {
+    authorityGate,
+    outcomeContractGate,
+    executionEvidence,
+    executionEvidenceAssessment,
+  } = finalAuthority;
   const shouldPromoteStableWorkflow =
     args.shouldPromoteStableWorkflow
-    && outcomeContractGate.allows_authoritative
-    && executionEvidenceAssessment.allows_stable_promotion;
+    && authorityGate.allows_authoritative
+    && authorityGate.allows_stable_promotion;
 
   if (args.shouldCreateRule) {
     nodes.push({
@@ -338,6 +349,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
         outcome_contract_gate: outcomeContractGate,
         ...(executionEvidence ? { execution_evidence_v1: executionEvidence } : {}),
         execution_evidence_assessment: executionEvidenceAssessment,
+        authority_gate_v1: authorityGate,
         ...(!shouldPromoteStableWorkflow
           ? {
               execution_native_v1: {
@@ -444,6 +456,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
         outcome_contract_gate: stableOutcomeContractGate,
         ...(executionEvidence ? { execution_evidence_v1: executionEvidence } : {}),
         execution_evidence_assessment: executionEvidenceAssessment,
+        authority_gate_v1: authorityGate,
         execution_native_v1: ExecutionNativeV1Schema.parse({
           schema_version: "execution_native_v1",
           execution_kind: "workflow_anchor",
