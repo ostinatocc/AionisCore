@@ -889,6 +889,84 @@ test("buildPlanningSummary respects explicit advisory trust from persisted polic
   });
 });
 
+test("buildPlanningSummary demotes blocked authoritative workflow to inspect-first first step", () => {
+  const executionContract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    task_family: "task:repair_export",
+    workflow_signature: "fix-export-failure-workflow",
+    selected_tool: "edit",
+    file_path: "src/routes/export.ts",
+    target_files: ["src/routes/export.ts"],
+    next_action: "Patch src/routes/export.ts and rerun export tests.",
+    acceptance_checks: ["npm test -- export"],
+    success_invariants: ["export route returns valid serialized payload"],
+    provenance: {
+      source_kind: "workflow_projection",
+      source_summary_version: "planning-summary-test",
+      source_anchor: "wf_authority_blocked",
+      evidence_refs: ["wf_authority_blocked"],
+      notes: ["test authoritative workflow projection"],
+    },
+  });
+  const summary = buildPlanningSummary({
+    rules: { considered: 2, matched: 1 },
+    tools: {
+      selection: { selected: "edit" },
+      decision: {
+        decision_id: "d_blocked_authority",
+      },
+    },
+    layered_context: layeredContextFixture,
+    cost_signals: null,
+    context_est_tokens: 320,
+    context_compaction_profile: "balanced",
+    optimization_profile: "balanced",
+    recall_mode: "balanced",
+    experience_intelligence: {
+      execution_contract_v1: executionContract,
+      recommendation: {
+        history_applied: true,
+        tool: {
+          selected_tool: "edit",
+        },
+        path: {
+          source_kind: "recommended_workflow",
+          workflow_signature: "fix-export-failure-workflow",
+          file_path: "src/routes/export.ts",
+          contract_trust: "authoritative",
+          authority_blocked: true,
+          authority_primary_blocker: "execution_evidence:after_exit_revalidation_failed",
+        },
+        combined_next_action: "Patch src/routes/export.ts and rerun export tests.",
+      },
+      action_retrieval: {
+        uncertainty: {
+          summary_version: "action_retrieval_uncertainty_v1",
+          level: "moderate",
+          confidence: 0.42,
+          evidence_gap_count: 1,
+          reasons: [
+            "selected workflow authority is blocked: execution_evidence:after_exit_revalidation_failed",
+          ],
+          recommended_actions: ["inspect_context"],
+        },
+      },
+    },
+  });
+
+  assert.equal(summary.first_step_recommendation?.contract_trust, "advisory");
+  assert.equal(summary.first_step_recommendation?.execution_contract_v1?.contract_trust, "advisory");
+  assert.equal(summary.first_step_recommendation?.file_path, "src/routes/export.ts");
+  assert.equal(
+    summary.first_step_recommendation?.next_action,
+    "Inspect src/routes/export.ts and revalidate current context before reusing edit; authority blocked by execution_evidence:after_exit_revalidation_failed.",
+  );
+  assert.equal(
+    summary.first_step_recommendation?.execution_contract_v1?.next_action,
+    summary.first_step_recommendation?.next_action,
+  );
+});
+
 test("buildAssemblySummary surfaces semantic forgetting, relocation, and rehydration counts", () => {
   const summary = buildAssemblySummary({
     rules: { considered: 2, matched: 1 },

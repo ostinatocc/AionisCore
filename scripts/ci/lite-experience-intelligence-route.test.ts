@@ -379,7 +379,11 @@ async function seedStableWorkflowFixture(dbPath: string) {
   return { liteWriteStore, liteRecallStore };
 }
 
-async function seedWorkflowOnlyFixture(dbPath: string, contractTrust: "authoritative" | "advisory" | "observational") {
+async function seedWorkflowOnlyFixture(
+  dbPath: string,
+  contractTrust: "authoritative" | "advisory" | "observational",
+  authorityVisibility?: Record<string, unknown>,
+) {
   const liteWriteStore = createLiteWriteStore(dbPath);
   const liteRecallStore = createLiteRecallStore(dbPath);
   const [sharedEmbedding] = await FakeEmbeddingProvider.embed(["repair export failure in node tests"]);
@@ -400,6 +404,7 @@ async function seedWorkflowOnlyFixture(dbPath: string, contractTrust: "authorita
           slots: {
             summary_kind: "workflow_anchor",
             compression_layer: "L2",
+            ...(authorityVisibility ? { authority_visibility: authorityVisibility } : {}),
             anchor_v1: {
               anchor_kind: "workflow",
               anchor_level: "L2",
@@ -789,6 +794,107 @@ test("action retrieval route exposes explicit retrieval evidence and low uncerta
     assert.equal(body.evidence.trusted_pattern_count >= 1, true);
     assert.equal(body.evidence.entries.some((entry) => entry.source_kind === "stable_workflow"), true);
     assert.equal(body.evidence.entries.some((entry) => entry.source_kind === "trusted_pattern"), true);
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("action retrieval demotes blocked authoritative workflow to inspect-first guidance", async () => {
+  const app = Fastify();
+  const { liteWriteStore, liteRecallStore } = await seedWorkflowOnlyFixture(
+    tmpDbPath("action-retrieval-authority-blocked"),
+    "authoritative",
+    {
+      surface_version: "runtime_authority_visibility_v1",
+      node_id: "stable-export-workflow-fixture",
+      node_kind: "workflow",
+      title: "Fix export failure",
+      requested_trust: "authoritative",
+      effective_trust: "advisory",
+      status: "insufficient",
+      allows_authoritative: false,
+      allows_stable_promotion: false,
+      authority_blocked: true,
+      stable_promotion_blocked: true,
+      primary_blocker: "execution_evidence:after_exit_revalidation_failed",
+      authority_reasons: ["execution_evidence:after_exit_revalidation_failed"],
+      outcome_contract_reasons: [],
+      execution_evidence_reasons: ["after_exit_revalidation_failed"],
+      execution_evidence_status: "failed",
+      false_confidence_detected: true,
+    },
+  );
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryAccessRoutes({
+      app,
+      env: {
+        AIONIS_EDITION: "lite",
+        APP_ENV: "test",
+        MEMORY_SCOPE: "default",
+        MEMORY_TENANT_ID: "default",
+        LITE_LOCAL_ACTOR_ID: "local-user",
+        MAX_TEXT_LEN: 10_000,
+        PII_REDACTION: false,
+        ALLOW_CROSS_SCOPE_EDGES: false,
+        MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+        MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+      } as any,
+      embedder: FakeEmbeddingProvider,
+      liteWriteStore,
+      liteRecallAccess: liteRecallStore.createRecallAccess(),
+      writeAccessShadowMirrorV2: false,
+      requireStoreFeatureCapability: () => {},
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/action/retrieval",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "repair export failure in node tests",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        candidates: ["edit", "test"],
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = ActionRetrievalResponseSchema.parse(response.json());
+    assert.equal(body.history_applied, true);
+    assert.equal(body.path.source_kind, "recommended_workflow");
+    assert.equal((body.path as any).contract_trust, "advisory");
+    assert.equal((body.path as any).authority_blocked, true);
+    assert.equal((body.path as any).authority_primary_blocker, "execution_evidence:after_exit_revalidation_failed");
+    assert.equal(body.execution_contract_v1?.contract_trust, "advisory");
+    assert.match(body.recommended_next_action ?? "", /Inspect src\/routes\/export\.ts/);
+    assert.match(body.recommended_next_action ?? "", /authority blocked by execution_evidence:after_exit_revalidation_failed/);
+    assert.equal(body.tool_source_kind, "tools_select");
+    assert.notEqual(body.uncertainty.level, "low");
+    assert.equal(body.uncertainty.recommended_actions.includes("inspect_context"), true);
+    assert.match(body.uncertainty.reasons.join(" "), /selected workflow authority is blocked/);
+    assert.equal(
+      body.evidence.entries.some((entry) =>
+        entry.source_kind === "stable_workflow"
+        && (entry as any).authority_blocked === true
+      ),
+      true,
+    );
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -1241,14 +1347,14 @@ test("kickoff recommendation can recover file-level workflow guidance from host-
     assert.equal(response.statusCode, 200);
     const body = KickoffRecommendationResponseSchema.parse(response.json());
     assert.equal(body.kickoff_recommendation?.history_applied, true);
-    assert.equal(body.kickoff_recommendation?.contract_trust, "authoritative");
+    assert.equal(body.kickoff_recommendation?.contract_trust, "advisory");
     assert.equal(body.kickoff_recommendation?.selected_tool, "edit");
     assert.equal(body.kickoff_recommendation?.source_kind, "experience_intelligence");
     assert.equal(body.kickoff_recommendation?.file_path, "src/routes/export.ts");
     assert.match(body.kickoff_recommendation?.next_action ?? "", /src\/routes\/export\.ts/);
     assert.equal(body.action_retrieval_uncertainty?.summary_version, "action_retrieval_uncertainty_v1");
-    assert.notEqual(body.action_retrieval_uncertainty?.level, "high");
-    assert.ok((body.action_retrieval_uncertainty?.confidence ?? 0) >= 0.48);
+    assert.equal(body.action_retrieval_uncertainty?.level, "high");
+    assert.ok((body.action_retrieval_uncertainty?.recommended_actions ?? []).includes("inspect_context"));
     assert.ok(!(body.action_retrieval_uncertainty?.recommended_actions ?? []).includes("request_operator_review"));
     assert.equal(body.policy_contract?.selected_tool, "edit");
     assert.equal(body.policy_contract?.materialization_state, "computed");

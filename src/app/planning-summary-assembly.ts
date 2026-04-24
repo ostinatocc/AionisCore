@@ -43,6 +43,8 @@ type ExperienceRecommendationProjection = {
   file_path: string | null;
   combined_next_action: string | null;
   action_retrieval_uncertainty: ActionRetrievalUncertaintySummary | null;
+  authority_blocked: boolean;
+  authority_primary_blocker: string | null;
 };
 
 function readActionRetrievalUncertainty(
@@ -339,6 +341,11 @@ export function buildPlanningSummary(args: {
             ? experienceRecommendation.combined_next_action
             : null,
         action_retrieval_uncertainty: actionRetrievalUncertainty,
+        authority_blocked: experiencePath?.authority_blocked === true,
+        authority_primary_blocker:
+          typeof experiencePath?.authority_primary_blocker === "string"
+            ? experiencePath.authority_primary_blocker
+            : null,
       }
     : null;
   const selectedTool =
