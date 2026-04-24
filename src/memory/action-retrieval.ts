@@ -28,6 +28,7 @@ import type { LiteWriteStore } from "../store/lite-write-store.js";
 export type WorkflowEntry = {
   anchor_id: string;
   contract_trust?: ContractTrust | null;
+  execution_contract_v1?: ExecutionContractV1 | null;
   anchor_level?: string | null;
   promotion_state?: string | null;
   workflow_signature?: string | null;
@@ -76,6 +77,8 @@ type RankedWorkflow = {
 
 export type PolicyHintEntryLike = {
   anchor_id: string;
+  contract_trust?: ContractTrust | null;
+  execution_contract_v1?: ExecutionContractV1 | null;
   anchor_level?: string | null;
   summary?: string | null;
   confidence?: number | null;
@@ -93,6 +96,15 @@ export type PersistedPolicyMemory = {
   contract: PolicyContract;
   execution_contract: ExecutionContractV1;
   derived_policy: DerivedPolicySurface | null;
+};
+
+type RankedTrustedPattern = {
+  entry: PolicyHintEntryLike;
+  score: number;
+  overlap: number;
+  tool_aligned: boolean;
+  family_match: boolean;
+  relevant: boolean;
 };
 
 export function asRecord(value: unknown): Record<string, unknown> | null {
@@ -700,27 +712,100 @@ export function toPolicyHintEntry(value: unknown): PolicyHintEntryLike | null {
   const record = asRecord(value);
   const anchorId = firstString(record?.anchor_id);
   if (!anchorId) return null;
+  const executionContract = parseExecutionContract(record?.execution_contract_v1);
+  const targetFiles = stringList(record?.target_files, 24);
   return {
     anchor_id: anchorId,
+    contract_trust: firstContractTrust(executionContract?.contract_trust, record?.contract_trust),
+    execution_contract_v1: executionContract,
     anchor_level: firstString(record?.anchor_level),
     summary: firstString(record?.summary),
     confidence: Number.isFinite(Number(record?.confidence)) ? Number(record?.confidence) : null,
-    selected_tool: firstString(record?.selected_tool),
-    task_family: firstString(record?.task_family),
-    workflow_signature: firstString(record?.workflow_signature),
-    file_path: firstString(record?.file_path),
-    target_files: stringList(record?.target_files, 24),
+    selected_tool: firstString(record?.selected_tool, executionContract?.selected_tool),
+    task_family: firstString(record?.task_family, executionContract?.task_family),
+    workflow_signature: firstString(record?.workflow_signature, executionContract?.workflow_signature),
+    file_path: firstString(record?.file_path, executionContract?.file_path),
+    target_files: targetFiles.length > 0 ? targetFiles : stringList(executionContract?.target_files, 24),
     mode: firstString(record?.mode, record?.rehydration_default_mode),
+  };
+}
+
+function scoreTrustedPattern(args: {
+  entry: PolicyHintEntryLike;
+  selectedTool: string | null;
+  cueTokens: Set<string>;
+  currentTaskFamily: string | null;
+}): RankedTrustedPattern {
+  const executionContract = parseExecutionContract(args.entry.execution_contract_v1);
+  const targetFiles = args.entry.target_files && args.entry.target_files.length > 0
+    ? args.entry.target_files
+    : stringList(executionContract?.target_files, 24);
+  const textTokens = new Set(
+    [
+      args.entry.summary ?? "",
+      firstString(args.entry.task_family, executionContract?.task_family) ?? "",
+      firstString(args.entry.workflow_signature, executionContract?.workflow_signature) ?? "",
+      firstString(args.entry.file_path, executionContract?.file_path) ?? "",
+      firstString(args.entry.selected_tool, executionContract?.selected_tool) ?? "",
+      executionContract?.next_action ?? "",
+      executionContract?.workflow_steps.join(" ") ?? "",
+      executionContract?.pattern_hints.join(" ") ?? "",
+      executionContract?.outcome.acceptance_checks.join(" ") ?? "",
+      executionContract?.outcome.success_invariants.join(" ") ?? "",
+      ...targetFiles,
+    ].flatMap((value) => normalizeTokens(value)),
+  );
+  let overlap = 0;
+  for (const token of args.cueTokens) {
+    if (textTokens.has(token)) overlap += 1;
+  }
+
+  const entrySelectedTool = firstString(args.entry.selected_tool, executionContract?.selected_tool);
+  const entryTaskFamily = firstString(args.entry.task_family, executionContract?.task_family);
+  const toolAligned = !args.selectedTool || entrySelectedTool === args.selectedTool;
+  const familyMatch = !!args.currentTaskFamily && entryTaskFamily === args.currentTaskFamily;
+  const confidence = numeric(args.entry.confidence) ?? 0;
+  const contractTrust = firstContractTrust(args.entry.contract_trust, executionContract?.contract_trust);
+  let score = 0;
+  if (args.selectedTool && toolAligned) score += 90;
+  else if (args.selectedTool) score -= 100;
+  if (familyMatch) score += 55;
+  if (targetFiles.length > 0) score += 20;
+  if (args.entry.file_path || executionContract?.file_path) score += 12;
+  if (contractTrust === "authoritative") score += 16;
+  else if (contractTrust === "advisory") score -= 6;
+  else if (contractTrust === "observational") score -= 40;
+  score += overlap * 12;
+  score += Math.round(confidence * 10);
+
+  return {
+    entry: args.entry,
+    score,
+    overlap,
+    tool_aligned: toolAligned,
+    family_match: familyMatch,
+    relevant: toolAligned && (overlap > 0 || familyMatch),
   };
 }
 
 export function choosePreferredTrustedPattern(args: {
   trustedPatterns: PolicyHintEntryLike[];
   selectedTool: string | null;
+  queryText: string;
+  context: unknown;
 }): PolicyHintEntryLike | null {
-  return (args.selectedTool ? args.trustedPatterns.find((entry) => entry.selected_tool === args.selectedTool) : null)
-    ?? args.trustedPatterns[0]
-    ?? null;
+  if (args.trustedPatterns.length === 0) return null;
+  const cueTokens = buildCueTokens(args.queryText, args.context);
+  const currentTaskFamily = resolveTaskFamilyFromContext(args.context);
+  const ranked = args.trustedPatterns
+    .map((entry) => scoreTrustedPattern({
+      entry,
+      selectedTool: args.selectedTool,
+      cueTokens,
+      currentTaskFamily,
+    }))
+    .sort((a, b) => b.score - a.score || a.entry.anchor_id.localeCompare(b.entry.anchor_id));
+  return ranked.find((entry) => entry.relevant)?.entry ?? null;
 }
 
 export function findSelectedWorkflow(args: {
@@ -875,7 +960,12 @@ export function buildActionRetrievalResponse(args: {
   const rehydrationCandidates = (Array.isArray(args.introspection.rehydration_candidates) ? args.introspection.rehydration_candidates : [])
     .map(toPolicyHintEntry)
     .filter((entry): entry is PolicyHintEntryLike => entry !== null);
-  const preferredPattern = choosePreferredTrustedPattern({ trustedPatterns, selectedTool });
+  const preferredPattern = choosePreferredTrustedPattern({
+    trustedPatterns,
+    selectedTool,
+    queryText: args.parsed.query_text,
+    context: args.parsed.context,
+  });
   const path = choosePathRecommendation({
     queryText: args.parsed.query_text,
     context: args.parsed.context,
@@ -896,7 +986,7 @@ export function buildActionRetrievalResponse(args: {
     preferredPattern,
     selectedWorkflow,
   });
-  const historyApplied = path.source_kind !== "none" || !!persistedPolicy;
+  const historyApplied = path.source_kind !== "none" || !!persistedPolicy || !!preferredPattern;
   const contextExecutionContract = resolveContextExecutionContract(args.parsed.context);
   const selectedWorkflowExecutionContract = selectedWorkflow
     ? buildExecutionContractFromWorkflowEntry({

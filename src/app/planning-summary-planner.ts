@@ -10,6 +10,7 @@ import type {
   WorkflowLifecycleSummary,
 } from "./planning-summary.js";
 import { guardExecutionContractForHost, type ExecutionContractV1 } from "../memory/execution-contract.js";
+import { resolveContractTrustForSteering } from "../memory/contract-trust.js";
 import { isPromotionReadyWorkflowSignal, summarizePacketEntryLabels } from "./planning-summary-surfaces.js";
 import { safeRecordArray, safeStringArray, uniqueStrings } from "./planning-summary-utils.js";
 
@@ -229,6 +230,7 @@ function resolveContractTrust(args: {
   taskFamily: string | null;
   workflowSignature: string | null;
   policyMemoryId: string | null;
+  executionContract: ExecutionContractV1 | null;
   uncertainty: ActionRetrievalUncertaintySummary | null;
 }): ContractTrust {
   const strongIdentity = hasStrongContractIdentity(args);
@@ -245,13 +247,11 @@ function resolveContractTrust(args: {
         )
         ? "authoritative"
         : "advisory";
-  if (!args.explicitTrust) return computedTrust;
-  const rank: Record<ContractTrust, number> = {
-    observational: 0,
-    advisory: 1,
-    authoritative: 2,
-  };
-  return rank[args.explicitTrust] < rank[computedTrust] ? args.explicitTrust : computedTrust;
+  return resolveContractTrustForSteering({
+    computedTrust,
+    explicitTrust: args.explicitTrust,
+    executionContract: args.executionContract,
+  });
 }
 
 function applyContractTrustGuard(args: {
@@ -274,6 +274,7 @@ function applyContractTrustGuard(args: {
     taskFamily: args.taskFamily,
     workflowSignature: args.workflowSignature,
     policyMemoryId: args.policyMemoryId,
+    executionContract: args.executionContract,
     uncertainty: args.uncertainty,
   });
 

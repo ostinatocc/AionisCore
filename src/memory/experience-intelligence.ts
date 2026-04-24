@@ -35,6 +35,7 @@ import {
   type ToolsSelectRouteContract,
 } from "./schemas.js";
 import { parseExecutionContract, type ExecutionContractV1 } from "./execution-contract.js";
+import { resolveContractTrustForSteering } from "./contract-trust.js";
 import { selectTools } from "./tools-select.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
@@ -68,6 +69,9 @@ function buildDerivedPolicySurface(args: {
   tools: ToolsSelectRouteContract;
   introspection: ExecutionMemoryIntrospectionResponse;
   path: ReturnType<typeof choosePathRecommendation>;
+  queryText: string;
+  context: unknown;
+  executionContract: ExecutionContractV1 | null;
 }): DerivedPolicySurface | null {
   const selectedTool = firstString(args.tools.selection?.selected);
   if (!selectedTool) return null;
@@ -75,7 +79,12 @@ function buildDerivedPolicySurface(args: {
   const trustedPatterns = (Array.isArray(args.introspection.trusted_patterns) ? args.introspection.trusted_patterns : [])
     .map(toPolicyHintEntry)
     .filter((entry): entry is PolicyHintEntryLike => entry !== null);
-  const preferredPattern = choosePreferredTrustedPattern({ trustedPatterns, selectedTool });
+  const preferredPattern = choosePreferredTrustedPattern({
+    trustedPatterns,
+    selectedTool,
+    queryText: args.queryText,
+    context: args.context,
+  });
   const patternSupports = preferredPattern?.selected_tool === selectedTool;
   const selectedWorkflow = findSelectedWorkflow({
     introspection: args.introspection,
@@ -96,12 +105,25 @@ function buildDerivedPolicySurface(args: {
         : "stable_workflow";
   const workflowContractTrust = firstContractTrust(
     (args.path as Record<string, unknown>).contract_trust,
+    parseExecutionContract(selectedWorkflow?.execution_contract_v1)?.contract_trust,
     selectedWorkflow?.contract_trust,
   );
-  const policyContractTrust: ContractTrust =
-    patternSupports
-      ? "authoritative"
-      : workflowContractTrust ?? "authoritative";
+  const selectedWorkflowExecutionContract = parseExecutionContract(selectedWorkflow?.execution_contract_v1);
+  const preferredPatternExecutionContract = parseExecutionContract(preferredPattern?.execution_contract_v1);
+  const steeringExecutionContract = args.executionContract
+    ?? selectedWorkflowExecutionContract
+    ?? preferredPatternExecutionContract
+    ?? null;
+  const policyContractTrust = resolveContractTrustForSteering({
+    computedTrust: patternSupports || workflowPolicyState === "stable" ? "authoritative" : "advisory",
+    explicitTrust: firstContractTrust(
+      args.executionContract?.contract_trust,
+      preferredPattern?.contract_trust,
+      preferredPatternExecutionContract?.contract_trust,
+      workflowContractTrust,
+    ),
+    executionContract: steeringExecutionContract,
+  });
   const policyState =
     (patternSupports || workflowPolicyState === "stable") && policyContractTrust === "authoritative"
       ? "stable"
@@ -125,11 +147,33 @@ function buildDerivedPolicySurface(args: {
     workflowSupports ? `stable workflow supports ${selectedTool}` : null,
     workflowSupports && selectedWorkflow ? workflowEvidenceParts(selectedWorkflow).join("; ") : null,
   ].filter((value): value is string => !!value).join("; ");
-  const workflowSteps = stringList(selectedWorkflow?.workflow_steps, 24);
-  const patternHints = stringList(selectedWorkflow?.pattern_hints, 24);
+  const workflowSteps = stringList(
+    selectedWorkflow?.workflow_steps && selectedWorkflow.workflow_steps.length > 0
+      ? selectedWorkflow.workflow_steps
+      : args.executionContract?.workflow_steps,
+    24,
+  );
+  const patternHints = stringList(
+    selectedWorkflow?.pattern_hints && selectedWorkflow.pattern_hints.length > 0
+      ? selectedWorkflow.pattern_hints
+      : args.executionContract?.pattern_hints,
+    24,
+  );
   const serviceLifecycleConstraints = Array.isArray(selectedWorkflow?.service_lifecycle_constraints)
-    ? selectedWorkflow!.service_lifecycle_constraints!.slice(0, 16)
+    && selectedWorkflow.service_lifecycle_constraints.length > 0
+    ? selectedWorkflow.service_lifecycle_constraints.slice(0, 16)
+    : Array.isArray(args.executionContract?.service_lifecycle_constraints)
+    && args.executionContract.service_lifecycle_constraints.length > 0
+    ? args.executionContract.service_lifecycle_constraints.slice(0, 16)
     : [];
+  const targetFiles = stringList(
+    selectedWorkflow?.target_files && selectedWorkflow.target_files.length > 0
+      ? selectedWorkflow.target_files
+      : args.executionContract?.target_files && args.executionContract.target_files.length > 0
+        ? args.executionContract.target_files
+        : preferredPattern?.target_files,
+    24,
+  );
 
   return DerivedPolicySurfaceSchema.parse({
     summary_version: "derived_policy_v1",
@@ -138,10 +182,15 @@ function buildDerivedPolicySurface(args: {
     policy_state: policyState,
     contract_trust: policyContractTrust,
     selected_tool: selectedTool,
-    task_family: firstString((args.path as Record<string, unknown>).task_family, selectedWorkflow?.task_family, preferredPattern?.task_family),
-    workflow_signature: firstString(selectedWorkflow?.workflow_signature),
-    file_path: firstString(selectedWorkflow?.file_path, preferredPattern?.file_path),
-    target_files: stringList(selectedWorkflow?.target_files, 24),
+    task_family: firstString(
+      (args.path as Record<string, unknown>).task_family,
+      selectedWorkflow?.task_family,
+      preferredPattern?.task_family,
+      args.executionContract?.task_family,
+    ),
+    workflow_signature: firstString(selectedWorkflow?.workflow_signature, args.executionContract?.workflow_signature),
+    file_path: firstString(selectedWorkflow?.file_path, preferredPattern?.file_path, args.executionContract?.file_path),
+    target_files: targetFiles,
     ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
     ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
     ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
@@ -163,6 +212,8 @@ function buildPolicyHintPack(args: {
   tools: ToolsSelectRouteContract;
   introspection: ExecutionMemoryIntrospectionResponse;
   path: ReturnType<typeof choosePathRecommendation>;
+  queryText: string;
+  context: unknown;
 }): PolicyHintPack {
   const hints: PolicyHintEntry[] = [];
   const selectedTool = firstString(args.tools.selection?.selected);
@@ -176,7 +227,12 @@ function buildPolicyHintPack(args: {
     .map(toPolicyHintEntry)
     .filter((entry): entry is PolicyHintEntryLike => entry !== null);
 
-  const preferredPattern = choosePreferredTrustedPattern({ trustedPatterns, selectedTool });
+  const preferredPattern = choosePreferredTrustedPattern({
+    trustedPatterns,
+    selectedTool,
+    queryText: args.queryText,
+    context: args.context,
+  });
   if (preferredPattern && preferredPattern.selected_tool) {
     hints.push({
       hint_id: `tool_preference:${preferredPattern.anchor_id}:${preferredPattern.selected_tool}`,
@@ -428,7 +484,12 @@ export function buildExperienceIntelligenceResponse(args: {
   const trustedPatterns = (Array.isArray(args.introspection.trusted_patterns) ? args.introspection.trusted_patterns : [])
     .map(toPolicyHintEntry)
     .filter((entry): entry is PolicyHintEntryLike => entry !== null);
-  const preferredPattern = choosePreferredTrustedPattern({ trustedPatterns, selectedTool });
+  const preferredPattern = choosePreferredTrustedPattern({
+    trustedPatterns,
+    selectedTool,
+    queryText: args.parsed.query_text,
+    context: args.parsed.context,
+  });
   const selectedWorkflow = findSelectedWorkflow({
     introspection: args.introspection,
     path,
@@ -448,11 +509,16 @@ export function buildExperienceIntelligenceResponse(args: {
     tools: args.tools,
     introspection: args.introspection,
     path,
+    queryText: args.parsed.query_text,
+    context: args.parsed.context,
+    executionContract,
   });
   const policyHints = buildPolicyHintPack({
     tools: args.tools,
     introspection: args.introspection,
     path,
+    queryText: args.parsed.query_text,
+    context: args.parsed.context,
   });
   const persistedPolicy = readPersistedPolicyMemory({
     introspection: args.introspection,

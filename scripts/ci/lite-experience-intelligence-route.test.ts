@@ -18,6 +18,7 @@ import {
 } from "../../src/memory/schemas.ts";
 import { toolSelectionFeedback } from "../../src/memory/tools-feedback.ts";
 import { applyMemoryWrite, prepareMemoryWrite } from "../../src/memory/write.ts";
+import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
 import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
 import { createLiteWriteStore } from "../../src/store/lite-write-store.ts";
 import { InflightGate } from "../../src/util/inflight_gate.ts";
@@ -64,9 +65,51 @@ async function seedStableWorkflowFixture(dbPath: string) {
   const liteWriteStore = createLiteWriteStore(dbPath);
   const liteRecallStore = createLiteRecallStore(dbPath);
   const [sharedEmbedding] = await FakeEmbeddingProvider.embed(["repair export failure in node tests"]);
+  const workflowExecutionContract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    task_family: "task:repair_export",
+    task_signature: "execution_task:repair-export",
+    workflow_signature: "execution_workflow:repair-export",
+    selected_tool: "edit",
+    file_path: "src/routes/export.ts",
+    target_files: ["src/routes/export.ts"],
+    next_action: "Patch src/routes/export.ts and rerun export tests.",
+    workflow_steps: [
+      "Inspect src/routes/export.ts for export response handling.",
+      "Patch the export serialization logic with edit.",
+      "Rerun export-focused tests before handing off.",
+    ],
+    pattern_hints: [
+      "Prefer edit for route-level export repairs.",
+      "Keep response serialization changes scoped to src/routes/export.ts.",
+    ],
+    service_lifecycle_constraints: [
+      {
+        version: 1,
+        service_kind: "generic",
+        label: "export test verification shell",
+        launch_reference: null,
+        endpoint: null,
+        must_survive_agent_exit: false,
+        revalidate_from_fresh_shell: true,
+        detach_then_probe: false,
+        health_checks: ["npm test -- export"],
+        teardown_notes: [],
+      },
+    ],
+    acceptance_checks: ["npm test -- export"],
+    provenance: {
+      source_kind: "workflow_projection",
+      source_summary_version: "lite-experience-intelligence-fixture",
+      source_anchor: "stable-export-workflow-fixture",
+      evidence_refs: [],
+      notes: ["stable workflow fixture carries explicit outcome contract"],
+    },
+  });
   const trustedPattern = MemoryAnchorV1Schema.parse({
     anchor_kind: "pattern",
     anchor_level: "L3",
+    contract_trust: "authoritative",
     pattern_state: "stable",
     credibility_state: "trusted",
     task_signature: "tools_select:repair-export",
@@ -146,6 +189,7 @@ async function seedStableWorkflowFixture(dbPath: string) {
               execution_kind: "pattern_anchor",
               summary_kind: "pattern_anchor",
               compression_layer: "L3",
+              contract_trust: "authoritative",
               task_signature: trustedPattern.task_signature,
               task_family: trustedPattern.task_family,
               error_family: trustedPattern.error_family,
@@ -178,9 +222,11 @@ async function seedStableWorkflowFixture(dbPath: string) {
           slots: {
             summary_kind: "workflow_anchor",
             compression_layer: "L2",
+            execution_contract_v1: workflowExecutionContract,
             anchor_v1: {
               anchor_kind: "workflow",
               anchor_level: "L2",
+              contract_trust: "authoritative",
               task_signature: "execution_task:repair-export",
               task_class: "execution_write_projection",
               workflow_signature: "execution_workflow:repair-export",
@@ -245,6 +291,7 @@ async function seedStableWorkflowFixture(dbPath: string) {
               execution_kind: "workflow_anchor",
               summary_kind: "workflow_anchor",
               compression_layer: "L2",
+              contract_trust: "authoritative",
               task_signature: "execution_task:repair-export",
               task_family: "task:repair_export",
               workflow_signature: "execution_workflow:repair-export",
@@ -1192,7 +1239,7 @@ test("kickoff recommendation can recover file-level workflow guidance from host-
     assert.equal(response.statusCode, 200);
     const body = KickoffRecommendationResponseSchema.parse(response.json());
     assert.equal(body.kickoff_recommendation?.history_applied, true);
-    assert.equal(body.kickoff_recommendation?.contract_trust, "authoritative");
+    assert.equal(body.kickoff_recommendation?.contract_trust, "advisory");
     assert.equal(body.kickoff_recommendation?.selected_tool, "edit");
     assert.equal(body.kickoff_recommendation?.source_kind, "experience_intelligence");
     assert.equal(body.kickoff_recommendation?.file_path, "src/routes/export.ts");
@@ -1202,7 +1249,7 @@ test("kickoff recommendation can recover file-level workflow guidance from host-
     assert.ok((body.action_retrieval_uncertainty?.confidence ?? 0) >= 0.48);
     assert.ok(!(body.action_retrieval_uncertainty?.recommended_actions ?? []).includes("request_operator_review"));
     assert.equal(body.policy_contract?.selected_tool, "edit");
-    assert.equal(body.policy_contract?.materialization_state, "persisted");
+    assert.equal(body.policy_contract?.materialization_state, "computed");
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -1316,6 +1363,7 @@ test("experience intelligence route learns a stronger next recommendation after 
       scope: "default",
       query_text: "repair export failure in node tests",
       context: {
+        contract_trust: "authoritative",
         task_kind: "repair_export",
         task_family: "task:repair_export",
         workflow_signature: "execution_workflow:repair-export",
@@ -1465,6 +1513,7 @@ test("kickoff recommendation route can recover file-level guidance from family-l
     });
 
     const feedbackContext = {
+      contract_trust: "authoritative",
       task_kind: "repair_export",
       task_family: "task:repair_export",
       workflow_signature: "execution_workflow:repair-export",

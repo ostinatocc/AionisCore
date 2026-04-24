@@ -1,6 +1,6 @@
 # Aionis Runtime Local Runtime Architecture
 
-Last reviewed: 2026-04-20
+Last reviewed: 2026-04-24
 
 Document status: living technical architecture reference
 
@@ -331,6 +331,35 @@ Key modules:
    Feedback and rule-feedback persistence.
 
 These modules are what make Lite a real runtime kernel rather than a thin transport wrapper.
+
+## Continuity kernel contract and trust
+
+The continuity kernel is organized around a single canonical execution contract:
+
+1. `src/memory/execution-contract.ts`
+   Owns `execution_contract_v1`, including action surface, outcome requirements, service lifecycle constraints, trust, and provenance.
+2. `src/memory/node-execution-surface.ts`
+   Owns node-level read projection. When a node has a non-empty canonical action or lifecycle surface, that canonical surface wins. Legacy fields are compatibility fallback only; they must not append stale `target_files`, `workflow_steps`, `pattern_hints`, or service lifecycle constraints onto a populated canonical contract.
+3. `src/memory/contract-trust.ts`
+   Owns steering trust. `authoritative` steering requires explicit authoritative trust and a canonical outcome signal. Computed confidence alone can at most become advisory.
+4. `src/memory/action-retrieval.ts`
+   Merges context continuity, policy memory, workflow memory, path recommendation, and tool selection into one contract before projecting host-facing recommendations.
+5. `src/memory/experience-intelligence.ts`
+   Converts recalled pattern/workflow/policy evidence into derived policy and kickoff surfaces without creating a second contract owner.
+
+This separation is deliberate:
+
+1. Contract Compiler decides the execution contract shape.
+2. Trust Gate decides whether the contract can steer strongly.
+3. Orchestrator consumes the contract and projects host-facing actions.
+4. Learning Loop promotes reusable workflow/policy memory from the contract instead of redefining contract fields.
+
+Pattern and workflow memory are not equivalent to persisted policy memory:
+
+1. A relevant trusted pattern or stable workflow may produce computed guidance.
+2. A `policy_contract_v1` is persisted only when a policy memory node is actually materialized.
+3. Advisory candidate policy memory may be persisted as hint/governance state; persistence does not make it authoritative.
+4. Feedback materialization may use the current canonical execution contract as outcome evidence, but a pattern-only advisory contract does not become authoritative without explicit trust and outcome requirements.
 
 ## Public route surface in Lite
 

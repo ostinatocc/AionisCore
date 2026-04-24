@@ -203,6 +203,7 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
   const execution = parseNodeExecutionNative(slots) ?? {};
   const anchor = parseNodeAnchor(slots) ?? {};
   const patternSurface = resolveNodePatternExecutionSurface({ slots });
+  const executionContract = resolveNodeExecutionContract({ slots });
   const trustHardening = asRecord(execution.trust_hardening ?? anchor.trust_hardening);
   const maintenance = asRecord(execution.maintenance ?? anchor.maintenance);
   const operatorOverride = readPatternOperatorOverride(slots);
@@ -219,6 +220,8 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
     title: firstString(row.title),
     summary: firstString(row.text_summary, anchor.summary),
     anchor_level: patternSurface.anchor_level,
+    execution_contract_v1: executionContract,
+    contract_trust: patternSurface.contract_trust,
     selected_tool: patternSurface.selected_tool,
     task_family: resolveNodeTaskFamily({ slots }),
     error_family: firstString(execution.error_family, anchor.error_family),

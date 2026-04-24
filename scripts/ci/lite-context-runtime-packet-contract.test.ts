@@ -1480,7 +1480,7 @@ test("planning_context returns aligned planner packet, action packet summary, an
     const planningFirstStep = body.planning_summary.first_step_recommendation;
     assert.equal(planningFirstStep?.source_kind, "experience_intelligence");
     assert.equal(planningFirstStep?.history_applied, true);
-    assert.equal(planningFirstStep?.contract_trust, "authoritative");
+    assert.equal(planningFirstStep?.contract_trust, "advisory");
     assert.equal(planningFirstStep?.selected_tool, body.planning_summary.selected_tool);
     assert.equal(planningFirstStep?.task_family ?? null, null);
     assert.equal(planningFirstStep?.workflow_signature, "fix-export-failure-workflow");
@@ -1904,8 +1904,8 @@ test("planning_context debug layered_context projects delegation learning withou
       gate_action: "inspect_context",
       instruction: "Inspect the current context before starting with edit.",
       tool_route: null,
-      priority: "required",
-      contract_trust: "authoritative",
+      priority: "recommended",
+      contract_trust: "advisory",
       selected_tool: "edit",
       file_path: null,
       task_family: null,
@@ -2274,7 +2274,7 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     const assemblyFirstStep = body.assembly_summary.first_step_recommendation;
     assert.equal(assemblyFirstStep?.source_kind, "experience_intelligence");
     assert.equal(assemblyFirstStep?.history_applied, true);
-    assert.equal(assemblyFirstStep?.contract_trust, "authoritative");
+    assert.equal(assemblyFirstStep?.contract_trust, "advisory");
     assert.equal(assemblyFirstStep?.selected_tool, body.assembly_summary.selected_tool);
     assert.equal(assemblyFirstStep?.task_family ?? null, null);
     assert.equal(assemblyFirstStep?.workflow_signature, "fix-export-failure-workflow");
@@ -2422,8 +2422,8 @@ test("context_assemble can still return layered_context when explicitly requeste
       gate_action: "inspect_context",
       instruction: "Inspect the current context before starting with edit.",
       tool_route: null,
-      priority: "required",
-      contract_trust: "authoritative",
+      priority: "recommended",
+      contract_trust: "advisory",
       selected_tool: "edit",
       file_path: null,
       task_family: null,

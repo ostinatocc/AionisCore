@@ -1367,10 +1367,14 @@ test("execution introspection derives workflow fields through canonical executio
     assert.equal(workflow?.task_signature, "canonical-export-repair");
     assert.equal(workflow?.workflow_signature, "execution_workflow:canonical-export-repair");
     assert.equal(workflow?.file_path, "src/routes/canonical-export.ts");
+    assert.deepEqual(workflow?.target_files, ["src/routes/canonical-export.ts"]);
     assert.equal(workflow?.next_action, "Follow the canonical execution contract next action.");
-    assert.equal(workflow?.workflow_steps[0], "inspect canonical export failure");
-    assert.equal(workflow?.pattern_hints[0], "canonical pattern hint");
-    assert.equal(workflow?.service_lifecycle_constraints[0]?.label, "canonical export preview");
+    assert.deepEqual(workflow?.workflow_steps, ["inspect canonical export failure", "patch canonical export route", "rerun canonical export checks"]);
+    assert.deepEqual(workflow?.pattern_hints, ["canonical pattern hint"]);
+    assert.deepEqual(
+      workflow?.service_lifecycle_constraints.map((constraint) => constraint.label),
+      ["canonical export preview"],
+    );
     assert.equal(workflow?.service_lifecycle_constraints[0]?.must_survive_agent_exit, true);
   } finally {
     await app.close();

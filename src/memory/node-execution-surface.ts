@@ -54,6 +54,14 @@ function stringList(value: unknown): string[] {
   return uniqueStrings(value);
 }
 
+function firstNonEmptyStringList(...values: unknown[]): string[] {
+  for (const value of values) {
+    const next = stringList(value);
+    if (next.length > 0) return next;
+  }
+  return [];
+}
+
 function uniqueLifecycleConstraints(
   values: unknown[],
   limit = 16,
@@ -74,6 +82,20 @@ function uniqueLifecycleConstraints(
     if (out.length >= limit) break;
   }
   return out;
+}
+
+function lifecycleConstraintList(value: unknown): Array<z.infer<typeof ServiceLifecycleConstraintV1Schema>> {
+  return uniqueLifecycleConstraints(Array.isArray(value) ? value : [], 16);
+}
+
+function firstNonEmptyLifecycleConstraintList(
+  ...values: unknown[]
+): Array<z.infer<typeof ServiceLifecycleConstraintV1Schema>> {
+  for (const value of values) {
+    const next = lifecycleConstraintList(value);
+    if (next.length > 0) return next;
+  }
+  return [];
 }
 
 function toLayerId(value: string | null): MemoryLayerId | null {
@@ -186,12 +208,14 @@ export function resolveNodeTargetFiles(args: {
   executionResultSummary?: Record<string, unknown> | null;
 }): string[] {
   const contract = resolveNodeExecutionContract(args);
-  return uniqueStrings([
-    ...(contract?.target_files ?? []),
-    ...stringList(args.slots?.target_files),
-    ...stringList(parseNodeExecutionNative(args.slots)?.target_files),
-    ...stringList(parseNodeAnchor(args.slots)?.target_files),
-  ], 24);
+  const execution = parseNodeExecutionNative(args.slots);
+  const anchor = parseNodeAnchor(args.slots);
+  return firstNonEmptyStringList(
+    contract?.target_files,
+    args.slots?.target_files,
+    execution?.target_files,
+    anchor?.target_files,
+  );
 }
 
 export function resolveNodeNextAction(args: {
@@ -212,12 +236,14 @@ export function resolveNodeWorkflowSteps(args: {
   executionResultSummary?: Record<string, unknown> | null;
 }): string[] {
   const contract = resolveNodeExecutionContract(args);
-  return uniqueStrings([
-    ...(contract?.workflow_steps ?? []),
-    ...stringList(args.slots?.workflow_steps),
-    ...stringList(parseNodeExecutionNative(args.slots)?.workflow_steps),
-    ...stringList(parseNodeAnchor(args.slots)?.key_steps),
-  ], 24);
+  const execution = parseNodeExecutionNative(args.slots);
+  const anchor = parseNodeAnchor(args.slots);
+  return firstNonEmptyStringList(
+    contract?.workflow_steps,
+    args.slots?.workflow_steps,
+    execution?.workflow_steps,
+    anchor?.key_steps,
+  );
 }
 
 export function resolveNodePatternHints(args: {
@@ -225,12 +251,14 @@ export function resolveNodePatternHints(args: {
   executionResultSummary?: Record<string, unknown> | null;
 }): string[] {
   const contract = resolveNodeExecutionContract(args);
-  return uniqueStrings([
-    ...(contract?.pattern_hints ?? []),
-    ...stringList(args.slots?.pattern_hints),
-    ...stringList(parseNodeExecutionNative(args.slots)?.pattern_hints),
-    ...stringList(parseNodeAnchor(args.slots)?.pattern_hints),
-  ], 24);
+  const execution = parseNodeExecutionNative(args.slots);
+  const anchor = parseNodeAnchor(args.slots);
+  return firstNonEmptyStringList(
+    contract?.pattern_hints,
+    args.slots?.pattern_hints,
+    execution?.pattern_hints,
+    anchor?.pattern_hints,
+  );
 }
 
 export function resolveNodeServiceLifecycleConstraints(args: {
@@ -238,18 +266,14 @@ export function resolveNodeServiceLifecycleConstraints(args: {
   executionResultSummary?: Record<string, unknown> | null;
 }): Array<z.infer<typeof ServiceLifecycleConstraintV1Schema>> {
   const contract = resolveNodeExecutionContract(args);
-  return uniqueLifecycleConstraints([
-    ...(contract?.service_lifecycle_constraints ?? []),
-    ...((Array.isArray(args.slots?.service_lifecycle_constraints)
-      ? args.slots?.service_lifecycle_constraints
-      : []) as unknown[]),
-    ...((Array.isArray(parseNodeExecutionNative(args.slots)?.service_lifecycle_constraints)
-      ? parseNodeExecutionNative(args.slots)?.service_lifecycle_constraints
-      : []) as unknown[]),
-    ...((Array.isArray(parseNodeAnchor(args.slots)?.service_lifecycle_constraints)
-      ? parseNodeAnchor(args.slots)?.service_lifecycle_constraints
-      : []) as unknown[]),
-  ], 16);
+  const execution = parseNodeExecutionNative(args.slots);
+  const anchor = parseNodeAnchor(args.slots);
+  return firstNonEmptyLifecycleConstraintList(
+    contract?.service_lifecycle_constraints,
+    args.slots?.service_lifecycle_constraints,
+    execution?.service_lifecycle_constraints,
+    anchor?.service_lifecycle_constraints,
+  );
 }
 
 export function resolveNodeAnchorKind(slots: Record<string, unknown> | null | undefined): string | null {

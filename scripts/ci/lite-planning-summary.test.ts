@@ -13,6 +13,8 @@ import {
   summarizeWorkflowMaintenanceSurface,
   summarizePatternSignals,
 } from "../../src/app/planning-summary.ts";
+import { resolveContractTrustForSteering } from "../../src/memory/contract-trust.ts";
+import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
 
 const layeredContextFixture = {
   action_recall_packet: {
@@ -202,6 +204,56 @@ const layeredContextFixture = {
     selected_blocks: 2,
   },
 };
+
+test("contract trust steering requires explicit authoritative trust and outcome signal", () => {
+  const outcomeContract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    target_files: ["src/routes/export.ts"],
+    provenance: {
+      source_kind: "manual_context",
+    },
+  });
+  const thinContract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    workflow_signature: "execution_workflow:thin",
+    provenance: {
+      source_kind: "manual_context",
+    },
+  });
+
+  assert.equal(
+    resolveContractTrustForSteering({
+      computedTrust: "authoritative",
+      explicitTrust: null,
+      executionContract: outcomeContract,
+    }),
+    "advisory",
+  );
+  assert.equal(
+    resolveContractTrustForSteering({
+      computedTrust: "authoritative",
+      explicitTrust: "authoritative",
+      executionContract: thinContract,
+    }),
+    "advisory",
+  );
+  assert.equal(
+    resolveContractTrustForSteering({
+      computedTrust: "authoritative",
+      explicitTrust: "authoritative",
+      executionContract: outcomeContract,
+    }),
+    "authoritative",
+  );
+  assert.equal(
+    resolveContractTrustForSteering({
+      computedTrust: "authoritative",
+      explicitTrust: "observational",
+      executionContract: outcomeContract,
+    }),
+    "observational",
+  );
+});
 
 test("summarizePatternSignals splits trusted and contested pattern signals", () => {
   const summary = summarizePatternSignals(layeredContextFixture);

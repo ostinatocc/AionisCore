@@ -655,7 +655,6 @@ async function materializeLitePolicyMemoryFromFeedback(args: {
   });
   if (!experience.policy_contract || !experience.derived_policy) return null;
   if (experience.policy_contract.selected_tool !== args.selectedTool) return null;
-  if (experience.policy_contract.policy_state !== "stable") return null;
   const enrichedPolicy = mergeWorkflowFeedbackIntoPolicySurfaces({
     policyContract: experience.policy_contract as Record<string, unknown>,
     derivedPolicy: experience.derived_policy as Record<string, unknown>,

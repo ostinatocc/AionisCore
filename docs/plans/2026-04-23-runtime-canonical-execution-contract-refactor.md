@@ -179,6 +179,7 @@ The refactor is already in progress. The current state is:
   - action retrieval, experience intelligence, planning summary, and memory context assembly now consume canonical contract
   - action retrieval now resolves a canonical context contract only when explicit continuity surfaces are present; bare ambient request metadata such as `task_kind` no longer hardens into host-facing execution contract
   - action retrieval now merges context continuity, persisted policy memory, workflow memory, path recommendation, and tool selection into one canonical execution contract before projecting host-facing `recommended_*`, `path`, and kickoff surfaces
+  - action retrieval now only applies trusted pattern memory when it is relevant to the current query/context; a same-tool pattern alone is not enough to mark history applied
   - replay / recall / execution introspection now read canonical contract directly instead of reconstructing it from thin projections
   - node-level execution interpretation is being centralized behind a shared execution surface instead of being repeated in each consumer
   - recall/action packet, runtime tool hints, pattern operator override, and execution introspection now consume the shared execution surface rather than carrying private slot interpreters
@@ -192,6 +193,15 @@ The refactor is already in progress. The current state is:
   - replay-learning workflow observation counting now keys off canonical workflow signature first, with `execution_native_v1` kept only as compatibility fallback
   - continuity review packs and agent memory review/resume/handoff packs now use canonical contract-first fields for `file_path`, `target_files`, `next_action`, and `acceptance_checks`; recovered handoff fields are fallback transport data, not primary steering truth
   - action retrieval, tools feedback materialization, evolution governance, agent memory packs, and context overlay now share the same action-surface merge helper; downstream consumers no longer call the raw scalar/list merge directly
+  - tools feedback materialization now uses the current canonical execution contract as outcome evidence when deciding whether a learned pattern can become stable policy memory
+
+The Trust Gate rule is now explicit:
+
+- `authoritative` steering requires explicit authoritative trust
+- `authoritative` steering also requires a canonical outcome signal, currently represented by non-empty `execution_contract_v1.outcome.success_invariants`
+- computed confidence, pattern credibility, or workflow stability can support advisory guidance, but they cannot independently upgrade to authoritative
+- persisted policy memory is distinct from computed guidance; stable workflow or trusted pattern guidance remains `computed` until a policy memory node is actually materialized
+- advisory candidate policy memory may persist for hinting and governance, but it remains non-authoritative until stronger trust and outcome evidence are present
 
 What still remains is not a new feature wave. It is the final ownership cleanup:
 
@@ -304,6 +314,8 @@ Benchmarks are allowed only as validation after this dogfood pass.
 4. Any legacy surface kept for compatibility must be explicitly labeled as a projection.
 5. If a field cannot be justified across multiple real Runtime task families, it does not belong in the canonical contract.
 6. When merging contracts, scalar identity can be backfilled by priority order, but non-empty execution action surfaces must stay coherent with the highest-priority contract instead of being concatenated across stale projections.
+7. `authoritative` is a Trust Gate outcome, not a recall score. It must be backed by explicit trust and outcome requirements.
+8. Relevant pattern/workflow memory may guide action, but unrelated same-tool memory must not mark history applied or change the source kind.
 
 ## Immediate work order
 
@@ -311,8 +323,9 @@ The immediate work order for the current branch is:
 
 1. Continue removing remaining legacy reassembly paths that still treat `execution_native_v1`, `recovery_contract_v1`, or `policy_contract_v1` as primary truth instead of canonical inputs
 2. Keep compatibility projections explicit, but make downstream readers consume `execution_contract_v1` or the shared node execution surface first
-3. Finish deleting duplicate ownership in remaining lifecycle/governance consumers
-4. Only after ownership cleanup is complete, move to Runtime dogfood across real task families
+3. Audit policy/workflow promotion paths for any remaining route-local trust upgrades
+4. Finish deleting duplicate ownership in remaining lifecycle/governance consumers
+5. Only after ownership cleanup is complete, move to Runtime dogfood across real task families
 
 ## Definition of success
 
