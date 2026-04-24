@@ -16,6 +16,7 @@ export {
   isPromotionReadyWorkflowSignal,
   summarizeActionRecallPacket,
   summarizeActionRecallPacketSurface,
+  summarizeAuthorityVisibilitySurface,
   summarizeContinuityCarrierSurface,
   summarizeDistillationSignalSurface,
   summarizePatternLifecycleSurface,
@@ -55,6 +56,7 @@ export type PlanningSummary = {
   action_packet_summary: ActionPacketSummary;
   workflow_lifecycle_summary: WorkflowLifecycleSummary;
   workflow_maintenance_summary: WorkflowMaintenanceSummary;
+  authority_visibility_summary: AuthorityVisibilitySummary;
   distillation_signal_summary: DistillationSignalSummary;
   pattern_lifecycle_summary: PatternLifecycleSummary;
   pattern_maintenance_summary: PatternMaintenanceSummary;
@@ -92,6 +94,7 @@ export type AssemblySummary = {
   action_packet_summary: ActionPacketSummary;
   workflow_lifecycle_summary: WorkflowLifecycleSummary;
   workflow_maintenance_summary: WorkflowMaintenanceSummary;
+  authority_visibility_summary: AuthorityVisibilitySummary;
   distillation_signal_summary: DistillationSignalSummary;
   pattern_lifecycle_summary: PatternLifecycleSummary;
   pattern_maintenance_summary: PatternMaintenanceSummary;
@@ -198,6 +201,7 @@ export type PlannerPacketSummarySurface = {
   workflow_signals?: unknown;
   recommended_workflows?: unknown;
   candidate_workflows?: unknown;
+  authority_visibility_summary?: unknown;
   candidate_patterns?: unknown;
   trusted_patterns?: unknown;
   contested_patterns?: unknown;
@@ -248,6 +252,22 @@ export type WorkflowMaintenanceSummary = {
   retain_count: number;
   promote_candidate_count: number;
   retain_workflow_count: number;
+};
+
+export type AuthorityVisibilitySummary = {
+  summary_version: "runtime_authority_visibility_summary_v1";
+  surface_count: number;
+  sufficient_count: number;
+  insufficient_count: number;
+  authoritative_allowed_count: number;
+  authoritative_blocked_count: number;
+  stable_promotion_allowed_count: number;
+  stable_promotion_blocked_count: number;
+  execution_evidence_failed_count: number;
+  execution_evidence_incomplete_count: number;
+  false_confidence_count: number;
+  reason_counts: Record<string, number>;
+  top_blockers: string[];
 };
 
 export type DistillationSignalSummary = {
@@ -329,6 +349,7 @@ export type ExecutionMemorySummaryBundle = {
   workflow_signal_summary: WorkflowSignalSummary;
   workflow_lifecycle_summary: WorkflowLifecycleSummary;
   workflow_maintenance_summary: WorkflowMaintenanceSummary;
+  authority_visibility_summary: AuthorityVisibilitySummary;
   distillation_signal_summary: DistillationSignalSummary;
   pattern_lifecycle_summary: PatternLifecycleSummary;
   pattern_maintenance_summary: PatternMaintenanceSummary;

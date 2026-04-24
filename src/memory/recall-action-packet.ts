@@ -21,6 +21,10 @@ import {
   resolveNodeWorkflowSignature,
   resolveNodeWorkflowSourceKind,
 } from "./node-execution-surface.js";
+import {
+  buildRuntimeAuthorityVisibilityFromSlots,
+  type RuntimeAuthorityVisibilityV1,
+} from "./authority-visibility.js";
 
 type NodeRow = RecallNodeRow;
 
@@ -66,6 +70,7 @@ export type ActionRecallWorkflow = {
   archive_relocation_state?: "none" | "candidate" | "cold_archive" | null;
   archive_relocation_target?: "none" | "local_cold_store" | "external_object_store" | null;
   archive_payload_scope?: "none" | "anchor_payload" | "node" | null;
+  authority_visibility?: RuntimeAuthorityVisibilityV1 | null;
 };
 
 export type ActionRecallPattern = {
@@ -273,12 +278,14 @@ export function buildActionRecallPacket(args: {
       const distillation = meta.distillation;
       const semanticForgetting = asRecord(node.slots?.semantic_forgetting_v1);
       const archiveRelocation = asRecord(node.slots?.archive_relocation_v1);
+      const title = node.title ?? null;
+      const summary = meta.anchorSummary ?? node.text_summary ?? node.title ?? null;
       const workflowEntry: ActionRecallWorkflow = {
         anchor_id: node.id,
         uri,
         type: node.type,
-        title: node.title ?? null,
-        summary: meta.anchorSummary ?? node.text_summary ?? node.title ?? null,
+        title,
+        summary,
         anchor_level: anchorLevel,
         execution_contract_v1: meta.executionContract,
         contract_trust: meta.contractTrust,
@@ -304,6 +311,12 @@ export function buildActionRecallPacket(args: {
         archive_relocation_state: firstString(archiveRelocation?.relocation_state) as any,
         archive_relocation_target: firstString(archiveRelocation?.relocation_target) as any,
         archive_payload_scope: firstString(archiveRelocation?.payload_scope) as any,
+        authority_visibility: buildRuntimeAuthorityVisibilityFromSlots({
+          nodeId: node.id,
+          nodeKind: "workflow",
+          title: title ?? summary,
+          slots: meta.slots,
+        }),
       };
       if (meta.executionKind === "workflow_candidate" || firstString(meta.workflowPromotion?.promotion_state) === "candidate") {
         deferredCandidateWorkflows.push(workflowEntry);

@@ -1,5 +1,6 @@
 import type {
   ActionPacketSummary,
+  AuthorityVisibilitySummary,
   ContinuityCarrierSummary,
   DistillationSignalSummary,
   ExecutionMemorySummaryBundle,
@@ -13,6 +14,10 @@ import type {
   WorkflowMaintenanceSummary,
   WorkflowSignalSummary,
 } from "./planning-summary.js";
+import {
+  runtimeAuthorityVisibilityFromEntry,
+  summarizeRuntimeAuthorityVisibility,
+} from "../memory/authority-visibility.js";
 import { safeRecordArray, uniqueStrings } from "./planning-summary-utils.js";
 
 export function summarizePacketEntryLabels(entries: Array<Record<string, unknown>>, field: "title" | "summary", limit = 3): string[] {
@@ -360,6 +365,47 @@ export function summarizeWorkflowMaintenanceSurface(surface: PlannerPacketSummar
   };
 }
 
+export function summarizeAuthorityVisibilitySurface(surface: PlannerPacketSummarySurface) {
+  const { recommendedWorkflows, candidateWorkflows } = collectWorkflowEntriesFromSurface(surface);
+  const packet =
+    surface.action_recall_packet && typeof surface.action_recall_packet === "object"
+      ? (surface.action_recall_packet as Record<string, unknown>)
+      : {};
+  const supportingKnowledge = Array.isArray(surface.supporting_knowledge)
+    ? surface.supporting_knowledge
+    : Array.isArray(packet.supporting_knowledge)
+      ? packet.supporting_knowledge
+      : [];
+  const explicitSummary = surface.authority_visibility_summary as Record<string, unknown> | undefined;
+  if (explicitSummary?.summary_version === "runtime_authority_visibility_summary_v1") {
+    return {
+      summary_version: "runtime_authority_visibility_summary_v1",
+      surface_count: Number(explicitSummary.surface_count ?? 0),
+      sufficient_count: Number(explicitSummary.sufficient_count ?? 0),
+      insufficient_count: Number(explicitSummary.insufficient_count ?? 0),
+      authoritative_allowed_count: Number(explicitSummary.authoritative_allowed_count ?? 0),
+      authoritative_blocked_count: Number(explicitSummary.authoritative_blocked_count ?? 0),
+      stable_promotion_allowed_count: Number(explicitSummary.stable_promotion_allowed_count ?? 0),
+      stable_promotion_blocked_count: Number(explicitSummary.stable_promotion_blocked_count ?? 0),
+      execution_evidence_failed_count: Number(explicitSummary.execution_evidence_failed_count ?? 0),
+      execution_evidence_incomplete_count: Number(explicitSummary.execution_evidence_incomplete_count ?? 0),
+      false_confidence_count: Number(explicitSummary.false_confidence_count ?? 0),
+      reason_counts: (
+        explicitSummary.reason_counts
+        && typeof explicitSummary.reason_counts === "object"
+        && !Array.isArray(explicitSummary.reason_counts)
+          ? explicitSummary.reason_counts
+          : {}
+      ) as Record<string, number>,
+      top_blockers: uniqueStrings(Array.isArray(explicitSummary.top_blockers) ? explicitSummary.top_blockers : [], 8),
+    } satisfies AuthorityVisibilitySummary;
+  }
+  return summarizeRuntimeAuthorityVisibility(
+    [...safeRecordArray(recommendedWorkflows), ...safeRecordArray(candidateWorkflows), ...safeRecordArray(supportingKnowledge)]
+      .map((entry) => runtimeAuthorityVisibilityFromEntry(entry)),
+  );
+}
+
 export function summarizeActionRecallPacket(layeredContext: unknown): ActionPacketSummary {
   const layered =
     layeredContext && typeof layeredContext === "object"
@@ -625,6 +671,7 @@ export function buildExecutionMemorySummaryBundle(surface: PlannerPacketSummaryS
     workflow_signal_summary: summarizeWorkflowSignalSurface(surface),
     workflow_lifecycle_summary: summarizeWorkflowLifecycleSurface(surface),
     workflow_maintenance_summary: summarizeWorkflowMaintenanceSurface(surface),
+    authority_visibility_summary: summarizeAuthorityVisibilitySurface(surface),
     distillation_signal_summary: summarizeDistillationSignalSurface(surface),
     pattern_lifecycle_summary: summarizePatternLifecycleSurface(surface),
     pattern_maintenance_summary: summarizePatternMaintenanceSurface(surface),

@@ -265,6 +265,90 @@ async function seedEvolutionFixture(dbPath: string) {
           importance: 0.9,
           confidence: 0.88,
         },
+        {
+          id: randomUUID(),
+          type: "event",
+          title: "Failed service-style export recovery",
+          text_summary: "Candidate workflow blocked because after-exit revalidation failed.",
+          slots: {
+            summary_kind: "workflow_candidate",
+            compression_layer: "L1",
+            execution_native_v1: {
+              schema_version: "execution_native_v1",
+              execution_kind: "workflow_candidate",
+              summary_kind: "workflow_candidate",
+              compression_layer: "L1",
+              task_signature: "execution_task:repair-export",
+              workflow_signature: "execution_workflow:repair-export-service-check",
+              anchor_kind: "workflow",
+              anchor_level: "L1",
+              tool_set: ["edit", "test"],
+              file_path: "src/routes/export.ts",
+              target_files: ["src/routes/export.ts"],
+              next_action: "Patch export route, then revalidate from a fresh shell.",
+              workflow_promotion: {
+                promotion_state: "candidate",
+                promotion_origin: "execution_write_auto_promotion",
+                required_observations: 2,
+                observed_count: 1,
+                last_transition: "candidate_observed",
+                last_transition_at: "2026-03-20T00:00:00Z",
+                source_status: "failed",
+              },
+            },
+            workflow_promotion: {
+              promotion_state: "candidate",
+              promotion_origin: "execution_write_auto_promotion",
+              required_observations: 2,
+              observed_count: 1,
+              last_transition: "candidate_observed",
+              last_transition_at: "2026-03-20T00:00:00Z",
+              source_status: "failed",
+            },
+            authority_gate_v1: {
+              gate_version: "runtime_authority_gate_v1",
+              requested_trust: "authoritative",
+              effective_trust: "advisory",
+              status: "insufficient",
+              allows_authoritative: false,
+              allows_stable_promotion: false,
+              reasons: ["execution_evidence:after_exit_revalidation_failed"],
+              outcome_contract_gate: {
+                status: "sufficient",
+                requested_trust: "authoritative",
+                allows_authoritative: true,
+                reasons: [],
+              },
+              execution_evidence_assessment: {
+                schema_version: "execution_evidence_assessment_v1",
+                status: "failed",
+                requested_trust: "authoritative",
+                effective_trust: "advisory",
+                allows_stable_promotion: false,
+                reasons: ["after_exit_revalidation_failed"],
+                decisive_fields: {
+                  false_confidence_detected: true,
+                },
+              },
+            },
+            execution_evidence_assessment: {
+              schema_version: "execution_evidence_assessment_v1",
+              status: "failed",
+              requested_trust: "authoritative",
+              effective_trust: "advisory",
+              allows_stable_promotion: false,
+              reasons: ["after_exit_revalidation_failed"],
+              decisive_fields: {
+                false_confidence_detected: true,
+              },
+            },
+          },
+          embedding: sharedEmbedding,
+          embedding_model: FakeEmbeddingProvider.name,
+          salience: 0.72,
+          importance: 0.82,
+          confidence: 0.74,
+        },
       ],
       edges: [],
     },
@@ -570,6 +654,15 @@ test("memory evolution review-pack route exposes stable workflow and reviewer-fr
     );
     assert.equal(parsed.evolution_review_pack.policy_review.persisted_policy_count, 0);
     assert.ok(parsed.evolution_review_pack.review_contract.trusted_pattern_anchor_ids.length >= 1);
+    const authoritySummary = (parsed.evolution_review_pack as any).authority_visibility_summary;
+    assert.equal(authoritySummary.authoritative_blocked_count, 1);
+    assert.equal(authoritySummary.execution_evidence_failed_count, 1);
+    assert.deepEqual(authoritySummary.top_blockers, ["execution_evidence:after_exit_revalidation_failed"]);
+    const authorityBlockers = (parsed.evolution_review_pack as any).authority_blockers as Array<Record<string, unknown>>;
+    assert.equal(authorityBlockers.length, 1);
+    assert.equal(authorityBlockers[0]?.primary_blocker, "execution_evidence:after_exit_revalidation_failed");
+    assert.equal((parsed.evolution_review_pack.review_contract as any).authority_visibility_summary.authoritative_blocked_count, 1);
+    assert.equal((parsed.evolution_review_pack.review_contract as any).authority_blockers[0]?.execution_evidence_status, "failed");
     assert.deepEqual(parsed.evolution_review_pack.learning_summary, {
       task_family: "task:repair_export",
       matched_records: 2,

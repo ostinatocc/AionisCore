@@ -16,6 +16,7 @@ import { dedupeWorkflowCandidatesBySignature } from "./workflow-candidate-aggreg
 import { explainWorkflowProjectionForSourceNode } from "./workflow-write-projection.js";
 import { isPatternSuppressed, readPatternOperatorOverride } from "./pattern-operator-override.js";
 import { buildOutcomeContractGate, type OutcomeContractGate } from "./contract-trust.js";
+import { buildRuntimeAuthorityVisibilityFromSlots } from "./authority-visibility.js";
 import {
   resolveNodeAnchorSummary,
   resolveNodeAnchorLevel,
@@ -49,6 +50,10 @@ import {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function optionalRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
 function firstString(...values: unknown[]): string | null {
@@ -115,6 +120,14 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     executionContract,
     requestedTrust: contractTrust,
   });
+  const title = firstString(row.title);
+  const summary = firstString(row.text_summary, resolveNodeAnchorSummary(slots));
+  const authorityVisibility = buildRuntimeAuthorityVisibilityFromSlots({
+    nodeId: row.id,
+    nodeKind: "workflow",
+    title: title ?? summary,
+    slots,
+  });
   const semanticForgetting = asRecord(slots.semantic_forgetting_v1);
   const archiveRelocation = asRecord(slots.archive_relocation_v1);
   const workflowPromotion = resolveNodeWorkflowPromotionSurface(slots) ?? {};
@@ -140,8 +153,8 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     anchor_id: row.id,
     uri: toNodeUri(tenantId, scope, row.type, row.id),
     type: row.type,
-    title: firstString(row.title),
-    summary: firstString(row.text_summary, resolveNodeAnchorSummary(slots)),
+    title,
+    summary,
     anchor_level: resolveNodeAnchorLevel(slots),
     execution_contract_v1: executionContract,
     source_kind: resolveNodeWorkflowSourceKind(slots),
@@ -149,6 +162,9 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     promotion_state: firstString(workflowPromotion.promotion_state),
     contract_trust: contractTrust,
     outcome_contract_gate: outcomeContractGate,
+    ...(optionalRecord(slots.authority_gate_v1) ? { authority_gate_v1: optionalRecord(slots.authority_gate_v1) } : {}),
+    ...(optionalRecord(slots.execution_evidence_assessment) ? { execution_evidence_assessment: optionalRecord(slots.execution_evidence_assessment) } : {}),
+    authority_visibility: authorityVisibility,
     task_family: resolveNodeTaskFamily({ slots }),
     observed_count: Number.isFinite(observedCount) ? observedCount : null,
     required_observations: Number.isFinite(requiredObservations) ? requiredObservations : null,
@@ -278,6 +294,7 @@ function toWorkflowSignal(entry: ReturnType<typeof toWorkflowEntry>) {
     offline_priority: entry.offline_priority,
     last_maintenance_at: entry.last_maintenance_at,
     outcome_contract_gate: entry.outcome_contract_gate,
+    authority_visibility: entry.authority_visibility,
   };
 }
 
@@ -317,6 +334,12 @@ function toPolicyMemoryEntry(
     executionContract,
     requestedTrust: executionContract?.contract_trust ?? contract?.contract_trust,
   });
+  const authorityVisibility = buildRuntimeAuthorityVisibilityFromSlots({
+    nodeId: row.id,
+    nodeKind: "policy_memory",
+    title: firstString(row.title, row.text_summary),
+    slots,
+  });
   const maintenance = resolveNodeMaintenanceSurface(slots) ?? {};
   const policySurface = resolveNodePolicyMemorySurface(slots);
   return {
@@ -329,6 +352,9 @@ function toPolicyMemoryEntry(
     summary: firstString(row.text_summary),
     execution_contract_v1: executionContract,
     outcome_contract_gate: outcomeContractGate,
+    ...(optionalRecord(slots.authority_gate_v1) ? { authority_gate_v1: optionalRecord(slots.authority_gate_v1) } : {}),
+    ...(optionalRecord(slots.execution_evidence_assessment) ? { execution_evidence_assessment: optionalRecord(slots.execution_evidence_assessment) } : {}),
+    authority_visibility: authorityVisibility,
     selected_tool: resolveNodeSelectedTool({ slots }),
     workflow_signature: resolveNodeWorkflowSignature({ slots }),
     file_path: resolveNodeFilePath({ slots }),
