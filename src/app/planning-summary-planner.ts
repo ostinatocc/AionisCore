@@ -12,6 +12,10 @@ import type {
 } from "./planning-summary.js";
 import { guardExecutionContractForHost, type ExecutionContractV1 } from "../memory/execution-contract.js";
 import { resolveContractTrustForSteering } from "../memory/contract-trust.js";
+import {
+  buildAuthorityInspectionNextAction,
+  demoteContractTrustForAuthorityBlock,
+} from "../memory/authority-consumption.js";
 import { isPromotionReadyWorkflowSignal, summarizePacketEntryLabels } from "./planning-summary-surfaces.js";
 import { safeRecordArray, safeStringArray, uniqueStrings } from "./planning-summary-utils.js";
 
@@ -218,24 +222,6 @@ function buildUncertaintyAwareNextAction(args: {
   );
 }
 
-function buildAuthorityBlockedNextAction(args: {
-  selectedTool: string | null;
-  filePath: string | null;
-  blocker: string | null;
-}): string {
-  const blocker = args.blocker ?? "authority_visibility_blocked";
-  if (args.selectedTool && args.filePath) {
-    return `Inspect ${args.filePath} and revalidate current context before reusing ${args.selectedTool}; authority blocked by ${blocker}.`;
-  }
-  if (args.filePath) {
-    return `Inspect ${args.filePath} and revalidate current context before reusing learned execution memory; authority blocked by ${blocker}.`;
-  }
-  if (args.selectedTool) {
-    return `Inspect current context before reusing ${args.selectedTool}; authority blocked by ${blocker}.`;
-  }
-  return `Inspect current context before reusing learned execution memory; authority blocked by ${blocker}.`;
-}
-
 function hasStrongContractIdentity(args: {
   taskFamily: string | null;
   workflowSignature: string | null;
@@ -274,7 +260,7 @@ function resolveContractTrust(args: {
     explicitTrust: args.explicitTrust,
     executionContract: args.executionContract,
   });
-  return args.authorityBlocked && resolvedTrust === "authoritative" ? "advisory" : resolvedTrust;
+  return demoteContractTrustForAuthorityBlock(resolvedTrust, args.authorityBlocked) ?? "advisory";
 }
 
 function applyContractTrustGuard(args: {
@@ -294,10 +280,11 @@ function applyContractTrustGuard(args: {
 }): FirstStepRecommendation {
   const authorityBlocked = args.authorityBlocked === true;
   const effectiveNextAction = authorityBlocked
-    ? buildAuthorityBlockedNextAction({
+    ? buildAuthorityInspectionNextAction({
         selectedTool: args.selectedTool,
         filePath: args.filePath,
         blocker: args.authorityPrimaryBlocker ?? null,
+        reuseTarget: "learned execution memory",
       })
     : args.nextAction;
   const contractTrust = resolveContractTrust({
