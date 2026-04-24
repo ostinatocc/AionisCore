@@ -970,6 +970,15 @@ test("policy governance apply route can retire and reactivate persisted policy m
       goal: "repair export failure in node tests",
       target_files: ["src/routes/export.ts"],
       next_action: "Patch src/routes/export.ts and rerun export tests.",
+      execution_evidence_v1: {
+        schema_version: "execution_evidence_v1",
+        validation_passed: true,
+        after_exit_revalidated: true,
+        fresh_shell_probe_passed: true,
+        failure_reason: null,
+        false_confidence_detected: false,
+        evidence_refs: ["tools_feedback_policy_governance:fresh_shell_export_test"],
+      },
       error: {
         signature: "node-export-mismatch",
       },

@@ -140,6 +140,8 @@ function compileEvidenceFromRecord(args: {
   const validationPassed =
     booleanField(record, "validation_passed", "validationPassed", "passed", "ok", "success")
     ?? statusToValidation(record.status)
+    ?? statusToValidation(record.validation_status)
+    ?? statusToValidation(record.source_run_status)
     ?? statusToValidation(record.result)
     ?? statusToValidation(record.outcome);
   const afterExitRevalidated = booleanField(
@@ -279,10 +281,15 @@ export function extractExecutionEvidenceFromSlots(args: {
 }): ExecutionEvidenceV1 | null {
   const slots = args.slots ?? {};
   const executionResultSummary = asRecord(slots.execution_result_summary);
+  const compileSummary = asRecord(slots.compile_summary);
   return parseEvidence(slots.execution_evidence_v1)
     ?? parseEvidence(executionResultSummary?.execution_evidence_v1)
     ?? compileEvidenceFromRecord({
       record: executionResultSummary,
+      evidenceRefs: [slots.execution_evidence, slots.execution_packet_v1],
+    })
+    ?? compileEvidenceFromRecord({
+      record: compileSummary,
       evidenceRefs: [slots.execution_evidence, slots.execution_packet_v1],
     })
     ?? compileEvidenceFromArray(slots.execution_evidence)

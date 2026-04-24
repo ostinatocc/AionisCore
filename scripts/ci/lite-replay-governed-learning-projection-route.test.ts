@@ -142,6 +142,13 @@ async function seedPendingReviewPlaybook(args: {
             risk_profile: "medium",
             source_run_id: randomUUID(),
             created_from_run_ids: [randomUUID()],
+            compile_summary: {
+              source_run_status: "success",
+              validation_status: "success",
+              total_steps: 2,
+              successful_steps: 2,
+              evidence_refs: ["seed_pending_review_playbook:successful_source_run"],
+            },
             policy_constraints: {},
             ...(args.workflowSignature ? { workflow_signature: args.workflowSignature } : {}),
             steps_template: [

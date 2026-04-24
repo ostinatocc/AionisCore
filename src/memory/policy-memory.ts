@@ -24,7 +24,7 @@ import {
 import {
   buildExecutionContractFromProjection,
 } from "./execution-contract.js";
-import { buildOutcomeContractGate } from "./contract-trust.js";
+import { buildRuntimeAuthorityGate } from "./authority-gate.js";
 import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 import {
   resolveNodeErrorSignature,
@@ -321,6 +321,23 @@ function buildPolicyExecutionContract(args: {
   });
 }
 
+function buildPolicyAuthoritySurfaces(args: {
+  contract: PolicyContract;
+  executionContract: Record<string, unknown>;
+}) {
+  const authority = buildRuntimeAuthorityGate({
+    executionContract: args.executionContract,
+    requestedTrust: normalizeContractTrust(args.contract.contract_trust),
+    slots: args.contract as unknown as Record<string, unknown>,
+  });
+  return {
+    outcome_contract_gate: authority.outcomeContractGate,
+    ...(authority.executionEvidence ? { execution_evidence_v1: authority.executionEvidence } : {}),
+    execution_evidence_assessment: authority.executionEvidenceAssessment,
+    authority_gate_v1: authority.authorityGate,
+  };
+}
+
 function buildPolicyMemorySlots(args: {
   taskSignature: string | null;
   errorSignature: string | null;
@@ -350,6 +367,10 @@ function buildPolicyMemorySlots(args: {
     source: args.source,
     governanceAction: args.governanceAction ?? null,
   });
+  const authoritySurfaces = buildPolicyAuthoritySurfaces({
+    contract: args.contract,
+    executionContract,
+  });
 
   return {
     summary_kind: "policy_memory",
@@ -366,6 +387,7 @@ function buildPolicyMemorySlots(args: {
     target_files: args.contract.target_files,
     source_anchor_ids: args.contract.source_anchor_ids,
     execution_contract_v1: executionContract,
+    ...authoritySurfaces,
     policy_contract_v1: {
       ...args.contract,
       policy_memory_state: args.contract.policy_memory_state,
@@ -534,14 +556,23 @@ function normalizePolicyContractLifecycle(args: {
   nodeId: string | null;
   nextState: PolicyMemoryLifecycleState;
 }): PolicyContract {
-  const outcomeContractGate = buildOutcomeContractGate({
-    executionContract: args.contract,
+  const executionContract = buildPolicyExecutionContract({
+    nodeId: args.nodeId,
+    taskSignature: null,
+    errorSignature: null,
+    workflowSignature: firstString(args.contract.workflow_signature),
+    contract: args.contract,
+    source: "materialization",
+  });
+  const authority = buildRuntimeAuthorityGate({
+    executionContract,
     requestedTrust: normalizeContractTrust(args.contract.contract_trust),
+    slots: args.contract as unknown as Record<string, unknown>,
   });
   const effectiveState = normalizePersistedPolicyLifecycleState({
     requestedState: args.nextState,
     contractTrust: normalizeContractTrust(args.contract.contract_trust),
-    outcomeAllowsAuthoritative: outcomeContractGate.allows_authoritative,
+    outcomeAllowsAuthoritative: authority.authorityGate.allows_authoritative,
   });
   const shouldDegrade = effectiveState !== "active";
   return PolicyContractSchema.parse({
@@ -554,7 +585,10 @@ function normalizePolicyContractLifecycle(args: {
     activation_mode: shouldDegrade ? "hint" : args.contract.activation_mode,
     materialization_state: "persisted",
     policy_memory_id: args.nodeId ?? null,
-    outcome_contract_gate: outcomeContractGate,
+    outcome_contract_gate: authority.outcomeContractGate,
+    ...(authority.executionEvidence ? { execution_evidence_v1: authority.executionEvidence } : {}),
+    execution_evidence_assessment: authority.executionEvidenceAssessment,
+    authority_gate_v1: authority.authorityGate,
   });
 }
 
@@ -710,6 +744,10 @@ async function applyPolicyMemoryFeedbackToNodes(args: {
       contract: nextContract,
       source: "feedback",
     });
+    const authoritySurfaces = buildPolicyAuthoritySurfaces({
+      contract: nextContract,
+      executionContract: nextExecutionContract,
+    });
     const nextSlots: Record<string, unknown> = {
       ...nextState.slots,
       summary_kind: "policy_memory",
@@ -725,6 +763,7 @@ async function applyPolicyMemoryFeedbackToNodes(args: {
       target_files: nextContract.target_files,
       source_anchor_ids: nextContract.source_anchor_ids,
       execution_contract_v1: nextExecutionContract,
+      ...authoritySurfaces,
       policy_memory_signature: firstString(slots.policy_memory_signature),
       last_materialized_at: firstString(slots.last_materialized_at),
       execution_native_v1: nextExecutionNative,
@@ -977,6 +1016,10 @@ async function applyPolicyMemoryGovernanceToNode(args: {
     source: "governance",
     governanceAction: args.action,
   });
+  const authoritySurfaces = buildPolicyAuthoritySurfaces({
+    contract: nextContract,
+    executionContract: nextExecutionContract,
+  });
 
   const nextSlots: Record<string, unknown> = {
     ...slots,
@@ -993,6 +1036,7 @@ async function applyPolicyMemoryGovernanceToNode(args: {
     target_files: nextContract.target_files,
     source_anchor_ids: nextContract.source_anchor_ids,
     execution_contract_v1: nextExecutionContract,
+    ...authoritySurfaces,
     policy_last_review_at: args.appliedAt,
     policy_last_review_job: "policy_governance_apply",
     policy_last_review_reason: buildPolicyGovernanceReviewReason({

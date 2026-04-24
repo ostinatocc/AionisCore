@@ -46,6 +46,7 @@ import {
   normalizeContractTrust as normalizeContractTrustValue,
   resolveContractTrustForSteering,
 } from "./contract-trust.js";
+import { extractExecutionEvidenceFromSlots } from "./execution-evidence.js";
 import {
   buildGovernedStateDecisionTrace,
   buildGovernanceDecisionTraceBase,
@@ -673,6 +674,13 @@ async function materializeLitePolicyMemoryFromFeedback(args: {
     workflowFeedbackTarget: args.workflowFeedbackTarget,
     contractTrust,
   });
+  const executionEvidence = extractExecutionEvidenceFromSlots({
+    slots: materializationContext,
+  });
+  const policyContractWithEvidence = PolicyContractSchema.parse({
+    ...enrichedPolicy.policyContract,
+    ...(executionEvidence ? { execution_evidence_v1: executionEvidence } : {}),
+  });
 
   const persisted = await writePolicyMemorySnapshot({
     tenant_id: args.tenancy.tenant_id,
@@ -683,7 +691,7 @@ async function materializeLitePolicyMemoryFromFeedback(args: {
     task_signature: args.workflowFeedbackTarget.taskSignature,
     error_signature: args.workflowFeedbackTarget.errorSignature,
     workflow_signature: args.workflowFeedbackTarget.workflowSignature,
-    policy_contract: enrichedPolicy.policyContract,
+    policy_contract: policyContractWithEvidence,
     derived_policy: enrichedPolicy.derivedPolicy,
     feedback_commit_id: args.commitId,
   }, {

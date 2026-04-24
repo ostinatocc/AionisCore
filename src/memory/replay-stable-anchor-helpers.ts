@@ -15,7 +15,10 @@ import {
   deriveReplayWorkflowContractFromSlots,
   type ReplayWorkflowContract,
 } from "./replay-workflow-contract.js";
-import { buildOutcomeContractGate } from "./contract-trust.js";
+import {
+  buildRuntimeAuthorityGate,
+  downgradeAuthoritativeTrust,
+} from "./authority-gate.js";
 
 function asObject(v: unknown): Record<string, unknown> | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
@@ -106,18 +109,16 @@ function replayWriteNodeId(scopeKey: string, clientId: string): string {
   return stableUuid(`${scopeKey}:node:${clientId.trim()}`);
 }
 
-function outcomeGatedReplayWorkflowContract(args: {
+function authorityGatedReplayWorkflowContract(args: {
   base: ReplayWorkflowContract;
   taskSignature: string;
   workflowSignature: string;
   sourceAnchor: string;
   filePath?: string | null;
   notes: string[];
-}): {
-  workflowContract: ReplayWorkflowContract;
-  outcomeContractGate: ReturnType<typeof buildOutcomeContractGate>;
-} {
-  const candidateExecutionContract = buildReplayProjectionExecutionContract({
+  slots: Record<string, unknown>;
+}) {
+  const initialExecutionContract = buildReplayProjectionExecutionContract({
     base: args.base,
     task_signature: args.taskSignature,
     workflow_signature: args.workflowSignature,
@@ -125,19 +126,46 @@ function outcomeGatedReplayWorkflowContract(args: {
     file_path: args.filePath ?? null,
     notes: args.notes,
   });
-  const outcomeContractGate = buildOutcomeContractGate({
-    executionContract: candidateExecutionContract,
+  const initialAuthority = buildRuntimeAuthorityGate({
+    executionContract: initialExecutionContract,
     requestedTrust: args.base.contract_trust,
+    slots: args.slots,
   });
-  if (args.base.contract_trust !== "authoritative" || outcomeContractGate.allows_authoritative) {
-    return { workflowContract: args.base, outcomeContractGate };
+  const effectiveTrust = downgradeAuthoritativeTrust({
+    requestedTrust: args.base.contract_trust,
+    authorityGate: initialAuthority.authorityGate,
+  });
+  const workflowContract =
+    effectiveTrust !== args.base.contract_trust
+      ? {
+          ...args.base,
+          contract_trust: effectiveTrust,
+        }
+      : args.base;
+  if (workflowContract === args.base) {
+    return {
+      workflowContract,
+      executionContract: initialExecutionContract,
+      ...initialAuthority,
+    };
   }
+  const executionContract = buildReplayProjectionExecutionContract({
+    base: workflowContract,
+    task_signature: args.taskSignature,
+    workflow_signature: args.workflowSignature,
+    source_anchor: args.sourceAnchor,
+    file_path: args.filePath ?? null,
+    notes: [...args.notes, "runtime_authority_gate_downgraded_authoritative_contract"],
+  });
+  const finalAuthority = buildRuntimeAuthorityGate({
+    executionContract,
+    requestedTrust: workflowContract.contract_trust,
+    slots: args.slots,
+  });
   return {
-    workflowContract: {
-      ...args.base,
-      contract_trust: "advisory",
-    },
-    outcomeContractGate,
+    workflowContract,
+    executionContract,
+    ...finalAuthority,
   };
 }
 
@@ -178,20 +206,23 @@ function buildReplayPlaybookAnchor(args: {
   const rawWorkflowContract = deriveReplayWorkflowContractFromSlots(args.slots);
   const taskSignature = `replay_playbook:${args.playbookId}`;
   const workflowSignature = deriveReplayWorkflowSignature(args.playbookId, stepsTemplate);
-  const { workflowContract, outcomeContractGate } = outcomeGatedReplayWorkflowContract({
+  const authority = authorityGatedReplayWorkflowContract({
     base: rawWorkflowContract,
     taskSignature,
     workflowSignature,
     sourceAnchor: args.clientId,
     filePath: rawWorkflowContract.execution_contract_v1?.file_path ?? rawWorkflowContract.target_files[0] ?? null,
     notes: ["replay_playbook_anchor_gate"],
+    slots: args.slots,
   });
+  const { workflowContract, outcomeContractGate } = authority;
+  const promotionState = authority.authorityGate.allows_stable_promotion ? "stable" : "candidate";
   const payloadCostHint: "low" | "medium" | "high" =
     stepsTotal <= 4 ? "low" : stepsTotal <= 10 ? "medium" : "high";
   const promotionAt = new Date().toISOString();
   return MemoryAnchorV1Schema.parse({
     anchor_kind: "workflow",
-    anchor_level: "L2",
+    anchor_level: promotionState === "stable" ? "L2" : "L1",
     ...(workflowContract.contract_trust ? { contract_trust: workflowContract.contract_trust } : {}),
     task_signature: taskSignature,
     task_class: "replay_playbook",
@@ -247,11 +278,11 @@ function buildReplayPlaybookAnchor(args: {
       last_used_at: null,
     },
     maintenance: buildWorkflowMaintenanceMetadata({
-      promotion_state: "stable",
+      promotion_state: promotionState,
       at: promotionAt,
     }),
     workflow_promotion: buildWorkflowPromotionMetadata({
-      promotion_state: "stable",
+      promotion_state: promotionState,
       promotion_origin: args.promotionOrigin,
       source_status: args.status,
       at: promotionAt,
@@ -297,34 +328,38 @@ export async function buildStablePlaybookNodeFields(args: {
   const existingExecutionNative = asObject(asObject(args.slots)?.execution_native_v1);
   const existingDistillation = asObject(existingExecutionNative?.distillation);
   const rawWorkflowContract = deriveReplayWorkflowContractFromSlots(args.slots);
-  const { workflowContract, outcomeContractGate } = outcomeGatedReplayWorkflowContract({
+  const authority = authorityGatedReplayWorkflowContract({
     base: rawWorkflowContract,
     taskSignature: anchor.task_signature,
     workflowSignature: anchor.workflow_signature,
     sourceAnchor: args.clientId,
     filePath: anchor.file_path ?? null,
     notes: ["replay_stable_playbook_projection"],
+    slots: args.slots,
   });
-  const executionContract = buildReplayProjectionExecutionContract({
-    base: workflowContract,
-    task_signature: anchor.task_signature,
-    workflow_signature: anchor.workflow_signature,
-    source_anchor: args.clientId,
-    file_path: anchor.file_path ?? null,
-    notes: ["replay_stable_playbook_projection"],
-  });
+  const {
+    workflowContract,
+    executionContract,
+    outcomeContractGate,
+    executionEvidence,
+    executionEvidenceAssessment,
+    authorityGate,
+  } = authority;
+  const workflowPromotionState = anchor.workflow_promotion?.promotion_state ?? "stable";
+  const summaryKind = workflowPromotionState === "stable" ? "workflow_anchor" : "workflow_candidate";
+  const compressionLayer = workflowPromotionState === "stable" ? "L2" : "L1";
   const executionNative = ExecutionNativeV1Schema.parse({
     schema_version: "execution_native_v1",
-    execution_kind: "workflow_anchor",
-    summary_kind: "workflow_anchor",
-    compression_layer: "L2",
+    execution_kind: workflowPromotionState === "stable" ? "workflow_anchor" : "workflow_candidate",
+    summary_kind: summaryKind,
+    compression_layer: compressionLayer,
     ...(workflowContract.contract_trust ? { contract_trust: workflowContract.contract_trust } : {}),
     task_signature: anchor.task_signature,
     task_class: anchor.task_class,
     ...(anchor.task_family ? { task_family: anchor.task_family } : {}),
     workflow_signature: anchor.workflow_signature,
     anchor_kind: "workflow",
-    anchor_level: "L2",
+    anchor_level: anchor.anchor_level,
     tool_set: anchor.tool_set,
     ...(anchor.file_path !== undefined ? { file_path: anchor.file_path } : {}),
     ...(workflowContract.target_files.length > 0 ? { target_files: workflowContract.target_files } : {}),
@@ -342,12 +377,15 @@ export async function buildStablePlaybookNodeFields(args: {
   });
   const slots = {
     ...args.slots,
-    summary_kind: "workflow_anchor",
-    compression_layer: "L2",
+    summary_kind: summaryKind,
+    compression_layer: compressionLayer,
     anchor_v1: anchor,
     execution_native_v1: executionNative,
     execution_contract_v1: executionContract,
     outcome_contract_gate: outcomeContractGate,
+    ...(executionEvidence ? { execution_evidence_v1: executionEvidence } : {}),
+    execution_evidence_assessment: executionEvidenceAssessment,
+    authority_gate_v1: authorityGate,
   };
   const embedText = `${args.title}\n${anchor.summary}\n${anchor.tool_set.join(" ")}\n${anchor.task_signature}`;
   if (!args.embedder) {
