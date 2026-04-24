@@ -290,7 +290,7 @@ async function seedEvolutionFixture(dbPath: string) {
                 promotion_state: "candidate",
                 promotion_origin: "execution_write_auto_promotion",
                 required_observations: 2,
-                observed_count: 1,
+                observed_count: 2,
                 last_transition: "candidate_observed",
                 last_transition_at: "2026-03-20T00:00:00Z",
                 source_status: "failed",
@@ -300,7 +300,7 @@ async function seedEvolutionFixture(dbPath: string) {
               promotion_state: "candidate",
               promotion_origin: "execution_write_auto_promotion",
               required_observations: 2,
-              observed_count: 1,
+              observed_count: 2,
               last_transition: "candidate_observed",
               last_transition_at: "2026-03-20T00:00:00Z",
               source_status: "failed",
@@ -637,6 +637,7 @@ test("memory evolution review-pack route exposes stable workflow and reviewer-fr
       "execution_workflow:repair-export",
     );
     assert.ok(parsed.evolution_review_pack.stable_workflow);
+    assert.equal(parsed.evolution_review_pack.promotion_ready_workflow, null);
     assert.equal(parsed.evolution_review_pack.derived_policy?.selected_tool, "edit");
     assert.equal(parsed.evolution_review_pack.policy_contract?.selected_tool, "edit");
     assert.equal(parsed.evolution_review_pack.policy_governance_contract.action, "none");
@@ -663,6 +664,7 @@ test("memory evolution review-pack route exposes stable workflow and reviewer-fr
     assert.equal(authorityBlockers[0]?.primary_blocker, "execution_evidence:after_exit_revalidation_failed");
     assert.equal((parsed.evolution_review_pack.review_contract as any).authority_visibility_summary.authoritative_blocked_count, 1);
     assert.equal((parsed.evolution_review_pack.review_contract as any).authority_blockers[0]?.execution_evidence_status, "failed");
+    assert.deepEqual(parsed.evolution_review_pack.review_contract.promotion_ready_anchor_ids, []);
     assert.deepEqual(parsed.evolution_review_pack.learning_summary, {
       task_family: "task:repair_export",
       matched_records: 2,

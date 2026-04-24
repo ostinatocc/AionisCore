@@ -35,6 +35,13 @@ export function authorityVisibilityRequiresInspection(
     || visibility?.execution_evidence_status === "failed";
 }
 
+export function authorityVisibilityBlocksPromotionReadiness(
+  visibility: RuntimeAuthorityVisibilityV1 | null | undefined,
+): boolean {
+  return visibility?.execution_evidence_status === "failed"
+    || visibility?.false_confidence_detected === true;
+}
+
 export function authorityVisibilityPrimaryBlocker(
   visibility: RuntimeAuthorityVisibilityV1 | null | undefined,
 ): string | null {
