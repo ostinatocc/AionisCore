@@ -1,3 +1,5 @@
+import type { ExecutionContractV1 } from "../memory/execution-contract.js";
+
 export {
   buildAssemblySummary,
   buildExecutionSummarySurface,
@@ -104,6 +106,7 @@ export type FirstStepRecommendation = {
   source_kind: "experience_intelligence" | "tool_selection";
   history_applied: boolean;
   contract_trust: ContractTrust;
+  execution_contract_v1: ExecutionContractV1 | null;
   selected_tool: string | null;
   task_family: string | null;
   workflow_signature: string | null;
@@ -116,6 +119,7 @@ export type KickoffRecommendation = {
   source_kind: "experience_intelligence" | "tool_selection";
   history_applied: boolean;
   contract_trust: ContractTrust;
+  execution_contract_v1: ExecutionContractV1 | null;
   selected_tool: string | null;
   task_family: string | null;
   workflow_signature: string | null;

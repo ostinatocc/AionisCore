@@ -1477,17 +1477,19 @@ test("planning_context returns aligned planner packet, action packet summary, an
     assertNoLegacyPlannerMirrors(body as Record<string, unknown>);
     assert.ok(!("layered_context" in (body as Record<string, unknown>)), "default planning_context should not expose layered_context");
     assert.ok(!("operator_projection" in (body as Record<string, unknown>)), "default planning_context should not expose operator_projection");
-    assert.deepEqual(body.planning_summary.first_step_recommendation, {
-      source_kind: "experience_intelligence",
-      history_applied: true,
-      contract_trust: "authoritative",
-      selected_tool: body.planning_summary.selected_tool,
-      task_family: null,
-      workflow_signature: "fix-export-failure-workflow",
-      policy_memory_id: null,
-      file_path: null,
-      next_action: "Inspect the current context before starting with edit.",
-    });
+    const planningFirstStep = body.planning_summary.first_step_recommendation;
+    assert.equal(planningFirstStep?.source_kind, "experience_intelligence");
+    assert.equal(planningFirstStep?.history_applied, true);
+    assert.equal(planningFirstStep?.contract_trust, "authoritative");
+    assert.equal(planningFirstStep?.selected_tool, body.planning_summary.selected_tool);
+    assert.equal(planningFirstStep?.task_family ?? null, null);
+    assert.equal(planningFirstStep?.workflow_signature, "fix-export-failure-workflow");
+    assert.equal(planningFirstStep?.policy_memory_id ?? null, null);
+    assert.equal(planningFirstStep?.file_path ?? null, null);
+    assert.equal(planningFirstStep?.next_action, "Inspect the current context before starting with edit.");
+    assert.equal(planningFirstStep?.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(planningFirstStep?.execution_contract_v1?.selected_tool, body.planning_summary.selected_tool);
+    assert.equal(planningFirstStep?.execution_contract_v1?.workflow_signature, "fix-export-failure-workflow");
     assert.equal(body.planning_summary.action_retrieval_uncertainty?.summary_version, "action_retrieval_uncertainty_v1");
     assert.ok(body.planning_summary.action_retrieval_uncertainty?.recommended_actions.includes("inspect_context"));
     assert.deepEqual(body.planning_summary.action_retrieval_gate, {
@@ -2269,17 +2271,19 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     assertNoLegacyPlannerMirrors(body as Record<string, unknown>);
     assert.ok(!("layered_context" in (body as Record<string, unknown>)), "default context_assemble should not expose layered_context");
     assert.ok(!("operator_projection" in (body as Record<string, unknown>)), "default context_assemble should not expose operator_projection");
-    assert.deepEqual(body.assembly_summary.first_step_recommendation, {
-      source_kind: "experience_intelligence",
-      history_applied: true,
-      contract_trust: "authoritative",
-      selected_tool: body.assembly_summary.selected_tool,
-      task_family: null,
-      workflow_signature: "fix-export-failure-workflow",
-      policy_memory_id: null,
-      file_path: null,
-      next_action: "Inspect the current context before starting with edit.",
-    });
+    const assemblyFirstStep = body.assembly_summary.first_step_recommendation;
+    assert.equal(assemblyFirstStep?.source_kind, "experience_intelligence");
+    assert.equal(assemblyFirstStep?.history_applied, true);
+    assert.equal(assemblyFirstStep?.contract_trust, "authoritative");
+    assert.equal(assemblyFirstStep?.selected_tool, body.assembly_summary.selected_tool);
+    assert.equal(assemblyFirstStep?.task_family ?? null, null);
+    assert.equal(assemblyFirstStep?.workflow_signature, "fix-export-failure-workflow");
+    assert.equal(assemblyFirstStep?.policy_memory_id ?? null, null);
+    assert.equal(assemblyFirstStep?.file_path ?? null, null);
+    assert.equal(assemblyFirstStep?.next_action, "Inspect the current context before starting with edit.");
+    assert.equal(assemblyFirstStep?.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(assemblyFirstStep?.execution_contract_v1?.selected_tool, body.assembly_summary.selected_tool);
+    assert.equal(assemblyFirstStep?.execution_contract_v1?.workflow_signature, "fix-export-failure-workflow");
     assert.equal(body.assembly_summary.action_retrieval_uncertainty?.summary_version, "action_retrieval_uncertainty_v1");
     assert.ok(body.assembly_summary.action_retrieval_uncertainty?.recommended_actions.includes("inspect_context"));
     assert.deepEqual(body.assembly_summary.action_retrieval_gate, {

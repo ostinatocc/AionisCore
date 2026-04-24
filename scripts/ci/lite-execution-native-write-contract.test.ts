@@ -197,20 +197,34 @@ test("prepare/apply write normalizes execution-native metadata for anchors and d
     assert.equal(workflowPrepared?.slots.execution_native_v1.execution_kind, "workflow_anchor");
     assert.equal(workflowPrepared?.slots.execution_native_v1.task_signature, "repair-export-node-tests");
     assert.equal(workflowPrepared?.slots.execution_native_v1.error_signature, "node-export-mismatch");
+    assert.equal(workflowPrepared?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(workflowPrepared?.slots.execution_contract_v1?.task_signature, "repair-export-node-tests");
+    assert.equal(workflowPrepared?.slots.execution_contract_v1?.workflow_signature, "inspect-patch-rerun");
+    assert.equal(workflowPrepared?.slots.execution_contract_v1?.provenance?.source_kind, "legacy_projection");
     assert.equal(workflowPrepared?.slots.semantic_forgetting_v1?.action, "retain");
     assert.equal(workflowPrepared?.slots.archive_relocation_v1?.relocation_state, "none");
     assert.ok(typeof workflowPrepared?.salience === "number");
     assert.equal(patternPrepared?.slots.execution_native_v1.execution_kind, "pattern_anchor");
     assert.equal(patternPrepared?.slots.execution_native_v1.pattern_state, "stable");
     assert.equal(patternPrepared?.slots.execution_native_v1.selected_tool, "edit");
+    assert.equal(patternPrepared?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(patternPrepared?.slots.execution_contract_v1?.selected_tool, "edit");
+    assert.equal(patternPrepared?.slots.execution_contract_v1?.task_family, "task:repair_export");
     assert.equal(distilledEvidencePrepared?.slots.execution_native_v1.execution_kind, "distilled_evidence");
     assert.equal(distilledEvidencePrepared?.slots.execution_native_v1.distillation?.preferred_promotion_target, "workflow");
     assert.equal(distilledEvidencePrepared?.slots.execution_native_v1.maintenance?.offline_priority, "promote_to_workflow");
+    assert.equal(distilledEvidencePrepared?.slots.execution_contract_v1 ?? null, null);
     assert.equal(distilledFactPrepared?.slots.execution_native_v1.execution_kind, "distilled_fact");
     assert.equal(distilledFactPrepared?.slots.execution_native_v1.compression_layer, "L1");
     assert.equal(distilledFactPrepared?.slots.execution_native_v1.distillation?.preferred_promotion_target, "workflow");
     assert.equal(distilledFactPrepared?.slots.execution_native_v1.distillation?.extraction_pattern, "colon");
     assert.equal(distilledFactPrepared?.slots.execution_native_v1.maintenance?.offline_priority, "promote_to_workflow");
+    assert.equal(taskSignatureFactPrepared?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(taskSignatureFactPrepared?.slots.execution_contract_v1?.task_signature, "repair-export-node-tests");
+    assert.equal(taskSignatureFactPrepared?.slots.execution_contract_v1?.provenance?.source_kind, "write_distillation");
+    assert.equal(errorSignatureFactPrepared?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(workflowSignatureFactPrepared?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(workflowSignatureFactPrepared?.slots.execution_contract_v1?.workflow_signature, "inspect-patch-rerun");
     assert.equal(taskSignatureFactPrepared?.slots.execution_native_v1.task_signature, "repair-export-node-tests");
     assert.equal(errorSignatureFactPrepared?.slots.execution_native_v1.error_signature, "node-export-mismatch");
     assert.equal(workflowSignatureFactPrepared?.slots.execution_native_v1.workflow_signature, "inspect-patch-rerun");
@@ -248,12 +262,22 @@ test("prepare/apply write normalizes execution-native metadata for anchors and d
       (row) => row.slots?.summary_kind === "write_distillation_fact" && row.title === "Workflow Signature",
     );
     assert.equal(storedWorkflow?.slots.execution_native_v1.anchor_kind, "workflow");
+    assert.equal(storedWorkflow?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(storedWorkflow?.slots.execution_contract_v1?.workflow_signature, "inspect-patch-rerun");
     assert.equal(storedPattern?.slots.execution_native_v1.anchor_kind, "pattern");
+    assert.equal(storedPattern?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(storedPattern?.slots.execution_contract_v1?.selected_tool, "edit");
     assert.equal(storedDistilledEvidence?.slots.execution_native_v1.execution_kind, "distilled_evidence");
     assert.equal(storedDistilledEvidence?.slots.execution_native_v1.distillation?.preferred_promotion_target, "workflow");
+    assert.equal(storedDistilledEvidence?.slots.execution_contract_v1 ?? null, null);
     assert.equal(storedDistilledFact?.slots.execution_native_v1.execution_kind, "distilled_fact");
     assert.equal(storedDistilledFact?.slots.execution_native_v1.distillation?.preferred_promotion_target, "workflow");
     assert.equal(storedDistilledFact?.slots.execution_native_v1.maintenance?.offline_priority, "promote_to_workflow");
+    assert.equal(storedTaskSignatureFact?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(storedTaskSignatureFact?.slots.execution_contract_v1?.task_signature, "repair-export-node-tests");
+    assert.equal(storedTaskSignatureFact?.slots.execution_contract_v1?.provenance?.source_kind, "write_distillation");
+    assert.equal(storedWorkflowSignatureFact?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(storedWorkflowSignatureFact?.slots.execution_contract_v1?.workflow_signature, "inspect-patch-rerun");
     assert.equal(storedWorkflow?.slots.semantic_forgetting_v1?.action, "retain");
     assert.equal(storedWorkflow?.slots.archive_relocation_v1?.relocation_state, "none");
     assert.equal(storedTaskSignatureFact?.slots.execution_native_v1.task_signature, "repair-export-node-tests");
@@ -519,11 +543,16 @@ test("prepare/apply write normalizes execution-native metadata for handoff and s
     assert.equal(preparedHandoff?.slots.execution_native_v1.file_path, filePath);
     assert.deepEqual(preparedHandoff?.slots.execution_native_v1.target_files, [filePath]);
     assert.equal(preparedHandoff?.slots.execution_native_v1.next_action, `Patch ${filePath} and rerun export tests`);
+    assert.equal(preparedHandoff?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(preparedHandoff?.slots.execution_contract_v1?.file_path, filePath);
+    assert.deepEqual(preparedHandoff?.slots.execution_contract_v1?.target_files, [filePath]);
     assert.equal(preparedSessionEvent?.slots.execution_native_v1.execution_kind, "execution_native");
     assert.equal(preparedSessionEvent?.slots.execution_native_v1.summary_kind, "session_event");
     assert.equal(preparedSessionEvent?.slots.execution_native_v1.compression_layer, "L0");
     assert.equal(preparedSessionEvent?.slots.execution_native_v1.file_path, filePath);
     assert.deepEqual(preparedSessionEvent?.slots.execution_native_v1.target_files, [filePath]);
+    assert.equal(preparedSessionEvent?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(preparedSessionEvent?.slots.execution_contract_v1?.file_path, filePath);
     assert.equal(preparedSession?.slots.execution_native_v1.execution_kind, "execution_native");
     assert.equal(preparedSession?.slots.execution_native_v1.summary_kind, "session");
     assert.equal(preparedSession?.slots.execution_native_v1.compression_layer, "L0");
@@ -548,8 +577,8 @@ test("prepare/apply write normalizes execution-native metadata for handoff and s
       limit: 10,
       offset: 0,
     });
-    assert.ok(continuityRows.rows.some((row) => row.execution_native_v1.summary_kind === "handoff" && row.execution_native_v1.file_path === filePath));
-    assert.ok(continuityRows.rows.some((row) => row.execution_native_v1.summary_kind === "session_event" && row.execution_native_v1.file_path === filePath));
+    assert.ok(continuityRows.rows.some((row) => row.execution_native_v1.summary_kind === "handoff" && row.execution_native_v1.file_path === filePath && row.slots?.execution_contract_v1?.file_path === filePath));
+    assert.ok(continuityRows.rows.some((row) => row.execution_native_v1.summary_kind === "session_event" && row.execution_native_v1.file_path === filePath && row.slots?.execution_contract_v1?.file_path === filePath));
     assert.ok(continuityRows.rows.some((row) => row.execution_native_v1.summary_kind === "session"));
   } finally {
     await store.close();

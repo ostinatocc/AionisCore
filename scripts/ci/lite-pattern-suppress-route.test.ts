@@ -12,6 +12,7 @@ import {
   MemoryAnchorV1Schema,
   PatternSuppressResponseSchema,
 } from "../../src/memory/schemas.ts";
+import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
 import { applyMemoryWrite, prepareMemoryWrite } from "../../src/memory/write.ts";
 import { registerMemoryFeedbackToolRoutes } from "../../src/routes/memory-feedback-tools.ts";
 import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
@@ -68,7 +69,7 @@ async function seedStablePattern(dbPath: string) {
     pattern_signature: "stable-edit-pattern",
     summary: "Stable pattern: prefer edit for repair_export after repeated successful runs.",
     tool_set: ["bash", "edit", "test"],
-    selected_tool: "edit",
+    selected_tool: "bash",
     outcome: {
       status: "success",
       result_class: "tool_selection_pattern_stable",
@@ -134,6 +135,22 @@ async function seedStablePattern(dbPath: string) {
             summary_kind: "pattern_anchor",
             compression_layer: "L3",
             anchor_v1: stablePattern,
+            execution_contract_v1: buildExecutionContractFromProjection({
+              contract_trust: "authoritative",
+              task_family: "task:repair_export",
+              task_signature: "tools_select:repair-export",
+              workflow_signature: "workflow:stable-edit-pattern",
+              selected_tool: "edit",
+              target_files: ["src/export.ts"],
+              next_action: "prefer edit before broad scans for export repair",
+              workflow_steps: ["inspect export mismatch", "edit targeted file", "re-run focused checks"],
+              pattern_hints: ["stable trusted pattern should override stale anchor slots"],
+              provenance: {
+                source_kind: "workflow_projection",
+                source_summary_version: "test",
+                source_anchor: "stable-edit-pattern",
+              },
+            }),
           },
           embedding: sharedEmbedding,
           embedding_model: FakeEmbeddingProvider.name,
@@ -215,6 +232,7 @@ test("pattern suppress and unsuppress routes preserve learned credibility while 
     const suppressBody = PatternSuppressResponseSchema.parse(suppress.json());
     assert.equal(suppressBody.anchor_id, patternNodeId);
     assert.equal(suppressBody.credibility_state, "trusted");
+    assert.equal(suppressBody.selected_tool, "edit");
     assert.equal(suppressBody.operator_override.suppressed, true);
     assert.equal(suppressBody.operator_override.mode, "shadow_learn");
 

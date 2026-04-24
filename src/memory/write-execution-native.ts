@@ -1,5 +1,6 @@
 import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema } from "./schemas.js";
+import { deriveExecutionContractFromSlots } from "./execution-contract.js";
 
 type WriteLifecycleNode = {
   type: string;
@@ -81,6 +82,42 @@ function extractCompactExecutionSignatureValue(value: string | null | undefined)
   if (!normalized) return null;
   const compact = normalized.match(/^([A-Za-z0-9._:/-]{1,256})(?:\s+.*)?$/);
   return compact?.[1] ?? normalized;
+}
+
+function deriveExecutionContractProvenance(args: {
+  summaryKind: string | null;
+  systemKind: string | null;
+  hasAnchor: boolean;
+  slots: Record<string, unknown>;
+}) {
+  const sourceAnchor = firstString(args.slots.anchor, args.slots.file_path);
+  if (args.hasAnchor) {
+    return {
+      source_kind: "legacy_projection" as const,
+      source_anchor: sourceAnchor,
+      notes: ["write_execution_native:anchor_normalization"],
+    };
+  }
+  if (args.summaryKind === "write_distillation_fact" || args.summaryKind === "write_distillation_evidence") {
+    return {
+      source_kind: "write_distillation" as const,
+      source_anchor: sourceAnchor,
+      source_summary_version: "write_distillation_v1",
+      notes: [`write_execution_native:${args.summaryKind}`],
+    };
+  }
+  if (args.summaryKind === "handoff" || args.systemKind === "session_event" || args.systemKind === "session") {
+    return {
+      source_kind: "legacy_projection" as const,
+      source_anchor: sourceAnchor,
+      notes: [`write_execution_native:${args.summaryKind ?? args.systemKind ?? "continuity_carrier"}`],
+    };
+  }
+  return {
+    source_kind: "legacy_projection" as const,
+    source_anchor: sourceAnchor,
+    notes: ["write_execution_native:slot_normalization"],
+  };
 }
 
 export function normalizeExecutionNativeSlots(
@@ -221,6 +258,18 @@ export function normalizeExecutionNativeSlots(
     out.execution_native_v1 = parsed;
     if (!out.summary_kind && parsed.summary_kind) out.summary_kind = parsed.summary_kind;
     if (!out.compression_layer && parsed.compression_layer) out.compression_layer = parsed.compression_layer;
+  }
+  const normalizedExecutionContract = deriveExecutionContractFromSlots({
+    slots: out,
+    provenance: deriveExecutionContractProvenance({
+      summaryKind,
+      systemKind,
+      hasAnchor: anchorParsed.success,
+      slots: out,
+    }),
+  });
+  if (normalizedExecutionContract) {
+    out.execution_contract_v1 = normalizedExecutionContract;
   }
   return out;
 }

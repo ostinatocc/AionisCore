@@ -8,6 +8,7 @@ import Fastify from "fastify";
 import { createRequestGuards } from "../../src/app/request-guards.ts";
 import { registerHostErrorHandler } from "../../src/host/http-host.ts";
 import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
+import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
 import {
   DelegationRecordsWriteResponseSchema,
   ExecutionMemoryIntrospectionResponseSchema,
@@ -657,6 +658,138 @@ async function seedExecutionNativeOnlyWorkflowIntrospectionFixture(dbPath: strin
   return { liteWriteStore };
 }
 
+async function seedCanonicalContractPrecedenceIntrospectionFixture(dbPath: string) {
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const canonicalContract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    task_family: "task:canonical_export_repair",
+    task_signature: "canonical-export-repair",
+    workflow_signature: "execution_workflow:canonical-export-repair",
+    selected_tool: "edit",
+    file_path: "src/routes/canonical-export.ts",
+    target_files: ["src/routes/canonical-export.ts"],
+    next_action: "Follow the canonical execution contract next action.",
+    workflow_steps: ["inspect canonical export failure", "patch canonical export route", "rerun canonical export checks"],
+    pattern_hints: ["canonical pattern hint"],
+    service_lifecycle_constraints: [
+      {
+        version: 1,
+        service_kind: "http",
+        label: "canonical export preview",
+        launch_reference: "npm run preview:canonical",
+        endpoint: "http://127.0.0.1:4173/canonical",
+        must_survive_agent_exit: true,
+        revalidate_from_fresh_shell: true,
+        detach_then_probe: true,
+        health_checks: ["curl -fsS http://127.0.0.1:4173/canonical"],
+        teardown_notes: ["stop preview after verification"],
+      },
+    ],
+    acceptance_checks: ["npm run -s test:canonical-export"],
+    provenance: {
+      source_kind: "manual_context",
+      source_summary_version: "execution_contract_v1",
+      source_anchor: "canonical-introspection-test",
+      evidence_refs: [],
+      notes: ["canonical contract must drive introspection fields"],
+    },
+  });
+  const prepared = await prepareMemoryWrite(
+    {
+      tenant_id: "default",
+      scope: "default",
+      actor: "local-user",
+      producer_agent_id: "local-user",
+      owner_agent_id: "local-user",
+      input_text: "seed canonical contract precedence introspection fixture",
+      auto_embed: false,
+      nodes: [
+        {
+          id: randomUUID(),
+          type: "procedure",
+          title: "Canonical export workflow",
+          text_summary: "Workflow with canonical contract and conflicting legacy execution-native fields.",
+          slots: {
+            summary_kind: "workflow_anchor",
+            compression_layer: "L2",
+            execution_contract_v1: canonicalContract,
+            execution_native_v1: {
+              schema_version: "execution_native_v1",
+              execution_kind: "workflow_anchor",
+              summary_kind: "workflow_anchor",
+              compression_layer: "L2",
+              contract_trust: "observational",
+              task_family: "task:legacy_export_repair",
+              task_signature: "legacy-export-repair",
+              workflow_signature: "execution_workflow:legacy-export-repair",
+              file_path: "src/routes/legacy-export.ts",
+              target_files: ["src/routes/legacy-export.ts"],
+              next_action: "Legacy execution-native next action should not steer introspection.",
+              workflow_steps: ["legacy inspect", "legacy patch"],
+              pattern_hints: ["legacy pattern hint"],
+              service_lifecycle_constraints: [
+                {
+                  version: 1,
+                  service_kind: "http",
+                  label: "legacy export preview",
+                  launch_reference: "npm run preview:legacy",
+                  endpoint: "http://127.0.0.1:4173/legacy",
+                  must_survive_agent_exit: false,
+                  revalidate_from_fresh_shell: false,
+                  detach_then_probe: false,
+                  health_checks: ["curl -fsS http://127.0.0.1:4173/legacy"],
+                  teardown_notes: ["legacy teardown"],
+                },
+              ],
+              anchor_kind: "workflow",
+              anchor_level: "L2",
+              workflow_promotion: {
+                promotion_state: "stable",
+                promotion_origin: "execution_write_auto_promotion",
+                required_observations: 2,
+                observed_count: 2,
+                last_transition: "promoted_to_stable",
+                last_transition_at: "2026-03-20T00:30:00Z",
+                source_status: null,
+              },
+              maintenance: {
+                model: "lazy_online_v1",
+                maintenance_state: "retain",
+                offline_priority: "retain_workflow",
+                lazy_update_fields: ["usage_count", "last_used_at"],
+                last_maintenance_at: "2026-03-20T00:30:00Z",
+              },
+            },
+          },
+        },
+      ],
+      edges: [],
+    },
+    "default",
+    "default",
+    {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+    },
+    null,
+  );
+
+  await liteWriteStore.withTx(() =>
+    applyMemoryWrite({} as any, prepared, {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+      shadowDualWriteEnabled: false,
+      shadowDualWriteStrict: false,
+      associativeLinkOrigin: "memory_write",
+      write_access: liteWriteStore,
+    }),
+  );
+
+  return { liteWriteStore };
+}
+
 test("execution introspection route exposes demo-friendly workflow and pattern surfaces", async () => {
   const dbPath = tmpDbPath("execution-introspect");
   const app = Fastify();
@@ -1176,6 +1309,69 @@ test("execution introspection demo workflow lines keep source and tools for exec
     assert.ok(body.demo_surface.sections.workflows.some((line) => line.includes("source=playbook")));
     assert.ok(body.demo_surface.sections.workflows.some((line) => line.includes("tools=edit, test")));
     assert.ok(body.demo_surface.sections.workflows.some((line) => line.includes("projection=execution_write_projection_v1")));
+  } finally {
+    await app.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("execution introspection derives workflow fields through canonical execution contract surface", async () => {
+  const dbPath = tmpDbPath("execution-introspect-canonical-contract-precedence");
+  const app = Fastify();
+  const { liteWriteStore } = await seedCanonicalContractPrecedenceIntrospectionFixture(dbPath);
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryAccessRoutes({
+      app,
+      env: {
+        AIONIS_EDITION: "lite",
+        APP_ENV: "test",
+        MEMORY_SCOPE: "default",
+        MEMORY_TENANT_ID: "default",
+        LITE_LOCAL_ACTOR_ID: "local-user",
+        MAX_TEXT_LEN: 10_000,
+        PII_REDACTION: false,
+        ALLOW_CROSS_SCOPE_EDGES: false,
+        MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+        MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+      } as any,
+      embedder: null,
+      liteWriteStore,
+      writeAccessShadowMirrorV2: false,
+      requireStoreFeatureCapability: () => {},
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/execution/introspect",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        limit: 8,
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = ExecutionMemoryIntrospectionResponseSchema.parse(response.json());
+    const workflow = body.recommended_workflows[0];
+    assert.equal(workflow?.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(workflow?.contract_trust, "authoritative");
+    assert.equal(workflow?.task_family, "task:canonical_export_repair");
+    assert.equal(workflow?.task_signature, "canonical-export-repair");
+    assert.equal(workflow?.workflow_signature, "execution_workflow:canonical-export-repair");
+    assert.equal(workflow?.file_path, "src/routes/canonical-export.ts");
+    assert.equal(workflow?.next_action, "Follow the canonical execution contract next action.");
+    assert.equal(workflow?.workflow_steps[0], "inspect canonical export failure");
+    assert.equal(workflow?.pattern_hints[0], "canonical pattern hint");
+    assert.equal(workflow?.service_lifecycle_constraints[0]?.label, "canonical export preview");
+    assert.equal(workflow?.service_lifecycle_constraints[0]?.must_survive_agent_exit, true);
   } finally {
     await app.close();
     await liteWriteStore.close();

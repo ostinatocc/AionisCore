@@ -7,6 +7,21 @@ import {
   type ExecutionStateV1,
 } from "../execution/types.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema } from "./schemas.js";
+import { buildExecutionContractFromProjection, parseExecutionContract } from "./execution-contract.js";
+import {
+  resolveNodeAnchorKind,
+  resolveNodeExecutionContractTrust,
+  resolveNodeExecutionKind,
+  resolveNodeFilePath,
+  resolveNodeNextAction,
+  resolveNodePatternHints,
+  resolveNodeServiceLifecycleConstraints,
+  resolveNodeTaskFamily,
+  resolveNodeTaskSignature,
+  resolveNodeWorkflowSignature,
+  resolveNodeWorkflowSteps,
+  resolveNodeTargetFiles,
+} from "./node-execution-surface.js";
 import {
   buildDistillationMetadata,
   buildWorkflowMaintenanceMetadata,
@@ -104,13 +119,6 @@ function firstString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function firstContractTrust(...values: unknown[]): "authoritative" | "advisory" | "observational" | null {
-  for (const value of values) {
-    if (value === "authoritative" || value === "advisory" || value === "observational") return value;
-  }
-  return null;
-}
-
 function normalizeLabel(value: string | null | undefined): string | null {
   if (!value) return null;
   return value.trim().toLowerCase().replace(/\s+/g, " ");
@@ -154,29 +162,24 @@ function firstRecord(value: unknown): Record<string, unknown> | null {
   return asRecord(value);
 }
 
+function readSourceExecutionContract(source: WriteProjectionSourceNode) {
+  return parseExecutionContract(firstRecord(source.slots)?.execution_contract_v1);
+}
+
 function collectWorkflowSteps(source: WriteProjectionSourceNode): string[] {
   return normalizeFileList([
-    ...stringList(firstRecord(source.slots)?.workflow_steps),
-    ...stringList(firstRecord(source.slots?.execution_native_v1)?.workflow_steps),
+    ...resolveNodeWorkflowSteps({ slots: source.slots }),
   ]);
 }
 
 function collectPatternHints(source: WriteProjectionSourceNode): string[] {
   return normalizeFileList([
-    ...stringList(firstRecord(source.slots)?.pattern_hints),
-    ...stringList(firstRecord(source.slots?.execution_native_v1)?.pattern_hints),
+    ...resolveNodePatternHints({ slots: source.slots }),
   ]);
 }
 
 function deriveContractTrustFromSource(source: WriteProjectionSourceNode): "authoritative" | "advisory" | "observational" | null {
-  const slots = asRecord(source.slots);
-  const executionNative = asRecord(slots?.execution_native_v1);
-  const recoveryContract = asRecord(slots?.recovery_contract_v1);
-  return firstContractTrust(
-    slots?.contract_trust,
-    executionNative?.contract_trust,
-    recoveryContract?.contract_trust,
-  );
+  return resolveNodeExecutionContractTrust({ slots: source.slots });
 }
 
 function collectServiceLifecycleConstraints(
@@ -185,8 +188,7 @@ function collectServiceLifecycleConstraints(
   packet: ExecutionPacketV1 | null,
 ): ExecutionStateV1["service_lifecycle_constraints"] {
   return uniqueLifecycleConstraints([
-    ...((firstRecord(source.slots)?.service_lifecycle_constraints as unknown[]) ?? []),
-    ...((firstRecord(source.slots?.execution_native_v1)?.service_lifecycle_constraints as unknown[]) ?? []),
+    ...resolveNodeServiceLifecycleConstraints({ slots: source.slots }),
     ...(state?.service_lifecycle_constraints ?? []),
     ...(packet?.service_lifecycle_constraints ?? []),
   ]);
@@ -194,11 +196,12 @@ function collectServiceLifecycleConstraints(
 
 function synthesizePacketFromLightweightHandoff(source: WriteProjectionSourceNode): ExecutionPacketV1 | null {
   const slots = asRecord(source.slots);
+  const executionContract = readSourceExecutionContract(source);
   if (!slots) return null;
   if (firstString(slots.summary_kind) !== "handoff") return null;
 
   const handoffKind = firstString(slots.handoff_kind);
-  const filePath = firstString(slots.file_path);
+  const filePath = firstString(executionContract?.file_path, slots.file_path);
   const repoRoot = firstString(slots.repo_root);
   const symbol = firstString(slots.symbol);
   const explicitAnchor = firstString(slots.anchor);
@@ -207,6 +210,7 @@ function synthesizePacketFromLightweightHandoff(source: WriteProjectionSourceNod
     ?? firstString(source.text_summary)
     ?? firstString(source.title);
   const targetFiles = normalizeFileList([
+    ...(executionContract?.target_files ?? []),
     ...stringList(slots.target_files),
     ...(filePath ? [filePath] : []),
   ]);
@@ -215,14 +219,18 @@ function synthesizePacketFromLightweightHandoff(source: WriteProjectionSourceNod
     return null;
   }
 
-  const nextAction = firstString(slots.next_action)
+  const nextAction = firstString(executionContract?.next_action, slots.next_action)
     ?? firstString(slots.handoff_text)
     ?? taskBrief;
-  const acceptanceChecks = stringList(slots.acceptance_checks);
+  const acceptanceChecks = normalizeFileList([
+    ...(executionContract?.outcome.acceptance_checks ?? []),
+    ...stringList(slots.acceptance_checks),
+  ]);
   const mustChange = stringList(slots.must_change);
   const mustRemove = stringList(slots.must_remove);
   const mustKeep = stringList(slots.must_keep);
   const serviceLifecycleConstraints = uniqueLifecycleConstraints([
+    ...(executionContract?.service_lifecycle_constraints ?? []),
     ...((slots.service_lifecycle_constraints as unknown[]) ?? []),
     ...((firstRecord(slots.execution_native_v1)?.service_lifecycle_constraints as unknown[]) ?? []),
   ]);
@@ -307,16 +315,7 @@ function deriveTaskSignatureFromInputs(state: ExecutionStateV1 | null, packet: E
 }
 
 function deriveTaskFamilyFromSource(source: WriteProjectionSourceNode): string | null {
-  const slots = asRecord(source.slots);
-  const executionNative = asRecord(slots?.execution_native_v1);
-  const executionResultSummary = asRecord(slots?.execution_result_summary);
-  const trajectoryCompileSummary = asRecord(executionResultSummary?.trajectory_compile_v1);
-  return firstString(
-    slots?.task_family,
-    executionNative?.task_family,
-    trajectoryCompileSummary?.task_family,
-    slots?.task_kind,
-  );
+  return resolveNodeTaskFamily({ slots: source.slots });
 }
 
 function resolveWorkflowProjectionDistillationSourceKind(
@@ -389,10 +388,8 @@ function buildProjectionClientId(sourceNodeId: string, workflowSignature: string
 }
 
 function sourceAlreadyCarriesWorkflowMemory(node: WriteProjectionSourceNode): boolean {
-  const executionNative = asRecord(node.slots?.execution_native_v1);
-  const anchor = asRecord(node.slots?.anchor_v1);
-  const executionKind = firstString(executionNative?.execution_kind);
-  const anchorKind = firstString(anchor?.anchor_kind);
+  const executionKind = resolveNodeExecutionKind(node.slots);
+  const anchorKind = resolveNodeAnchorKind(node.slots);
   return executionKind === "workflow_candidate"
     || executionKind === "workflow_anchor"
     || anchorKind === "workflow";
@@ -427,7 +424,10 @@ export function assessWorkflowProjectionSourceNode(source: WriteProjectionSource
     return { eligible: false, reason: "missing_execution_continuity" };
   }
 
-  const workflowSignature = deriveWorkflowSignatureFromInputs(state, packet);
+  const sourceExecutionContract = readSourceExecutionContract(source);
+  const workflowSignature = firstString(sourceExecutionContract?.workflow_signature)
+    ?? resolveNodeWorkflowSignature({ slots: source.slots })
+    ?? deriveWorkflowSignatureFromInputs(state, packet);
   const projectionObservationId = deriveWorkflowProjectionObservationId(source, state, packet);
   return {
     eligible: true,
@@ -439,6 +439,40 @@ export function assessWorkflowProjectionSourceNode(source: WriteProjectionSource
     ownerAgentId: source.owner_agent_id ?? source.producer_agent_id ?? null,
     ownerTeamId: source.owner_team_id ?? null,
   };
+}
+
+function buildWorkflowProjectionExecutionContract(args: {
+  source: WriteProjectionSourceNode;
+  contractTrust: "authoritative" | "advisory" | "observational" | null;
+  taskSignature: string;
+  taskFamily: string | null;
+  workflowSignature: string;
+  filePath: string | null;
+  targetFiles: string[];
+  nextAction: string | null;
+  workflowSteps: string[];
+  patternHints: string[];
+  serviceLifecycleConstraints: ExecutionStateV1["service_lifecycle_constraints"];
+}){
+  return buildExecutionContractFromProjection({
+    contract_trust: args.contractTrust,
+    task_family: args.taskFamily,
+    task_signature: args.taskSignature,
+    workflow_signature: args.workflowSignature,
+    file_path: args.filePath,
+    target_files: args.targetFiles,
+    next_action: args.nextAction,
+    workflow_steps: args.workflowSteps,
+    pattern_hints: args.patternHints,
+    service_lifecycle_constraints: args.serviceLifecycleConstraints,
+    provenance: {
+      source_kind: "workflow_projection",
+      source_summary_version: "execution_write_projection_v1",
+      source_anchor: args.source.id,
+      evidence_refs: [args.source.id],
+      notes: [firstString(args.source.title, args.source.text_summary) ?? "workflow write projection"],
+    },
+  });
 }
 
 export function countDistinctWorkflowObservations(rows: Array<{ id: string; client_id?: string | null }>): number {
@@ -728,18 +762,37 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
     });
     const observedCount = countDistinctWorkflowObservations(existingCandidates.rows) + 1;
     const requiredObservations = 2;
+    const sourceExecutionContract = readSourceExecutionContract(source);
     const title = deriveCandidateTitle(source, state, packet);
     const summary = buildCandidateSummary(state, packet);
-    const taskSignature = deriveTaskSignatureFromInputs(state, packet);
+    const taskSignature = resolveNodeTaskSignature({ slots: source.slots }) ?? deriveTaskSignatureFromInputs(state, packet);
     const taskFamily = deriveTaskFamilyFromSource(source);
-    const targetFiles = collectTargetFilesFromInputs(state, packet);
-    const filePath = firstString(packet?.resume_anchor?.file_path ?? null) ?? targetFiles[0] ?? null;
-    const nextAction = firstString(packet?.next_action ?? null);
+    const sourceTargetFiles = resolveNodeTargetFiles({ slots: source.slots });
+    const targetFiles = sourceTargetFiles.length > 0 ? sourceTargetFiles : collectTargetFilesFromInputs(state, packet);
+    const filePath = resolveNodeFilePath({ slots: source.slots })
+      ?? firstString(packet?.resume_anchor?.file_path ?? null)
+      ?? targetFiles[0]
+      ?? null;
+    const nextAction = resolveNodeNextAction({ slots: source.slots })
+      ?? firstString(packet?.next_action ?? null);
     const workflowSteps = collectWorkflowSteps(source);
     const patternHints = collectPatternHints(source);
     const serviceLifecycleConstraints = collectServiceLifecycleConstraints(source, state, packet);
     const contractTrust = deriveContractTrustFromSource(source);
     const toolSet = deriveWorkflowToolSet(state, packet);
+    const executionContract = buildWorkflowProjectionExecutionContract({
+      source,
+      contractTrust,
+      taskSignature,
+      taskFamily,
+      workflowSignature,
+      filePath,
+      targetFiles,
+      nextAction,
+      workflowSteps,
+      patternHints,
+      serviceLifecycleConstraints,
+    });
     const distillationSourceKind = resolveWorkflowProjectionDistillationSourceKind(source);
 
     const executionNative = ExecutionNativeV1Schema.parse({
@@ -830,6 +883,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
         ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
         ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
+        execution_contract_v1: executionContract,
         execution_native_v1: executionNative,
         workflow_write_projection: {
           generated_by: "execution_write_projection_v1",
@@ -883,6 +937,19 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         supportingNodeIds: existingCandidates.rows.map((row) => row.id),
         promotedAt: now,
       });
+      const stableExecutionContract = buildWorkflowProjectionExecutionContract({
+        source,
+        contractTrust,
+        taskSignature: stableAnchor.task_signature,
+        taskFamily: stableAnchor.task_family ?? null,
+        workflowSignature: stableAnchor.workflow_signature,
+        filePath: stableAnchor.file_path ?? null,
+        targetFiles: stableAnchor.target_files ?? [],
+        nextAction: stableAnchor.next_action ?? null,
+        workflowSteps: stableAnchor.key_steps ?? [],
+        patternHints: stableAnchor.pattern_hints ?? [],
+        serviceLifecycleConstraints: stableAnchor.service_lifecycle_constraints ?? [],
+      });
       nodes.push({
         id: stableNodeId,
         client_id: stableClientId,
@@ -899,6 +966,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
           summary_kind: "workflow_anchor",
           compression_layer: "L2",
           anchor_v1: stableAnchor,
+          execution_contract_v1: stableExecutionContract,
           execution_native_v1: {
             schema_version: "execution_native_v1",
             execution_kind: "workflow_anchor",

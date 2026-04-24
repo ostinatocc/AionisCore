@@ -81,6 +81,8 @@ test("replay-learning projection artifacts produce candidate workflow before pro
   assert.equal(plan.shouldPromoteStableWorkflow, false);
   assert.equal(episode?.type, "event");
   assert.equal(episode?.slots?.summary_kind, "workflow_candidate");
+  assert.equal(episode?.slots?.execution_contract_v1?.schema_version, "execution_contract_v1");
+  assert.equal(episode?.slots?.execution_contract_v1?.workflow_signature, "replay-learning-workflow-sig");
   assert.equal(episode?.slots?.execution_native_v1?.execution_kind, "workflow_candidate");
   assert.equal(episode?.slots?.execution_native_v1?.workflow_promotion?.promotion_state, "candidate");
   assert.equal(episode?.slots?.execution_native_v1?.workflow_promotion?.observed_count, 1);
@@ -117,6 +119,8 @@ test("replay-learning projection artifacts auto-promote to stable workflow when 
   assert.equal(episode?.slots?.execution_native_v1, undefined);
   assert.equal(workflow?.type, "procedure");
   assert.equal(workflow?.slots?.summary_kind, "workflow_anchor");
+  assert.equal(workflow?.slots?.execution_contract_v1?.schema_version, "execution_contract_v1");
+  assert.equal(workflow?.slots?.execution_contract_v1?.workflow_signature, "replay-learning-workflow-sig");
   assert.equal(workflow?.slots?.execution_native_v1?.execution_kind, "workflow_anchor");
   assert.equal(workflow?.slots?.execution_native_v1?.workflow_promotion?.promotion_origin, "replay_learning_auto_promotion");
   assert.equal(workflow?.slots?.execution_native_v1?.workflow_promotion?.promotion_state, "stable");
@@ -161,6 +165,7 @@ test("replay-learning projection artifacts keep low-trust workflows at candidate
   assert.equal(plan.shouldPromoteStableWorkflow, false);
   assert.equal(workflow, undefined);
   assert.equal(episode?.slots?.summary_kind, "workflow_candidate");
+  assert.equal(episode?.slots?.execution_contract_v1?.contract_trust, "advisory");
   assert.equal(episode?.slots?.execution_native_v1?.contract_trust, "advisory");
   assert.equal(episode?.slots?.execution_native_v1?.workflow_promotion?.promotion_state, "candidate");
 });
@@ -248,6 +253,10 @@ test("replay-learning projection artifacts preserve richer recovery contract fie
 
   const workflow = plan.nodes.find((node) => node.client_id === plan.workflowClientId) as Record<string, any> | undefined;
   assert.ok(workflow);
+  assert.equal(workflow?.slots?.execution_contract_v1?.schema_version, "execution_contract_v1");
+  assert.equal(workflow?.slots?.execution_contract_v1?.contract_trust, "authoritative");
+  assert.equal(workflow?.slots?.execution_contract_v1?.task_family, "service_publish_validate");
+  assert.deepEqual(workflow?.slots?.execution_contract_v1?.target_files, ["scripts/build_and_serve.py", "pyproject.toml"]);
   assert.equal(workflow?.slots?.anchor_v1?.contract_trust, "authoritative");
   assert.equal(workflow?.slots?.anchor_v1?.task_family, "service_publish_validate");
   assert.deepEqual(workflow?.slots?.anchor_v1?.target_files, ["scripts/build_and_serve.py", "pyproject.toml"]);

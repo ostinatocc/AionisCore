@@ -27,6 +27,13 @@ import {
   type ToolsFeedbackGovernancePreview,
   type ToolsFeedbackResponse,
 } from "./schemas.js";
+import {
+  buildExecutionContractContextOverlay,
+  buildExecutionContractFromProjection,
+  deriveExecutionContractFromSlots,
+  mergeExecutionContractsWithActionSurface,
+  projectExecutionContractToRecoveryContract,
+} from "./execution-contract.js";
 import type { FormPatternGovernanceReviewProvider } from "./governance-provider-types.js";
 import { buildExperienceIntelligenceResponse } from "./experience-intelligence.js";
 import { buildExecutionMemoryIntrospectionLite } from "./execution-introspection.js";
@@ -185,51 +192,55 @@ function normalizeContractTrust(value: unknown): ContractTrust | null {
     : null;
 }
 
+function resolveFeedbackExecutionContract(context: unknown) {
+  const ctx = asRecord(context);
+  if (!ctx) return null;
+  return deriveExecutionContractFromSlots({
+    slots: ctx,
+    provenance: {
+      source_kind: "manual_context",
+      source_summary_version: "tools_feedback_context_v1",
+      notes: ["tools_feedback:context_resolution"],
+    },
+  });
+}
+
 function extractWorkflowFeedbackTarget(context: unknown): WorkflowFeedbackTarget {
   const ctx = asRecord(context);
+  const executionContract = resolveFeedbackExecutionContract(context);
   const task = asRecord(ctx?.task);
   const error = asRecord(ctx?.error);
   const workflow = asRecord(ctx?.workflow);
   const execution = asRecord(ctx?.execution);
-  const recoveryContract = asRecord(ctx?.recovery_contract_v1);
-  const recoveryContractBody = asRecord(recoveryContract?.contract);
-  const executionResultSummary = asRecord(ctx?.execution_result_summary);
-  const trajectoryCompile = asRecord(executionResultSummary?.trajectory_compile_v1);
-  const trajectoryContract = asRecord(trajectoryCompile?.contract);
   const targetFiles = stringList([
+    ...stringList(executionContract?.target_files, 24),
     ...stringList(ctx?.target_files, 24),
     ...stringList(workflow?.target_files, 24),
     ...stringList(execution?.target_files, 24),
-    ...stringList(recoveryContractBody?.target_files, 24),
-    ...stringList(trajectoryContract?.target_files, 24),
   ], 24);
   const workflowSteps = stringList([
+    ...stringList(executionContract?.workflow_steps, 24),
     ...stringList(ctx?.workflow_steps, 24),
     ...stringList(workflow?.workflow_steps, 24),
     ...stringList(execution?.workflow_steps, 24),
-    ...stringList(recoveryContractBody?.workflow_steps, 24),
-    ...stringList(trajectoryContract?.workflow_steps, 24),
   ], 24);
   const patternHints = stringList([
+    ...stringList(executionContract?.pattern_hints, 24),
     ...stringList(ctx?.pattern_hints, 24),
     ...stringList(workflow?.pattern_hints, 24),
     ...stringList(execution?.pattern_hints, 24),
-    ...stringList(recoveryContractBody?.pattern_hints, 24),
-    ...stringList(trajectoryContract?.pattern_hints, 24),
   ], 24);
   const serviceLifecycleConstraints = [
+    ...serviceLifecycleList(executionContract?.service_lifecycle_constraints, 16),
     ...serviceLifecycleList(ctx?.service_lifecycle_constraints, 16),
     ...serviceLifecycleList(workflow?.service_lifecycle_constraints, 16),
     ...serviceLifecycleList(execution?.service_lifecycle_constraints, 16),
-    ...serviceLifecycleList(recoveryContractBody?.service_lifecycle_constraints, 16),
-    ...serviceLifecycleList(trajectoryContract?.service_lifecycle_constraints, 16),
   ].slice(0, 16);
   return {
     taskSignature:
-      nullableString(ctx?.task_signature)
+      nullableString(executionContract?.task_signature)
+      ?? nullableString(ctx?.task_signature)
       ?? nullableString(task?.signature)
-      ?? nullableString(recoveryContract?.task_signature)
-      ?? nullableString(trajectoryCompile?.task_signature)
       ?? nullableString(execution?.task_signature),
     errorSignature:
       nullableString(ctx?.error_signature)
@@ -237,33 +248,29 @@ function extractWorkflowFeedbackTarget(context: unknown): WorkflowFeedbackTarget
       ?? nullableString(error?.code)
       ?? nullableString(execution?.error_signature),
     workflowSignature:
-      nullableString(ctx?.workflow_signature)
+      nullableString(executionContract?.workflow_signature)
+      ?? nullableString(ctx?.workflow_signature)
       ?? nullableString(workflow?.signature)
-      ?? nullableString(recoveryContract?.workflow_signature)
-      ?? nullableString(trajectoryCompile?.workflow_signature)
       ?? nullableString(execution?.workflow_signature),
     taskFamily:
-      nullableString(ctx?.task_family)
+      nullableString(executionContract?.task_family)
+      ?? nullableString(ctx?.task_family)
       ?? nullableString(task?.family)
-      ?? nullableString(recoveryContract?.task_family)
-      ?? nullableString(trajectoryCompile?.task_family)
       ?? nullableString(execution?.task_family)
       ?? nullableString(ctx?.task_kind),
     filePath:
-      nullableString(ctx?.file_path)
+      nullableString(executionContract?.file_path)
+      ?? nullableString(ctx?.file_path)
       ?? nullableString(workflow?.file_path)
       ?? nullableString(execution?.file_path)
-      ?? nullableString(recoveryContractBody?.file_path)
-      ?? nullableString(trajectoryContract?.file_path)
       ?? targetFiles[0]
       ?? null,
     targetFiles,
     nextAction:
-      nullableString(ctx?.next_action)
+      nullableString(executionContract?.next_action)
+      ?? nullableString(ctx?.next_action)
       ?? nullableString(workflow?.next_action)
-      ?? nullableString(execution?.next_action)
-      ?? nullableString(recoveryContractBody?.next_action)
-      ?? nullableString(trajectoryContract?.next_action),
+      ?? nullableString(execution?.next_action),
     workflowSteps,
     patternHints,
     serviceLifecycleConstraints,
@@ -272,15 +279,13 @@ function extractWorkflowFeedbackTarget(context: unknown): WorkflowFeedbackTarget
 
 function extractFeedbackContractTrust(context: unknown): ContractTrust | null {
   const ctx = asRecord(context);
+  const executionContract = resolveFeedbackExecutionContract(context);
   const firstStep = asRecord(ctx?.first_step_recommendation);
   const kickoff = asRecord(ctx?.kickoff_recommendation);
-  const policyContract = asRecord(ctx?.policy_contract);
-  const recoveryContract = asRecord(ctx?.recovery_contract_v1);
   return normalizeContractTrust(ctx?.contract_trust)
+    ?? normalizeContractTrust(executionContract?.contract_trust)
     ?? normalizeContractTrust(firstStep?.contract_trust)
     ?? normalizeContractTrust(kickoff?.contract_trust)
-    ?? normalizeContractTrust(policyContract?.contract_trust)
-    ?? normalizeContractTrust(recoveryContract?.contract_trust)
     ?? null;
 }
 
@@ -335,11 +340,28 @@ export function buildMaterializationContextFromFeedback(args: {
   workflowFeedbackTarget: WorkflowFeedbackTarget;
 }) {
   const base = asRecord(args.context) ? { ...(args.context as Record<string, unknown>) } : {};
+  const existingExecutionContract = resolveFeedbackExecutionContract(base);
   const contractTrust = extractFeedbackContractTrust(args.context);
   if (contractTrust) {
     base.contract_trust = contractTrust;
   }
   if (contractTrust === "observational") {
+    if (existingExecutionContract) {
+      base.execution_contract_v1 = mergeExecutionContractsWithActionSurface({
+        existing: existingExecutionContract,
+        incoming: buildExecutionContractFromProjection({
+          contract_trust: "observational",
+          provenance: {
+            source_kind: "manual_context",
+            source_summary_version: "tools_feedback_materialization_v1",
+            source_anchor: null,
+            evidence_refs: [],
+            notes: ["feedback materialization kept contract observational"],
+          },
+        }),
+        preference: "incoming",
+      });
+    }
     const recoveryContract = asRecord(base.recovery_contract_v1);
     if (recoveryContract) {
       base.recovery_contract_v1 = {
@@ -387,33 +409,38 @@ export function buildMaterializationContextFromFeedback(args: {
     || args.workflowFeedbackTarget.patternHints.length > 0
     || args.workflowFeedbackTarget.serviceLifecycleConstraints.length > 0
   ) {
-    const recoveryContract = asRecord(base.recovery_contract_v1);
-    const recoveryBody = asRecord(recoveryContract?.contract);
-    base.recovery_contract_v1 = {
-      ...(recoveryContract ?? {}),
-      ...(contractTrust ? { contract_trust: contractTrust } : {}),
-      ...(nullableString(recoveryContract?.task_family) || !args.workflowFeedbackTarget.taskFamily
-        ? {}
-        : { task_family: args.workflowFeedbackTarget.taskFamily }),
-      ...(nullableString(recoveryContract?.task_signature) || !args.workflowFeedbackTarget.taskSignature
-        ? {}
-        : { task_signature: args.workflowFeedbackTarget.taskSignature }),
-      ...(nullableString(recoveryContract?.workflow_signature) || !args.workflowFeedbackTarget.workflowSignature
-        ? {}
-        : { workflow_signature: args.workflowFeedbackTarget.workflowSignature }),
-      contract: {
-        ...(recoveryBody ?? {}),
-        target_files: mergeStringList(recoveryBody?.target_files, args.workflowFeedbackTarget.targetFiles, 24),
-        next_action: nullableString(recoveryBody?.next_action) ?? args.workflowFeedbackTarget.nextAction,
-        workflow_steps: mergeStringList(recoveryBody?.workflow_steps, args.workflowFeedbackTarget.workflowSteps, 24),
-        pattern_hints: mergeStringList(recoveryBody?.pattern_hints, args.workflowFeedbackTarget.patternHints, 24),
-        service_lifecycle_constraints: mergeServiceLifecycleList(
-          recoveryBody?.service_lifecycle_constraints,
-          args.workflowFeedbackTarget.serviceLifecycleConstraints,
-          16,
-        ),
-      },
-    };
+    const mergedExecutionContract = mergeExecutionContractsWithActionSurface({
+      existing: existingExecutionContract,
+      incoming: buildExecutionContractFromProjection({
+        contract_trust: contractTrust,
+        task_family: args.workflowFeedbackTarget.taskFamily,
+        task_signature: args.workflowFeedbackTarget.taskSignature,
+        workflow_signature: args.workflowFeedbackTarget.workflowSignature,
+        file_path: args.workflowFeedbackTarget.filePath,
+        target_files: args.workflowFeedbackTarget.targetFiles,
+        next_action: args.workflowFeedbackTarget.nextAction,
+        workflow_steps: args.workflowFeedbackTarget.workflowSteps,
+        pattern_hints: args.workflowFeedbackTarget.patternHints,
+        service_lifecycle_constraints: args.workflowFeedbackTarget.serviceLifecycleConstraints,
+        provenance: {
+          source_kind: "manual_context",
+          source_summary_version: "tools_feedback_materialization_v1",
+          source_anchor: null,
+          evidence_refs: [],
+          notes: ["workflow feedback target enriched canonical execution contract"],
+        },
+      }),
+      preference: "incoming",
+    });
+    return buildExecutionContractContextOverlay({
+      currentContext: base,
+      contract: mergedExecutionContract,
+      recoveryContract: projectExecutionContractToRecoveryContract({
+        existing: base.recovery_contract_v1,
+        contract: mergedExecutionContract,
+        summaryVersion: "recovery_contract_v1",
+      }),
+    });
   }
   return base;
 }

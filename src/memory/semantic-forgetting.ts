@@ -1,5 +1,11 @@
 import { resolveNodePriorityProfile } from "./importance-dynamics.js";
 import { nextColderTier, normalizeMemoryTier, type MemoryTierName } from "./evolution-operators.js";
+import {
+  resolveNodeCredibilityState,
+  resolveNodeExecutionContractTrust,
+  resolveNodePolicyMemoryState,
+  resolveNodeSummaryKind,
+} from "./node-execution-surface.js";
 
 export type SemanticForgettingAction = "retain" | "demote" | "archive" | "review";
 export type SemanticForgettingLifecycleState = "active" | "contested" | "retired" | "archived";
@@ -50,14 +56,16 @@ function numeric(value: unknown): number | null {
 
 function deriveLifecycleState(slots: Record<string, unknown> | null, tier: MemoryTierName): SemanticForgettingLifecycleState {
   if (tier === "archive") return "archived";
-  const policyState = firstString(slots?.policy_memory_state, asRecord(slots?.policy_contract_v1)?.policy_memory_state);
+  const policyState = resolveNodePolicyMemoryState(slots);
   if (policyState === "retired") return "retired";
   if (policyState === "contested") return "contested";
-  const credibilityState = firstString(
-    asRecord(slots?.anchor_v1)?.credibility_state,
-    asRecord(slots?.execution_native_v1)?.credibility_state,
-  );
+  const credibilityState = resolveNodeCredibilityState(slots);
   if (credibilityState === "contested") return "contested";
+  const summaryKind = resolveNodeSummaryKind(slots);
+  const contractTrust = resolveNodeExecutionContractTrust({ slots });
+  if (summaryKind === "policy_memory" && contractTrust && contractTrust !== "authoritative") {
+    return "contested";
+  }
   const explicit = firstString(slots?.lifecycle_state);
   if (explicit === "archived") return "archived";
   return "active";

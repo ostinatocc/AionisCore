@@ -78,3 +78,52 @@ test("semantic forgetting archives retired policy memory", () => {
   assert.equal(out.lifecycle_state, "retired");
   assert.equal(out.should_relocate, true);
 });
+
+test("semantic forgetting treats low-trust canonical policy memory as contested when explicit lifecycle state is absent", () => {
+  const out = resolveSemanticForgettingDecision({
+    type: "concept",
+    tier: "hot",
+    title: "Advisory policy memory",
+    text_summary: "Hint-level persisted policy memory should not stay hot by default",
+    slots: {
+      summary_kind: "policy_memory",
+      compression_layer: "L4",
+      execution_contract_v1: {
+        schema_version: "execution_contract_v1",
+        contract_trust: "advisory",
+        task_family: "task:repair_export",
+        task_signature: "repair-export-route",
+        workflow_signature: "execution_workflow:repair-export",
+        policy_memory_id: "pm_advisory",
+        selected_tool: "edit",
+        file_path: "src/routes/export.ts",
+        target_files: ["src/routes/export.ts"],
+        next_action: "Patch src/routes/export.ts and rerun export tests.",
+        workflow_steps: [],
+        pattern_hints: [],
+        service_lifecycle_constraints: [],
+        outcome: {
+          acceptance_checks: [],
+          success_invariants: [],
+          dependency_requirements: [],
+          environment_assumptions: [],
+          must_hold_after_exit: [],
+          external_visibility_requirements: [],
+        },
+        provenance: {
+          source_kind: "policy_contract",
+          source_summary_version: "policy_contract_v1",
+          source_anchor: "pm_advisory",
+          evidence_refs: [],
+          notes: [],
+        },
+      },
+      feedback_positive: 1,
+      feedback_quality: 0.1,
+    },
+  });
+
+  assert.equal(out.lifecycle_state, "contested");
+  assert.equal(out.action, "demote");
+  assert.equal(out.target_tier, "warm");
+});

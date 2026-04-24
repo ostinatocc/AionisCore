@@ -29,10 +29,12 @@ import {
   buildExecutionRoutingSignalSummary,
 } from "./planning-summary-routing.js";
 import { buildExecutionMemorySummaryBundle } from "./planning-summary-surfaces.js";
+import { parseExecutionContract, type ExecutionContractV1 } from "../memory/execution-contract.js";
 
 type ExperienceRecommendationProjection = {
   history_applied: boolean;
   contract_trust: ContractTrust | null;
+  execution_contract_v1: ExecutionContractV1 | null;
   selected_tool: string | null;
   task_family: string | null;
   workflow_signature: string | null;
@@ -269,6 +271,11 @@ export function buildPlanningSummary(args: {
     args.experience_intelligence && typeof args.experience_intelligence === "object"
       ? ((args.experience_intelligence as Record<string, unknown>).recommendation as Record<string, unknown> | undefined)
       : undefined;
+  const experienceExecutionContract = parseExecutionContract(
+    args.experience_intelligence && typeof args.experience_intelligence === "object"
+      ? (args.experience_intelligence as Record<string, unknown>).execution_contract_v1
+      : null,
+  );
   const actionRetrievalUncertainty = readActionRetrievalUncertainty(args.experience_intelligence);
   const experiencePath =
     experienceRecommendation?.path && typeof experienceRecommendation.path === "object"
@@ -281,35 +288,52 @@ export function buildPlanningSummary(args: {
   const experienceSummary: ExperienceRecommendationProjection | null = experienceRecommendation
     ? {
         history_applied: experienceRecommendation.history_applied === true,
-        contract_trust: readContractTrust(experiencePath?.contract_trust)
+        contract_trust: readContractTrust(experienceExecutionContract?.contract_trust)
+          ?? readContractTrust(experiencePath?.contract_trust)
           ?? readContractTrust(experiencePolicyContract?.contract_trust)
           ?? null,
-        selected_tool: typeof experienceRecommendation.tool === "object" && experienceRecommendation.tool && typeof (experienceRecommendation.tool as any).selected_tool === "string"
+        execution_contract_v1: experienceExecutionContract,
+        selected_tool: typeof experienceExecutionContract?.selected_tool === "string"
+          ? experienceExecutionContract.selected_tool
+          : typeof experienceRecommendation.tool === "object" && experienceRecommendation.tool && typeof (experienceRecommendation.tool as any).selected_tool === "string"
           ? (experienceRecommendation.tool as any).selected_tool
           : null,
         task_family:
-          typeof experiencePath?.task_family === "string"
+          typeof experienceExecutionContract?.task_family === "string"
+            ? experienceExecutionContract.task_family
+            : typeof experiencePath?.task_family === "string"
             ? experiencePath.task_family
             : typeof experiencePolicyContract?.task_family === "string"
               ? experiencePolicyContract.task_family
               : null,
         workflow_signature:
-          typeof experiencePath?.workflow_signature === "string"
+          typeof experienceExecutionContract?.workflow_signature === "string"
+            ? experienceExecutionContract.workflow_signature
+            : typeof experiencePath?.workflow_signature === "string"
             ? experiencePath.workflow_signature
             : typeof experiencePolicyContract?.workflow_signature === "string"
               ? experiencePolicyContract.workflow_signature
               : null,
         policy_memory_id:
-          typeof experiencePolicyContract?.policy_memory_id === "string"
+          typeof experienceExecutionContract?.policy_memory_id === "string"
+            ? experienceExecutionContract.policy_memory_id
+            : typeof experiencePolicyContract?.policy_memory_id === "string"
             ? experiencePolicyContract.policy_memory_id
             : null,
         path_source_kind:
           experiencePath?.source_kind === "recommended_workflow" || experiencePath?.source_kind === "candidate_workflow"
             ? experiencePath.source_kind
             : "none",
-        file_path: typeof experiencePath?.file_path === "string" ? experiencePath.file_path : null,
+        file_path:
+          typeof experienceExecutionContract?.file_path === "string"
+            ? experienceExecutionContract.file_path
+            : typeof experiencePath?.file_path === "string"
+              ? experiencePath.file_path
+              : null,
         combined_next_action:
-          typeof experienceRecommendation.combined_next_action === "string"
+          typeof experienceExecutionContract?.next_action === "string"
+            ? experienceExecutionContract.next_action
+            : typeof experienceRecommendation.combined_next_action === "string"
             ? experienceRecommendation.combined_next_action
             : null,
         action_retrieval_uncertainty: actionRetrievalUncertainty,

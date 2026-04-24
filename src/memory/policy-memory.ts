@@ -21,7 +21,19 @@ import {
   type PolicyGovernanceApplyAction,
   type PolicyGovernanceContract,
 } from "./schemas.js";
+import {
+  buildExecutionContractFromProjection,
+} from "./execution-contract.js";
 import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
+import {
+  resolveNodeErrorSignature,
+  resolveNodeExecutionContract,
+  resolveNodeFilePath,
+  resolveNodePolicyMemoryState,
+  resolveNodeTargetFiles,
+  resolveNodeTaskSignature,
+  resolveNodeWorkflowSignature,
+} from "./node-execution-surface.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
@@ -263,6 +275,44 @@ function buildPolicyExecutionNative(args: {
   });
 }
 
+function buildPolicyExecutionContract(args: {
+  nodeId?: string | null;
+  taskSignature: string | null;
+  errorSignature: string | null;
+  workflowSignature: string | null;
+  contract: PolicyContract;
+  source: "materialization" | "feedback" | "governance";
+  governanceAction?: PolicyGovernanceApplyAction | null;
+}): Record<string, unknown> {
+  const notes = [
+    args.contract.reason,
+    `policy_memory_source:${args.source}`,
+    args.errorSignature ? `error_signature:${args.errorSignature}` : null,
+    args.governanceAction ? `governance_action:${args.governanceAction}` : null,
+  ].filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+  return buildExecutionContractFromProjection({
+    contract_trust: args.contract.contract_trust ?? null,
+    task_family: args.contract.task_family ?? null,
+    task_signature: args.taskSignature,
+    workflow_signature: args.workflowSignature,
+    policy_memory_id: args.nodeId ?? null,
+    selected_tool: args.contract.selected_tool,
+    file_path: args.contract.file_path,
+    target_files: args.contract.target_files,
+    next_action: args.contract.next_action,
+    workflow_steps: args.contract.workflow_steps,
+    pattern_hints: args.contract.pattern_hints,
+    service_lifecycle_constraints: args.contract.service_lifecycle_constraints,
+    provenance: {
+      source_kind: "policy_contract",
+      source_summary_version: args.contract.summary_version,
+      source_anchor: args.nodeId ?? null,
+      evidence_refs: args.contract.source_anchor_ids,
+      notes,
+    },
+  });
+}
+
 function buildPolicyMemorySlots(args: {
   taskSignature: string | null;
   errorSignature: string | null;
@@ -283,6 +333,15 @@ function buildPolicyMemorySlots(args: {
     source: args.source,
     governanceAction: args.governanceAction ?? null,
   });
+  const executionContract = buildPolicyExecutionContract({
+    nodeId: null,
+    taskSignature: args.taskSignature,
+    errorSignature: args.errorSignature,
+    workflowSignature: args.workflowSignature,
+    contract: args.contract,
+    source: args.source,
+    governanceAction: args.governanceAction ?? null,
+  });
 
   return {
     summary_kind: "policy_memory",
@@ -298,6 +357,7 @@ function buildPolicyMemorySlots(args: {
     file_path: args.contract.file_path,
     target_files: args.contract.target_files,
     source_anchor_ids: args.contract.source_anchor_ids,
+    execution_contract_v1: executionContract,
     policy_contract_v1: {
       ...args.contract,
       policy_memory_state: args.contract.policy_memory_state,
@@ -427,6 +487,8 @@ async function updateExistingPolicyMemoryLite(
 }
 
 function derivePolicyMemoryStateFromSlots(slots: Record<string, unknown> | null | undefined): PolicyMemoryLifecycleState {
+  const explicitState = resolveNodePolicyMemoryState(slots);
+  if (explicitState) return explicitState;
   const positiveCount = asNonNegativeInt(slots?.feedback_positive);
   const negativeCount = asNonNegativeInt(slots?.feedback_negative);
   const feedbackQuality = asFeedbackQuality(slots?.feedback_quality);
@@ -485,13 +547,15 @@ function formatPolicyMemoryFeedbackResult(args: {
   contract: PolicyContract;
   slots: Record<string, unknown>;
 }): PolicyMemoryFeedbackUpdateResult {
-  const targetFiles = stringList(args.slots.target_files, 24);
-  const filePath = firstString(args.slots.file_path, args.contract.file_path, targetFiles[0] ?? null);
+  const targetFiles = resolveNodeTargetFiles({ slots: args.slots });
+  const filePath = resolveNodeFilePath({ slots: args.slots })
+    ?? firstString(args.contract.file_path, targetFiles[0] ?? null);
   const policyMemorySignature = firstString(args.slots.policy_memory_signature)
     ?? buildPolicyMemorySignature({
-      taskSignature: firstString(args.slots.task_signature),
-      errorSignature: firstString(args.slots.error_signature),
-      workflowSignature: firstString(args.slots.workflow_signature, args.contract.workflow_signature),
+      taskSignature: resolveNodeTaskSignature({ slots: args.slots }),
+      errorSignature: resolveNodeErrorSignature(args.slots),
+      workflowSignature: resolveNodeWorkflowSignature({ slots: args.slots })
+        ?? firstString(args.contract.workflow_signature),
       selectedTool: args.contract.selected_tool,
       filePath,
       targetFiles,
@@ -525,14 +589,16 @@ function scorePolicyMemoryMatch(
 ): number {
   const slots = asRecord(node.slots);
   const contract = asRecord(slots?.policy_contract_v1);
-  const selectedTool = firstString(slots?.selected_tool, contract?.selected_tool);
+  const executionContract = resolveNodeExecutionContract({ slots });
+  const selectedTool = firstString(executionContract?.selected_tool, slots?.selected_tool, contract?.selected_tool);
   if (selectedTool !== target.selectedTool) return -1;
 
   let matched = 0;
   let score = 0;
-  const taskSignature = firstString(slots?.task_signature);
-  const errorSignature = firstString(slots?.error_signature);
-  const workflowSignature = firstString(slots?.workflow_signature, contract?.workflow_signature);
+  const taskSignature = resolveNodeTaskSignature({ slots });
+  const errorSignature = resolveNodeErrorSignature(slots);
+  const workflowSignature = resolveNodeWorkflowSignature({ slots })
+    ?? firstString(contract?.workflow_signature);
 
   if (target.workflowSignature && workflowSignature === target.workflowSignature) {
     matched += 1;
@@ -570,6 +636,7 @@ async function applyPolicyMemoryFeedbackToNodes(args: {
   let best: PolicyMemoryFeedbackUpdateResult | null = null;
   for (const node of args.nodes) {
     const slots = asRecord(node.slots) ?? {};
+    const currentExecutionContract = resolveNodeExecutionContract({ slots });
     const currentContract = parseStoredPolicyContract(slots.policy_contract_v1, node.id);
     if (!currentContract) continue;
     const derivedPolicy = parseStoredDerivedPolicy(slots.derived_policy_v1);
@@ -599,15 +666,30 @@ async function applyPolicyMemoryFeedbackToNodes(args: {
       nodeId: node.id,
       nextState: lifecycleState,
     });
-    const taskSignature = firstString(slots.task_signature);
-    const errorSignature = firstString(slots.error_signature);
-    const workflowSignature = firstString(slots.workflow_signature, nextContract.workflow_signature);
+    const taskSignature = resolveNodeTaskSignature({ slots: nextState.slots })
+      ?? firstString(currentExecutionContract?.task_signature, slots.task_signature);
+    const errorSignature = resolveNodeErrorSignature(nextState.slots)
+      ?? firstString(slots.error_signature);
+    const workflowSignature = firstString(
+      nextContract.workflow_signature,
+      resolveNodeWorkflowSignature({ slots: nextState.slots }),
+      currentExecutionContract?.workflow_signature,
+      slots.workflow_signature,
+    );
     const nextExecutionNative = buildPolicyExecutionNative({
       taskSignature,
       errorSignature,
       workflowSignature,
       contract: nextContract,
       at: args.feedbackAt,
+      source: "feedback",
+    });
+    const nextExecutionContract = buildPolicyExecutionContract({
+      nodeId: node.id,
+      taskSignature,
+      errorSignature,
+      workflowSignature,
+      contract: nextContract,
       source: "feedback",
     });
     const nextSlots: Record<string, unknown> = {
@@ -624,6 +706,7 @@ async function applyPolicyMemoryFeedbackToNodes(args: {
       file_path: firstString(slots.file_path, nextContract.file_path),
       target_files: nextContract.target_files,
       source_anchor_ids: nextContract.source_anchor_ids,
+      execution_contract_v1: nextExecutionContract,
       policy_memory_signature: firstString(slots.policy_memory_signature),
       last_materialized_at: firstString(slots.last_materialized_at),
       execution_native_v1: nextExecutionNative,
@@ -845,12 +928,18 @@ async function applyPolicyMemoryGovernanceToNode(args: {
   });
   const effectiveNextState = nextContract.policy_memory_state;
   const nextDerivedPolicy = args.liveDerivedPolicy ?? parseStoredDerivedPolicy(slots.derived_policy_v1);
-  const taskSignature = firstString(slots.task_signature, asRecord(slots.execution_native_v1)?.task_signature);
-  const errorSignature = firstString(slots.error_signature, asRecord(slots.execution_native_v1)?.error_signature);
+  const currentExecutionContract = resolveNodeExecutionContract({ slots });
+  const taskSignature = firstString(
+    resolveNodeTaskSignature({ slots }),
+    currentExecutionContract?.task_signature,
+    slots.task_signature,
+  );
+  const errorSignature = firstString(resolveNodeErrorSignature(slots), slots.error_signature);
   const workflowSignature = firstString(
     nextContract.workflow_signature,
+    resolveNodeWorkflowSignature({ slots }),
+    currentExecutionContract?.workflow_signature,
     slots.workflow_signature,
-    asRecord(slots.execution_native_v1)?.workflow_signature,
   );
   const nextExecutionNative = buildPolicyExecutionNative({
     taskSignature,
@@ -858,6 +947,15 @@ async function applyPolicyMemoryGovernanceToNode(args: {
     workflowSignature,
     contract: nextContract,
     at: args.appliedAt,
+    source: "governance",
+    governanceAction: args.action,
+  });
+  const nextExecutionContract = buildPolicyExecutionContract({
+    nodeId: args.node.id,
+    taskSignature,
+    errorSignature,
+    workflowSignature,
+    contract: nextContract,
     source: "governance",
     governanceAction: args.action,
   });
@@ -876,6 +974,7 @@ async function applyPolicyMemoryGovernanceToNode(args: {
     file_path: firstString(nextContract.file_path, slots.file_path),
     target_files: nextContract.target_files,
     source_anchor_ids: nextContract.source_anchor_ids,
+    execution_contract_v1: nextExecutionContract,
     policy_last_review_at: args.appliedAt,
     policy_last_review_job: "policy_governance_apply",
     policy_last_review_reason: buildPolicyGovernanceReviewReason({

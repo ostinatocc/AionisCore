@@ -11,6 +11,11 @@ import {
   type ResumeAnchor,
   type ServiceLifecycleConstraintV1,
 } from "../execution/index.js";
+import {
+  buildExecutionContractContextOverlay,
+  buildExecutionContractFromTrajectoryCompile,
+  projectExecutionContractToRecoveryContract,
+} from "./execution-contract.js";
 import { buildTrajectoryCompileLite } from "./trajectory-compile.js";
 import type {
   StaticContextBlock,
@@ -20,10 +25,6 @@ import type {
 } from "./schemas.js";
 
 type MaybeString = string | null | undefined;
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-}
 
 function firstString(...values: Array<unknown>): string | null {
   for (const value of values) {
@@ -45,11 +46,6 @@ function uniqueStrings(values: Array<MaybeString>, limit = 32): string[] {
     if (out.length >= limit) break;
   }
   return out;
-}
-
-function stringList(value: unknown, limit = 32): string[] {
-  if (!Array.isArray(value)) return [];
-  return uniqueStrings(value.filter((entry): entry is string => typeof entry === "string"), limit);
 }
 
 function uniqueLifecycleConstraints(
@@ -123,93 +119,34 @@ function buildResumeAnchor(args: {
   };
 }
 
-function mergeCompiledStringField(existing: unknown, compiled: string | null): string | null {
-  return firstString(existing, compiled);
-}
-
-function mergeCompiledStringList(existing: unknown, compiled: string[], limit = 32): string[] {
-  return uniqueStrings([
-    ...stringList(existing, limit),
-    ...compiled,
-  ], limit);
-}
-
-function mergeCompiledLifecycleList(
-  existing: unknown,
-  compiled: ServiceLifecycleConstraintV1[],
-  limit = 16,
-): ServiceLifecycleConstraintV1[] {
-  const existingItems = Array.isArray(existing)
-    ? existing
-      .map((entry) => ServiceLifecycleConstraintV1Schema.safeParse(entry))
-      .filter((parsed): parsed is { success: true; data: ServiceLifecycleConstraintV1 } => parsed.success)
-      .map((parsed) => parsed.data)
-    : [];
-  return uniqueLifecycleConstraints([
-    ...existingItems,
-    ...compiled,
-  ], limit);
-}
-
 function mergeCompiledRecoveryContract(args: {
   existing: unknown;
   compiled: TrajectoryCompileResponse;
 }): Record<string, unknown> {
-  const existingRecord = asRecord(args.existing);
-  const existingContract = asRecord(existingRecord?.contract);
-  return {
-    ...(existingRecord ?? {}),
-    summary_version: args.compiled.summary_version,
-    compiler_version: args.compiled.compiler_version,
-    task_family: mergeCompiledStringField(existingRecord?.task_family, args.compiled.task_family),
-    task_signature: mergeCompiledStringField(existingRecord?.task_signature, args.compiled.task_signature),
-    workflow_signature: mergeCompiledStringField(existingRecord?.workflow_signature, args.compiled.workflow_signature),
-    contract: {
-      ...(existingContract ?? {}),
-      target_files: mergeCompiledStringList(existingContract?.target_files, args.compiled.contract.target_files, 24),
-      acceptance_checks: mergeCompiledStringList(existingContract?.acceptance_checks, args.compiled.contract.acceptance_checks, 24),
-      next_action: mergeCompiledStringField(existingContract?.next_action, args.compiled.contract.next_action),
-      workflow_steps: mergeCompiledStringList(existingContract?.workflow_steps, args.compiled.contract.workflow_steps, 24),
-      pattern_hints: mergeCompiledStringList(existingContract?.pattern_hints, args.compiled.contract.pattern_hints, 24),
-      likely_tool: mergeCompiledStringField(existingContract?.likely_tool, args.compiled.contract.likely_tool),
-      service_lifecycle_constraints: mergeCompiledLifecycleList(
-        existingContract?.service_lifecycle_constraints,
-        args.compiled.contract.service_lifecycle_constraints,
-        16,
-      ),
-      noise_markers: mergeCompiledStringList(existingContract?.noise_markers, args.compiled.contract.noise_markers, 16),
-    },
-    promotion_seed: args.compiled.promotion_seed,
-  };
+  return projectExecutionContractToRecoveryContract({
+    existing: args.existing,
+    contract: buildExecutionContractFromTrajectoryCompile(args.compiled),
+    summaryVersion: args.compiled.summary_version,
+    compilerVersion: args.compiled.compiler_version,
+    promotionSeed: args.compiled.promotion_seed,
+    noiseMarkers: args.compiled.contract.noise_markers,
+  });
 }
 
 function mergeTrajectoryCompileContext(args: {
   currentContext: Record<string, unknown>;
   compiled: TrajectoryCompileResponse;
 }): Record<string, unknown> {
-  const current = args.currentContext;
-  return {
-    ...current,
-    task_kind: mergeCompiledStringField(current.task_kind, args.compiled.task_family),
-    task_family: mergeCompiledStringField(current.task_family, args.compiled.task_family),
-    task_signature: mergeCompiledStringField(current.task_signature, args.compiled.task_signature),
-    workflow_signature: mergeCompiledStringField(current.workflow_signature, args.compiled.workflow_signature),
-    target_files: mergeCompiledStringList(current.target_files, args.compiled.contract.target_files, 24),
-    acceptance_checks: mergeCompiledStringList(current.acceptance_checks, args.compiled.contract.acceptance_checks, 24),
-    next_action: mergeCompiledStringField(current.next_action, args.compiled.contract.next_action),
-    workflow_steps: mergeCompiledStringList(current.workflow_steps, args.compiled.contract.workflow_steps, 24),
-    pattern_hints: mergeCompiledStringList(current.pattern_hints, args.compiled.contract.pattern_hints, 24),
-    likely_tool: mergeCompiledStringField(current.likely_tool, args.compiled.contract.likely_tool),
-    service_lifecycle_constraints: mergeCompiledLifecycleList(
-      current.service_lifecycle_constraints,
-      args.compiled.contract.service_lifecycle_constraints,
-      16,
-    ),
-    recovery_contract_v1: mergeCompiledRecoveryContract({
-      existing: current.recovery_contract_v1,
-      compiled: args.compiled,
-    }),
-  };
+  const contract = buildExecutionContractFromTrajectoryCompile(args.compiled);
+  const recoveryContract = mergeCompiledRecoveryContract({
+    existing: args.currentContext.recovery_contract_v1,
+    compiled: args.compiled,
+  });
+  return buildExecutionContractContextOverlay({
+    currentContext: args.currentContext,
+    contract,
+    recoveryContract,
+  });
 }
 
 export function maybeBuildTrajectoryCompile(args: {
@@ -240,27 +177,28 @@ export function maybeBuildTrajectoryCompile(args: {
 }
 
 export function buildTrajectoryCompileContextOverlay(compiled: TrajectoryCompileResponse): Record<string, unknown> {
+  const contract = buildExecutionContractFromTrajectoryCompile(compiled);
   return {
-    task_kind: compiled.task_family,
-    task_family: compiled.task_family,
-    task_signature: compiled.task_signature,
-    workflow_signature: compiled.workflow_signature,
-    target_files: compiled.contract.target_files,
-    acceptance_checks: compiled.contract.acceptance_checks,
-    next_action: compiled.contract.next_action,
-    workflow_steps: compiled.contract.workflow_steps,
-    pattern_hints: compiled.contract.pattern_hints,
-    likely_tool: compiled.contract.likely_tool,
-    service_lifecycle_constraints: compiled.contract.service_lifecycle_constraints,
-    recovery_contract_v1: {
-      summary_version: compiled.summary_version,
-      compiler_version: compiled.compiler_version,
-      task_family: compiled.task_family,
-      task_signature: compiled.task_signature,
-      workflow_signature: compiled.workflow_signature,
-      contract: compiled.contract,
-      promotion_seed: compiled.promotion_seed,
-    },
+    task_kind: contract.task_family,
+    task_family: contract.task_family,
+    task_signature: contract.task_signature,
+    workflow_signature: contract.workflow_signature,
+    target_files: contract.target_files,
+    acceptance_checks: contract.outcome.acceptance_checks,
+    next_action: contract.next_action,
+    workflow_steps: contract.workflow_steps,
+    pattern_hints: contract.pattern_hints,
+    likely_tool: contract.selected_tool,
+    service_lifecycle_constraints: contract.service_lifecycle_constraints,
+    execution_contract_v1: contract,
+    recovery_contract_v1: projectExecutionContractToRecoveryContract({
+      existing: null,
+      contract,
+      summaryVersion: compiled.summary_version,
+      compilerVersion: compiled.compiler_version,
+      promotionSeed: compiled.promotion_seed,
+      noiseMarkers: compiled.contract.noise_markers,
+    }),
   };
 }
 
@@ -430,6 +368,18 @@ export function mergeTrajectoryCompileSummary(
     acceptance_check_count: compiled.contract.acceptance_checks.length,
     service_constraint_count: compiled.contract.service_lifecycle_constraints.length,
     likely_tool: compiled.contract.likely_tool,
+  };
+  const contract = buildExecutionContractFromTrajectoryCompile(compiled);
+  base.execution_contract_v1 = {
+    task_family: contract.task_family,
+    task_signature: contract.task_signature,
+    workflow_signature: contract.workflow_signature,
+    target_file_count: contract.target_files.length,
+    acceptance_check_count: contract.outcome.acceptance_checks.length,
+    success_invariant_count: contract.outcome.success_invariants.length,
+    must_hold_after_exit_count: contract.outcome.must_hold_after_exit.length,
+    external_visibility_requirement_count: contract.outcome.external_visibility_requirements.length,
+    selected_tool: contract.selected_tool,
   };
   return base;
 }

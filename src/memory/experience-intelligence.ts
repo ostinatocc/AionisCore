@@ -34,6 +34,7 @@ import {
   type PolicyContract,
   type ToolsSelectRouteContract,
 } from "./schemas.js";
+import { parseExecutionContract, type ExecutionContractV1 } from "./execution-contract.js";
 import { selectTools } from "./tools-select.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
@@ -318,6 +319,7 @@ function buildPolicyContract(args: {
   policyHints: PolicyHintPack;
   path: ReturnType<typeof choosePathRecommendation>;
   nextAction: string | null;
+  executionContract: ExecutionContractV1 | null;
 }): PolicyContract | null {
   if (!args.derivedPolicy) return null;
   const avoidTools = Array.from(new Set(
@@ -328,7 +330,9 @@ function buildPolicyContract(args: {
   const rehydrationMode =
     args.policyHints.hints.find((entry) => entry.hint_kind === "payload_rehydration" && entry.action === "rehydrate")?.rehydration_mode
     ?? null;
-  const targetFiles = args.path.target_files.length > 0
+  const targetFiles = Array.isArray(args.executionContract?.target_files) && args.executionContract.target_files.length > 0
+    ? args.executionContract.target_files
+    : args.path.target_files.length > 0
     ? args.path.target_files
     : args.derivedPolicy.target_files.length > 0
       ? args.derivedPolicy.target_files
@@ -345,15 +349,22 @@ function buildPolicyContract(args: {
   const pathServiceLifecycleConstraints = Array.isArray(args.path.service_lifecycle_constraints)
     ? args.path.service_lifecycle_constraints
     : [];
-  const workflowSteps = pathWorkflowSteps.length > 0
+  const workflowSteps = Array.isArray(args.executionContract?.workflow_steps) && args.executionContract.workflow_steps.length > 0
+    ? args.executionContract.workflow_steps
+    : pathWorkflowSteps.length > 0
     ? pathWorkflowSteps
     : Array.isArray(args.derivedPolicy.workflow_steps)
       ? args.derivedPolicy.workflow_steps
       : [];
-  const patternHints = Array.isArray(args.derivedPolicy.pattern_hints)
+  const patternHints = Array.isArray(args.executionContract?.pattern_hints) && args.executionContract.pattern_hints.length > 0
+    ? args.executionContract.pattern_hints
+    : Array.isArray(args.derivedPolicy.pattern_hints)
     ? args.derivedPolicy.pattern_hints
     : [];
-  const serviceLifecycleConstraints = pathServiceLifecycleConstraints.length > 0
+  const serviceLifecycleConstraints = Array.isArray(args.executionContract?.service_lifecycle_constraints)
+    && args.executionContract.service_lifecycle_constraints.length > 0
+    ? args.executionContract.service_lifecycle_constraints
+    : pathServiceLifecycleConstraints.length > 0
     ? pathServiceLifecycleConstraints
     : Array.isArray(args.derivedPolicy.service_lifecycle_constraints)
       ? args.derivedPolicy.service_lifecycle_constraints
@@ -376,11 +387,11 @@ function buildPolicyContract(args: {
     history_applied: args.historyApplied,
     selected_tool: args.derivedPolicy.selected_tool,
     avoid_tools: avoidTools,
-    task_family: firstString((args.path as Record<string, unknown>).task_family, args.derivedPolicy.task_family),
-    workflow_signature: firstString(args.path.workflow_signature, args.derivedPolicy.workflow_signature),
-    file_path: firstString(args.path.file_path, args.derivedPolicy.file_path),
+    task_family: firstString(args.executionContract?.task_family, (args.path as Record<string, unknown>).task_family, args.derivedPolicy.task_family),
+    workflow_signature: firstString(args.executionContract?.workflow_signature, args.path.workflow_signature, args.derivedPolicy.workflow_signature),
+    file_path: firstString(args.executionContract?.file_path, args.path.file_path, args.derivedPolicy.file_path),
     target_files: targetFiles,
-    next_action: firstString(args.nextAction, args.path.next_action),
+    next_action: firstString(args.executionContract?.next_action, args.nextAction, args.path.next_action),
     ...(workflowSteps.length > 0 ? { workflow_steps: workflowSteps } : {}),
     ...(patternHints.length > 0 ? { pattern_hints: patternHints } : {}),
     ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
@@ -411,6 +422,7 @@ export function buildExperienceIntelligenceResponse(args: {
     tools: args.tools,
     introspection: args.introspection,
   });
+  const executionContract = parseExecutionContract(actionRetrieval.execution_contract_v1);
   const path = actionRetrieval.path;
   const selectedTool = actionRetrieval.selected_tool;
   const trustedPatterns = (Array.isArray(args.introspection.trusted_patterns) ? args.introspection.trusted_patterns : [])
@@ -466,6 +478,7 @@ export function buildExperienceIntelligenceResponse(args: {
         policyHints,
         path,
         nextAction: combinedNextAction,
+        executionContract,
       });
   const delegationLearning = args.delegationLearning ?? {
     task_family: null,
@@ -483,6 +496,7 @@ export function buildExperienceIntelligenceResponse(args: {
     scope: args.tools.scope,
     query_text: args.parsed.query_text,
     action_retrieval: actionRetrieval,
+    execution_contract_v1: executionContract,
     recommendation: {
       history_applied: historyApplied,
       tool: actionRetrieval.tool,
@@ -601,6 +615,9 @@ export function buildKickoffRecommendationResponseFromExperience(
   experience: ExperienceIntelligenceResponse,
 ): KickoffRecommendationResponse {
   const actionRetrieval = asRecord(experience.action_retrieval);
+  const executionContract = parseExecutionContract(
+    asRecord(experience)?.execution_contract_v1 ?? actionRetrieval?.execution_contract_v1,
+  );
   const tool = asRecord(actionRetrieval?.tool ?? experience.recommendation?.tool);
   const path = asRecord(actionRetrieval?.path ?? experience.recommendation?.path);
   const policyContract = asRecord(experience.policy_contract);
@@ -616,6 +633,8 @@ export function buildKickoffRecommendationResponseFromExperience(
       || actionRetrieval?.contract_trust === "advisory"
       || actionRetrieval?.contract_trust === "observational"
         ? actionRetrieval.contract_trust
+        : executionContract?.contract_trust
+          ? executionContract.contract_trust
         : path?.contract_trust === "authoritative"
           || path?.contract_trust === "advisory"
           || path?.contract_trust === "observational"
@@ -625,11 +644,12 @@ export function buildKickoffRecommendationResponseFromExperience(
             || policyContract?.contract_trust === "observational"
             ? policyContract.contract_trust
             : null,
-    selectedTool: firstString(actionRetrieval?.selected_tool, tool?.selected_tool),
-    taskFamily: firstString(path?.task_family, policyContract?.task_family),
-    workflowSignature: firstString(path?.workflow_signature, policyContract?.workflow_signature),
-    policyMemoryId: firstString(policyContract?.policy_memory_id),
+    selectedTool: firstString(executionContract?.selected_tool, actionRetrieval?.selected_tool, tool?.selected_tool),
+    taskFamily: firstString(executionContract?.task_family, path?.task_family, policyContract?.task_family),
+    workflowSignature: firstString(executionContract?.workflow_signature, path?.workflow_signature, policyContract?.workflow_signature),
+    policyMemoryId: firstString(executionContract?.policy_memory_id, policyContract?.policy_memory_id),
     filePath: firstString(
+      executionContract?.file_path,
       actionRetrieval?.recommended_file_path,
       path?.file_path,
       policyContract?.file_path,
@@ -637,10 +657,12 @@ export function buildKickoffRecommendationResponseFromExperience(
       typeof policyTargetFiles[0] === "string" ? policyTargetFiles[0] : null,
     ),
     nextAction: firstString(
+      executionContract?.next_action,
       actionRetrieval?.recommended_next_action,
       experience.recommendation?.combined_next_action,
       policyContract?.next_action,
     ),
+    executionContract,
     uncertainty:
       actionRetrieval?.uncertainty && typeof actionRetrieval.uncertainty === "object"
         ? (actionRetrieval.uncertainty as any)

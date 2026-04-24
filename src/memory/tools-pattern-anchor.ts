@@ -11,6 +11,7 @@ import {
   type PatternCredibilityState,
   type PatternTransitionKind,
 } from "./evolution-operators.js";
+import { buildExecutionContractFromProjection } from "./execution-contract.js";
 import { resolveNodePriorityProfile } from "./importance-dynamics.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema, type MemoryAnchorV1 } from "./schemas.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
@@ -21,6 +22,7 @@ import {
   extractTaskCue,
   extractTaskFamily,
 } from "./pattern-trust-shaping.js";
+import type { ContractTrust } from "./contract-trust.js";
 
 const STABLE_PATTERN_MIN_DISTINCT_RUNS = 3;
 const CONTESTED_REVALIDATION_MIN_FRESH_RUNS = 2;
@@ -205,6 +207,47 @@ function observedPostContestRunIds(record: Record<string, unknown> | null): stri
     : [];
 }
 
+function derivePatternAnchorContractTrust(anchor: Pick<MemoryAnchorV1, "pattern_state" | "credibility_state">): ContractTrust {
+  if ((anchor.pattern_state ?? "provisional") === "stable" && (anchor.credibility_state ?? "candidate") === "trusted") {
+    return "advisory";
+  }
+  return "observational";
+}
+
+function buildPatternExecutionContract(args: {
+  anchor: MemoryAnchorV1;
+  taskCue: string | null;
+  sourceRuleIds: string[];
+  feedbackOutcome: "positive" | "negative";
+}) {
+  const contractTrust = derivePatternAnchorContractTrust(args.anchor);
+  const nextAction = args.anchor.selected_tool
+    ? args.taskCue
+      ? `Prefer ${args.anchor.selected_tool} first for ${args.taskCue} before widening tool search.`
+      : `Prefer ${args.anchor.selected_tool} first before widening tool search.`
+    : null;
+  const patternHints = uniqueStrings([
+    args.sourceRuleIds.length > 0 ? "rule_backed_selection_pattern" : "feedback_derived_selection_pattern",
+    (args.anchor.pattern_state ?? "provisional") === "stable" ? "stable_tool_selection_pattern" : "provisional_tool_selection_pattern",
+    (args.anchor.credibility_state ?? "candidate") === "contested" ? "counter_evidence_open" : null,
+    args.feedbackOutcome === "negative" ? "negative_feedback_recorded" : "positive_feedback_recorded",
+  ], 8);
+  return buildExecutionContractFromProjection({
+    contract_trust: contractTrust,
+    task_family: args.anchor.task_family ?? null,
+    task_signature: args.anchor.task_signature,
+    selected_tool: args.anchor.selected_tool ?? null,
+    next_action: nextAction,
+    workflow_steps: args.anchor.key_steps ?? [],
+    pattern_hints: patternHints,
+    provenance: {
+      source_kind: "pattern_anchor_write",
+      source_anchor: args.anchor.pattern_signature ?? null,
+      notes: ["tools_pattern_anchor_projection"],
+    },
+  });
+}
+
 function buildPatternAnchor(args: {
   taskCue: string | null;
   taskFamily: string | null;
@@ -302,6 +345,10 @@ function buildPatternAnchor(args: {
   const baseAnchor = MemoryAnchorV1Schema.parse({
     anchor_kind: "pattern",
     anchor_level: "L3",
+    contract_trust: derivePatternAnchorContractTrust({
+      pattern_state: patternState,
+      credibility_state: credibilityState,
+    }),
     pattern_state: patternState,
     credibility_state: credibilityState,
     task_signature: taskSignature,
@@ -429,6 +476,10 @@ function buildPatternAnchor(args: {
 
   return MemoryAnchorV1Schema.parse({
     ...baseAnchor,
+    contract_trust: derivePatternAnchorContractTrust({
+      pattern_state: "stable",
+      credibility_state: "trusted",
+    }),
     pattern_state: "stable",
     credibility_state: "trusted",
     summary: buildPatternSummary({
@@ -474,17 +525,25 @@ function buildPatternAnchor(args: {
 
 function buildPatternAnchorSlots(args: {
   anchor: MemoryAnchorV1;
+  taskCue: string | null;
   patternSignature: string;
   selectedTool: string;
   candidates: string[];
   sourceRuleIds: string[];
   feedbackOutcome: "positive" | "negative";
 }): Record<string, unknown> {
+  const executionContract = buildPatternExecutionContract({
+    anchor: args.anchor,
+    taskCue: args.taskCue,
+    sourceRuleIds: args.sourceRuleIds,
+    feedbackOutcome: args.feedbackOutcome,
+  });
   const executionNative = ExecutionNativeV1Schema.parse({
     schema_version: "execution_native_v1",
     execution_kind: "pattern_anchor",
     summary_kind: "pattern_anchor",
     compression_layer: "L3",
+    ...(args.anchor.contract_trust ? { contract_trust: args.anchor.contract_trust } : {}),
     task_signature: args.anchor.task_signature,
     ...(args.anchor.task_family ? { task_family: args.anchor.task_family } : {}),
     ...(args.anchor.error_signature ? { error_signature: args.anchor.error_signature } : {}),
@@ -504,6 +563,7 @@ function buildPatternAnchorSlots(args: {
     compression_layer: "L3",
     anchor_v1: args.anchor,
     execution_native_v1: executionNative,
+    execution_contract_v1: executionContract,
     decision_pattern_signature: args.patternSignature,
     pattern_state: args.anchor.pattern_state ?? "provisional",
     credibility_state: args.anchor.credibility_state ?? "candidate",
@@ -694,6 +754,7 @@ export async function writeToolsDecisionPatternAnchor(
   const summary = anchor.summary;
   const slots = buildPatternAnchorSlots({
     anchor,
+    taskCue,
     patternSignature,
     selectedTool: args.selected_tool,
     candidates: args.candidates,

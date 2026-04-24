@@ -1,5 +1,6 @@
 import { recoverHandoff } from "./handoff.js";
 import { buildEvolutionInspectStateLite } from "./evolution-inspect.js";
+import { parseExecutionContract } from "./execution-contract.js";
 import {
   ContinuityReviewPackResponseSchema,
   EvolutionReviewPackResponseSchema,
@@ -47,12 +48,19 @@ function toContinuityFocusItem(handoff: Record<string, unknown> | null | undefin
 function buildContinuityReviewContract(recovered: Record<string, unknown>) {
   const executionReady = asRecord(recovered.execution_ready_handoff);
   if (Object.keys(executionReady).length === 0) return null;
+  const executionContract = parseExecutionContract(recovered.execution_contract_v1);
   const mustKeep = stringList(executionReady.must_keep);
   const mustRemove = stringList(executionReady.must_remove);
+  const contractTargetFiles = executionContract?.target_files ?? [];
+  const contractAcceptanceChecks = executionContract?.outcome.acceptance_checks ?? [];
   return {
-    target_files: stringList(executionReady.target_files),
-    next_action: firstString(executionReady.next_action),
-    acceptance_checks: stringList(executionReady.acceptance_checks),
+    execution_contract_v1: executionContract,
+    target_files: contractTargetFiles.length > 0 ? contractTargetFiles : stringList(executionReady.target_files),
+    next_action: firstString(executionContract?.next_action, executionReady.next_action),
+    acceptance_checks:
+      contractAcceptanceChecks.length > 0
+        ? contractAcceptanceChecks
+        : stringList(executionReady.acceptance_checks),
     must_change: stringList(executionReady.must_change),
     must_remove: mustRemove,
     must_keep: mustKeep,
@@ -151,10 +159,17 @@ export async function buildEvolutionReviewPackLite(args: {
     .filter((entry) => asRecord(entry).promotion_ready === true)
     .map((entry) => firstString(asRecord(entry).anchor_id))
     .filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
-  const selectedTool = firstString(experience.recommendation?.tool?.selected_tool);
-  const recommendedFilePath = firstString(experience.recommendation?.path?.file_path);
-  const recommendedNextAction = firstString(experience.recommendation?.combined_next_action, experience.recommendation?.path?.next_action);
-  const targetFiles = Array.isArray(experience.recommendation?.path?.target_files)
+  const executionContract = parseExecutionContract(experience.execution_contract_v1);
+  const selectedTool = firstString(executionContract?.selected_tool, experience.recommendation?.tool?.selected_tool);
+  const recommendedFilePath = firstString(executionContract?.file_path, experience.recommendation?.path?.file_path);
+  const recommendedNextAction = firstString(
+    executionContract?.next_action,
+    experience.recommendation?.combined_next_action,
+    experience.recommendation?.path?.next_action,
+  );
+  const targetFiles = Array.isArray(executionContract?.target_files)
+    ? executionContract.target_files
+    : Array.isArray(experience.recommendation?.path?.target_files)
     ? experience.recommendation.path.target_files.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
     : [];
 
@@ -177,6 +192,7 @@ export async function buildEvolutionReviewPackLite(args: {
       policy_governance_apply_payload: computed.policyGovernanceApplyPayload,
       policy_governance_apply_result: computed.policyGovernanceApplyResult,
       review_contract: {
+        execution_contract_v1: executionContract,
         selected_tool: selectedTool,
         file_path: recommendedFilePath,
         target_files: targetFiles,

@@ -166,6 +166,10 @@ test("replayPlaybookPromote writes workflow anchor payload onto stable playbook 
     assert.deepEqual(promoted.slots.anchor_v1.tool_set, ["edit", "test"]);
     assert.deepEqual(promoted.slots.anchor_v1.payload_refs.node_ids, [sourceNodeId]);
     assert.deepEqual(promoted.slots.anchor_v1.payload_refs.run_ids, [runId]);
+    assert.equal(promoted.slots.execution_contract_v1.schema_version, "execution_contract_v1");
+    assert.equal(promoted.slots.execution_contract_v1.task_signature, promoted.slots.anchor_v1.task_signature);
+    assert.equal(promoted.slots.execution_contract_v1.workflow_signature, promoted.slots.anchor_v1.workflow_signature);
+    assert.deepEqual(promoted.slots.execution_contract_v1.workflow_steps, promoted.slots.anchor_v1.key_steps);
     assert.equal(promoted.slots.semantic_forgetting_v1.action, "retain");
     assert.equal(promoted.slots.archive_relocation_v1.payload_scope, "anchor_payload");
     assert.equal(promoted.slots.archive_relocation_v1.relocation_state, "none");
@@ -247,6 +251,8 @@ test("stable replay playbook anchors are recallable through the procedure recall
     assert.equal((recall as any).action_recall_packet.recommended_workflows[0]?.rehydration_default_mode, "partial");
     assert.equal((recall as any).action_recall_packet.recommended_workflows[0]?.maintenance_state, "retain");
     assert.equal((recall as any).action_recall_packet.recommended_workflows[0]?.offline_priority, "retain_workflow");
+    assert.equal((recall as any).action_recall_packet.recommended_workflows[0]?.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal((recall as any).action_recall_packet.recommended_workflows[0]?.execution_contract_v1?.workflow_signature, promotedNode.slots.anchor_v1.workflow_signature);
     assert.ok(recall.context.items.some((item) => item.kind === "procedure" && item.node_id === promoted.playbook_node_id));
     assert.ok(Array.isArray((recall as any).runtime_tool_hints));
     assert.ok((recall as any).runtime_tool_hints.some((hint: any) => hint.anchor.id === promoted.playbook_node_id));
@@ -341,6 +347,7 @@ test("stable replay playbook recall surfaces persisted contract trust", async ()
     );
 
     assert.equal((recall as any).action_recall_packet.recommended_workflows[0]?.contract_trust, "advisory");
+    assert.equal((recall as any).action_recall_packet.recommended_workflows[0]?.execution_contract_v1?.contract_trust, "advisory");
   } finally {
     await liteRecallStore.close();
     await liteReplayStore.close();
@@ -477,6 +484,13 @@ test("replayPlaybookPromote preserves richer recovery contract fields on stable 
     assert.ok(promoted.slots.execution_native_v1.workflow_steps.includes("python scripts/build_and_serve.py --port 8080"));
     assert.ok(promoted.slots.execution_native_v1.pattern_hints.includes("publish_then_install_from_clean_client_path"));
     assert.equal(promoted.slots.execution_native_v1.service_lifecycle_constraints[0]?.revalidate_from_fresh_shell, true);
+    assert.equal(promoted.slots.execution_contract_v1.contract_trust, "advisory");
+    assert.equal(promoted.slots.execution_contract_v1.task_family, "service_publish_validate");
+    assert.deepEqual(promoted.slots.execution_contract_v1.target_files, ["scripts/build_and_serve.py", "pyproject.toml"]);
+    assert.equal(
+      promoted.slots.execution_contract_v1.outcome.must_hold_after_exit[0],
+      "service_survives_agent_exit:service:http://localhost:8080/simple/vectorops/",
+    );
   } finally {
     await liteReplayStore.close();
     await liteWriteStore.close();

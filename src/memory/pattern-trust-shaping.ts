@@ -1,19 +1,20 @@
+import { deriveExecutionContractFromSlots } from "./execution-contract.js";
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
-function recoveryContext(context: unknown): {
-  recoveryContract: Record<string, unknown> | null;
-  trajectoryCompile: Record<string, unknown> | null;
-} {
+function executionContextContract(context: unknown) {
   const ctx = asRecord(context);
-  const recoveryContract = asRecord(ctx?.recovery_contract_v1);
-  const executionResultSummary = asRecord(ctx?.execution_result_summary);
-  const trajectoryCompile = asRecord(executionResultSummary?.trajectory_compile_v1);
-  return {
-    recoveryContract,
-    trajectoryCompile,
-  };
+  if (!ctx) return null;
+  return deriveExecutionContractFromSlots({
+    slots: ctx,
+    provenance: {
+      source_kind: "manual_context",
+      source_summary_version: "pattern_trust_shaping_context_v1",
+      notes: ["pattern_trust_shaping:context_resolution"],
+    },
+  });
 }
 
 function firstNonEmptyString(values: unknown[]): string | null {
@@ -60,23 +61,22 @@ export function extractTaskCue(
   const task = asRecord(ctx?.task);
   const issue = asRecord(ctx?.issue);
   const error = asRecord(ctx?.error);
-  const { recoveryContract } = recoveryContext(context);
-  const contract = asRecord(recoveryContract?.contract);
+  const executionContract = executionContextContract(context);
   return firstNonEmptyString([
+    executionContract?.task_signature,
     ctx?.task_signature,
     task?.signature,
-    recoveryContract?.task_signature,
     ctx?.goal,
     task?.goal,
     ctx?.objective,
     task?.objective,
-    recoveryContract?.task_family,
+    executionContract?.task_family,
     ctx?.query,
     task?.query,
     ctx?.task_kind,
     issue?.kind,
-    contract?.next_action,
-    Array.isArray(contract?.target_files) ? (contract?.target_files as string[]).join(" ") : null,
+    executionContract?.next_action,
+    executionContract?.target_files.join(" "),
     error?.signature,
     error?.code,
     note,
@@ -100,12 +100,11 @@ export function extractTaskFamily(context: unknown, taskCue: string | null): str
   const ctx = asRecord(context);
   const task = asRecord(ctx?.task);
   const issue = asRecord(ctx?.issue);
-  const { recoveryContract, trajectoryCompile } = recoveryContext(context);
+  const executionContract = executionContextContract(context);
   return normalizeFamilyLabel(
     firstNonEmptyString([
+      executionContract?.task_family,
       ctx?.task_family,
-      recoveryContract?.task_family,
-      trajectoryCompile?.task_family,
       task?.family,
       ctx?.task_kind,
       task?.kind,

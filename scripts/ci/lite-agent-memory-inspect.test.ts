@@ -14,6 +14,7 @@ import {
   buildAgentMemoryReviewPackLite,
   buildAgentMemoryResumePackLite,
 } from "../../src/memory/agent-memory-inspect-core.ts";
+import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
 import { buildHandoffWriteBody } from "../../src/memory/handoff.ts";
 import { MemoryAnchorV1Schema } from "../../src/memory/schemas.ts";
 import { applyMemoryWrite, prepareMemoryWrite } from "../../src/memory/write.ts";
@@ -347,6 +348,63 @@ async function seedHandoffFixture(store: ReturnType<typeof createLiteWriteStore>
   }));
 }
 
+async function seedConflictingCanonicalHandoffFixture(store: ReturnType<typeof createLiteWriteStore>) {
+  const handoffWrite = buildHandoffWriteBody({
+    tenant_id: "default",
+    scope: "default",
+    actor: "local-user",
+    memory_lane: "shared",
+    anchor: "resume:src/routes/legacy-export.ts",
+    file_path: "src/routes/legacy-export.ts",
+    repo_root: "/repo",
+    handoff_kind: "patch_handoff",
+    title: "Fix legacy export route",
+    summary: "Legacy handoff fields conflict with the canonical execution contract",
+    handoff_text: "Legacy handoff text should not steer resume or handoff packs",
+    target_files: ["src/routes/legacy-export.ts"],
+    next_action: "Legacy handoff next action should not steer packs",
+    must_change: ["src/routes/legacy-export.ts"],
+    acceptance_checks: ["npm run -s test:legacy-export"],
+  });
+  const slots = handoffWrite.nodes?.[0]?.slots as Record<string, unknown>;
+  slots.execution_contract_v1 = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    task_family: "task:canonical_handoff_resume",
+    task_signature: "canonical-handoff-resume",
+    workflow_signature: "execution_workflow:canonical-handoff-resume",
+    selected_tool: "edit",
+    file_path: "src/routes/canonical-export.ts",
+    target_files: ["src/routes/canonical-export.ts"],
+    next_action: "Canonical execution contract next action should steer packs",
+    workflow_steps: ["inspect canonical handoff", "patch canonical export"],
+    acceptance_checks: ["npm run -s test:canonical-export"],
+    provenance: {
+      source_kind: "manual_context",
+      source_summary_version: "execution_contract_v1",
+      source_anchor: "canonical-handoff-test",
+      evidence_refs: [],
+      notes: ["pack surfaces must prefer execution_contract_v1 over handoff fields"],
+    },
+  });
+
+  const prepared = await prepareMemoryWrite(
+    handoffWrite,
+    "default",
+    "default",
+    {
+      maxTextLen: 10000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+    },
+    null,
+  );
+
+  await store.withTx(() => applyMemoryWrite({} as any, prepared, {
+    ...writeOptions,
+    write_access: store,
+  }));
+}
+
 test("agent memory inspect facade composes continuity and evolution into review/resume/handoff packs", async () => {
   const dbPath = tmpDbPath("agent-memory-inspect");
   const liteWriteStore = createLiteWriteStore(dbPath);
@@ -396,10 +454,34 @@ test("agent memory inspect facade composes continuity and evolution into review/
   assert.equal(inspect.agent_memory_summary.active_policy_count, 0);
   assert.equal(inspect.agent_memory_summary.contested_policy_count, 0);
   assert.equal(inspect.agent_memory_summary.retired_policy_count, 0);
+  assert.equal(
+    inspect.evolution_inspect.execution_introspection.recommended_workflows[0]?.execution_contract_v1?.schema_version,
+    "execution_contract_v1",
+  );
+  assert.equal(
+    inspect.evolution_inspect.execution_introspection.recommended_workflows[0]?.execution_contract_v1?.workflow_signature,
+    "execution_workflow:repair-export",
+  );
 
   assert.equal(reviewPack.agent_memory_review_pack.rollback_required, true);
   assert.deepEqual(reviewPack.agent_memory_review_pack.must_remove, ["legacy export fallback"]);
   assert.equal(reviewPack.agent_memory_review_pack.selected_tool, "edit");
+  assert.equal(
+    reviewPack.agent_memory_review_pack.execution_contract_v1?.schema_version,
+    "execution_contract_v1",
+  );
+  assert.equal(
+    reviewPack.agent_memory_review_pack.execution_contract_v1?.selected_tool,
+    "edit",
+  );
+  assert.equal(
+    reviewPack.agent_memory_review_pack.execution_contract_v1?.file_path,
+    "src/routes/export.ts",
+  );
+  assert.equal(
+    reviewPack.agent_memory_review_pack.execution_contract_v1?.workflow_signature,
+    "execution_workflow:repair-export",
+  );
 
   assert.equal(resumePack.agent_memory_resume_pack.resume_file_path, "src/routes/export.ts");
   assert.equal(
@@ -407,10 +489,99 @@ test("agent memory inspect facade composes continuity and evolution into review/
     "Patch src/routes/export.ts and rerun export tests",
   );
   assert.ok(resumePack.agent_memory_resume_pack.execution_ready_handoff);
+  assert.equal(
+    resumePack.agent_memory_resume_pack.execution_contract_v1?.schema_version,
+    "execution_contract_v1",
+  );
+  assert.equal(
+    resumePack.agent_memory_resume_pack.execution_contract_v1?.selected_tool,
+    "edit",
+  );
+  assert.equal(
+    resumePack.agent_memory_resume_pack.execution_contract_v1?.file_path,
+    "src/routes/export.ts",
+  );
 
   assert.equal(handoffPack.agent_memory_handoff_pack.handoff_kind, "patch_handoff");
   assert.equal(handoffPack.agent_memory_handoff_pack.handoff_file_path, "src/routes/export.ts");
   assert.deepEqual(handoffPack.agent_memory_handoff_pack.acceptance_checks, ["npm run -s test:lite -- export"]);
+  assert.equal(
+    handoffPack.agent_memory_handoff_pack.execution_contract_v1?.schema_version,
+    "execution_contract_v1",
+  );
+  assert.equal(
+    handoffPack.agent_memory_handoff_pack.execution_contract_v1?.selected_tool,
+    "edit",
+  );
+  assert.equal(
+    handoffPack.agent_memory_handoff_pack.execution_contract_v1?.file_path,
+    "src/routes/export.ts",
+  );
+});
+
+test("agent memory resume and handoff packs prefer canonical contract over legacy handoff fields", async () => {
+  const dbPath = tmpDbPath("agent-memory-canonical-handoff");
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+
+  await seedEvolutionFixture(liteWriteStore);
+  await seedConflictingCanonicalHandoffFixture(liteWriteStore);
+
+  const args = {
+    liteWriteStore,
+    liteRecallAccess: liteRecallStore.createRecallAccess(),
+    embedder: FakeEmbeddingProvider,
+    defaultScope: "default",
+    defaultTenantId: "default",
+    defaultActorId: "local-user",
+    body: {
+      tenant_id: "default",
+      scope: "default",
+      query_text: "resume canonical export handoff",
+      context: {
+        repo_root: "/repo",
+        file_path: "src/routes/legacy-export.ts",
+      },
+      candidates: ["edit", "bash", "test"],
+      anchor: "resume:src/routes/legacy-export.ts",
+      file_path: "src/routes/legacy-export.ts",
+      repo_root: "/repo",
+      handoff_kind: "patch_handoff",
+    },
+  } as const;
+
+  const ctx = {};
+  const resumePack = await buildAgentMemoryResumePackLite(args, ctx);
+  const handoffPack = await buildAgentMemoryHandoffPackLite(args, ctx);
+
+  assert.equal(
+    resumePack.agent_memory_resume_pack.execution_contract_v1?.file_path,
+    "src/routes/canonical-export.ts",
+  );
+  assert.deepEqual(
+    resumePack.agent_memory_resume_pack.execution_contract_v1?.target_files,
+    ["src/routes/canonical-export.ts"],
+  );
+  assert.equal(resumePack.agent_memory_resume_pack.resume_file_path, "src/routes/canonical-export.ts");
+  assert.deepEqual(resumePack.agent_memory_resume_pack.resume_target_files, ["src/routes/canonical-export.ts"]);
+  assert.equal(
+    resumePack.agent_memory_resume_pack.resume_next_action,
+    "Canonical execution contract next action should steer packs",
+  );
+  assert.equal(
+    handoffPack.agent_memory_handoff_pack.execution_contract_v1?.file_path,
+    "src/routes/canonical-export.ts",
+  );
+  assert.deepEqual(
+    handoffPack.agent_memory_handoff_pack.execution_contract_v1?.target_files,
+    ["src/routes/canonical-export.ts"],
+  );
+  assert.equal(handoffPack.agent_memory_handoff_pack.handoff_file_path, "src/routes/canonical-export.ts");
+  assert.deepEqual(handoffPack.agent_memory_handoff_pack.handoff_target_files, ["src/routes/canonical-export.ts"]);
+  assert.equal(
+    handoffPack.agent_memory_handoff_pack.handoff_next_action,
+    "Canonical execution contract next action should steer packs",
+  );
 });
 
 test("agent memory routes expose inspect, review, resume, and handoff packs", async () => {
@@ -448,6 +619,10 @@ test("agent memory routes expose inspect, review, resume, and handoff packs", as
     const inspect = inspectResp.json();
     assert.equal(inspect.summary_version, "agent_memory_inspect_v1");
     assert.equal(inspect.agent_memory_summary.has_continuity, true);
+    assert.equal(
+      inspect.evolution_inspect.execution_introspection.recommended_workflows[0]?.execution_contract_v1?.schema_version,
+      "execution_contract_v1",
+    );
 
     const reviewResp = await app.inject({
       method: "POST",
@@ -458,6 +633,10 @@ test("agent memory routes expose inspect, review, resume, and handoff packs", as
     const review = reviewResp.json();
     assert.equal(review.summary_version, "agent_memory_review_pack_v1");
     assert.equal(review.agent_memory_review_pack.selected_tool, "edit");
+    assert.equal(
+      review.agent_memory_review_pack.execution_contract_v1?.schema_version,
+      "execution_contract_v1",
+    );
 
     const resumeResp = await app.inject({
       method: "POST",
@@ -468,6 +647,10 @@ test("agent memory routes expose inspect, review, resume, and handoff packs", as
     const resume = resumeResp.json();
     assert.equal(resume.summary_version, "agent_memory_resume_pack_v1");
     assert.equal(resume.agent_memory_resume_pack.resume_file_path, "src/routes/export.ts");
+    assert.equal(
+      resume.agent_memory_resume_pack.execution_contract_v1?.schema_version,
+      "execution_contract_v1",
+    );
 
     const handoffResp = await app.inject({
       method: "POST",
@@ -478,6 +661,10 @@ test("agent memory routes expose inspect, review, resume, and handoff packs", as
     const handoff = handoffResp.json();
     assert.equal(handoff.summary_version, "agent_memory_handoff_pack_v1");
     assert.equal(handoff.agent_memory_handoff_pack.handoff_kind, "patch_handoff");
+    assert.equal(
+      handoff.agent_memory_handoff_pack.execution_contract_v1?.schema_version,
+      "execution_contract_v1",
+    );
   } finally {
     await app.close();
   }

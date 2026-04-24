@@ -10,7 +10,10 @@ import { buildWorkflowMaintenanceMetadata, buildWorkflowPromotionMetadata } from
 import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema } from "./schemas.js";
 import type { ReplayMirrorNodeRecord, ReplayWriteMirror } from "./replay-write.js";
-import { deriveReplayWorkflowContractFromSlots } from "./replay-workflow-contract.js";
+import {
+  buildReplayProjectionExecutionContract,
+  deriveReplayWorkflowContractFromSlots,
+} from "./replay-workflow-contract.js";
 
 function asObject(v: unknown): Record<string, unknown> | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
@@ -246,6 +249,14 @@ export async function buildStablePlaybookNodeFields(args: {
   const existingExecutionNative = asObject(asObject(args.slots)?.execution_native_v1);
   const existingDistillation = asObject(existingExecutionNative?.distillation);
   const workflowContract = deriveReplayWorkflowContractFromSlots(args.slots);
+  const executionContract = buildReplayProjectionExecutionContract({
+    base: workflowContract,
+    task_signature: anchor.task_signature,
+    workflow_signature: anchor.workflow_signature,
+    source_anchor: args.clientId,
+    file_path: anchor.file_path ?? null,
+    notes: ["replay_stable_playbook_projection"],
+  });
   const executionNative = ExecutionNativeV1Schema.parse({
     schema_version: "execution_native_v1",
     execution_kind: "workflow_anchor",
@@ -278,6 +289,7 @@ export async function buildStablePlaybookNodeFields(args: {
     compression_layer: "L2",
     anchor_v1: anchor,
     execution_native_v1: executionNative,
+    execution_contract_v1: executionContract,
   };
   const embedText = `${args.title}\n${anchor.summary}\n${anchor.tool_set.join(" ")}\n${anchor.task_signature}`;
   if (!args.embedder) {

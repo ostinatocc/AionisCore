@@ -9,6 +9,7 @@ import type {
   PlannerPacketSummarySurface,
   WorkflowLifecycleSummary,
 } from "./planning-summary.js";
+import { guardExecutionContractForHost, type ExecutionContractV1 } from "../memory/execution-contract.js";
 import { isPromotionReadyWorkflowSignal, summarizePacketEntryLabels } from "./planning-summary-surfaces.js";
 import { safeRecordArray, safeStringArray, uniqueStrings } from "./planning-summary-utils.js";
 
@@ -24,6 +25,7 @@ type PatternSignalSummaryLike = {
 type ExperienceRecommendationProjectionLike = {
   history_applied: boolean;
   contract_trust: ContractTrust | null;
+  execution_contract_v1: ExecutionContractV1 | null;
   selected_tool: string | null;
   task_family: string | null;
   workflow_signature: string | null;
@@ -261,6 +263,7 @@ function applyContractTrustGuard(args: {
   workflowSignature: string | null;
   policyMemoryId: string | null;
   filePath: string | null;
+  executionContract: ExecutionContractV1 | null;
   nextAction: string | null;
   uncertainty: ActionRetrievalUncertaintySummary | null;
 }): FirstStepRecommendation {
@@ -279,6 +282,10 @@ function applyContractTrustGuard(args: {
       source_kind: args.sourceKind,
       history_applied: args.historyApplied,
       contract_trust: contractTrust,
+      execution_contract_v1: guardExecutionContractForHost({
+        contract: args.executionContract,
+        trust: contractTrust,
+      }),
       selected_tool: args.selectedTool,
       task_family: args.taskFamily,
       workflow_signature: args.workflowSignature,
@@ -292,6 +299,10 @@ function applyContractTrustGuard(args: {
     source_kind: args.sourceKind,
     history_applied: args.historyApplied,
     contract_trust: contractTrust,
+    execution_contract_v1: guardExecutionContractForHost({
+      contract: args.executionContract,
+      trust: contractTrust,
+    }),
     selected_tool: args.selectedTool,
     task_family: null,
     workflow_signature: null,
@@ -483,6 +494,7 @@ export function buildFirstStepRecommendation(args: {
       workflowSignature: experience.workflow_signature,
       policyMemoryId: experience.policy_memory_id,
       filePath: experience.file_path,
+      executionContract: experience.execution_contract_v1,
       nextAction: buildUncertaintyAwareNextAction({
         sourceKind: "experience_intelligence",
         selectedTool,
@@ -503,6 +515,7 @@ export function buildFirstStepRecommendation(args: {
     workflowSignature: null,
     policyMemoryId: null,
     filePath: null,
+    executionContract: experience?.execution_contract_v1 ?? null,
     nextAction: buildUncertaintyAwareNextAction({
       sourceKind: "tool_selection",
       selectedTool: args.selectedTool,
@@ -522,6 +535,7 @@ export function buildKickoffRecommendation(
     source_kind: firstStepRecommendation.source_kind,
     history_applied: firstStepRecommendation.history_applied,
     contract_trust: firstStepRecommendation.contract_trust,
+    execution_contract_v1: firstStepRecommendation.execution_contract_v1,
     selected_tool: firstStepRecommendation.selected_tool,
     task_family: firstStepRecommendation.task_family,
     workflow_signature: firstStepRecommendation.workflow_signature,
@@ -540,6 +554,7 @@ export function buildKickoffRecommendationFromExperience(args: {
   policyMemoryId: string | null;
   filePath: string | null;
   nextAction: string | null;
+  executionContract: ExecutionContractV1 | null;
   uncertainty?: ActionRetrievalUncertaintySummary | null;
 }): KickoffRecommendation | null {
   if (!args.selectedTool && !args.filePath && !args.nextAction && !args.uncertainty) return null;
@@ -552,6 +567,7 @@ export function buildKickoffRecommendationFromExperience(args: {
     workflowSignature: args.workflowSignature,
     policyMemoryId: args.policyMemoryId,
     filePath: args.filePath,
+    executionContract: args.executionContract,
     nextAction: buildUncertaintyAwareNextAction({
       sourceKind: args.historyApplied ? "experience_intelligence" : "tool_selection",
       selectedTool: args.selectedTool,
@@ -565,6 +581,7 @@ export function buildKickoffRecommendationFromExperience(args: {
     source_kind: firstStep.source_kind,
     history_applied: firstStep.history_applied,
     contract_trust: firstStep.contract_trust,
+    execution_contract_v1: firstStep.execution_contract_v1,
     selected_tool: firstStep.selected_tool,
     task_family: firstStep.task_family,
     workflow_signature: firstStep.workflow_signature,

@@ -33,6 +33,12 @@ import {
   maybeBuildTrajectoryCompile,
   mergeTrajectoryCompileSummary,
 } from "./trajectory-compile-runtime.js";
+import {
+  buildExecutionContractFromHandoff,
+  buildExecutionContractFromTrajectoryCompile,
+  parseExecutionContract,
+  type ExecutionContractV1,
+} from "./execution-contract.js";
 import { HttpError } from "../util/http.js";
 
 type LiteWriteStoreLike = {
@@ -214,6 +220,39 @@ function buildStoredExecutionReadyHandoff(input: {
       ? input.acceptance_checks.filter((value) => typeof value === "string" && value.trim().length > 0)
       : [],
   };
+}
+
+function buildStoredExecutionContract(
+  slots: Record<string, unknown>,
+  promptSafe: PromptSafeHandoff,
+  executionReady: ExecutionReadyHandoff,
+): ExecutionContractV1 {
+  const stored = parseExecutionContract(slots.execution_contract_v1);
+  if (stored) return stored;
+  return buildExecutionContractFromHandoff({
+    anchor: promptSafe.anchor,
+    handoffKind: promptSafe.handoff_kind,
+    filePath: promptSafe.file_path,
+    repoRoot: promptSafe.repo_root,
+    targetFiles: executionReady.target_files,
+    nextAction: executionReady.next_action,
+    acceptanceChecks: executionReady.acceptance_checks,
+    workflowSteps: Array.isArray(slots.workflow_steps)
+      ? slots.workflow_steps.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : [],
+    patternHints: Array.isArray(slots.pattern_hints)
+      ? slots.pattern_hints.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : [],
+    selectedTool: typeof slots.likely_tool === "string" ? slots.likely_tool : null,
+    taskFamily: typeof slots.task_family === "string" ? slots.task_family : promptSafe.handoff_kind,
+    taskSignature: typeof slots.task_signature === "string" ? slots.task_signature : null,
+    workflowSignature: typeof slots.workflow_signature === "string" ? slots.workflow_signature : null,
+    serviceLifecycleConstraints: Array.isArray(slots.service_lifecycle_constraints)
+      ? slots.service_lifecycle_constraints.filter(
+          (value): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value)),
+        )
+      : [],
+  });
 }
 
 function readInlineExecutionProjection(raw: Record<string, unknown>, executionReady: ExecutionReadyHandoff): RecoveredExecutionProjection | null {
@@ -421,6 +460,9 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
     defaultScope: parsed.scope ?? "default",
     defaultTenantId: parsed.tenant_id ?? "default",
   });
+  const compiledExecutionContract = compiledTrajectory
+    ? buildExecutionContractFromTrajectoryCompile(compiledTrajectory)
+    : null;
   const compiledTargetFiles = compiledTrajectory?.contract.target_files ?? [];
   const compiledAcceptanceChecks = compiledTrajectory?.contract.acceptance_checks ?? [];
   const compiledNextAction = compiledTrajectory?.contract.next_action ?? null;
@@ -491,6 +533,23 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
   const executionResultSummary = compiledTrajectory
     ? mergeTrajectoryCompileSummary(parsed.execution_result_summary ?? null, compiledTrajectory)
     : (parsed.execution_result_summary ?? null);
+  const executionContract = buildExecutionContractFromHandoff({
+    anchor: parsed.anchor,
+    handoffKind: parsed.handoff_kind,
+    filePath: parsed.file_path ?? null,
+    repoRoot: parsed.repo_root ?? parsed.trajectory_hints?.repo_root ?? null,
+    targetFiles: executionReady.target_files,
+    nextAction: executionReady.next_action,
+    acceptanceChecks: executionReady.acceptance_checks,
+    workflowSteps: compiledTrajectory?.contract.workflow_steps ?? [],
+    patternHints: compiledTrajectory?.contract.pattern_hints ?? [],
+    selectedTool: compiledTrajectory?.contract.likely_tool ?? null,
+    taskFamily: compiledTrajectory?.task_family ?? parsed.handoff_kind,
+    taskSignature: compiledTrajectory?.task_signature ?? null,
+    workflowSignature: compiledTrajectory?.workflow_signature ?? null,
+    serviceLifecycleConstraints: compiledTrajectory?.contract.service_lifecycle_constraints ?? [],
+    base: compiledExecutionContract,
+  });
   const delegationRecords = buildStoredDelegationRecords({
     raw,
     executionReady,
@@ -552,6 +611,7 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
           must_change: parsed.must_change ?? [],
           must_remove: parsed.must_remove ?? [],
           must_keep: parsed.must_keep ?? [],
+          execution_contract_v1: executionContract,
           execution_result_summary: executionResultSummary,
           execution_artifacts: executionArtifacts,
           execution_evidence: executionEvidence,
@@ -790,6 +850,10 @@ function normalizeRecoveredHandoff(
     slots && "execution_result_summary" in slots && slots.execution_result_summary && typeof slots.execution_result_summary === "object"
       ? (slots.execution_result_summary as Record<string, unknown>)
       : null;
+  const executionContract =
+    slots && "execution_contract_v1" in slots
+      ? buildStoredExecutionContract(slots, promptSafe, executionReady)
+      : buildStoredExecutionContract(slots, promptSafe, executionReady);
   const delegationRecords =
     slots && typeof slots === "object"
       ? readStoredDelegationRecords(slots, () =>
@@ -839,6 +903,7 @@ function normalizeRecoveredHandoff(
     },
     prompt_safe_handoff: promptSafe,
     execution_ready_handoff: executionReady,
+    execution_contract_v1: executionContract,
     execution_result_summary: executionResultSummary,
     execution_artifacts: executionArtifacts,
     execution_evidence: executionEvidence,

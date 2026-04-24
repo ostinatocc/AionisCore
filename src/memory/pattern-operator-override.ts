@@ -7,19 +7,12 @@ import {
   PatternUnsuppressRequest,
   type PatternOperatorOverride,
 } from "./schemas.js";
+import { resolveNodePatternExecutionSurface } from "./node-execution-surface.js";
 import { resolveTenantScope } from "./tenant.js";
 import { buildAionisUri } from "./uri.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
-
-function firstString(...values: unknown[]): string | null {
-  for (const value of values) {
-    const next = typeof value === "string" ? value.trim() : "";
-    if (next) return next;
-  }
-  return null;
 }
 
 function buildOperatorOverride(args: {
@@ -55,17 +48,6 @@ export function isPatternSuppressed(override: PatternOperatorOverride | null, no
   return Number.isFinite(untilMs) && untilMs > now;
 }
 
-function derivePatternIdentity(slots: Record<string, unknown>) {
-  const execution = asRecord(slots.execution_native_v1);
-  const anchor = asRecord(slots.anchor_v1);
-  return {
-    anchorKind: firstString(execution.anchor_kind, anchor.anchor_kind),
-    selectedTool: firstString(execution.selected_tool, anchor.selected_tool),
-    patternState: firstString(execution.pattern_state, anchor.pattern_state),
-    credibilityState: firstString(execution.credibility_state, anchor.credibility_state, asRecord(execution.promotion ?? anchor.promotion).credibility_state),
-  };
-}
-
 async function loadPatternAnchorNode(args: {
   liteWriteStore: Pick<LiteWriteStore, "findNodes">;
   scope: string;
@@ -86,14 +68,16 @@ async function loadPatternAnchorNode(args: {
       anchor_id: args.anchorId,
     });
   }
-  const identity = derivePatternIdentity(asRecord(row.slots));
-  if (row.type !== "concept" || identity.anchorKind !== "pattern") {
+  const patternSurface = resolveNodePatternExecutionSurface({
+    slots: asRecord(row.slots),
+  });
+  if (row.type !== "concept" || patternSurface.anchor_kind !== "pattern") {
     throw new HttpError(400, "pattern_anchor_required", "target node is not a pattern anchor", {
       anchor_id: args.anchorId,
       node_type: row.type,
     });
   }
-  return { row, identity };
+  return { row, patternSurface };
 }
 
 async function updatePatternOperatorOverride(args: {
@@ -104,7 +88,7 @@ async function updatePatternOperatorOverride(args: {
   anchorId: string;
   nextOverride: PatternOperatorOverride;
 }) {
-  const { row, identity } = await loadPatternAnchorNode({
+  const { row, patternSurface } = await loadPatternAnchorNode({
     liteWriteStore: args.liteWriteStore,
     scope: args.scope,
     anchorId: args.anchorId,
@@ -134,9 +118,9 @@ async function updatePatternOperatorOverride(args: {
       type: row.type,
       id: row.id,
     }),
-    selected_tool: identity.selectedTool,
-    pattern_state: identity.patternState,
-    credibility_state: identity.credibilityState,
+    selected_tool: patternSurface.selected_tool,
+    pattern_state: patternSurface.pattern_state,
+    credibility_state: patternSurface.credibility_state,
     operator_override: args.nextOverride,
   });
 }

@@ -197,6 +197,7 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
       execution_artifacts: readSlot(continuitySlots, "execution_artifacts"),
       execution_evidence: readSlot(continuitySlots, "execution_evidence"),
       delegation_records_v1: readSlot(continuitySlots, "delegation_records_v1"),
+      execution_contract_v1: readSlot(continuitySlots, "execution_contract_v1"),
       execution_state_v1: readSlot(continuitySlots, "execution_state_v1"),
       execution_packet_v1: readSlot(continuitySlots, "execution_packet_v1"),
       control_profile_v1: readSlot(continuitySlots, "control_profile_v1"),

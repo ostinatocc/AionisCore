@@ -1,0 +1,461 @@
+import type { MemoryLayerId } from "./layer-policy.js";
+import { z } from "zod";
+import {
+  deriveExecutionContractFromSlots,
+  type ExecutionContractV1,
+} from "./execution-contract.js";
+import type { ContractTrust } from "./schemas.js";
+import { ServiceLifecycleConstraintV1Schema } from "../execution/types.js";
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
+function firstFinite(...values: unknown[]): number | null {
+  for (const value of values) {
+    const next = Number(value);
+    if (Number.isFinite(next)) return next;
+  }
+  return null;
+}
+
+function firstBoolean(...values: unknown[]): boolean | null {
+  for (const value of values) {
+    if (typeof value === "boolean") return value;
+  }
+  return null;
+}
+
+function uniqueStrings(values: unknown[], limit = 24): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return uniqueStrings(value);
+}
+
+function uniqueLifecycleConstraints(
+  values: unknown[],
+  limit = 16,
+): Array<z.infer<typeof ServiceLifecycleConstraintV1Schema>> {
+  const out: Array<z.infer<typeof ServiceLifecycleConstraintV1Schema>> = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const parsed = ServiceLifecycleConstraintV1Schema.safeParse(value);
+    if (!parsed.success) continue;
+    const key = [
+      parsed.data.label,
+      parsed.data.endpoint ?? "",
+      parsed.data.launch_reference ?? "",
+    ].join("::");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(parsed.data);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function toLayerId(value: string | null): MemoryLayerId | null {
+  return value === "L0" || value === "L1" || value === "L2" || value === "L3" || value === "L4" || value === "L5"
+    ? value
+    : null;
+}
+
+function mapExecutionKindToAnchorKind(executionKind: string | null): string | null {
+  if (executionKind === "workflow_anchor") return "workflow";
+  if (executionKind === "pattern_anchor") return "pattern";
+  return null;
+}
+
+export function parseNodeExecutionNative(slots: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
+  return asRecord(slots?.execution_native_v1);
+}
+
+export function parseNodeAnchor(slots: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
+  return asRecord(slots?.anchor_v1);
+}
+
+export function resolveNodeExecutionContract(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): ExecutionContractV1 | null {
+  return deriveExecutionContractFromSlots({
+    slots: args.slots ?? null,
+  });
+}
+
+export function resolveNodeExecutionContractTrust(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): ContractTrust | null {
+  const trust = resolveNodeExecutionContract(args)?.contract_trust;
+  return trust === "authoritative" || trust === "advisory" || trust === "observational" ? trust : null;
+}
+
+export function resolveNodeExecutionKind(slots: Record<string, unknown> | null | undefined): string | null {
+  return firstString(parseNodeExecutionNative(slots)?.execution_kind);
+}
+
+export function resolveNodeTaskSignature(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): string | null {
+  const contract = resolveNodeExecutionContract(args);
+  return firstString(
+    contract?.task_signature,
+    parseNodeExecutionNative(args.slots)?.task_signature,
+    args.slots?.task_signature,
+  );
+}
+
+export function resolveNodeTaskFamily(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): string | null {
+  const slots = args.slots ?? null;
+  const contract = resolveNodeExecutionContract(args);
+  const executionResultSummary = asRecord(args.executionResultSummary) ?? asRecord(slots?.execution_result_summary);
+  const trajectoryCompileSummary = asRecord(executionResultSummary?.trajectory_compile_v1);
+  return firstString(
+    contract?.task_family,
+    slots?.task_family,
+    parseNodeExecutionNative(slots)?.task_family,
+    trajectoryCompileSummary?.task_family,
+    slots?.task_kind,
+  );
+}
+
+export function resolveNodeWorkflowSignature(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): string | null {
+  const contract = resolveNodeExecutionContract(args);
+  return firstString(
+    contract?.workflow_signature,
+    parseNodeExecutionNative(args.slots)?.workflow_signature,
+    args.slots?.workflow_signature,
+  );
+}
+
+export function resolveNodeErrorSignature(
+  slots: Record<string, unknown> | null | undefined,
+): string | null {
+  return firstString(
+    slots?.error_signature,
+    parseNodeExecutionNative(slots)?.error_signature,
+    parseNodeAnchor(slots)?.error_signature,
+  );
+}
+
+export function resolveNodeFilePath(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): string | null {
+  const contract = resolveNodeExecutionContract(args);
+  return firstString(
+    contract?.file_path,
+    args.slots?.file_path,
+    parseNodeExecutionNative(args.slots)?.file_path,
+    parseNodeAnchor(args.slots)?.file_path,
+  );
+}
+
+export function resolveNodeTargetFiles(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): string[] {
+  const contract = resolveNodeExecutionContract(args);
+  return uniqueStrings([
+    ...(contract?.target_files ?? []),
+    ...stringList(args.slots?.target_files),
+    ...stringList(parseNodeExecutionNative(args.slots)?.target_files),
+    ...stringList(parseNodeAnchor(args.slots)?.target_files),
+  ], 24);
+}
+
+export function resolveNodeNextAction(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): string | null {
+  const contract = resolveNodeExecutionContract(args);
+  return firstString(
+    contract?.next_action,
+    args.slots?.next_action,
+    parseNodeExecutionNative(args.slots)?.next_action,
+    parseNodeAnchor(args.slots)?.next_action,
+  );
+}
+
+export function resolveNodeWorkflowSteps(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): string[] {
+  const contract = resolveNodeExecutionContract(args);
+  return uniqueStrings([
+    ...(contract?.workflow_steps ?? []),
+    ...stringList(args.slots?.workflow_steps),
+    ...stringList(parseNodeExecutionNative(args.slots)?.workflow_steps),
+    ...stringList(parseNodeAnchor(args.slots)?.key_steps),
+  ], 24);
+}
+
+export function resolveNodePatternHints(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): string[] {
+  const contract = resolveNodeExecutionContract(args);
+  return uniqueStrings([
+    ...(contract?.pattern_hints ?? []),
+    ...stringList(args.slots?.pattern_hints),
+    ...stringList(parseNodeExecutionNative(args.slots)?.pattern_hints),
+    ...stringList(parseNodeAnchor(args.slots)?.pattern_hints),
+  ], 24);
+}
+
+export function resolveNodeServiceLifecycleConstraints(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): Array<z.infer<typeof ServiceLifecycleConstraintV1Schema>> {
+  const contract = resolveNodeExecutionContract(args);
+  return uniqueLifecycleConstraints([
+    ...(contract?.service_lifecycle_constraints ?? []),
+    ...((Array.isArray(args.slots?.service_lifecycle_constraints)
+      ? args.slots?.service_lifecycle_constraints
+      : []) as unknown[]),
+    ...((Array.isArray(parseNodeExecutionNative(args.slots)?.service_lifecycle_constraints)
+      ? parseNodeExecutionNative(args.slots)?.service_lifecycle_constraints
+      : []) as unknown[]),
+    ...((Array.isArray(parseNodeAnchor(args.slots)?.service_lifecycle_constraints)
+      ? parseNodeAnchor(args.slots)?.service_lifecycle_constraints
+      : []) as unknown[]),
+  ], 16);
+}
+
+export function resolveNodeAnchorKind(slots: Record<string, unknown> | null | undefined): string | null {
+  return firstString(
+    parseNodeExecutionNative(slots)?.anchor_kind,
+    mapExecutionKindToAnchorKind(resolveNodeExecutionKind(slots)),
+    parseNodeAnchor(slots)?.anchor_kind,
+  );
+}
+
+export function resolveNodeAnchorLevel(
+  slots: Record<string, unknown> | null | undefined,
+): MemoryLayerId | null {
+  return toLayerId(firstString(
+    parseNodeExecutionNative(slots)?.anchor_level,
+    parseNodeAnchor(slots)?.anchor_level,
+  ));
+}
+
+export function resolveNodeSelectedTool(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): string | null {
+  const contract = resolveNodeExecutionContract(args);
+  return firstString(
+    contract?.selected_tool,
+    parseNodeExecutionNative(args.slots)?.selected_tool,
+    parseNodeAnchor(args.slots)?.selected_tool,
+  );
+}
+
+export function resolveNodePatternState(
+  slots: Record<string, unknown> | null | undefined,
+): string | null {
+  return firstString(
+    parseNodeExecutionNative(slots)?.pattern_state,
+    parseNodeAnchor(slots)?.pattern_state,
+  );
+}
+
+export function resolveNodeSummaryKind(slots: Record<string, unknown> | null | undefined): string | null {
+  return firstString(parseNodeExecutionNative(slots)?.summary_kind, slots?.summary_kind);
+}
+
+export function resolveNodeCompressionLayer(args: {
+  type: string;
+  slots: Record<string, unknown> | null | undefined;
+}): MemoryLayerId | null {
+  const slots = args.slots ?? null;
+  const executionLayer = toLayerId(firstString(parseNodeExecutionNative(slots)?.compression_layer));
+  if (executionLayer) return executionLayer;
+
+  const anchorLevel = toLayerId(firstString(
+    parseNodeExecutionNative(slots)?.anchor_level,
+    parseNodeAnchor(slots)?.anchor_level,
+  ));
+  if (anchorLevel) return anchorLevel;
+
+  if (args.type === "event") return "L0";
+  if (args.type === "evidence") {
+    if (resolveNodeSummaryKind(slots) === "write_distillation_evidence") return "L1";
+    return "L0";
+  }
+  if (args.type === "topic") return "L2";
+  if (args.type === "concept") {
+    const slotLayer = toLayerId(firstString(slots?.compression_layer));
+    if (slotLayer) return slotLayer;
+    if (resolveNodeSummaryKind(slots) === "write_distillation_fact") return "L1";
+    if (resolveNodeSummaryKind(slots) === "compression_rollup") return "L3";
+  }
+  return null;
+}
+
+export function resolveNodeRehydrationDefaultMode(
+  slots: Record<string, unknown> | null | undefined,
+): "summary_only" | "partial" | "full" | "differential" | null {
+  const mode = firstString(
+    parseNodeExecutionNative(slots)?.rehydration_default_mode,
+    asRecord(parseNodeAnchor(slots)?.rehydration)?.default_mode,
+  );
+  return mode === "summary_only" || mode === "partial" || mode === "full" || mode === "differential"
+    ? mode
+    : null;
+}
+
+export function resolveNodeCredibilityState(
+  slots: Record<string, unknown> | null | undefined,
+): "candidate" | "trusted" | "contested" | null {
+  const anchor = parseNodeAnchor(slots);
+  const execution = parseNodeExecutionNative(slots);
+  const promotion = asRecord(execution?.promotion) ?? asRecord(anchor?.promotion);
+  const patternState = resolveNodePatternState(slots);
+  const state = firstString(
+    execution?.credibility_state,
+    anchor?.credibility_state,
+    promotion?.credibility_state,
+    patternState === "stable" ? "trusted" : null,
+  );
+  return state === "candidate" || state === "trusted" || state === "contested" ? state : null;
+}
+
+export type NodePatternPromotionSurface = {
+  distinct_run_count: number | null;
+  required_distinct_runs: number | null;
+  counter_evidence_count: number | null;
+  counter_evidence_open: boolean;
+  last_transition: string | null;
+};
+
+export function resolveNodePatternPromotionSurface(
+  slots: Record<string, unknown> | null | undefined,
+): NodePatternPromotionSurface {
+  const execution = parseNodeExecutionNative(slots);
+  const anchor = parseNodeAnchor(slots);
+  const promotion = asRecord(execution?.promotion) ?? asRecord(anchor?.promotion);
+  const metrics = asRecord(anchor?.metrics);
+  return {
+    distinct_run_count: firstFinite(promotion?.distinct_run_count, metrics?.distinct_run_count),
+    required_distinct_runs: firstFinite(promotion?.required_distinct_runs),
+    counter_evidence_count: firstFinite(promotion?.counter_evidence_count),
+    counter_evidence_open: firstBoolean(promotion?.counter_evidence_open) === true,
+    last_transition: firstString(promotion?.last_transition),
+  };
+}
+
+export type NodePatternExecutionSurface = {
+  anchor_kind: string | null;
+  anchor_level: MemoryLayerId | null;
+  selected_tool: string | null;
+  pattern_state: string | null;
+  credibility_state: "candidate" | "trusted" | "contested" | null;
+  contract_trust: ContractTrust | null;
+  promotion: NodePatternPromotionSurface;
+};
+
+export function resolveNodePatternExecutionSurface(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): NodePatternExecutionSurface {
+  return {
+    anchor_kind: resolveNodeAnchorKind(args.slots),
+    anchor_level: resolveNodeAnchorLevel(args.slots),
+    selected_tool: resolveNodeSelectedTool(args),
+    pattern_state: resolveNodePatternState(args.slots),
+    credibility_state: resolveNodeCredibilityState(args.slots),
+    contract_trust: resolveNodeExecutionContractTrust(args),
+    promotion: resolveNodePatternPromotionSurface(args.slots),
+  };
+}
+
+export function resolveNodePolicyMemoryState(
+  slots: Record<string, unknown> | null | undefined,
+): "active" | "contested" | "retired" | null {
+  const state = resolveNodePolicyMemorySurface(slots).policy_memory_state;
+  return state === "active" || state === "contested" || state === "retired" ? state : null;
+}
+
+export type NodePolicyMemorySurface = {
+  policy_memory_state: "active" | "contested" | "retired" | null;
+  policy_state: string | null;
+  policy_source_kind: string | null;
+  activation_mode: string | null;
+  materialization_state: string | null;
+  last_transition: string | null;
+};
+
+export function resolveNodePolicyMemorySurface(
+  slots: Record<string, unknown> | null | undefined,
+): NodePolicyMemorySurface {
+  const execution = parseNodeExecutionNative(slots);
+  const policyEvolution = asRecord(execution?.policy_evolution);
+  const policyContract = asRecord(slots?.policy_contract_v1) ?? asRecord(slots?.policy_contract);
+  const derivedPolicy = asRecord(slots?.derived_policy_v1);
+  const rawPolicyMemoryState = firstString(
+    slots?.policy_memory_state,
+    policyEvolution?.policy_memory_state,
+    policyContract?.policy_memory_state,
+    derivedPolicy?.policy_memory_state,
+  );
+  const policyMemoryState =
+    rawPolicyMemoryState === "active" || rawPolicyMemoryState === "contested" || rawPolicyMemoryState === "retired"
+      ? rawPolicyMemoryState
+      : null;
+  return {
+    policy_memory_state: policyMemoryState,
+    policy_state: firstString(policyEvolution?.policy_state, policyContract?.policy_state, derivedPolicy?.policy_state),
+    policy_source_kind: firstString(
+      policyEvolution?.policy_source_kind,
+      policyContract?.source_kind,
+      derivedPolicy?.source_kind,
+    ),
+    activation_mode: firstString(
+      policyEvolution?.activation_mode,
+      policyContract?.activation_mode,
+      derivedPolicy?.activation_mode,
+    ),
+    materialization_state: firstString(
+      policyEvolution?.materialization_state,
+      slots?.materialization_state,
+      policyContract?.materialization_state,
+      derivedPolicy?.materialization_state,
+    ),
+    last_transition: firstString(
+      policyEvolution?.last_transition,
+      policyContract?.last_transition,
+      derivedPolicy?.last_transition,
+    ),
+  };
+}

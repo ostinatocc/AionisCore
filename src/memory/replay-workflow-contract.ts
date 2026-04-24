@@ -1,5 +1,10 @@
-import { ServiceLifecycleConstraintV1Schema, type ServiceLifecycleConstraintV1 } from "../execution/types.js";
-import { ContractTrustSchema, ExecutionNativeV1Schema, type ContractTrust } from "./schemas.js";
+import type { ServiceLifecycleConstraintV1 } from "../execution/types.js";
+import {
+  buildExecutionContractFromProjection,
+  deriveExecutionContractFromSlots,
+  type ExecutionContractV1,
+} from "./execution-contract.js";
+import type { ContractTrust } from "./contract-trust.js";
 
 function asObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -11,38 +16,15 @@ function toStringOrNull(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function uniqueStrings(values: unknown[], max = 64): string[] {
+function uniqueStrings(values: Array<string | null | undefined>, max = 64): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const value of values) {
-    const next = toStringOrNull(value);
+    const next = typeof value === "string" ? value.trim() : "";
     if (!next || seen.has(next)) continue;
     seen.add(next);
     out.push(next);
     if (out.length >= max) break;
-  }
-  return out;
-}
-
-function stringList(value: unknown, max = 64): string[] {
-  return Array.isArray(value) ? uniqueStrings(value, max) : [];
-}
-
-function uniqueLifecycleConstraints(values: unknown[], limit = 16): ServiceLifecycleConstraintV1[] {
-  const out: ServiceLifecycleConstraintV1[] = [];
-  const seen = new Set<string>();
-  for (const value of values) {
-    const parsed = ServiceLifecycleConstraintV1Schema.safeParse(value);
-    if (!parsed.success) continue;
-    const key = [
-      parsed.data.label,
-      parsed.data.endpoint ?? "",
-      parsed.data.launch_reference ?? "",
-    ].join("::");
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(parsed.data);
-    if (out.length >= limit) break;
   }
   return out;
 }
@@ -62,6 +44,7 @@ function deriveTemplateKeySteps(stepsRaw: unknown): string[] {
 }
 
 export type ReplayWorkflowContract = {
+  execution_contract_v1: ExecutionContractV1 | null;
   contract_trust: ContractTrust | null;
   task_family: string | null;
   target_files: string[];
@@ -71,56 +54,61 @@ export type ReplayWorkflowContract = {
   service_lifecycle_constraints: ServiceLifecycleConstraintV1[];
 };
 
-function normalizeContractTrust(value: unknown): ContractTrust | null {
-  const parsed = ContractTrustSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-}
-
 export function deriveReplayWorkflowContractFromSlots(slots: Record<string, unknown>): ReplayWorkflowContract {
-  const executionNativeParsed = ExecutionNativeV1Schema.safeParse(asObject(slots.execution_native_v1));
-  const executionNative = executionNativeParsed.success ? executionNativeParsed.data : null;
-  const executionResultSummary = asObject(slots.execution_result_summary);
-  const trajectoryCompileSummary = asObject(executionResultSummary?.trajectory_compile_v1);
-  const recoveryContract = asObject(slots.recovery_contract_v1);
-  const policyContract =
-    asObject(slots.policy_contract_v1)
-    ?? asObject(slots.policy_contract)
-    ?? null;
-
-  const targetFiles = uniqueStrings([
-    ...stringList(slots.target_files),
-    ...(executionNative?.target_files ?? []),
-    toStringOrNull(slots.file_path),
-    executionNative?.file_path ?? null,
-  ]);
-  const workflowSteps = uniqueStrings([
-    ...stringList(slots.workflow_steps, 24),
-    ...(executionNative?.workflow_steps ?? []),
-    ...deriveTemplateKeySteps(slots.steps_template),
-  ], 24);
-  const patternHints = uniqueStrings([
-    ...stringList(slots.pattern_hints, 24),
-    ...(executionNative?.pattern_hints ?? []),
-  ], 24);
-  const serviceLifecycleConstraints = uniqueLifecycleConstraints([
-    ...((Array.isArray(slots.service_lifecycle_constraints) ? slots.service_lifecycle_constraints : []) as unknown[]),
-    ...((executionNative?.service_lifecycle_constraints ?? []) as unknown[]),
-  ]);
+  const executionContract = deriveExecutionContractFromSlots({
+    slots,
+    provenance: {
+      source_kind: "legacy_projection",
+      notes: ["replay_workflow_contract_projection"],
+    },
+  });
 
   return {
-    contract_trust: normalizeContractTrust(slots.contract_trust)
-      ?? normalizeContractTrust(executionNative?.contract_trust)
-      ?? normalizeContractTrust(recoveryContract?.contract_trust)
-      ?? normalizeContractTrust(policyContract?.contract_trust)
-      ?? null,
-    task_family: toStringOrNull(slots.task_family)
-      ?? executionNative?.task_family
-      ?? toStringOrNull(trajectoryCompileSummary?.task_family)
-      ?? null,
-    target_files: targetFiles,
-    next_action: toStringOrNull(slots.next_action) ?? executionNative?.next_action ?? null,
-    workflow_steps: workflowSteps,
-    pattern_hints: patternHints,
-    service_lifecycle_constraints: serviceLifecycleConstraints,
+    execution_contract_v1: executionContract,
+    contract_trust: executionContract?.contract_trust ?? null,
+    task_family: executionContract?.task_family ?? null,
+    target_files: executionContract?.target_files ?? [],
+    next_action: executionContract?.next_action ?? null,
+    workflow_steps:
+      executionContract?.workflow_steps && executionContract.workflow_steps.length > 0
+        ? executionContract.workflow_steps
+        : deriveTemplateKeySteps(slots.steps_template),
+    pattern_hints: executionContract?.pattern_hints ?? [],
+    service_lifecycle_constraints: executionContract?.service_lifecycle_constraints ?? [],
   };
+}
+
+export function buildReplayProjectionExecutionContract(args: {
+  base: ReplayWorkflowContract;
+  task_signature: string;
+  workflow_signature: string;
+  source_anchor: string;
+  selected_tool?: string | null;
+  file_path?: string | null;
+  notes?: string[];
+}): ExecutionContractV1 {
+  return buildExecutionContractFromProjection({
+    contract_trust: args.base.contract_trust,
+    task_family: args.base.task_family,
+    task_signature: args.task_signature,
+    workflow_signature: args.workflow_signature,
+    selected_tool: args.selected_tool ?? null,
+    file_path: args.file_path ?? args.base.execution_contract_v1?.file_path ?? args.base.target_files[0] ?? null,
+    target_files: args.base.target_files,
+    next_action: args.base.next_action,
+    workflow_steps: args.base.workflow_steps,
+    pattern_hints: args.base.pattern_hints,
+    service_lifecycle_constraints: args.base.service_lifecycle_constraints,
+    acceptance_checks: args.base.execution_contract_v1?.outcome.acceptance_checks ?? [],
+    success_invariants: args.base.execution_contract_v1?.outcome.success_invariants ?? [],
+    dependency_requirements: args.base.execution_contract_v1?.outcome.dependency_requirements ?? [],
+    environment_assumptions: args.base.execution_contract_v1?.outcome.environment_assumptions ?? [],
+    must_hold_after_exit: args.base.execution_contract_v1?.outcome.must_hold_after_exit ?? [],
+    external_visibility_requirements: args.base.execution_contract_v1?.outcome.external_visibility_requirements ?? [],
+    provenance: {
+      source_kind: "workflow_projection",
+      source_anchor: args.source_anchor,
+      notes: args.notes ?? [],
+    },
+  });
 }

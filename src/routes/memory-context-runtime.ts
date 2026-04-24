@@ -1140,6 +1140,12 @@ export function registerMemoryContextRuntimeRoutes(args: {
       && !Array.isArray(args.experienceIntelligence.policy_contract)
         ? args.experienceIntelligence.policy_contract as Record<string, unknown>
         : null;
+    const executionContract =
+      firstStep?.execution_contract_v1
+      && typeof firstStep.execution_contract_v1 === "object"
+      && !Array.isArray(firstStep.execution_contract_v1)
+        ? firstStep.execution_contract_v1 as Record<string, unknown>
+        : null;
     const readNullableString = (...values: unknown[]) => {
       for (const value of values) {
         if (typeof value !== "string") continue;
@@ -1179,11 +1185,19 @@ export function registerMemoryContextRuntimeRoutes(args: {
       || firstStep?.contract_trust === "observational"
         ? firstStep.contract_trust
         : "observational";
-    const selectedTool = typeof firstStep?.selected_tool === "string" ? firstStep.selected_tool : null;
-    const filePath = typeof firstStep?.file_path === "string" ? firstStep.file_path : null;
+    const selectedTool = readNullableString(
+      executionContract?.selected_tool,
+      firstStep?.selected_tool,
+    );
+    const filePath = typeof executionContract?.file_path === "string"
+      ? executionContract.file_path
+      : typeof firstStep?.file_path === "string"
+        ? firstStep.file_path
+        : null;
     const taskFamily = contractTrust === "observational"
       ? null
       : readNullableString(
+          executionContract?.task_family,
           firstStep?.task_family,
           pathRecommendation?.task_family,
           policyContract?.task_family,
@@ -1191,6 +1205,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const workflowSignature = contractTrust === "observational"
       ? null
       : readNullableString(
+          executionContract?.workflow_signature,
           firstStep?.workflow_signature,
           pathRecommendation?.workflow_signature,
           policyContract?.workflow_signature,
@@ -1198,6 +1213,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const policyMemoryId = contractTrust === "observational"
       ? null
       : readNullableString(
+          executionContract?.policy_memory_id,
           firstStep?.policy_memory_id,
           policyContract?.policy_memory_id,
           pathRecommendation?.policy_memory_id,
@@ -1243,6 +1259,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
           ? "required" as const
           : "recommended" as const,
       contract_trust: contractTrust,
+      execution_contract_v1: executionContract,
       instruction:
         index === 0 && typeof gate?.instruction === "string"
           ? gate.instruction

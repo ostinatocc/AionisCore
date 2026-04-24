@@ -238,17 +238,27 @@ test("trajectory-aware augmentation upgrades thin placeholders and refreshes sta
   }).parsed;
 
   const context = augmented.context as Record<string, unknown>;
+  const executionContract = context.execution_contract_v1 as Record<string, unknown>;
   const recoveryContract = context.recovery_contract_v1 as Record<string, unknown>;
   const recoveryBody = recoveryContract.contract as Record<string, unknown>;
   const summary = (augmented.execution_result_summary as Record<string, unknown>).trajectory_compile_v1 as Record<string, unknown>;
+  const contractSummary = (augmented.execution_result_summary as Record<string, unknown>).execution_contract_v1 as Record<string, unknown>;
 
   assert.equal(context.task_family, "package_publish_validate");
+  assert.equal(executionContract.schema_version, "execution_contract_v1");
+  assert.equal(executionContract.task_family, "package_publish_validate");
   assert.ok(Array.isArray(context.target_files));
   assert.ok((context.target_files as string[]).includes("scripts/build_and_serve.py"));
   assert.ok(Array.isArray(recoveryBody.target_files));
   assert.ok((recoveryBody.target_files as string[]).includes("/app/src/vectorops/__init__.py"));
   assert.match(String(recoveryBody.next_action), /fresh shell/i);
+  assert.ok(Array.isArray((executionContract.outcome as Record<string, unknown>).must_hold_after_exit));
+  assert.ok(
+    ((executionContract.outcome as Record<string, unknown>).must_hold_after_exit as string[])
+      .some((entry) => entry.includes("service_survives_agent_exit")),
+  );
   assert.equal(summary.task_family, "package_publish_validate");
+  assert.equal(contractSummary.task_family, "package_publish_validate");
   assert.notEqual(summary.workflow_signature, "stale-workflow");
 });
 
@@ -364,9 +374,14 @@ test("handoff/store compiles trajectory into effective contract and lifecycle co
     assert.ok(Array.isArray(body.handoff?.acceptance_checks));
     assert.ok(body.handoff.acceptance_checks.some((entry: string) => entry.includes("curl -fsS http://localhost:8080/simple/vectorops/")));
     assert.ok(body.handoff.acceptance_checks.some((entry: string) => entry.includes("pip install --index-url http://localhost:8080/simple vectorops==0.1.0")));
+    assert.equal(body.execution_contract_v1.schema_version, "execution_contract_v1");
+    assert.equal(body.execution_contract_v1.task_family, "package_publish_validate");
+    assert.ok(Array.isArray(body.execution_contract_v1.outcome.acceptance_checks));
+    assert.ok(body.execution_contract_v1.outcome.must_hold_after_exit.some((entry: string) => entry.includes("service_survives_agent_exit")));
     assert.equal(body.execution_packet_v1.service_lifecycle_constraints.length, 1);
     assert.equal(body.execution_packet_v1.service_lifecycle_constraints[0].must_survive_agent_exit, true);
     assert.ok(body.execution_result_summary?.trajectory_compile_v1);
+    assert.ok(body.execution_result_summary?.execution_contract_v1);
   } finally {
     await app.close();
   }

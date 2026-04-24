@@ -6,9 +6,12 @@ import path from "node:path";
 import Fastify from "fastify";
 import { createRequestGuards } from "../../src/app/request-guards.ts";
 import { registerHostErrorHandler } from "../../src/host/http-host.ts";
+import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
+import { buildHandoffWriteBody } from "../../src/memory/handoff.ts";
 import { registerHandoffRoutes } from "../../src/routes/handoff.ts";
 import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
 import { ContinuityReviewPackResponseSchema } from "../../src/memory/schemas.ts";
+import { applyMemoryWrite, prepareMemoryWrite } from "../../src/memory/write.ts";
 import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
 import { createLiteWriteStore } from "../../src/store/lite-write-store.ts";
 import { InflightGate } from "../../src/util/inflight_gate.ts";
@@ -185,6 +188,98 @@ test("memory continuity review-pack route wraps recovered handoff into reviewer-
     assert.deepEqual(parsed.continuity_review_pack.review_contract?.must_keep, ["existing success path"]);
     assert.deepEqual(parsed.continuity_review_pack.review_contract?.acceptance_checks, ["npm run -s test:lite -- export"]);
     assert.equal(parsed.continuity_review_pack.latest_handoff?.anchor, "resume:src/routes/export.ts");
+  } finally {
+    await app.close();
+  }
+});
+
+test("memory continuity review-pack route prefers canonical contract over legacy handoff fields", async () => {
+  const dbPath = tmpDbPath("continuity-review-pack-canonical-contract");
+  const app = Fastify();
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  try {
+    registerApp({ app, liteWriteStore, liteRecallStore });
+    const handoffWrite = buildHandoffWriteBody({
+      tenant_id: "default",
+      scope: "default",
+      memory_lane: "shared",
+      actor: "local-user",
+      anchor: "resume:src/routes/legacy-export.ts",
+      file_path: "src/routes/legacy-export.ts",
+      repo_root: "/repo",
+      handoff_kind: "patch_handoff",
+      title: "Fix legacy export route",
+      summary: "Legacy handoff fields conflict with canonical contract",
+      handoff_text: "Legacy handoff text should not steer review contract",
+      target_files: ["src/routes/legacy-export.ts"],
+      next_action: "Legacy next action should not steer review contract",
+      acceptance_checks: ["npm run -s test:legacy-export"],
+    });
+    const slots = handoffWrite.nodes?.[0]?.slots as Record<string, unknown>;
+    slots.execution_contract_v1 = buildExecutionContractFromProjection({
+      contract_trust: "authoritative",
+      task_family: "task:canonical_continuity_review",
+      task_signature: "canonical-continuity-review",
+      workflow_signature: "execution_workflow:canonical-continuity-review",
+      selected_tool: "edit",
+      file_path: "src/routes/canonical-export.ts",
+      target_files: ["src/routes/canonical-export.ts"],
+      next_action: "Canonical review contract next action",
+      acceptance_checks: ["npm run -s test:canonical-export"],
+      provenance: {
+        source_kind: "manual_context",
+        source_summary_version: "execution_contract_v1",
+        source_anchor: "canonical-continuity-review-test",
+        evidence_refs: [],
+        notes: ["continuity review contract must prefer execution_contract_v1"],
+      },
+    });
+    const prepared = await prepareMemoryWrite(
+      handoffWrite,
+      "default",
+      "default",
+      {
+        maxTextLen: 10000,
+        piiRedaction: false,
+        allowCrossScopeEdges: false,
+      },
+      null,
+    );
+    await liteWriteStore.withTx(() => applyMemoryWrite({} as any, prepared, {
+      maxTextLen: 10000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+      shadowDualWriteEnabled: false,
+      shadowDualWriteStrict: false,
+      write_access: liteWriteStore,
+    }));
+
+    const reviewResp = await app.inject({
+      method: "POST",
+      url: "/v1/memory/continuity/review-pack",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        anchor: "resume:src/routes/legacy-export.ts",
+        file_path: "src/routes/legacy-export.ts",
+        repo_root: "/repo",
+        handoff_kind: "patch_handoff",
+      },
+    });
+    assert.equal(reviewResp.statusCode, 200, reviewResp.body);
+    const parsed = ContinuityReviewPackResponseSchema.parse(JSON.parse(reviewResp.body));
+    assert.equal(
+      parsed.continuity_review_pack.review_contract?.execution_contract_v1?.file_path,
+      "src/routes/canonical-export.ts",
+    );
+    assert.deepEqual(
+      parsed.continuity_review_pack.review_contract?.execution_contract_v1?.target_files,
+      ["src/routes/canonical-export.ts"],
+    );
+    assert.deepEqual(parsed.continuity_review_pack.review_contract?.target_files, ["src/routes/canonical-export.ts"]);
+    assert.equal(parsed.continuity_review_pack.review_contract?.next_action, "Canonical review contract next action");
+    assert.deepEqual(parsed.continuity_review_pack.review_contract?.acceptance_checks, ["npm run -s test:canonical-export"]);
   } finally {
     await app.close();
   }

@@ -9,6 +9,7 @@ import { updateRuleState } from "../../src/memory/rules.ts";
 import { MemoryAnchorV1Schema, MemoryRecallRequest, ToolsFeedbackResponseSchema } from "../../src/memory/schemas.ts";
 import { suppressPatternAnchorLite } from "../../src/memory/pattern-operator-override.ts";
 import { extractTaskFamily, resolvePatternTaskAffinity } from "../../src/memory/pattern-trust-shaping.ts";
+import { buildExecutionContractFromProjection, parseExecutionContract } from "../../src/memory/execution-contract.ts";
 import { memoryRecallParsed } from "../../src/memory/recall.ts";
 import { selectTools } from "../../src/memory/tools-select.ts";
 import { toolSelectionFeedback } from "../../src/memory/tools-feedback.ts";
@@ -134,6 +135,45 @@ test("extractTaskFamily derives family from recovery contract when plain task_fa
   }, null);
 
   assert.equal(taskFamily, "task:git-deploy-webserver");
+});
+
+test("pattern trust shaping prefers canonical execution contract over legacy recovery contract", () => {
+  const context = {
+    goal: "recover deploy hook and rerun smoke checks",
+    execution_contract_v1: buildExecutionContractFromProjection({
+      task_family: "task:canonical-deploy-flow",
+      task_signature: "execution_task:canonical-deploy-flow",
+      workflow_signature: "execution_workflow:canonical-deploy-flow",
+      target_files: ["/srv/git/hooks/post-receive"],
+      next_action: "Rebuild the deploy hook from the canonical contract.",
+      provenance: {
+        source_kind: "manual_context",
+        source_summary_version: "test",
+      },
+    }),
+    recovery_contract_v1: {
+      task_family: "task:legacy-deploy-flow",
+      task_signature: "execution_task:legacy-deploy-flow",
+      workflow_signature: "execution_workflow:legacy-deploy-flow",
+      contract: {
+        next_action: "Use the legacy recovery contract.",
+        target_files: ["/tmp/legacy-hook"],
+      },
+    },
+  };
+
+  const taskFamily = extractTaskFamily(context, null);
+  const affinity = resolvePatternTaskAffinity({
+    context,
+    selectedTool: "edit",
+    storedTaskFamily: "task:canonical-deploy-flow",
+    storedTaskSignature: "tools_select:execution_task:canonical-deploy-flow",
+    storedErrorFamily: null,
+  });
+
+  assert.equal(taskFamily, "task:canonical-deploy-flow");
+  assert.equal(affinity.level, "same_task_family");
+  assert.equal(affinity.current_task_family, "task:canonical-deploy-flow");
 });
 
 test("resolvePatternTaskAffinity uses trajectory compile task family when direct task family is missing", () => {
@@ -392,6 +432,7 @@ test("positive tools feedback writes a provisional recallable pattern anchor", a
     assert.equal(anchorNode.slots.execution_native_v1.compression_layer, "L3");
     assert.equal(anchorNode.slots.execution_native_v1.anchor_kind, "pattern");
     assert.equal(anchorNode.slots.execution_native_v1.anchor_level, "L3");
+    assert.equal(anchorNode.slots.execution_native_v1.contract_trust, "observational");
     assert.equal(anchorNode.slots.execution_native_v1.task_family, "task:repair_export");
     assert.equal(anchorNode.slots.execution_native_v1.error_family, "error:node-export-mismatch");
     assert.equal(anchorNode.slots.execution_native_v1.pattern_state, "provisional");
@@ -399,6 +440,7 @@ test("positive tools feedback writes a provisional recallable pattern anchor", a
     assert.equal(anchorNode.slots.execution_native_v1.selected_tool, "edit");
     assert.equal(anchorNode.slots.anchor_v1.anchor_kind, "pattern");
     assert.equal(anchorNode.slots.anchor_v1.anchor_level, "L3");
+    assert.equal(anchorNode.slots.anchor_v1.contract_trust, "observational");
     assert.equal(anchorNode.slots.anchor_v1.pattern_state, "provisional");
     assert.equal(anchorNode.slots.anchor_v1.credibility_state, "candidate");
     assert.equal(anchorNode.slots.anchor_v1.task_family, "task:repair_export");
@@ -432,6 +474,18 @@ test("positive tools feedback writes a provisional recallable pattern anchor", a
     assert.equal(anchorNode.slots.execution_native_v1.trust_hardening.task_family, "task:repair_export");
     assert.equal(anchorNode.slots.execution_native_v1.trust_hardening.error_family, "error:node-export-mismatch");
     assert.equal(anchorNode.slots.execution_native_v1.maintenance.maintenance_state, "observe");
+    const executionContract = parseExecutionContract(anchorNode.slots.execution_contract_v1);
+    assert.equal(executionContract?.schema_version, "execution_contract_v1");
+    assert.equal(executionContract?.contract_trust, "observational");
+    assert.equal(executionContract?.task_family, "task:repair_export");
+    assert.equal(executionContract?.selected_tool, "edit");
+    assert.equal(
+      executionContract?.next_action,
+      "Prefer edit first for repair export failure in node tests before widening tool search.",
+    );
+    assert.ok(executionContract?.workflow_steps?.includes("evaluate active tool rules"));
+    assert.ok(executionContract?.pattern_hints?.includes("rule_backed_selection_pattern"));
+    assert.ok(executionContract?.pattern_hints?.includes("provisional_tool_selection_pattern"));
 
     const queryEmbedding = (await FakeEmbeddingProvider.embed([anchorNode.title ?? ""]))[0];
     const recall = await memoryRecallParsed(
@@ -1180,10 +1234,15 @@ test("selectTools reuses stable pattern anchors after distinct successful runs",
     const stableAnchorNode = stableNodeLookup.rows[0];
     assert.ok(stableAnchorNode);
     assert.equal(stableAnchorNode.slots.execution_native_v1.execution_kind, "pattern_anchor");
+    assert.equal(stableAnchorNode.slots.execution_native_v1.contract_trust, "advisory");
     assert.equal(stableAnchorNode.slots.execution_native_v1.pattern_state, "stable");
     assert.equal(stableAnchorNode.slots.execution_native_v1.credibility_state, "trusted");
     assert.equal(stableAnchorNode.slots.execution_native_v1.promotion.last_transition, "promoted_to_trusted");
     assert.equal(stableAnchorNode.slots.execution_native_v1.maintenance.maintenance_state, "retain");
+    const stableExecutionContract = parseExecutionContract(stableAnchorNode.slots.execution_contract_v1);
+    assert.equal(stableExecutionContract?.contract_trust, "advisory");
+    assert.equal(stableExecutionContract?.selected_tool, "edit");
+    assert.ok(stableExecutionContract?.pattern_hints?.includes("stable_tool_selection_pattern"));
   } finally {
     await liteRecallStore.close();
     await liteWriteStore.close();
@@ -1849,6 +1908,9 @@ test("contested pattern requires two fresh positive runs before revalidation to 
     assert.equal(rows[0]?.slots.anchor_v1.promotion.last_transition, "revalidated_to_trusted");
     assert.equal(rows[0]?.slots.anchor_v1.trust_hardening.post_contest_distinct_run_count, 2);
     assert.equal(rows[0]?.slots.anchor_v1.trust_hardening.revalidation_floor_satisfied, true);
+    const revalidatedExecutionContract = parseExecutionContract(rows[0]?.slots.execution_contract_v1);
+    assert.equal(revalidatedExecutionContract?.contract_trust, "advisory");
+    assert.ok(revalidatedExecutionContract?.pattern_hints?.includes("stable_tool_selection_pattern"));
   } finally {
     await liteRecallStore.close();
     await liteWriteStore.close();

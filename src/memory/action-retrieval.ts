@@ -11,6 +11,13 @@ import {
   type PolicyContract,
   type ToolsSelectRouteContract,
 } from "./schemas.js";
+import {
+  buildExecutionContractFromProjection,
+  deriveExecutionContractFromSlots,
+  mergeExecutionContractsWithActionSurface,
+  parseExecutionContract,
+  type ExecutionContractV1,
+} from "./execution-contract.js";
 import { buildExecutionMemoryIntrospectionLite } from "./execution-introspection.js";
 import { augmentTrajectoryAwareRequest } from "./trajectory-compile-runtime.js";
 import { selectTools } from "./tools-select.js";
@@ -84,6 +91,7 @@ export type PersistedPolicyMemory = {
   node_id: string;
   score: number;
   contract: PolicyContract;
+  execution_contract: ExecutionContractV1;
   derived_policy: DerivedPolicySurface | null;
 };
 
@@ -150,33 +158,22 @@ function normalizeTokens(value: string): string[] {
 
 function buildCueTokens(queryText: string, context: unknown): Set<string> {
   const ctx = asRecord(context);
+  const executionContract = resolveContextExecutionContract(context);
   const task = asRecord(ctx?.task);
   const error = asRecord(ctx?.error);
-  const recoveryContract = asRecord(ctx?.recovery_contract_v1);
-  const recoveryContractBody = asRecord(recoveryContract?.contract);
-  const executionResultSummary = asRecord(ctx?.execution_result_summary);
-  const trajectoryCompile = asRecord(executionResultSummary?.trajectory_compile_v1);
-  const serviceLifecycleHints = [
-    ...((Array.isArray(recoveryContractBody?.service_lifecycle_constraints)
-      ? recoveryContractBody?.service_lifecycle_constraints
-      : []) as unknown[]),
-    ...((Array.isArray(trajectoryCompile?.service_lifecycle_constraints)
-      ? trajectoryCompile?.service_lifecycle_constraints
-      : []) as unknown[]),
-  ].flatMap((entry) => {
-    const constraint = asRecord(entry);
+  const serviceLifecycleHints = (executionContract?.service_lifecycle_constraints ?? []).flatMap((entry) => {
     return [
-      firstString(constraint?.label),
-      firstString(constraint?.endpoint),
-      firstString(constraint?.launch_reference),
-      ...stringList(constraint?.health_checks, 8),
-      ...stringList(constraint?.teardown_notes, 8),
+      firstString(entry.label),
+      firstString(entry.endpoint),
+      firstString(entry.launch_reference),
+      ...stringList(entry.health_checks, 8),
+      ...stringList(entry.teardown_notes, 8),
     ];
   });
   const values = [
     queryText,
     firstString(ctx?.task_kind),
-    firstString(ctx?.task_family),
+    firstString(ctx?.task_family, executionContract?.task_family),
     firstString(ctx?.host_tool_profile),
     firstString(ctx?.host_preferred_tool),
     firstString(ctx?.goal),
@@ -187,20 +184,21 @@ function buildCueTokens(queryText: string, context: unknown): Set<string> {
     firstString(task?.objective),
     firstString(error?.signature),
     firstString(error?.code),
-    firstString(recoveryContract?.task_signature),
-    firstString(recoveryContract?.task_family),
-    firstString(recoveryContract?.workflow_signature),
-    firstString(recoveryContractBody?.next_action),
-    stringList(recoveryContractBody?.target_files, 24).join(" "),
-    stringList(recoveryContractBody?.workflow_steps, 24).join(" "),
-    stringList(recoveryContractBody?.pattern_hints, 24).join(" "),
-    firstString(trajectoryCompile?.task_signature),
-    firstString(trajectoryCompile?.task_family),
-    firstString(trajectoryCompile?.workflow_signature),
-    firstString(trajectoryCompile?.next_action),
-    stringList(trajectoryCompile?.target_files, 24).join(" "),
-    stringList(trajectoryCompile?.workflow_steps, 24).join(" "),
-    stringList(trajectoryCompile?.pattern_hints, 24).join(" "),
+    executionContract?.task_signature,
+    executionContract?.task_family,
+    executionContract?.workflow_signature,
+    executionContract?.next_action,
+    executionContract?.file_path,
+    executionContract?.selected_tool,
+    executionContract?.target_files.join(" "),
+    executionContract?.workflow_steps.join(" "),
+    executionContract?.pattern_hints.join(" "),
+    executionContract?.outcome.acceptance_checks.join(" "),
+    executionContract?.outcome.success_invariants.join(" "),
+    executionContract?.outcome.dependency_requirements.join(" "),
+    executionContract?.outcome.environment_assumptions.join(" "),
+    executionContract?.outcome.external_visibility_requirements.join(" "),
+    executionContract?.outcome.must_hold_after_exit.join(" "),
     ...serviceLifecycleHints,
   ].filter((value): value is string => typeof value === "string" && value.length > 0);
   return new Set(values.flatMap((value) => normalizeTokens(value)));
@@ -208,21 +206,192 @@ function buildCueTokens(queryText: string, context: unknown): Set<string> {
 
 function resolveTaskFamilyFromContext(context: unknown): string | null {
   const ctx = asRecord(context);
+  const executionContract = resolveContextExecutionContract(context);
   const task = asRecord(ctx?.task);
   const workflow = asRecord(ctx?.workflow);
-  const recoveryContract = asRecord(ctx?.recovery_contract_v1);
   const execution = asRecord(ctx?.execution);
-  const executionResultSummary = asRecord(ctx?.execution_result_summary);
-  const trajectoryCompile = asRecord(executionResultSummary?.trajectory_compile_v1);
   return firstString(
-    ctx?.task_family,
+    executionContract?.task_family,
     task?.family,
     workflow?.task_family,
-    recoveryContract?.task_family,
-    trajectoryCompile?.task_family,
     execution?.task_family,
     ctx?.task_kind,
   );
+}
+
+function mergeExecutionContractCandidate(
+  current: ExecutionContractV1 | null,
+  candidate: ExecutionContractV1 | null,
+): ExecutionContractV1 | null {
+  if (!candidate) return current;
+  return current
+    ? mergeExecutionContractsWithActionSurface({ existing: current, incoming: candidate, preference: "incoming" })
+    : candidate;
+}
+
+function resolveContextExecutionContract(context: unknown): ExecutionContractV1 | null {
+  const ctx = asRecord(context);
+  if (!ctx) return null;
+  const executionResultSummary = asRecord(ctx.execution_result_summary);
+  const hasExplicitContinuitySurface = Boolean(
+    parseExecutionContract(ctx.execution_contract_v1)
+    || asRecord(ctx.recovery_contract_v1)
+    || asRecord(ctx.policy_contract_v1)
+    || asRecord(ctx.policy_contract)
+    || asRecord(ctx.derived_policy_v1)
+    || asRecord(ctx.execution_native_v1)
+    || asRecord(ctx.anchor_v1)
+    || asRecord(executionResultSummary?.trajectory_compile_v1)
+    || firstString(
+      ctx.task_signature,
+      ctx.workflow_signature,
+      ctx.selected_tool,
+      ctx.file_path,
+      ctx.next_action,
+      ctx.contract_trust,
+    )
+    || stringList(ctx.target_files, 24).length > 0
+    || stringList(ctx.acceptance_checks, 24).length > 0
+    || stringList(ctx.workflow_steps, 24).length > 0
+    || stringList(ctx.pattern_hints, 24).length > 0
+    || (Array.isArray(ctx.service_lifecycle_constraints) && ctx.service_lifecycle_constraints.length > 0)
+  );
+  if (!hasExplicitContinuitySurface) return null;
+  return deriveExecutionContractFromSlots({
+    slots: ctx,
+    provenance: {
+      source_kind: "manual_context",
+      source_summary_version: "action_retrieval_context_v1",
+      notes: ["action_retrieval:context_resolution"],
+    },
+  });
+}
+
+function buildExecutionContractFromPersistedPolicyMemory(args: {
+  nodeId: string;
+  contract: PolicyContract;
+  derivedPolicy: DerivedPolicySurface | null;
+}): ExecutionContractV1 {
+  return buildExecutionContractFromProjection({
+    contract_trust: args.contract.contract_trust ?? args.derivedPolicy?.contract_trust ?? null,
+    task_family: args.contract.task_family ?? args.derivedPolicy?.task_family ?? null,
+    workflow_signature: args.contract.workflow_signature ?? args.derivedPolicy?.workflow_signature ?? null,
+    policy_memory_id: args.nodeId,
+    selected_tool: args.contract.selected_tool,
+    file_path: args.contract.file_path,
+    target_files: args.contract.target_files,
+    next_action: args.contract.next_action,
+    workflow_steps: args.contract.workflow_steps,
+    pattern_hints: args.contract.pattern_hints,
+    service_lifecycle_constraints: args.contract.service_lifecycle_constraints,
+    provenance: {
+      source_kind: "policy_contract",
+      source_summary_version: args.contract.summary_version,
+      source_anchor: args.nodeId,
+      evidence_refs: args.contract.source_anchor_ids,
+      notes: [args.contract.reason],
+    },
+  });
+}
+
+function buildExecutionContractFromWorkflowEntry(args: {
+  workflow: WorkflowEntry;
+  selectedTool: string | null;
+  sourceKind: "workflow_projection" | "action_retrieval";
+  summaryVersion: string;
+}): ExecutionContractV1 {
+  return buildExecutionContractFromProjection({
+    contract_trust: args.workflow.contract_trust ?? null,
+    task_family: args.workflow.task_family ?? null,
+    workflow_signature: args.workflow.workflow_signature ?? null,
+    selected_tool: args.selectedTool ?? null,
+    file_path: args.workflow.file_path ?? null,
+    target_files: args.workflow.target_files ?? [],
+    next_action: args.workflow.next_action ?? null,
+    workflow_steps: args.workflow.workflow_steps ?? [],
+    pattern_hints: args.workflow.pattern_hints ?? [],
+    service_lifecycle_constraints: args.workflow.service_lifecycle_constraints ?? [],
+    provenance: {
+      source_kind: args.sourceKind,
+      source_summary_version: args.summaryVersion,
+      source_anchor: args.workflow.anchor_id,
+      evidence_refs: [args.workflow.anchor_id],
+      notes: [args.workflow.summary ?? args.workflow.title ?? "workflow memory projection"],
+    },
+  });
+}
+
+function buildExecutionContractFromPathRecommendation(args: {
+  path: ReturnType<typeof choosePathRecommendation>;
+  selectedTool: string | null;
+}): ExecutionContractV1 | null {
+  const pathRecord = args.path as Record<string, unknown>;
+  const workflowSteps = Array.isArray(pathRecord.workflow_steps) ? pathRecord.workflow_steps : [];
+  const patternHints = Array.isArray(pathRecord.pattern_hints) ? pathRecord.pattern_hints : [];
+  const serviceLifecycleConstraints = Array.isArray(pathRecord.service_lifecycle_constraints)
+    ? pathRecord.service_lifecycle_constraints
+    : [];
+  const taskFamily = firstString(pathRecord.task_family);
+  const hasSignal = Boolean(
+    args.path.anchor_id
+    || taskFamily
+    || args.path.workflow_signature
+    || args.path.file_path
+    || args.path.target_files.length > 0
+    || args.path.next_action
+    || workflowSteps.length > 0
+    || patternHints.length > 0
+    || serviceLifecycleConstraints.length > 0,
+  );
+  if (!hasSignal) return null;
+  return buildExecutionContractFromProjection({
+    contract_trust: firstContractTrust(pathRecord.contract_trust),
+    task_family: taskFamily,
+    workflow_signature: args.path.workflow_signature,
+    selected_tool: args.selectedTool,
+    file_path: args.path.file_path,
+    target_files: args.path.target_files,
+    next_action: args.path.next_action,
+    workflow_steps: workflowSteps,
+    pattern_hints: patternHints,
+    service_lifecycle_constraints: serviceLifecycleConstraints,
+    provenance: {
+      source_kind: "action_retrieval",
+      source_summary_version: "action_retrieval_v1",
+      source_anchor: args.path.anchor_id,
+      evidence_refs: args.path.anchor_id ? [args.path.anchor_id] : [],
+      notes: [firstString(args.path.reason) ?? "path recommendation projection"],
+    },
+  });
+}
+
+function buildExecutionContractFromToolSelection(selectedTool: string | null): ExecutionContractV1 | null {
+  if (!selectedTool) return null;
+  return buildExecutionContractFromProjection({
+    selected_tool: selectedTool,
+    provenance: {
+      source_kind: "action_retrieval",
+      source_summary_version: "action_retrieval_v1",
+      notes: ["tool_selection_only"],
+    },
+  });
+}
+
+function buildExecutionContractFromPersistedPolicyEntry(args: {
+  entry: Record<string, unknown>;
+  nodeId: string;
+  contract: PolicyContract;
+  derivedPolicy: DerivedPolicySurface | null;
+}): ExecutionContractV1 {
+  const projected = buildExecutionContractFromPersistedPolicyMemory({
+    nodeId: args.nodeId,
+    contract: args.contract,
+    derivedPolicy: args.derivedPolicy,
+  });
+  const existing = parseExecutionContract(args.entry.execution_contract_v1);
+  return existing
+    ? mergeExecutionContractsWithActionSurface({ existing, incoming: projected, preference: "existing" })
+    : projected;
 }
 
 function parsePersistedPolicyContract(value: unknown, nodeId: string): PolicyContract | null {
@@ -256,16 +425,19 @@ export function readPersistedPolicyMemory(args: {
 
   const cueTokens = buildCueTokens(args.queryText, args.context);
   const ctx = asRecord(args.context);
+  const contextExecutionContract = resolveContextExecutionContract(args.context);
   const workflow = asRecord(ctx?.workflow);
   const task = asRecord(ctx?.task);
   const error = asRecord(ctx?.error);
   const currentWorkflowSignature = firstString(
+    contextExecutionContract?.workflow_signature,
     args.path.workflow_signature,
     workflow?.signature,
     args.selectedWorkflow?.workflow_signature,
     args.preferredPattern?.workflow_signature,
   );
   const currentFilePath = firstString(
+    contextExecutionContract?.file_path,
     args.path.file_path,
     ctx?.file_path,
     args.selectedWorkflow?.file_path,
@@ -273,10 +445,12 @@ export function readPersistedPolicyMemory(args: {
   );
   const currentTargetFiles = new Set(
     [
+      ...(contextExecutionContract?.target_files ?? []),
       ...args.path.target_files,
       ...(args.selectedWorkflow?.target_files ?? []),
       ...(args.preferredPattern?.target_files ?? []),
       ...stringList(ctx?.target_files, 24),
+      contextExecutionContract?.file_path ?? "",
       currentFilePath ?? "",
     ].filter((value): value is string => typeof value === "string" && value.length > 0),
   );
@@ -287,9 +461,9 @@ export function readPersistedPolicyMemory(args: {
       args.preferredPattern?.anchor_id ?? "",
     ].filter((value) => value.length > 0),
   );
-  const currentTaskSignature = firstString(ctx?.task_signature, task?.signature);
+  const currentTaskSignature = firstString(contextExecutionContract?.task_signature, ctx?.task_signature, task?.signature);
   const currentErrorSignature = firstString(ctx?.error_signature, error?.signature, error?.code);
-  const currentTaskFamily = resolveTaskFamilyFromContext(args.context);
+  const currentTaskFamily = firstString(contextExecutionContract?.task_family, resolveTaskFamilyFromContext(args.context));
 
   let best: PersistedPolicyMemory | null = null;
   for (const rawEntry of supportingKnowledge) {
@@ -301,14 +475,20 @@ export function readPersistedPolicyMemory(args: {
     const contract = parsePersistedPolicyContract(entry.policy_contract_v1, nodeId);
     if (!contract || contract.policy_memory_state !== "active") continue;
     const derivedPolicy = parsePersistedDerivedPolicy(entry.derived_policy_v1);
-    const entryWorkflowSignature = firstString(contract.workflow_signature, entry.workflow_signature);
-    const entryTaskFamily = firstString(contract.task_family, derivedPolicy?.task_family, entry.task_family);
-    const entryFilePath = firstString(contract.file_path, entry.file_path);
+    const executionContract = buildExecutionContractFromPersistedPolicyEntry({
+      entry,
+      nodeId,
+      contract,
+      derivedPolicy,
+    });
+    const entryWorkflowSignature = firstString(executionContract.workflow_signature, entry.workflow_signature);
+    const entryTaskFamily = firstString(executionContract.task_family, derivedPolicy?.task_family, entry.task_family);
+    const entryFilePath = firstString(executionContract.file_path, entry.file_path);
     const entryTaskSignature = firstString(entry.task_signature);
     const entryErrorSignature = firstString(entry.error_signature);
     const entryTargetFiles = new Set(
       [
-        ...contract.target_files,
+        ...executionContract.target_files,
         ...stringList(entry.target_files, 24),
         entryFilePath ?? "",
       ].filter((value): value is string => typeof value === "string" && value.length > 0),
@@ -331,7 +511,7 @@ export function readPersistedPolicyMemory(args: {
     }
 
     let score = 0;
-    if (args.selectedTool && contract.selected_tool === args.selectedTool) score += 90;
+    if (args.selectedTool && executionContract.selected_tool === args.selectedTool) score += 90;
     else if (args.selectedTool) score -= 40;
     if (currentWorkflowSignature && entryWorkflowSignature === currentWorkflowSignature) score += 70;
     if (currentTaskFamily && entryTaskFamily === currentTaskFamily) score += 55;
@@ -339,7 +519,13 @@ export function readPersistedPolicyMemory(args: {
     if (currentTaskSignature && entryTaskSignature === currentTaskSignature) score += 35;
     if (currentErrorSignature && entryErrorSignature === currentErrorSignature) score += 25;
     if (Array.from(entryTargetFiles).some((value) => currentTargetFiles.has(value))) score += 40;
-    if (contract.source_anchor_ids.some((anchorId) => supportingAnchorIds.has(anchorId))) score += 30;
+    if (
+      contract.source_anchor_ids.some((anchorId) => supportingAnchorIds.has(anchorId))
+      || executionContract.provenance.evidence_refs.some((anchorId) => supportingAnchorIds.has(anchorId))
+      || (executionContract.provenance.source_anchor != null && supportingAnchorIds.has(executionContract.provenance.source_anchor))
+    ) {
+      score += 30;
+    }
     if (contract.activation_mode === "default") score += 20;
     if (contract.policy_state === "stable") score += 15;
     score += overlap * 10;
@@ -350,6 +536,7 @@ export function readPersistedPolicyMemory(args: {
         node_id: nodeId,
         score,
         contract,
+        execution_contract: executionContract,
         derived_policy: derivedPolicy,
       };
     }
@@ -710,6 +897,36 @@ export function buildActionRetrievalResponse(args: {
     selectedWorkflow,
   });
   const historyApplied = path.source_kind !== "none" || !!persistedPolicy;
+  const contextExecutionContract = resolveContextExecutionContract(args.parsed.context);
+  const selectedWorkflowExecutionContract = selectedWorkflow
+    ? buildExecutionContractFromWorkflowEntry({
+        workflow: selectedWorkflow,
+        selectedTool,
+        sourceKind: "workflow_projection",
+        summaryVersion: "action_retrieval_workflow_projection_v1",
+      })
+    : null;
+  const pathExecutionContract = buildExecutionContractFromPathRecommendation({
+    path,
+    selectedTool,
+  });
+  let executionContract = contextExecutionContract;
+  executionContract = mergeExecutionContractCandidate(
+    executionContract,
+    persistedPolicy?.execution_contract ?? null,
+  );
+  executionContract = mergeExecutionContractCandidate(
+    executionContract,
+    selectedWorkflowExecutionContract,
+  );
+  executionContract = mergeExecutionContractCandidate(
+    executionContract,
+    pathExecutionContract,
+  );
+  executionContract = mergeExecutionContractCandidate(
+    executionContract,
+    buildExecutionContractFromToolSelection(selectedTool),
+  );
   const workflowSupportsForRetrieval = !!selectedTool
     && (
       stringList(selectedWorkflow?.tool_set, 24).includes(selectedTool)
@@ -726,75 +943,49 @@ export function buildActionRetrievalResponse(args: {
           : workflowSupportsForRetrieval
             ? "stable_workflow"
             : "tools_select";
-  const recommendedFilePath = firstString(
-    path.file_path,
-    persistedPolicy?.contract.file_path,
-    selectedWorkflow?.file_path,
-    preferredPattern?.file_path,
-  );
-  const recommendedTaskFamily = firstString(
-    (path as Record<string, unknown>).task_family,
-    persistedPolicy?.contract.task_family,
-    selectedWorkflow?.task_family,
-  );
+  const recommendedFilePath = firstString(executionContract?.file_path, preferredPattern?.file_path);
+  const recommendedTaskFamily = firstString(executionContract?.task_family);
   const recommendedTargetFiles = stringList(
-    path.target_files.length > 0
-      ? path.target_files
-      : Array.isArray(selectedWorkflow?.target_files) && selectedWorkflow.target_files.length > 0
-        ? selectedWorkflow.target_files
-        : Array.isArray(persistedPolicy?.contract.target_files)
-          ? persistedPolicy.contract.target_files
-          : recommendedFilePath
-            ? [recommendedFilePath]
-            : [],
+    executionContract?.target_files && executionContract.target_files.length > 0
+      ? executionContract.target_files
+      : recommendedFilePath
+        ? [recommendedFilePath]
+        : [],
     24,
   );
-  const recommendedWorkflowSteps = Array.isArray((path as Record<string, unknown>).workflow_steps)
-    && (path as Record<string, unknown>).workflow_steps.length > 0
-    ? ((path as Record<string, unknown>).workflow_steps as string[])
-    : Array.isArray(selectedWorkflow?.workflow_steps) && selectedWorkflow.workflow_steps.length > 0
-      ? selectedWorkflow.workflow_steps
-      : Array.isArray(persistedPolicy?.contract.workflow_steps)
-        ? persistedPolicy.contract.workflow_steps
-        : [];
-  const recommendedPatternHints = Array.isArray((path as Record<string, unknown>).pattern_hints)
-    && (path as Record<string, unknown>).pattern_hints.length > 0
-    ? ((path as Record<string, unknown>).pattern_hints as string[])
-    : Array.isArray(selectedWorkflow?.pattern_hints) && selectedWorkflow.pattern_hints.length > 0
-      ? selectedWorkflow.pattern_hints
-      : Array.isArray(persistedPolicy?.contract.pattern_hints)
-        ? persistedPolicy.contract.pattern_hints
-        : [];
-  const recommendedServiceLifecycleConstraints = Array.isArray((path as Record<string, unknown>).service_lifecycle_constraints)
-    && (path as Record<string, unknown>).service_lifecycle_constraints.length > 0
-    ? ((path as Record<string, unknown>).service_lifecycle_constraints as Array<Record<string, unknown>>)
-    : Array.isArray(selectedWorkflow?.service_lifecycle_constraints) && selectedWorkflow.service_lifecycle_constraints.length > 0
-      ? selectedWorkflow.service_lifecycle_constraints
-      : Array.isArray(persistedPolicy?.contract.service_lifecycle_constraints)
-        ? persistedPolicy.contract.service_lifecycle_constraints
-        : [];
+  const recommendedWorkflowSteps = Array.isArray(executionContract?.workflow_steps)
+    && executionContract.workflow_steps.length > 0
+    ? executionContract.workflow_steps
+    : [];
+  const recommendedPatternHints = Array.isArray(executionContract?.pattern_hints)
+    && executionContract.pattern_hints.length > 0
+    ? executionContract.pattern_hints
+    : [];
+  const recommendedServiceLifecycleConstraints = Array.isArray(executionContract?.service_lifecycle_constraints)
+    && executionContract.service_lifecycle_constraints.length > 0
+    ? executionContract.service_lifecycle_constraints
+    : [];
   const combinedNextAction = firstString(
-    path.next_action,
-    persistedPolicy?.contract.next_action,
+    executionContract?.next_action,
     recommendedFilePath && selectedTool ? `Use ${selectedTool} on ${recommendedFilePath} as the next learned step.` : null,
   );
   const evidenceEntries = [
     ...(persistedPolicy ? [{
       source_kind: "persisted_policy_memory" as const,
       anchor_id: persistedPolicy.node_id,
-      selected_tool: persistedPolicy.contract.selected_tool,
-      task_family: firstString(persistedPolicy.contract.task_family, persistedPolicy.derived_policy?.task_family),
-      workflow_signature: persistedPolicy.contract.workflow_signature,
-      file_path: persistedPolicy.contract.file_path,
-      target_files: stringList(persistedPolicy.contract.target_files, 24),
-      workflow_steps: Array.isArray(persistedPolicy.contract.workflow_steps)
-        ? persistedPolicy.contract.workflow_steps
+      selected_tool: persistedPolicy.execution_contract.selected_tool,
+      task_family: firstString(persistedPolicy.execution_contract.task_family, persistedPolicy.derived_policy?.task_family),
+      workflow_signature: persistedPolicy.execution_contract.workflow_signature,
+      file_path: persistedPolicy.execution_contract.file_path,
+      target_files: stringList(persistedPolicy.execution_contract.target_files, 24),
+      workflow_steps: Array.isArray(persistedPolicy.execution_contract.workflow_steps)
+        ? persistedPolicy.execution_contract.workflow_steps
         : [],
-      pattern_hints: Array.isArray(persistedPolicy.contract.pattern_hints)
-        ? persistedPolicy.contract.pattern_hints
+      pattern_hints: Array.isArray(persistedPolicy.execution_contract.pattern_hints)
+        ? persistedPolicy.execution_contract.pattern_hints
         : [],
-      service_lifecycle_constraints: Array.isArray(persistedPolicy.contract.service_lifecycle_constraints)
-        ? persistedPolicy.contract.service_lifecycle_constraints
+      service_lifecycle_constraints: Array.isArray(persistedPolicy.execution_contract.service_lifecycle_constraints)
+        ? persistedPolicy.execution_contract.service_lifecycle_constraints
         : [],
       confidence: persistedPolicy.contract.confidence,
       reason: persistedPolicy.contract.reason,
@@ -813,19 +1004,19 @@ export function buildActionRetrievalResponse(args: {
     ...(path.anchor_id ? [{
       source_kind: path.source_kind === "recommended_workflow" ? "stable_workflow" as const : "candidate_workflow" as const,
       anchor_id: path.anchor_id,
-      selected_tool: selectedTool,
-      task_family: firstString((path as Record<string, unknown>).task_family),
-      workflow_signature: path.workflow_signature,
-      file_path: path.file_path,
-      target_files: path.target_files,
-      workflow_steps: Array.isArray((path as Record<string, unknown>).workflow_steps)
-        ? (path as Record<string, unknown>).workflow_steps
+      selected_tool: pathExecutionContract?.selected_tool ?? selectedTool,
+      task_family: pathExecutionContract?.task_family ?? null,
+      workflow_signature: pathExecutionContract?.workflow_signature ?? null,
+      file_path: pathExecutionContract?.file_path ?? null,
+      target_files: pathExecutionContract?.target_files ?? [],
+      workflow_steps: Array.isArray(pathExecutionContract?.workflow_steps)
+        ? pathExecutionContract?.workflow_steps
         : [],
-      pattern_hints: Array.isArray((path as Record<string, unknown>).pattern_hints)
-        ? (path as Record<string, unknown>).pattern_hints
+      pattern_hints: Array.isArray(pathExecutionContract?.pattern_hints)
+        ? pathExecutionContract?.pattern_hints
         : [],
-      service_lifecycle_constraints: Array.isArray((path as Record<string, unknown>).service_lifecycle_constraints)
-        ? (path as Record<string, unknown>).service_lifecycle_constraints
+      service_lifecycle_constraints: Array.isArray(pathExecutionContract?.service_lifecycle_constraints)
+        ? pathExecutionContract?.service_lifecycle_constraints
         : [],
       confidence: path.confidence,
       reason: firstString(path.reason) ?? "workflow memory matched this request",
@@ -884,6 +1075,7 @@ export function buildActionRetrievalResponse(args: {
     selected_tool: selectedTool,
     recommended_file_path: recommendedFilePath,
     recommended_next_action: combinedNextAction,
+    execution_contract_v1: executionContract,
     tool: {
       selected_tool: selectedTool,
       ordered_tools: Array.isArray(args.tools.selection.ordered) ? args.tools.selection.ordered : [],
@@ -903,20 +1095,22 @@ export function buildActionRetrievalResponse(args: {
       source_kind: path.source_kind,
       anchor_id: path.anchor_id,
       ...(firstContractTrust(
-        (path as Record<string, unknown>).contract_trust,
-        selectedWorkflow?.contract_trust,
-        persistedPolicy?.contract.contract_trust,
+        executionContract?.contract_trust,
+        pathExecutionContract?.contract_trust,
+        selectedWorkflowExecutionContract?.contract_trust,
+        persistedPolicy?.execution_contract.contract_trust,
       )
         ? {
             contract_trust: firstContractTrust(
-              (path as Record<string, unknown>).contract_trust,
-              selectedWorkflow?.contract_trust,
-              persistedPolicy?.contract.contract_trust,
+              executionContract?.contract_trust,
+              pathExecutionContract?.contract_trust,
+              selectedWorkflowExecutionContract?.contract_trust,
+              persistedPolicy?.execution_contract.contract_trust,
             ),
           }
         : {}),
       task_family: recommendedTaskFamily,
-      workflow_signature: path.workflow_signature,
+      workflow_signature: firstString(executionContract?.workflow_signature, pathExecutionContract?.workflow_signature),
       title: path.title,
       summary: path.summary,
       file_path: recommendedFilePath,

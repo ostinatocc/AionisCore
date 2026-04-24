@@ -496,7 +496,16 @@ test("trajectory-backed handoff promotion preserves recovery compiler fields int
     });
     assert.equal(projectedRows.rows.length, 1);
     assert.equal(projectedRows.rows[0]?.execution_native_v1.task_family, "service_publish_validate");
-    assert.deepEqual(projectedRows.rows[0]?.execution_native_v1.target_files, ["package.json", "scripts/export-preview.ts"]);
+    assert.deepEqual(
+      [...(projectedRows.rows[0]?.execution_native_v1.target_files ?? [])].sort(),
+      ["package.json", "scripts/export-preview.ts"],
+    );
+    assert.equal(projectedRows.rows[0]?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(projectedRows.rows[0]?.slots.execution_contract_v1?.task_family, "service_publish_validate");
+    assert.deepEqual(
+      [...(projectedRows.rows[0]?.slots.execution_contract_v1?.target_files ?? [])].sort(),
+      ["package.json", "scripts/export-preview.ts"],
+    );
     assert.ok(projectedRows.rows[0]?.execution_native_v1.workflow_steps?.some((step) => step.includes("python -m http.server 8080")));
     assert.ok(projectedRows.rows[0]?.execution_native_v1.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
     assert.equal(projectedRows.rows[0]?.execution_native_v1.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);
@@ -540,7 +549,15 @@ test("trajectory-backed handoff promotion preserves recovery compiler fields int
     });
     assert.equal(stableRows.rows.length, 1);
     assert.equal(stableRows.rows[0]?.execution_native_v1.task_family, "service_publish_validate");
-    assert.deepEqual(stableRows.rows[0]?.execution_native_v1.target_files, ["package.json", "scripts/export-preview.ts"]);
+    assert.deepEqual(
+      [...(stableRows.rows[0]?.execution_native_v1.target_files ?? [])].sort(),
+      ["package.json", "scripts/export-preview.ts"],
+    );
+    assert.equal(stableRows.rows[0]?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.deepEqual(
+      [...(stableRows.rows[0]?.slots.execution_contract_v1?.target_files ?? [])].sort(),
+      ["package.json", "scripts/export-preview.ts"],
+    );
     assert.ok(stableRows.rows[0]?.execution_native_v1.workflow_steps?.some((step) => step.includes("python -m http.server 8080")));
     assert.ok(stableRows.rows[0]?.execution_native_v1.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
     assert.equal(stableRows.rows[0]?.execution_native_v1.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);

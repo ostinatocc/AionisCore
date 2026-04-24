@@ -1059,6 +1059,18 @@ test("policy governance apply route can retire and reactivate persisted policy m
     assert.equal(feedback.policy_memory?.policy_contract.service_lifecycle_constraints?.[0]?.revalidate_from_fresh_shell, true);
     const policyMemoryId = feedback.policy_memory?.node_id;
     assert.ok(policyMemoryId);
+    const persistedAfterFeedback = await liteWriteStore.findNodes({
+      scope: "default",
+      id: policyMemoryId!,
+      type: "concept",
+      limit: 1,
+      offset: 0,
+    });
+    const feedbackSlots = (persistedAfterFeedback.rows[0]?.slots ?? {}) as Record<string, unknown>;
+    assert.equal((feedbackSlots.execution_contract_v1 as Record<string, unknown>)?.schema_version, "execution_contract_v1");
+    assert.equal((feedbackSlots.execution_contract_v1 as Record<string, unknown>)?.policy_memory_id, policyMemoryId);
+    assert.equal((feedbackSlots.execution_contract_v1 as Record<string, unknown>)?.selected_tool, "edit");
+    assert.equal((feedbackSlots.execution_contract_v1 as Record<string, unknown>)?.file_path, "src/routes/export.ts");
 
     const retireResponse = await app.inject({
       method: "POST",
@@ -1079,6 +1091,17 @@ test("policy governance apply route can retire and reactivate persisted policy m
     assert.equal(retired.previous_state, "active");
     assert.equal(retired.next_state, "retired");
     assert.equal(retired.policy_memory.policy_memory_state, "retired");
+    const persistedAfterRetire = await liteWriteStore.findNodes({
+      scope: "default",
+      id: policyMemoryId!,
+      type: "concept",
+      limit: 1,
+      offset: 0,
+    });
+    const retireSlots = (persistedAfterRetire.rows[0]?.slots ?? {}) as Record<string, unknown>;
+    assert.equal((retireSlots.execution_contract_v1 as Record<string, unknown>)?.schema_version, "execution_contract_v1");
+    assert.equal((retireSlots.execution_contract_v1 as Record<string, unknown>)?.policy_memory_id, policyMemoryId);
+    assert.equal((retireSlots.execution_contract_v1 as Record<string, unknown>)?.selected_tool, "edit");
 
     const reactivateResponse = await app.inject({
       method: "POST",
@@ -1103,6 +1126,17 @@ test("policy governance apply route can retire and reactivate persisted policy m
     assert.equal(reactivated.next_state, "active");
     assert.equal(reactivated.policy_memory.policy_memory_state, "active");
     assert.equal(reactivated.live_policy_contract?.selected_tool, "edit");
+    const persistedAfterReactivate = await liteWriteStore.findNodes({
+      scope: "default",
+      id: policyMemoryId!,
+      type: "concept",
+      limit: 1,
+      offset: 0,
+    });
+    const reactivateSlots = (persistedAfterReactivate.rows[0]?.slots ?? {}) as Record<string, unknown>;
+    assert.equal((reactivateSlots.execution_contract_v1 as Record<string, unknown>)?.schema_version, "execution_contract_v1");
+    assert.equal((reactivateSlots.execution_contract_v1 as Record<string, unknown>)?.policy_memory_id, policyMemoryId);
+    assert.equal((reactivateSlots.execution_contract_v1 as Record<string, unknown>)?.selected_tool, "edit");
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -1294,6 +1328,19 @@ test("tools feedback materializes advisory trust as hint-only candidate policy m
     assert.equal(feedback.policy_memory?.policy_memory_state, "contested");
     assert.equal(feedback.policy_memory?.policy_contract.activation_mode, "hint");
     assert.equal(feedback.policy_memory?.policy_contract.policy_state, "candidate");
+    const policyMemoryId = feedback.policy_memory?.node_id;
+    assert.ok(policyMemoryId);
+    const persisted = await liteWriteStore.findNodes({
+      scope: "default",
+      id: policyMemoryId!,
+      type: "concept",
+      limit: 1,
+      offset: 0,
+    });
+    const persistedSlots = (persisted.rows[0]?.slots ?? {}) as Record<string, unknown>;
+    assert.equal((persistedSlots.execution_contract_v1 as Record<string, unknown>)?.schema_version, "execution_contract_v1");
+    assert.equal((persistedSlots.execution_contract_v1 as Record<string, unknown>)?.policy_memory_id, policyMemoryId);
+    assert.equal((persistedSlots.execution_contract_v1 as Record<string, unknown>)?.contract_trust, "advisory");
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -1408,6 +1455,17 @@ test("policy governance core keeps advisory policy memory contested until strong
     assert.equal(reactivated.policy_memory.policy_memory_state, "contested");
     assert.equal(reactivated.policy_memory.policy_contract.contract_trust, "advisory");
     assert.equal(reactivated.policy_memory.policy_contract.activation_mode, "hint");
+    const persisted = await liteWriteStore.findNodes({
+      scope: "default",
+      id: policyMemoryId!,
+      type: "concept",
+      limit: 1,
+      offset: 0,
+    });
+    const persistedSlots = (persisted.rows[0]?.slots ?? {}) as Record<string, unknown>;
+    assert.equal((persistedSlots.execution_contract_v1 as Record<string, unknown>)?.schema_version, "execution_contract_v1");
+    assert.equal((persistedSlots.execution_contract_v1 as Record<string, unknown>)?.policy_memory_id, policyMemoryId);
+    assert.equal((persistedSlots.execution_contract_v1 as Record<string, unknown>)?.contract_trust, "advisory");
   } finally {
     await app.close();
     await liteRecallStore.close();

@@ -15,6 +15,30 @@ import type { LiteExecutionNativeNodeRow, LiteWriteStore } from "../store/lite-w
 import { dedupeWorkflowCandidatesBySignature } from "./workflow-candidate-aggregation.js";
 import { explainWorkflowProjectionForSourceNode } from "./workflow-write-projection.js";
 import { isPatternSuppressed, readPatternOperatorOverride } from "./pattern-operator-override.js";
+import {
+  parseNodeAnchor,
+  parseNodeExecutionNative,
+  resolveNodeAnchorLevel,
+  resolveNodeCompressionLayer,
+  resolveNodeExecutionContract,
+  resolveNodeExecutionContractTrust,
+  resolveNodeExecutionKind,
+  resolveNodeErrorSignature,
+  resolveNodeFilePath,
+  resolveNodeNextAction,
+  resolveNodePatternExecutionSurface,
+  resolveNodePatternHints,
+  resolveNodePolicyMemorySurface,
+  resolveNodeRehydrationDefaultMode,
+  resolveNodeSelectedTool,
+  resolveNodeServiceLifecycleConstraints,
+  resolveNodeSummaryKind,
+  resolveNodeTargetFiles,
+  resolveNodeTaskFamily,
+  resolveNodeTaskSignature,
+  resolveNodeWorkflowSignature,
+  resolveNodeWorkflowSteps,
+} from "./node-execution-surface.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -24,13 +48,6 @@ function firstString(...values: unknown[]): string | null {
   for (const value of values) {
     const next = typeof value === "string" ? value.trim() : "";
     if (next) return next;
-  }
-  return null;
-}
-
-function firstContractTrust(...values: unknown[]): "authoritative" | "advisory" | "observational" | null {
-  for (const value of values) {
-    if (value === "authoritative" || value === "advisory" || value === "observational") return value;
   }
   return null;
 }
@@ -65,18 +82,6 @@ function stringList(value: unknown, limit = 16): string[] {
     if (!next || seen.has(next)) continue;
     seen.add(next);
     out.push(next);
-    if (out.length >= limit) break;
-  }
-  return out;
-}
-
-function serviceLifecycleList(value: unknown, limit = 16): Array<Record<string, unknown>> {
-  if (!Array.isArray(value)) return [];
-  const out: Array<Record<string, unknown>> = [];
-  for (const item of value) {
-    const record = asRecord(item);
-    if (!record) continue;
-    out.push(record);
     if (out.length >= limit) break;
   }
   return out;
@@ -118,8 +123,9 @@ function deriveWorkflowProjectionMeta(slots: Record<string, unknown>) {
 
 function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope: string) {
   const slots = asRecord(row.slots);
-  const execution = asRecord(slots.execution_native_v1);
-  const anchor = asRecord(slots.anchor_v1);
+  const execution = parseNodeExecutionNative(slots) ?? {};
+  const anchor = parseNodeAnchor(slots) ?? {};
+  const executionContract = resolveNodeExecutionContract({ slots });
   const semanticForgetting = asRecord(slots.semantic_forgetting_v1);
   const archiveRelocation = asRecord(slots.archive_relocation_v1);
   const workflowPromotion = asRecord(execution.workflow_promotion ?? anchor.workflow_promotion);
@@ -127,17 +133,12 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
   const rehydration = asRecord(execution.rehydration ?? anchor.rehydration);
   const distillation = asRecord(execution.distillation);
   const projectionMeta = deriveWorkflowProjectionMeta(slots);
-  const slotTargetFiles = stringList(slots.target_files, 24);
-  const executionTargetFiles = stringList(execution.target_files, 24);
-  const anchorTargetFiles = stringList(anchor.target_files, 24);
-  const targetFiles = Array.from(new Set([...executionTargetFiles, ...anchorTargetFiles, ...slotTargetFiles]));
-  const filePath = firstString(execution.file_path, anchor.file_path, targetFiles[0] ?? null);
-  const nextAction = firstString(execution.next_action, anchor.next_action);
-  const workflowSteps = stringList(execution.workflow_steps, 24).length > 0
-    ? stringList(execution.workflow_steps, 24)
-    : stringList(anchor.key_steps, 24);
-  const patternHints = stringList(execution.pattern_hints, 24);
-  const serviceLifecycleConstraints = serviceLifecycleList(execution.service_lifecycle_constraints, 16);
+  const targetFiles = resolveNodeTargetFiles({ slots });
+  const filePath = resolveNodeFilePath({ slots });
+  const nextAction = resolveNodeNextAction({ slots });
+  const workflowSteps = resolveNodeWorkflowSteps({ slots });
+  const patternHints = resolveNodePatternHints({ slots });
+  const serviceLifecycleConstraints = resolveNodeServiceLifecycleConstraints({ slots });
   const observedCount = Number(workflowPromotion.observed_count ?? Number.NaN);
   const requiredObservations = Number(workflowPromotion.required_observations ?? Number.NaN);
   const promotionReady =
@@ -152,7 +153,8 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     type: row.type,
     title: firstString(row.title),
     summary: firstString(row.text_summary, anchor.summary),
-    anchor_level: firstString(execution.anchor_level, anchor.anchor_level),
+    anchor_level: resolveNodeAnchorLevel(slots),
+    execution_contract_v1: executionContract,
     source_kind: deriveWorkflowSourceKind({
       anchor,
       workflowPromotion,
@@ -160,8 +162,8 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     }),
     promotion_origin: firstString(workflowPromotion.promotion_origin),
     promotion_state: firstString(workflowPromotion.promotion_state),
-    contract_trust: firstContractTrust(execution.contract_trust, anchor.contract_trust, slots.contract_trust),
-    task_family: firstString(execution.task_family, anchor.task_family, slots.task_kind),
+    contract_trust: resolveNodeExecutionContractTrust({ slots }),
+    task_family: resolveNodeTaskFamily({ slots }),
     observed_count: Number.isFinite(observedCount) ? observedCount : null,
     required_observations: Number.isFinite(requiredObservations) ? requiredObservations : null,
     promotion_ready: promotionReady,
@@ -172,13 +174,13 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     archive_relocation_state: firstString(archiveRelocation.relocation_state),
     archive_relocation_target: firstString(archiveRelocation.relocation_target),
     archive_payload_scope: firstString(archiveRelocation.payload_scope),
-    rehydration_default_mode: firstString(rehydration.default_mode),
+    rehydration_default_mode: resolveNodeRehydrationDefaultMode(slots) ?? firstString(rehydration.default_mode),
     tool_set: stringList(execution.tool_set, 16).length > 0 ? stringList(execution.tool_set, 16) : stringList(anchor.tool_set, 16),
     maintenance_state: firstString(maintenance.maintenance_state),
     offline_priority: firstString(maintenance.offline_priority),
     last_maintenance_at: firstString(maintenance.last_maintenance_at),
-    workflow_signature: firstString(execution.workflow_signature, anchor.workflow_signature),
-    task_signature: firstString(execution.task_signature, anchor.task_signature),
+    workflow_signature: resolveNodeWorkflowSignature({ slots }),
+    task_signature: resolveNodeTaskSignature({ slots }),
     file_path: filePath,
     target_files: targetFiles,
     next_action: nextAction,
@@ -198,29 +200,29 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
 
 function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope: string) {
   const slots = asRecord(row.slots);
-  const execution = asRecord(slots.execution_native_v1);
-  const anchor = asRecord(slots.anchor_v1);
-  const promotion = asRecord(execution.promotion ?? anchor.promotion);
+  const execution = parseNodeExecutionNative(slots) ?? {};
+  const anchor = parseNodeAnchor(slots) ?? {};
+  const patternSurface = resolveNodePatternExecutionSurface({ slots });
   const trustHardening = asRecord(execution.trust_hardening ?? anchor.trust_hardening);
   const maintenance = asRecord(execution.maintenance ?? anchor.maintenance);
   const operatorOverride = readPatternOperatorOverride(slots);
   const suppressed = isPatternSuppressed(operatorOverride);
-  const credibilityState = firstString(execution.credibility_state, anchor.credibility_state, promotion.credibility_state) ?? "candidate";
-  const distinctRunCount = Number(promotion.distinct_run_count ?? Number.NaN);
-  const requiredDistinctRuns = Number(promotion.required_distinct_runs ?? Number.NaN);
-  const counterEvidenceCount = Number(promotion.counter_evidence_count ?? Number.NaN);
-  const counterEvidenceOpen = promotion.counter_evidence_open === true;
+  const credibilityState = patternSurface.credibility_state ?? "candidate";
+  const distinctRunCount = Number(patternSurface.promotion.distinct_run_count ?? Number.NaN);
+  const requiredDistinctRuns = Number(patternSurface.promotion.required_distinct_runs ?? Number.NaN);
+  const counterEvidenceCount = Number(patternSurface.promotion.counter_evidence_count ?? Number.NaN);
+  const counterEvidenceOpen = patternSurface.promotion.counter_evidence_open;
   return {
     anchor_id: row.id,
     uri: toNodeUri(tenantId, scope, row.type, row.id),
     type: row.type,
     title: firstString(row.title),
     summary: firstString(row.text_summary, anchor.summary),
-    anchor_level: firstString(execution.anchor_level, anchor.anchor_level),
-    selected_tool: firstString(execution.selected_tool, anchor.selected_tool),
-    task_family: firstString(execution.task_family, anchor.task_family),
+    anchor_level: patternSurface.anchor_level,
+    selected_tool: patternSurface.selected_tool,
+    task_family: resolveNodeTaskFamily({ slots }),
     error_family: firstString(execution.error_family, anchor.error_family),
-    pattern_state: firstString(execution.pattern_state, anchor.pattern_state) ?? "provisional",
+    pattern_state: patternSurface.pattern_state ?? "provisional",
     credibility_state: credibilityState,
     trusted: credibilityState === "trusted",
     operator_override_present: operatorOverride !== null,
@@ -235,7 +237,7 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
     trust_hardening: Object.keys(trustHardening).length > 0 ? trustHardening : null,
     counter_evidence_count: Number.isFinite(counterEvidenceCount) ? counterEvidenceCount : null,
     counter_evidence_open: counterEvidenceOpen,
-    last_transition: firstString(promotion.last_transition),
+    last_transition: patternSurface.promotion.last_transition,
     maintenance_state: firstString(maintenance.maintenance_state),
     offline_priority: firstString(maintenance.offline_priority),
     last_maintenance_at: firstString(maintenance.last_maintenance_at),
@@ -293,9 +295,10 @@ function toPolicyMemoryEntry(
 ) {
   const slots = asRecord(row.slots);
   const contract = asRecord(slots.policy_contract_v1);
-  const execution = asRecord(slots.execution_native_v1);
+  const executionContract = resolveNodeExecutionContract({ slots });
+  const execution = parseNodeExecutionNative(slots) ?? {};
   const maintenance = asRecord(execution?.maintenance);
-  const policyEvolution = asRecord(execution?.policy_evolution);
+  const policySurface = resolveNodePolicyMemorySurface(slots);
   return {
     kind: "policy_memory",
     summary_kind: "policy_memory",
@@ -304,26 +307,27 @@ function toPolicyMemoryEntry(
     uri: toNodeUri(tenantId, scope, row.type, row.id),
     title: firstString(row.title),
     summary: firstString(row.text_summary),
-    selected_tool: firstString(slots.selected_tool, contract?.selected_tool),
-    workflow_signature: firstString(slots.workflow_signature, contract?.workflow_signature),
-    file_path: firstString(slots.file_path, contract?.file_path),
-    target_files: stringList(slots.target_files, 24),
-    task_signature: firstString(slots.task_signature),
-    error_signature: firstString(slots.error_signature),
+    execution_contract_v1: executionContract,
+    selected_tool: resolveNodeSelectedTool({ slots }),
+    workflow_signature: resolveNodeWorkflowSignature({ slots }),
+    file_path: resolveNodeFilePath({ slots }),
+    target_files: resolveNodeTargetFiles({ slots }),
+    task_signature: resolveNodeTaskSignature({ slots }),
+    error_signature: resolveNodeErrorSignature(slots),
     feedback_positive: Number.isFinite(Number(slots.feedback_positive)) ? Number(slots.feedback_positive) : null,
     feedback_negative: Number.isFinite(Number(slots.feedback_negative)) ? Number(slots.feedback_negative) : null,
     feedback_quality: Number.isFinite(Number(slots.feedback_quality)) ? Number(slots.feedback_quality) : null,
     last_feedback_at: firstString(slots.last_feedback_at),
     last_materialized_at: firstString(slots.last_materialized_at),
-    policy_memory_state: firstString(slots.policy_memory_state, policyEvolution?.policy_memory_state, contract?.policy_memory_state),
-    policy_state: firstString(policyEvolution?.policy_state, contract?.policy_state),
-    policy_source_kind: firstString(policyEvolution?.policy_source_kind, contract?.source_kind),
-    activation_mode: firstString(policyEvolution?.activation_mode, contract?.activation_mode),
-    materialization_state: firstString(policyEvolution?.materialization_state, slots.materialization_state, contract?.materialization_state),
+    policy_memory_state: policySurface.policy_memory_state,
+    policy_state: policySurface.policy_state,
+    policy_source_kind: policySurface.policy_source_kind,
+    activation_mode: policySurface.activation_mode,
+    materialization_state: policySurface.materialization_state,
     maintenance_state: firstString(maintenance?.maintenance_state),
     offline_priority: firstString(maintenance?.offline_priority),
     last_maintenance_at: firstString(maintenance?.last_maintenance_at),
-    last_transition: firstString(policyEvolution?.last_transition),
+    last_transition: policySurface.last_transition,
     policy_contract_v1: contract ?? null,
     derived_policy_v1: asRecord(slots.derived_policy_v1) ?? null,
     confidence: row.confidence,
@@ -336,17 +340,17 @@ function toDistillationEntry(
   scope: string,
 ) {
   const slots = asRecord(row.slots);
-  const execution = asRecord(slots.execution_native_v1);
+  const execution = parseNodeExecutionNative(slots) ?? {};
   const distillation = asRecord(execution.distillation);
   const maintenance = asRecord(execution.maintenance);
   return {
-    kind: firstString(execution.execution_kind, slots.summary_kind, row.type) ?? "unknown",
-    summary_kind: firstString(slots.summary_kind),
+    kind: firstString(resolveNodeExecutionKind(slots), resolveNodeSummaryKind(slots), row.type) ?? "unknown",
+    summary_kind: resolveNodeSummaryKind(slots),
     node_id: row.id,
     uri: toNodeUri(tenantId, scope, row.type, row.id),
     title: firstString(row.title),
     summary: firstString(row.text_summary),
-    compression_layer: firstString(execution.compression_layer, slots.compression_layer),
+    compression_layer: resolveNodeCompressionLayer({ type: row.type, slots }),
     distillation_origin: firstString(distillation.distillation_origin),
     preferred_promotion_target: firstString(distillation.preferred_promotion_target),
     extraction_pattern: firstString(distillation.extraction_pattern),
@@ -366,20 +370,21 @@ function toContinuityEntry(
   scope: string,
 ) {
   const slots = asRecord(row.slots);
-  const execution = asRecord(slots.execution_native_v1);
-  const summaryKind = firstString(execution.summary_kind, slots.summary_kind);
+  const executionContract = resolveNodeExecutionContract({ slots });
+  const summaryKind = resolveNodeSummaryKind(slots);
   return {
     kind: "continuity_carrier",
+    execution_contract_v1: executionContract,
     summary_kind: summaryKind,
-    execution_kind: firstString(execution.execution_kind),
+    execution_kind: resolveNodeExecutionKind(slots),
     node_id: row.id,
     uri: toNodeUri(tenantId, scope, row.type, row.id),
     title: firstString(row.title),
     summary: firstString(row.text_summary),
-    compression_layer: firstString(execution.compression_layer, slots.compression_layer),
-    file_path: firstString(execution.file_path, slots.file_path),
-    target_files: stringList(execution.target_files, 24),
-    next_action: firstString(execution.next_action, slots.next_action),
+    compression_layer: resolveNodeCompressionLayer({ type: row.type, slots }),
+    file_path: resolveNodeFilePath({ slots }),
+    target_files: resolveNodeTargetFiles({ slots }),
+    next_action: resolveNodeNextAction({ slots }),
     confidence: row.confidence,
   };
 }

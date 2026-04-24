@@ -7,7 +7,10 @@ import {
   buildWorkflowPromotionMetadata,
 } from "./evolution-operators.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema } from "./schemas.js";
-import { deriveReplayWorkflowContractFromSlots } from "./replay-workflow-contract.js";
+import {
+  buildReplayProjectionExecutionContract,
+  deriveReplayWorkflowContractFromSlots,
+} from "./replay-workflow-contract.js";
 
 export type ReplayLearningProjectionSource = {
   tenant_id: string;
@@ -232,6 +235,13 @@ export function buildReplayLearningProjectionArtifacts(args: {
   const shouldPromoteStableWorkflow = args.shouldPromoteStableWorkflow && allowsStableReplayPromotion(workflowContract.contract_trust);
   const nodes: Array<Record<string, unknown>> = [];
   const edges: Array<Record<string, unknown>> = [];
+  const candidateExecutionContract = buildReplayProjectionExecutionContract({
+    base: workflowContract,
+    task_signature: `replay_playbook:${args.source.playbook_id}`,
+    workflow_signature: args.workflowSignature,
+    source_anchor: episodeClientId,
+    notes: ["replay_learning_candidate_projection"],
+  });
 
   if (args.shouldCreateRule) {
     nodes.push({
@@ -288,6 +298,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
         lifecycle_state: "active",
         ttl_expires_at: args.ttlExpiresAt,
         archive_candidate: true,
+        execution_contract_v1: candidateExecutionContract,
         ...(!shouldPromoteStableWorkflow
           ? {
               execution_native_v1: {
@@ -368,6 +379,14 @@ export function buildReplayLearningProjectionArtifacts(args: {
       episodeNodeId,
       promotedAt: args.projectedAt,
     });
+    const stableExecutionContract = buildReplayProjectionExecutionContract({
+      base: workflowContract,
+      task_signature: workflowAnchor.task_signature,
+      workflow_signature: workflowAnchor.workflow_signature,
+      source_anchor: workflowClientId,
+      file_path: workflowAnchor.file_path ?? null,
+      notes: ["replay_learning_stable_projection"],
+    });
     nodes.push({
       client_id: workflowClientId,
       type: "procedure",
@@ -377,6 +396,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
         summary_kind: "workflow_anchor",
         compression_layer: "L2",
         anchor_v1: workflowAnchor,
+        execution_contract_v1: stableExecutionContract,
         execution_native_v1: ExecutionNativeV1Schema.parse({
           schema_version: "execution_native_v1",
           execution_kind: "workflow_anchor",

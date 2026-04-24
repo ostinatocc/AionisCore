@@ -1,6 +1,21 @@
 import type { RecallNodeRow } from "../store/recall-access.js";
 import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
 import { dedupeWorkflowCandidatesBySignature } from "./workflow-candidate-aggregation.js";
+import {
+  parseExecutionContract,
+  type ExecutionContractV1,
+} from "./execution-contract.js";
+import {
+  parseNodeAnchor,
+  parseNodeExecutionNative,
+  resolveNodeAnchorKind,
+  resolveNodeAnchorLevel,
+  resolveNodeExecutionContract,
+  resolveNodeExecutionContractTrust,
+  resolveNodeExecutionKind,
+  resolveNodePatternExecutionSurface,
+  resolveNodeRehydrationDefaultMode,
+} from "./node-execution-surface.js";
 
 type NodeRow = RecallNodeRow;
 
@@ -11,6 +26,7 @@ export type ActionRecallWorkflow = {
   title: string | null;
   summary: string | null;
   anchor_level: string;
+  execution_contract_v1: ExecutionContractV1 | null;
   contract_trust: "authoritative" | "advisory" | "observational" | null;
   promotion_state: "candidate" | "stable" | null;
   source_kind: string | null;
@@ -90,6 +106,7 @@ export type ActionRecallSupportingKnowledge = {
   uri: string | null;
   title: string | null;
   summary: string | null;
+  execution_contract_v1?: ExecutionContractV1 | null;
   summary_kind?: string | null;
   execution_kind?: string | null;
   compression_layer: string | null;
@@ -129,29 +146,11 @@ function firstFinite(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function firstContractTrust(value: unknown): "authoritative" | "advisory" | "observational" | null {
-  return value === "authoritative" || value === "advisory" || value === "observational" ? value : null;
-}
-
-function mapExecutionKindToAnchorKind(executionKind: string | null): string | null {
-  if (executionKind === "workflow_anchor") return "workflow";
-  if (executionKind === "workflow_candidate") return "workflow";
-  if (executionKind === "pattern_anchor") return "pattern";
-  return null;
-}
-
-function executionNativeRecord(slots: Record<string, unknown> | null): Record<string, unknown> | null {
-  return asRecord(slots?.execution_native_v1);
-}
-
-function anchorRecord(slots: Record<string, unknown> | null): Record<string, unknown> | null {
-  return asRecord(slots?.anchor_v1);
-}
-
 export function recallAnchorMeta(node: NodeRow): {
   slots: Record<string, unknown> | null;
   executionNative: Record<string, unknown> | null;
   anchor: Record<string, unknown> | null;
+  executionContract: ExecutionContractV1 | null;
   anchorKind: string | null;
   anchorLevel: string | null;
   executionKind: string | null;
@@ -167,38 +166,32 @@ export function recallAnchorMeta(node: NodeRow): {
   contractTrust: "authoritative" | "advisory" | "observational" | null;
 } {
   const slots = asRecord(node.slots);
-  const executionNative = executionNativeRecord(slots);
-  const anchor = anchorRecord(slots);
-  const anchorKind = firstString(executionNative?.anchor_kind)
-    ?? mapExecutionKindToAnchorKind(firstString(executionNative?.execution_kind))
-    ?? firstString(anchor?.anchor_kind);
-  const anchorLevel = firstString(executionNative?.anchor_level) ?? firstString(anchor?.anchor_level);
-  const executionKind = firstString(executionNative?.execution_kind);
+  const executionNative = parseNodeExecutionNative(slots);
+  const anchor = parseNodeAnchor(slots);
+  const executionContract = resolveNodeExecutionContract({ slots });
+  const anchorKind = resolveNodeAnchorKind(slots);
+  const anchorLevel = resolveNodeAnchorLevel(slots);
+  const executionKind = resolveNodeExecutionKind(slots);
+  const patternSurface = resolveNodePatternExecutionSurface({ slots });
   const patternState =
-    firstString(executionNative?.pattern_state ?? anchor?.pattern_state) === "stable" ? "stable" : "provisional";
+    patternSurface.pattern_state === "stable" ? "stable" : "provisional";
   const workflowPromotion = asRecord(executionNative?.workflow_promotion) ?? asRecord(anchor?.workflow_promotion);
   const promotion = asRecord(executionNative?.promotion) ?? asRecord(anchor?.promotion);
   const maintenance = asRecord(executionNative?.maintenance) ?? asRecord(anchor?.maintenance);
-  const rehydration = asRecord(executionNative?.rehydration) ?? asRecord(anchor?.rehydration);
-  const counterEvidenceOpen = promotion?.counter_evidence_open === true;
-  const credibilityStateRaw = firstString(
-    executionNative?.credibility_state ?? anchor?.credibility_state ?? promotion?.credibility_state,
-  );
-  const credibilityState: "candidate" | "trusted" | "contested" =
-    credibilityStateRaw === "trusted" || credibilityStateRaw === "contested" || credibilityStateRaw === "candidate"
-      ? credibilityStateRaw
-      : counterEvidenceOpen
-        ? "contested"
-        : patternState === "stable"
-          ? "trusted"
-          : "candidate";
+  const rehydration = asRecord(anchor?.rehydration)
+    ?? (resolveNodeRehydrationDefaultMode(slots)
+      ? { default_mode: resolveNodeRehydrationDefaultMode(slots) }
+      : null);
+  const counterEvidenceOpen = patternSurface.promotion.counter_evidence_open;
+  const credibilityState = patternSurface.credibility_state ?? (patternState === "stable" ? "trusted" : "candidate");
   const trusted = anchorKind === "pattern" ? credibilityState === "trusted" : false;
-  const selectedTool = firstString(executionNative?.selected_tool ?? anchor?.selected_tool);
-  const contractTrust = firstContractTrust(executionNative?.contract_trust ?? anchor?.contract_trust);
+  const selectedTool = patternSurface.selected_tool;
+  const contractTrust = resolveNodeExecutionContractTrust({ slots });
   return {
     slots,
     executionNative,
     anchor,
+    executionContract,
     anchorKind,
     anchorLevel,
     executionKind,
@@ -296,6 +289,7 @@ export function buildActionRecallPacket(args: {
         title: node.title ?? null,
         summary: firstString(anchor?.summary) ?? node.text_summary ?? node.title ?? null,
         anchor_level: anchorLevel,
+        execution_contract_v1: meta.executionContract,
         contract_trust: meta.contractTrust,
         promotion_state: firstString(meta.workflowPromotion?.promotion_state) as any,
         source_kind: deriveWorkflowSourceKind({
@@ -309,7 +303,8 @@ export function buildActionRecallPacket(args: {
         required_observations: firstFinite(meta.workflowPromotion?.required_observations),
         observed_count: firstFinite(meta.workflowPromotion?.observed_count),
         promotion_ready: isWorkflowPromotionReady(meta.workflowPromotion),
-        workflow_signature: firstString(meta.executionNative?.workflow_signature ?? anchor?.workflow_signature),
+        workflow_signature: meta.executionContract?.workflow_signature
+          ?? firstString(meta.executionNative?.workflow_signature ?? anchor?.workflow_signature),
         last_transition: firstString(meta.workflowPromotion?.last_transition) as any,
         last_transition_at: firstString(meta.workflowPromotion?.last_transition_at),
         rehydration_default_mode: firstString(meta.rehydration?.default_mode) as any,
@@ -423,6 +418,7 @@ export function buildActionRecallPacket(args: {
       uri: firstString(item?.uri),
       title: firstString(item?.title),
       summary: firstString(item?.summary),
+      execution_contract_v1: parseExecutionContract(item?.execution_contract_v1),
       summary_kind: firstString(item?.summary_kind),
       execution_kind: firstString(item?.execution_kind),
       compression_layer: firstString(item?.compression_layer),

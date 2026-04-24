@@ -9,6 +9,8 @@ import {
   ExecutionStateV1Schema,
 } from "../execution/types.js";
 import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
+import { ContractTrustSchema } from "./contract-trust.js";
+import { ExecutionContractV1Schema } from "./execution-contract.js";
 
 export const UUID = z.string().uuid();
 
@@ -425,8 +427,8 @@ export const MemoryPolicyEvolutionSchema = z.object({
   last_transition_at: z.string().min(1).nullable().default(null),
 });
 
-export const ContractTrustSchema = z.enum(["authoritative", "advisory", "observational"]);
-export type ContractTrust = z.infer<typeof ContractTrustSchema>;
+export { ContractTrustSchema } from "./contract-trust.js";
+export type { ContractTrust } from "./contract-trust.js";
 
 export const MemoryAnchorV1Schema = z.object({
   anchor_kind: MemoryAnchorKind,
@@ -1038,6 +1040,7 @@ export const ContinuityInspectSummarySchema = z.object({
 }).passthrough();
 
 export const ContinuityReviewContractSchema = z.object({
+  execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),
   target_files: z.array(z.string()),
   next_action: z.string().nullable(),
   acceptance_checks: z.array(z.string()),
@@ -1203,6 +1206,7 @@ export const ActionRetrievalResponseSchema = z.object({
   selected_tool: z.string().nullable(),
   recommended_file_path: z.string().nullable(),
   recommended_next_action: z.string().nullable(),
+  execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),
   tool: ExperienceIntelligenceToolRecommendationSchema,
   path: ExperienceIntelligencePathRecommendationSchema,
   evidence: ActionRetrievalEvidenceSchema,
@@ -1306,6 +1310,7 @@ export type PolicyContract = z.infer<typeof PolicyContractSchema>;
 export const PolicyReviewAttentionSchema = z.object({
   node_id: z.string(),
   policy_memory_state: z.enum(["active", "contested", "retired"]),
+  execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),
   selected_tool: z.string().nullable(),
   file_path: z.string().nullable(),
   workflow_signature: z.string().nullable(),
@@ -1341,6 +1346,7 @@ export const PolicyGovernanceContractSchema = z.object({
   policy_memory_id: z.string().nullable(),
   current_state: z.enum(["active", "contested", "retired"]).nullable(),
   target_state: z.enum(["active", "contested", "retired"]).nullable(),
+  execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),
   selected_tool: z.string().nullable(),
   file_path: z.string().nullable(),
   workflow_signature: z.string().nullable(),
@@ -1416,6 +1422,7 @@ export const ExperienceIntelligenceResponseSchema = z.object({
   scope: z.string(),
   query_text: z.string(),
   action_retrieval: ActionRetrievalResponseSchema,
+  execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),
   recommendation: z.object({
     history_applied: z.boolean(),
     tool: ExperienceIntelligenceToolRecommendationSchema,
@@ -1453,6 +1460,7 @@ export const FirstStepRecommendationSchema = z.object({
   source_kind: z.enum(["experience_intelligence", "tool_selection"]),
   history_applied: z.boolean(),
   contract_trust: ContractTrustSchema,
+  execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),
   selected_tool: z.string().nullable(),
   task_family: z.string().nullable(),
   workflow_signature: z.string().nullable(),
@@ -1465,6 +1473,7 @@ export const KickoffRecommendationSchema = z.object({
   source_kind: z.enum(["experience_intelligence", "tool_selection"]),
   history_applied: z.boolean(),
   contract_trust: ContractTrustSchema,
+  execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),
   selected_tool: z.string().nullable(),
   task_family: z.string().nullable(),
   workflow_signature: z.string().nullable(),
@@ -2033,6 +2042,7 @@ export const EvolutionInspectResponseSchema = z.object({
 }).passthrough();
 
 export const EvolutionReviewContractSchema = z.object({
+  execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),
   selected_tool: z.string().nullable(),
   file_path: z.string().nullable(),
   target_files: z.array(z.string()),
@@ -2152,6 +2162,7 @@ export type AgentMemoryReviewPackInput = z.infer<typeof AgentMemoryReviewPackReq
 
 export const AgentMemoryReviewPackSummarySchema = z.object({
   pack_version: z.literal("agent_memory_review_pack_v1"),
+  execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),
   selected_tool: z.string().nullable(),
   recommended_file_path: z.string().nullable(),
   recommended_next_action: z.string().nullable(),
@@ -2194,6 +2205,7 @@ export type AgentMemoryResumePackInput = z.infer<typeof AgentMemoryResumePackReq
 
 export const AgentMemoryResumePackSummarySchema = z.object({
   pack_version: z.literal("agent_memory_resume_pack_v1"),
+  execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),
   latest_handoff_anchor: z.string().nullable(),
   latest_resume_source_kind: z.string().nullable(),
   resume_selected_tool: z.string().nullable(),
@@ -2231,6 +2243,7 @@ export type AgentMemoryHandoffPackInput = z.infer<typeof AgentMemoryHandoffPackR
 
 export const AgentMemoryHandoffPackSummarySchema = z.object({
   pack_version: z.literal("agent_memory_handoff_pack_v1"),
+  execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),
   latest_handoff_anchor: z.string().nullable(),
   handoff_kind: z.string().nullable(),
   handoff_file_path: z.string().nullable(),
@@ -2379,6 +2392,7 @@ export const ContextOperatorProjectionSchema = z.object({
     action: ActionRetrievalGateActionSchema,
     priority: z.enum(["required", "recommended"]),
     contract_trust: ContractTrustSchema,
+    execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),
     instruction: z.string().nullable(),
     selected_tool: z.string().nullable(),
     file_path: z.string().nullable(),

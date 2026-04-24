@@ -8,8 +8,15 @@ import Fastify from "fastify";
 import { FakeEmbeddingProvider } from "../../src/embeddings/fake.ts";
 import { createRequestGuards } from "../../src/app/request-guards.ts";
 import { registerHostErrorHandler } from "../../src/host/http-host.ts";
+import { buildPolicyGovernanceContract } from "../../src/memory/evolution-inspect.ts";
+import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
 import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
-import { EvolutionReviewPackResponseSchema, MemoryAnchorV1Schema } from "../../src/memory/schemas.ts";
+import {
+  EvolutionReviewPackResponseSchema,
+  MemoryAnchorV1Schema,
+  PolicyContractSchema,
+  PolicyReviewSummarySchema,
+} from "../../src/memory/schemas.ts";
 import { applyMemoryWrite, prepareMemoryWrite } from "../../src/memory/write.ts";
 import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
 import { createLiteWriteStore } from "../../src/store/lite-write-store.ts";
@@ -283,6 +290,102 @@ async function seedEvolutionFixture(dbPath: string) {
   );
 }
 
+test("policy governance contract keeps highest-priority action surface coherent", () => {
+  const experienceExecutionContract = buildExecutionContractFromProjection({
+    contract_trust: "advisory",
+    task_family: "task:policy_surface_merge",
+    workflow_signature: "execution_workflow:experience",
+    selected_tool: "edit",
+    file_path: "src/routes/experience.ts",
+    target_files: ["src/routes/experience.ts"],
+    next_action: "Experience next action",
+    workflow_steps: ["experience step"],
+    acceptance_checks: ["npm run -s test:experience"],
+    provenance: {
+      source_kind: "manual_context",
+      source_summary_version: "execution_contract_v1",
+      source_anchor: "experience",
+      evidence_refs: [],
+      notes: [],
+    },
+  });
+  const policyContract = PolicyContractSchema.parse({
+    summary_version: "policy_contract_v1",
+    policy_kind: "tool_preference",
+    source_kind: "stable_workflow",
+    policy_state: "stable",
+    contract_trust: "authoritative",
+    policy_memory_state: "active",
+    activation_mode: "default",
+    materialization_state: "persisted",
+    history_applied: true,
+    selected_tool: "edit",
+    avoid_tools: [],
+    task_family: "task:policy_surface_merge",
+    workflow_signature: "execution_workflow:policy",
+    file_path: "src/routes/policy.ts",
+    target_files: ["src/routes/policy.ts"],
+    next_action: "Policy next action",
+    workflow_steps: ["policy step"],
+    pattern_hints: ["policy hint"],
+    rehydration_mode: null,
+    confidence: 0.91,
+    source_anchor_ids: ["policy-anchor"],
+    policy_memory_id: "policy-memory-1",
+    reason: "persisted policy should override lower-priority experience fields",
+  });
+  const derivedPolicy = {
+    summary_version: "derived_policy_v1",
+    policy_kind: "tool_preference",
+    source_kind: "stable_workflow",
+    policy_state: "stable",
+    contract_trust: "authoritative",
+    selected_tool: "edit",
+    task_family: "task:policy_surface_merge",
+    workflow_signature: "execution_workflow:derived",
+    policy_memory_id: "policy-memory-1",
+    file_path: "src/routes/derived.ts",
+    target_files: ["src/routes/derived.ts"],
+    workflow_steps: ["derived step"],
+    pattern_hints: ["derived hint"],
+    confidence: 0.94,
+    supporting_anchor_ids: ["derived-anchor"],
+    reason: "fresh derived policy should be the highest-priority action surface",
+    evidence: {
+      trusted_pattern_count: 1,
+      stable_workflow_count: 1,
+      usage_count: 2,
+      reuse_success_count: 2,
+      reuse_failure_count: 0,
+      feedback_quality: null,
+    },
+  };
+  const policyReview = PolicyReviewSummarySchema.parse({
+    summary_version: "policy_review_summary_v1",
+    persisted_policy_count: 1,
+    active_policy_count: 1,
+    contested_policy_count: 0,
+    retired_policy_count: 0,
+    review_recommended: false,
+    selected_policy_memory_id: "policy-memory-1",
+    selected_policy_memory_state: "active",
+    attention_policy: null,
+  });
+
+  const governance = buildPolicyGovernanceContract({
+    policyReview,
+    policyContract,
+    experienceExecutionContract,
+    derivedPolicy,
+  });
+
+  assert.equal(governance.action, "monitor");
+  assert.equal(governance.execution_contract_v1?.file_path, "src/routes/derived.ts");
+  assert.deepEqual(governance.execution_contract_v1?.target_files, ["src/routes/derived.ts"]);
+  assert.deepEqual(governance.execution_contract_v1?.workflow_steps, ["derived step"]);
+  assert.deepEqual(governance.execution_contract_v1?.pattern_hints, ["derived hint"]);
+});
+
 test("memory evolution review-pack route exposes stable workflow and reviewer-friendly contract", async () => {
   const dbPath = tmpDbPath("evolution-review-pack");
   const app = Fastify();
@@ -433,10 +536,38 @@ test("memory evolution review-pack route exposes stable workflow and reviewer-fr
     assert.equal(parsed.evolution_review_pack.pack_version, "evolution_review_pack_v1");
     assert.equal(parsed.evolution_review_pack.review_contract.selected_tool, "edit");
     assert.equal(parsed.evolution_review_pack.review_contract.file_path, "src/routes/export.ts");
+    assert.equal(
+      parsed.evolution_review_pack.review_contract.execution_contract_v1?.schema_version,
+      "execution_contract_v1",
+    );
+    assert.equal(
+      parsed.evolution_review_pack.review_contract.execution_contract_v1?.selected_tool,
+      "edit",
+    );
+    assert.equal(
+      parsed.evolution_review_pack.review_contract.execution_contract_v1?.file_path,
+      "src/routes/export.ts",
+    );
+    assert.equal(
+      parsed.evolution_review_pack.review_contract.execution_contract_v1?.workflow_signature,
+      "execution_workflow:repair-export",
+    );
     assert.ok(parsed.evolution_review_pack.stable_workflow);
     assert.equal(parsed.evolution_review_pack.derived_policy?.selected_tool, "edit");
     assert.equal(parsed.evolution_review_pack.policy_contract?.selected_tool, "edit");
     assert.equal(parsed.evolution_review_pack.policy_governance_contract.action, "none");
+    assert.equal(
+      parsed.evolution_review_pack.policy_governance_contract.execution_contract_v1?.schema_version,
+      "execution_contract_v1",
+    );
+    assert.equal(
+      parsed.evolution_review_pack.policy_governance_contract.execution_contract_v1?.selected_tool,
+      "edit",
+    );
+    assert.equal(
+      parsed.evolution_review_pack.policy_governance_contract.execution_contract_v1?.file_path,
+      "src/routes/export.ts",
+    );
     assert.equal(parsed.evolution_review_pack.policy_review.persisted_policy_count, 0);
     assert.ok(parsed.evolution_review_pack.review_contract.trusted_pattern_anchor_ids.length >= 1);
     assert.deepEqual(parsed.evolution_review_pack.learning_summary, {

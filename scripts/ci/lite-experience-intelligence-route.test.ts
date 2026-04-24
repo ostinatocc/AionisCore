@@ -726,7 +726,14 @@ test("action retrieval route exposes explicit retrieval evidence and low uncerta
     assert.equal(body.selected_tool, "edit");
     assert.equal(body.recommended_file_path, "src/routes/export.ts");
     assert.match(body.recommended_next_action ?? "", /src\/routes\/export\.ts/);
+    assert.equal(body.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(body.execution_contract_v1?.selected_tool, "edit");
+    assert.equal(body.execution_contract_v1?.task_family, "task:repair_export");
+    assert.equal(body.execution_contract_v1?.workflow_signature, "execution_workflow:repair-export");
+    assert.equal(body.execution_contract_v1?.file_path, "src/routes/export.ts");
     assert.equal(body.path.source_kind, "recommended_workflow");
+    assert.equal(body.path.file_path, body.execution_contract_v1?.file_path ?? null);
+    assert.equal(body.path.workflow_signature, body.execution_contract_v1?.workflow_signature ?? null);
     assert.equal(body.tool_source_kind, "blended");
     assert.equal(body.uncertainty.level, "low");
     assert.equal(body.evidence.stable_workflow_count >= 1, true);
@@ -799,6 +806,11 @@ test("action retrieval route surfaces higher uncertainty when no learned path ma
     assert.equal(body.tool_source_kind, "tools_select");
     assert.equal(body.recommended_file_path, null);
     assert.equal(body.recommended_next_action, null);
+    assert.equal(body.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(body.execution_contract_v1?.selected_tool, "bash");
+    assert.equal(body.execution_contract_v1?.task_family ?? null, null);
+    assert.equal(body.execution_contract_v1?.workflow_signature ?? null, null);
+    assert.equal(body.execution_contract_v1?.file_path ?? null, null);
     assert.equal(body.uncertainty.level, "high");
     assert.equal(body.uncertainty.recommended_actions.includes("widen_recall"), true);
   } finally {
@@ -1540,17 +1552,18 @@ test("kickoff recommendation route can recover file-level guidance from family-l
 
     assert.equal(response.statusCode, 200);
     const body = KickoffRecommendationResponseSchema.parse(response.json());
-    assert.deepEqual(body.kickoff_recommendation, {
-      source_kind: "experience_intelligence",
-      history_applied: true,
-      contract_trust: "authoritative",
-      selected_tool: "edit",
-      task_family: "task:repair_export",
-      workflow_signature: "execution_workflow:repair-export",
-      policy_memory_id: body.policy_contract?.policy_memory_id ?? null,
-      file_path: "src/routes/export.ts",
-      next_action: "Patch src/routes/export.ts and rerun export tests.",
-    });
+    assert.equal(body.kickoff_recommendation?.source_kind, "experience_intelligence");
+    assert.equal(body.kickoff_recommendation?.history_applied, true);
+    assert.equal(body.kickoff_recommendation?.contract_trust, "authoritative");
+    assert.equal(body.kickoff_recommendation?.selected_tool, "edit");
+    assert.equal(body.kickoff_recommendation?.task_family, "task:repair_export");
+    assert.equal(body.kickoff_recommendation?.workflow_signature, "execution_workflow:repair-export");
+    assert.equal(body.kickoff_recommendation?.policy_memory_id, body.policy_contract?.policy_memory_id ?? null);
+    assert.equal(body.kickoff_recommendation?.file_path, "src/routes/export.ts");
+    assert.equal(body.kickoff_recommendation?.next_action, "Patch src/routes/export.ts and rerun export tests.");
+    assert.equal(body.kickoff_recommendation?.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(body.kickoff_recommendation?.execution_contract_v1?.policy_memory_id, body.policy_contract?.policy_memory_id ?? null);
+    assert.equal(body.kickoff_recommendation?.execution_contract_v1?.file_path, "src/routes/export.ts");
     assert.equal(body.policy_contract?.materialization_state, "persisted");
     assert.equal(body.policy_contract?.task_family, "task:repair_export");
     assert.deepEqual(body.policy_contract?.target_files, ["src/routes/export.ts"]);
@@ -1617,17 +1630,18 @@ test("kickoff recommendation route returns a host-consumable file-level kickoff 
     assert.equal(response.statusCode, 200);
     const body = KickoffRecommendationResponseSchema.parse(response.json());
     assert.ok(!("recommendation" in (body as Record<string, unknown>)));
-    assert.deepEqual(body.kickoff_recommendation, {
-      source_kind: "experience_intelligence",
-      history_applied: true,
-      contract_trust: "authoritative",
-      selected_tool: "edit",
-      task_family: "task:repair_export",
-      workflow_signature: "execution_workflow:repair-export",
-      policy_memory_id: null,
-      file_path: "src/routes/export.ts",
-      next_action: "Patch src/routes/export.ts and rerun export tests.",
-    });
+    assert.equal(body.kickoff_recommendation?.source_kind, "experience_intelligence");
+    assert.equal(body.kickoff_recommendation?.history_applied, true);
+    assert.equal(body.kickoff_recommendation?.contract_trust, "authoritative");
+    assert.equal(body.kickoff_recommendation?.selected_tool, "edit");
+    assert.equal(body.kickoff_recommendation?.task_family, "task:repair_export");
+    assert.equal(body.kickoff_recommendation?.workflow_signature, "execution_workflow:repair-export");
+    assert.equal(body.kickoff_recommendation?.policy_memory_id ?? null, null);
+    assert.equal(body.kickoff_recommendation?.file_path, "src/routes/export.ts");
+    assert.equal(body.kickoff_recommendation?.next_action, "Patch src/routes/export.ts and rerun export tests.");
+    assert.equal(body.kickoff_recommendation?.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(body.kickoff_recommendation?.execution_contract_v1?.selected_tool, "edit");
+    assert.equal(body.kickoff_recommendation?.execution_contract_v1?.file_path, "src/routes/export.ts");
     assert.equal(body.policy_contract?.selected_tool, "edit");
     assert.equal(body.policy_contract?.materialization_state, "computed");
     assert.match(body.rationale.summary, /stable_workflows=1/);
@@ -1691,17 +1705,18 @@ test("kickoff recommendation route falls back to tool-only kickoff for unrelated
 
     assert.equal(response.statusCode, 200);
     const body = KickoffRecommendationResponseSchema.parse(response.json());
-    assert.deepEqual(body.kickoff_recommendation, {
-      source_kind: "tool_selection",
-      history_applied: false,
-      contract_trust: "observational",
-      selected_tool: "bash",
-      task_family: null,
-      workflow_signature: null,
-      policy_memory_id: null,
-      file_path: null,
-      next_action: "Inspect the current context before starting with bash.",
-    });
+    assert.equal(body.kickoff_recommendation?.source_kind, "tool_selection");
+    assert.equal(body.kickoff_recommendation?.history_applied, false);
+    assert.equal(body.kickoff_recommendation?.contract_trust, "observational");
+    assert.equal(body.kickoff_recommendation?.selected_tool, "bash");
+    assert.equal(body.kickoff_recommendation?.task_family ?? null, null);
+    assert.equal(body.kickoff_recommendation?.workflow_signature ?? null, null);
+    assert.equal(body.kickoff_recommendation?.policy_memory_id ?? null, null);
+    assert.equal(body.kickoff_recommendation?.file_path ?? null, null);
+    assert.equal(body.kickoff_recommendation?.next_action, "Inspect the current context before starting with bash.");
+    assert.equal(body.kickoff_recommendation?.execution_contract_v1?.schema_version, "execution_contract_v1");
+    assert.equal(body.kickoff_recommendation?.execution_contract_v1?.selected_tool, "bash");
+    assert.equal(body.kickoff_recommendation?.execution_contract_v1?.file_path ?? null, null);
     assert.equal(body.action_retrieval_uncertainty?.summary_version, "action_retrieval_uncertainty_v1");
     assert.equal(body.action_retrieval_uncertainty?.level, "high");
     assert.ok(body.action_retrieval_uncertainty?.recommended_actions.includes("inspect_context"));

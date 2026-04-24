@@ -3,6 +3,12 @@ import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { buildDelegationLearningSliceLite } from "./delegation-learning.js";
 import { buildExecutionMemoryIntrospectionLite } from "./execution-introspection.js";
+import {
+  buildExecutionContractFromProjection,
+  mergeExecutionContractsWithActionSurface,
+  parseExecutionContract,
+  type ExecutionContractV1,
+} from "./execution-contract.js";
 import { applyPolicyMemoryGovernanceLite } from "./policy-memory.js";
 import {
   EvolutionInspectRequest,
@@ -58,6 +64,67 @@ function firstString(...values: unknown[]): string | null {
 function numeric(value: unknown): number | null {
   const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function buildExecutionContractFromPolicyContractSurface(policyContract: PolicyContract | null): ExecutionContractV1 | null {
+  if (!policyContract) return null;
+  return buildExecutionContractFromProjection({
+    contract_trust: policyContract.contract_trust ?? null,
+    task_family: policyContract.task_family ?? null,
+    workflow_signature: policyContract.workflow_signature ?? null,
+    policy_memory_id: policyContract.policy_memory_id ?? null,
+    selected_tool: policyContract.selected_tool,
+    file_path: policyContract.file_path,
+    target_files: policyContract.target_files,
+    next_action: policyContract.next_action,
+    workflow_steps: policyContract.workflow_steps ?? [],
+    pattern_hints: policyContract.pattern_hints ?? [],
+    service_lifecycle_constraints: policyContract.service_lifecycle_constraints ?? [],
+    provenance: {
+      source_kind: "policy_contract",
+      source_summary_version: policyContract.summary_version,
+      source_anchor: policyContract.policy_memory_id ?? null,
+      notes: ["evolution_policy_contract_surface"],
+    },
+  });
+}
+
+function buildExecutionContractFromDerivedPolicySurface(derivedPolicy: Record<string, unknown> | null): ExecutionContractV1 | null {
+  if (!derivedPolicy) return null;
+  return buildExecutionContractFromProjection({
+    contract_trust: firstString(derivedPolicy.contract_trust),
+    task_family: firstString(derivedPolicy.task_family),
+    workflow_signature: firstString(derivedPolicy.workflow_signature),
+    policy_memory_id: firstString(derivedPolicy.policy_memory_id),
+    selected_tool: firstString(derivedPolicy.selected_tool),
+    file_path: firstString(derivedPolicy.file_path),
+    target_files: Array.isArray(derivedPolicy.target_files) ? derivedPolicy.target_files : [],
+    workflow_steps: Array.isArray(derivedPolicy.workflow_steps) ? derivedPolicy.workflow_steps : [],
+    pattern_hints: Array.isArray(derivedPolicy.pattern_hints) ? derivedPolicy.pattern_hints : [],
+    service_lifecycle_constraints: Array.isArray(derivedPolicy.service_lifecycle_constraints)
+      ? derivedPolicy.service_lifecycle_constraints
+      : [],
+    provenance: {
+      source_kind: "derived_policy",
+      source_anchor: firstString(derivedPolicy.policy_memory_id),
+      notes: ["evolution_derived_policy_surface"],
+    },
+  });
+}
+
+function mergeContractsInOrder(contracts: Array<ExecutionContractV1 | null>): ExecutionContractV1 | null {
+  let current: ExecutionContractV1 | null = null;
+  for (const contract of contracts) {
+    if (!contract) continue;
+    current = current
+      ? mergeExecutionContractsWithActionSurface({
+          existing: current,
+          incoming: contract,
+          preference: "incoming",
+        })
+      : contract;
+  }
+  return current;
 }
 
 function normalizeAutoApplyError(error: unknown): { code: string; message: string } {
@@ -144,6 +211,10 @@ export function buildPolicyReviewSummary(args: {
       ? {
           node_id: firstString(attentionEntry.node_id, attentionEntry.anchor_id) ?? "",
           policy_memory_state: attentionState,
+          execution_contract_v1: mergeContractsInOrder([
+            parseExecutionContract(attentionEntry.execution_contract_v1),
+            buildExecutionContractFromPolicyContractSurface(args.policyContract),
+          ]),
           selected_tool: firstString(attentionEntry.selected_tool),
           file_path: firstString(attentionEntry.file_path),
           workflow_signature: firstString(attentionEntry.workflow_signature),
@@ -160,9 +231,20 @@ export function buildPolicyReviewSummary(args: {
 export function buildPolicyGovernanceContract(args: {
   policyReview: PolicyReviewSummary;
   policyContract: PolicyContract | null;
+  experienceExecutionContract?: ExecutionContractV1 | null;
+  derivedPolicy?: Record<string, unknown> | null;
 }): PolicyGovernanceContract {
   const attention = args.policyReview.attention_policy;
   const selected = args.policyContract;
+  const selectedExecutionContract = mergeContractsInOrder([
+    args.experienceExecutionContract ?? null,
+    buildExecutionContractFromPolicyContractSurface(selected),
+    buildExecutionContractFromDerivedPolicySurface(args.derivedPolicy ?? null),
+  ]);
+  const attentionExecutionContract = mergeContractsInOrder([
+    parseExecutionContract(attention?.execution_contract_v1),
+    buildExecutionContractFromPolicyContractSurface(selected),
+  ]);
 
   if (!attention && selected?.materialization_state === "persisted") {
     return PolicyGovernanceContractSchema.parse({
@@ -173,11 +255,12 @@ export function buildPolicyGovernanceContract(args: {
       policy_memory_id: selected.policy_memory_id,
       current_state: selected.policy_memory_state,
       target_state: selected.policy_memory_state,
-      selected_tool: selected.selected_tool,
-      file_path: selected.file_path,
-      workflow_signature: selected.workflow_signature,
+      execution_contract_v1: selectedExecutionContract,
+      selected_tool: firstString(selectedExecutionContract?.selected_tool, selected.selected_tool),
+      file_path: firstString(selectedExecutionContract?.file_path, selected.file_path),
+      workflow_signature: firstString(selectedExecutionContract?.workflow_signature, selected.workflow_signature),
       rationale: "persisted_policy_memory_active_and_selected",
-      next_action: null,
+      next_action: firstString(selectedExecutionContract?.next_action),
     });
   }
 
@@ -190,13 +273,14 @@ export function buildPolicyGovernanceContract(args: {
       policy_memory_id: attention.node_id,
       current_state: "retired",
       target_state: "retired",
-      selected_tool: attention.selected_tool,
-      file_path: attention.file_path,
-      workflow_signature: attention.workflow_signature,
+      execution_contract_v1: attentionExecutionContract,
+      selected_tool: firstString(attentionExecutionContract?.selected_tool, attention.selected_tool),
+      file_path: firstString(attentionExecutionContract?.file_path, attention.file_path),
+      workflow_signature: firstString(attentionExecutionContract?.workflow_signature, attention.workflow_signature),
       rationale: attention.review_reason,
       next_action:
-        attention.selected_tool
-          ? `Do not reuse persisted ${attention.selected_tool}; collect fresh evidence before creating a replacement policy memory.`
+        firstString(attentionExecutionContract?.selected_tool, attention.selected_tool)
+          ? `Do not reuse persisted ${firstString(attentionExecutionContract?.selected_tool, attention.selected_tool)}; collect fresh evidence before creating a replacement policy memory.`
           : "Do not reuse this retired policy memory; collect fresh evidence before creating a replacement.",
     });
   }
@@ -208,6 +292,9 @@ export function buildPolicyGovernanceContract(args: {
       && !!attention.selected_tool
       && selected.selected_tool === attention.selected_tool
       && (selected.policy_state === "stable" || selected.activation_mode === "default");
+    const contestedExecutionContract = canReactivate
+      ? mergeContractsInOrder([attentionExecutionContract, selectedExecutionContract])
+      : attentionExecutionContract;
     return PolicyGovernanceContractSchema.parse({
       contract_version: "policy_governance_contract_v1",
       action: canReactivate ? "reactivate" : "refresh",
@@ -216,9 +303,10 @@ export function buildPolicyGovernanceContract(args: {
       policy_memory_id: attention.node_id,
       current_state: "contested",
       target_state: canReactivate ? "active" : "contested",
-      selected_tool: attention.selected_tool,
-      file_path: attention.file_path,
-      workflow_signature: attention.workflow_signature,
+      execution_contract_v1: contestedExecutionContract,
+      selected_tool: firstString(contestedExecutionContract?.selected_tool, attention.selected_tool),
+      file_path: firstString(contestedExecutionContract?.file_path, attention.file_path),
+      workflow_signature: firstString(contestedExecutionContract?.workflow_signature, attention.workflow_signature),
       rationale: canReactivate
         ? `${attention.review_reason}; live_policy_still_prefers_same_tool`
         : attention.review_reason,
@@ -236,11 +324,12 @@ export function buildPolicyGovernanceContract(args: {
     policy_memory_id: null,
     current_state: null,
     target_state: null,
-    selected_tool: selected?.selected_tool ?? null,
-    file_path: selected?.file_path ?? null,
-    workflow_signature: selected?.workflow_signature ?? null,
+    execution_contract_v1: selectedExecutionContract,
+    selected_tool: firstString(selectedExecutionContract?.selected_tool, selected?.selected_tool),
+    file_path: firstString(selectedExecutionContract?.file_path, selected?.file_path),
+    workflow_signature: firstString(selectedExecutionContract?.workflow_signature, selected?.workflow_signature),
     rationale: "no_policy_governance_action_required",
-    next_action: null,
+    next_action: firstString(selectedExecutionContract?.next_action),
   });
 }
 
@@ -314,6 +403,8 @@ function buildEvolutionInspectComputed(
   const policyGovernanceContract = buildPolicyGovernanceContract({
     policyReview,
     policyContract: artifacts.experience.policy_contract ?? null,
+    experienceExecutionContract: parseExecutionContract(artifacts.experience.execution_contract_v1),
+    derivedPolicy: asRecord(artifacts.experience.derived_policy),
   });
   const policyGovernanceApplyPayload = buildPolicyGovernanceApplyPayload({
     parsed: artifacts.parsed,

@@ -2,6 +2,11 @@ import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { InMemoryExecutionStateStore } from "../execution/state-store.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { LiteWriteStore } from "../store/lite-write-store.js";
+import {
+  mergeExecutionContractsWithActionSurface,
+  parseExecutionContract,
+  type ExecutionContractV1,
+} from "./execution-contract.js";
 import { recoverHandoff } from "./handoff.js";
 import { buildContinuityReviewPackLite, buildEvolutionReviewPackLite } from "./reviewer-packs.js";
 import {
@@ -50,6 +55,23 @@ function firstString(...values: unknown[]): string | null {
     if (trimmed) return trimmed;
   }
   return null;
+}
+
+function mergeContractsInOrder(contracts: Array<ExecutionContractV1 | null>): ExecutionContractV1 | null {
+  let current: ExecutionContractV1 | null = null;
+  for (const contract of contracts) {
+    if (!contract) continue;
+    if (!current) {
+      current = contract;
+      continue;
+    }
+    current = mergeExecutionContractsWithActionSurface({
+      existing: current,
+      incoming: contract,
+      preference: "incoming",
+    });
+  }
+  return current;
 }
 
 function getOrCreateContextValue<TKey extends keyof AgentMemoryInspectBuildContext>(
@@ -233,6 +255,10 @@ export async function buildAgentMemoryReviewPackLite(
     const continuityPack = inspect.continuity_review_pack;
     const continuityContract = continuityPack?.review_contract ?? null;
     const evolutionContract = inspect.evolution_review_pack.review_contract;
+    const packExecutionContract = mergeContractsInOrder([
+      parseExecutionContract(evolutionContract.execution_contract_v1),
+      parseExecutionContract(continuityContract?.execution_contract_v1),
+    ]);
     const summary = inspect.agent_memory_summary;
     const derivedPolicy = inspect.derived_policy ?? inspect.evolution_review_pack.derived_policy ?? inspect.evolution_inspect.derived_policy ?? null;
     const policyContract = inspect.policy_contract ?? inspect.evolution_review_pack.policy_contract ?? inspect.evolution_inspect.policy_contract ?? null;
@@ -252,9 +278,10 @@ export async function buildAgentMemoryReviewPackLite(
       agent_memory_inspect: inspect,
       agent_memory_review_pack: {
         pack_version: "agent_memory_review_pack_v1",
-        selected_tool: evolutionContract.selected_tool,
-        recommended_file_path: evolutionContract.file_path ?? summary.recommended_file_path,
-        recommended_next_action: evolutionContract.next_action ?? summary.recommended_next_action,
+        execution_contract_v1: packExecutionContract,
+        selected_tool: firstString(packExecutionContract?.selected_tool, evolutionContract.selected_tool),
+        recommended_file_path: firstString(packExecutionContract?.file_path, evolutionContract.file_path, summary.recommended_file_path),
+        recommended_next_action: firstString(packExecutionContract?.next_action, evolutionContract.next_action, summary.recommended_next_action),
         latest_handoff_anchor: summary.latest_handoff_anchor,
         latest_resume_source_kind: summary.latest_resume_source_kind,
         stable_workflow_anchor_id: evolutionContract.stable_workflow_anchor_id,
@@ -262,8 +289,18 @@ export async function buildAgentMemoryReviewPackLite(
         trusted_pattern_anchor_ids: evolutionContract.trusted_pattern_anchor_ids,
         contested_pattern_anchor_ids: evolutionContract.contested_pattern_anchor_ids,
         suppressed_pattern_anchor_ids: evolutionContract.suppressed_pattern_anchor_ids,
-        handoff_target_files: Array.isArray(continuityContract?.target_files) ? continuityContract.target_files : [],
-        acceptance_checks: Array.isArray(continuityContract?.acceptance_checks) ? continuityContract.acceptance_checks : [],
+        handoff_target_files:
+          Array.isArray(packExecutionContract?.target_files) && packExecutionContract.target_files.length > 0
+            ? packExecutionContract.target_files
+            : Array.isArray(continuityContract?.target_files)
+              ? continuityContract.target_files
+              : [],
+        acceptance_checks:
+          Array.isArray(packExecutionContract?.outcome.acceptance_checks) && packExecutionContract.outcome.acceptance_checks.length > 0
+            ? packExecutionContract.outcome.acceptance_checks
+            : Array.isArray(continuityContract?.acceptance_checks)
+              ? continuityContract.acceptance_checks
+              : [],
         must_change: Array.isArray(continuityContract?.must_change) ? continuityContract.must_change : [],
         must_remove: Array.isArray(continuityContract?.must_remove) ? continuityContract.must_remove : [],
         must_keep: Array.isArray(continuityContract?.must_keep) ? continuityContract.must_keep : [],
@@ -292,6 +329,11 @@ export async function buildAgentMemoryResumePackLite(
     const handoffData = asRecord(recoveredContinuity?.handoff);
     const executionReadyHandoff = asRecord(recoveredContinuity?.execution_ready_handoff);
     const evolutionContract = inspect.evolution_review_pack.review_contract;
+    const packExecutionContract = mergeContractsInOrder([
+      parseExecutionContract(evolutionContract.execution_contract_v1),
+      parseExecutionContract(continuityContract?.execution_contract_v1),
+      parseExecutionContract(recoveredContinuity?.execution_contract_v1),
+    ]);
     const summary = inspect.agent_memory_summary;
     const derivedPolicy = inspect.derived_policy ?? inspect.evolution_review_pack.derived_policy ?? inspect.evolution_inspect.derived_policy ?? null;
     const policyContract = inspect.policy_contract ?? inspect.evolution_review_pack.policy_contract ?? inspect.evolution_inspect.policy_contract ?? null;
@@ -306,22 +348,27 @@ export async function buildAgentMemoryResumePackLite(
       agent_memory_inspect: inspect,
       agent_memory_resume_pack: {
         pack_version: "agent_memory_resume_pack_v1",
+        execution_contract_v1: packExecutionContract,
         latest_handoff_anchor: summary.latest_handoff_anchor,
         latest_resume_source_kind: summary.latest_resume_source_kind,
-        resume_selected_tool: evolutionContract.selected_tool,
+        resume_selected_tool: firstString(packExecutionContract?.selected_tool, evolutionContract.selected_tool),
         resume_file_path:
-          firstString(executionReadyHandoff?.file_path)
+          packExecutionContract?.file_path
+          ?? firstString(executionReadyHandoff?.file_path)
           ?? firstString(handoffData?.file_path)
           ?? evolutionContract.file_path
           ?? summary.recommended_file_path,
         resume_target_files:
-          Array.isArray(continuityContract?.target_files) && continuityContract.target_files.length > 0
+          Array.isArray(packExecutionContract?.target_files) && packExecutionContract.target_files.length > 0
+            ? packExecutionContract.target_files
+            : Array.isArray(continuityContract?.target_files) && continuityContract.target_files.length > 0
             ? continuityContract.target_files
             : evolutionContract.target_files,
         resume_next_action:
-          firstString(executionReadyHandoff?.next_action)
-          ?? firstString(handoffData?.next_action)
+          packExecutionContract?.next_action
           ?? continuityContract?.next_action
+          ?? firstString(executionReadyHandoff?.next_action)
+          ?? firstString(handoffData?.next_action)
           ?? evolutionContract.next_action
           ?? summary.recommended_next_action,
         stable_workflow_anchor_id: evolutionContract.stable_workflow_anchor_id,
@@ -354,6 +401,11 @@ export async function buildAgentMemoryHandoffPackLite(
     const executionReadyHandoff = asRecord(recoveredContinuity?.execution_ready_handoff);
     const handoffData = asRecord(recoveredContinuity?.handoff);
     const evolutionContract = inspect.evolution_review_pack.review_contract;
+    const packExecutionContract = mergeContractsInOrder([
+      parseExecutionContract(evolutionContract.execution_contract_v1),
+      parseExecutionContract(continuityContract?.execution_contract_v1),
+      parseExecutionContract(recoveredContinuity?.execution_contract_v1),
+    ]);
     const derivedPolicy = inspect.derived_policy ?? inspect.evolution_review_pack.derived_policy ?? inspect.evolution_inspect.derived_policy ?? null;
     const policyContract = inspect.policy_contract ?? inspect.evolution_review_pack.policy_contract ?? inspect.evolution_inspect.policy_contract ?? null;
     const policyGovernanceApplyPayload = readPolicyGovernanceApplyPayload(inspect);
@@ -367,13 +419,15 @@ export async function buildAgentMemoryHandoffPackLite(
       agent_memory_inspect: inspect,
       agent_memory_handoff_pack: {
         pack_version: "agent_memory_handoff_pack_v1",
+        execution_contract_v1: packExecutionContract,
         latest_handoff_anchor: inspect.agent_memory_summary.latest_handoff_anchor,
         handoff_kind:
           latestHandoff?.handoff_kind
           ?? firstString(handoffData?.handoff_kind)
           ?? null,
         handoff_file_path:
-          latestHandoff?.file_path
+          packExecutionContract?.file_path
+          ?? latestHandoff?.file_path
           ?? firstString(executionReadyHandoff?.file_path)
           ?? firstString(handoffData?.file_path)
           ?? evolutionContract.file_path
@@ -387,17 +441,25 @@ export async function buildAgentMemoryHandoffPackLite(
           ?? firstString(handoffData?.symbol)
           ?? null,
         handoff_target_files:
-          Array.isArray(continuityContract?.target_files) && continuityContract.target_files.length > 0
+          Array.isArray(packExecutionContract?.target_files) && packExecutionContract.target_files.length > 0
+            ? packExecutionContract.target_files
+            : Array.isArray(continuityContract?.target_files) && continuityContract.target_files.length > 0
             ? continuityContract.target_files
             : evolutionContract.target_files,
         handoff_next_action:
-          latestHandoff?.next_action
+          packExecutionContract?.next_action
+          ?? continuityContract?.next_action
+          ?? latestHandoff?.next_action
           ?? firstString(executionReadyHandoff?.next_action)
           ?? firstString(handoffData?.next_action)
-          ?? continuityContract?.next_action
           ?? evolutionContract.next_action
           ?? null,
-        acceptance_checks: Array.isArray(continuityContract?.acceptance_checks) ? continuityContract.acceptance_checks : [],
+        acceptance_checks:
+          Array.isArray(packExecutionContract?.outcome.acceptance_checks) && packExecutionContract.outcome.acceptance_checks.length > 0
+            ? packExecutionContract.outcome.acceptance_checks
+            : Array.isArray(continuityContract?.acceptance_checks)
+              ? continuityContract.acceptance_checks
+              : [],
         must_change: Array.isArray(continuityContract?.must_change) ? continuityContract.must_change : [],
         must_remove: Array.isArray(continuityContract?.must_remove) ? continuityContract.must_remove : [],
         must_keep: Array.isArray(continuityContract?.must_keep) ? continuityContract.must_keep : [],

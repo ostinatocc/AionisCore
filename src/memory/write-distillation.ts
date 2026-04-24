@@ -1,6 +1,7 @@
 import { sha256Hex } from "../util/crypto.js";
 import { stableUuid } from "../util/uuid.js";
 import { ExecutionNativeV1Schema } from "./schemas.js";
+import { buildExecutionContractFromProjection } from "./execution-contract.js";
 import {
   buildDistillationMaintenanceMetadata,
   buildDistillationMetadata,
@@ -110,6 +111,34 @@ function deriveFactExecutionSignatures(args: {
     ...out,
     has_execution_signature: "task_signature" in out || "error_signature" in out || "workflow_signature" in out,
   };
+}
+
+function buildDistillationExecutionContract(args: {
+  taskSignature?: string;
+  errorSignature?: string;
+  workflowSignature?: string;
+  sourceKey: string;
+  sourceKind: WriteDistillationSource;
+  sourceNodeId?: string | null;
+  evidenceNodeId?: string | null;
+  sourceExcerpt: string;
+}) {
+  return buildExecutionContractFromProjection({
+    task_signature: args.taskSignature ?? null,
+    workflow_signature: args.workflowSignature ?? null,
+    provenance: {
+      source_kind: "write_distillation",
+      source_summary_version: "write_distillation_v1",
+      source_anchor: args.sourceNodeId ?? args.evidenceNodeId ?? null,
+      evidence_refs: [args.sourceNodeId, args.evidenceNodeId].filter((value): value is string => typeof value === "string" && value.length > 0),
+      notes: [
+        `distillation_source:${args.sourceKind}`,
+        `source_key:${args.sourceKey}`,
+        args.errorSignature ? `error_signature:${args.errorSignature}` : null,
+        args.sourceExcerpt ? `excerpt:${normalizeSnippet(args.sourceExcerpt, 120)}` : null,
+      ].filter((value): value is string => typeof value === "string" && value.length > 0),
+    },
+  });
 }
 
 function normalizeSnippet(input: string, maxLen = 280): string {
@@ -394,6 +423,20 @@ export function distillWriteArtifacts(args: {
           compression_layer: "L1",
           summary_kind: "write_distillation_fact",
           distillation_kind: "write_distilled_fact",
+          ...(factExecutionSignatures.has_execution_signature
+            ? {
+                execution_contract_v1: buildDistillationExecutionContract({
+                  taskSignature: factExecutionSignatures.task_signature,
+                  errorSignature: factExecutionSignatures.error_signature,
+                  workflowSignature: factExecutionSignatures.workflow_signature,
+                  sourceKey: source.source_key,
+                  sourceKind: source.source_kind,
+                  sourceNodeId: source.node?.id ?? null,
+                  evidenceNodeId,
+                  sourceExcerpt: fact.source_excerpt,
+                }),
+              }
+            : {}),
           execution_native_v1: executionNative,
           extraction_pattern: fact.extraction_pattern,
           source_kind: source.source_kind,

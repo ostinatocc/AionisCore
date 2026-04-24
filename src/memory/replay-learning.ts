@@ -15,6 +15,7 @@ import {
   type ReplayLearningProjectionSource,
 } from "./replay-learning-artifacts.js";
 import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
+import { resolveNodeWorkflowSignature } from "./node-execution-surface.js";
 import { updateRuleState } from "./rules.js";
 import { buildAionisUri } from "./uri.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
@@ -300,9 +301,8 @@ async function countReplayLearningWorkflowObservations(
     const observedVersions = new Set<string>();
     for (const row of rows) {
       const slots = asObject(row.slots) ?? {};
-      const executionNative = asObject(slots.execution_native_v1) ?? {};
       const replayLearning = asObject(slots.replay_learning) ?? {};
-      if (toStringOrNull(executionNative.workflow_signature) !== workflowSignature) continue;
+      if (resolveNodeWorkflowSignature({ slots }) !== workflowSignature) continue;
       const versionValue = replayLearning.source_playbook_version;
       const versionKey = typeof versionValue === "number"
         ? String(Math.trunc(versionValue))
@@ -319,7 +319,11 @@ async function countReplayLearningWorkflowObservations(
       AND n.type = 'event'::memory_node_type
       AND coalesce(n.slots->>'replay_learning_episode', '') = 'true'
       AND coalesce(n.slots->'replay_learning'->>'source_playbook_id', '') = $2
-      AND coalesce(n.slots->'execution_native_v1'->>'workflow_signature', '') = $3
+      AND coalesce(
+        n.slots->'execution_contract_v1'->>'workflow_signature',
+        n.slots->'execution_native_v1'->>'workflow_signature',
+        ''
+      ) = $3
     `,
     [scope, playbookId, workflowSignature],
   );

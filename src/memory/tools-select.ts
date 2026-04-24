@@ -30,6 +30,10 @@ import {
 } from "./tool-registry.js";
 import type { RecallStoreAccess, RecallNodeRow } from "../store/recall-access.js";
 import { resolvePatternTaskAffinity, type PatternAffinityLevel } from "./pattern-trust-shaping.js";
+import {
+  resolveNodeExecutionContract,
+  resolveNodePatternExecutionSurface,
+} from "./node-execution-surface.js";
 
 function inferBroadToolKind(name: string): "scan" | "test" | null {
   const lowered = name.toLowerCase();
@@ -236,27 +240,28 @@ async function recallToolSelectionPatterns(args: {
   for (const row of rows) {
     if (row.type !== "concept") continue;
     const slots = asRecord(row.slots);
-    const executionNative = asRecord(slots?.execution_native_v1);
     const anchor = asRecord(slots?.anchor_v1);
     if (!anchor) continue;
-    const anchorKind = firstString([executionNative?.anchor_kind, anchor.anchor_kind]);
-    const anchorLevel = firstString([executionNative?.anchor_level, anchor.anchor_level]);
-    const selectedTool = firstString([executionNative?.selected_tool, anchor.selected_tool]);
-    const taskSignature = firstString([executionNative?.task_signature, anchor.task_signature]);
-    const taskFamily = firstString([executionNative?.task_family, anchor.task_family]);
+    const executionNative = asRecord(slots?.execution_native_v1);
+    const executionContract = resolveNodeExecutionContract({ slots });
+    const patternSurface = resolveNodePatternExecutionSurface({ slots });
+    const anchorKind = patternSurface.anchor_kind;
+    const anchorLevel = patternSurface.anchor_level;
+    const selectedTool = patternSurface.selected_tool;
+    const taskSignature = firstString([executionContract?.task_signature, executionNative?.task_signature, anchor.task_signature]);
+    const taskFamily = firstString([executionContract?.task_family, executionNative?.task_family, anchor.task_family]);
     const errorFamily = firstString([executionNative?.error_family, anchor.error_family]);
-    const patternState = firstString([executionNative?.pattern_state, anchor.pattern_state]) === "stable" ? "stable" : "provisional";
+    const patternState = patternSurface.pattern_state === "stable" ? "stable" : "provisional";
     const toolSet = uniqueStrings(Array.isArray(anchor.tool_set) ? (anchor.tool_set as Array<string | null | undefined>) : []);
     const promotion = asRecord(executionNative?.promotion) ?? asRecord(anchor.promotion);
     const trustHardening = asRecord(executionNative?.trust_hardening) ?? asRecord(anchor.trust_hardening);
     const maintenance = asRecord(executionNative?.maintenance) ?? asRecord(anchor.maintenance);
     const operatorOverride = readPatternOperatorOverride(slots ?? {});
     const suppressed = isPatternSuppressed(operatorOverride);
-    const metrics = asRecord(anchor.metrics);
-    const distinctRunCount = Number(promotion?.distinct_run_count ?? metrics?.distinct_run_count ?? 0);
-    const requiredDistinctRuns = Math.max(2, Number(promotion?.required_distinct_runs ?? 2));
-    const counterEvidenceOpen = promotion?.counter_evidence_open === true;
-    const credibilityStateRaw = firstString([executionNative?.credibility_state, anchor.credibility_state, promotion?.credibility_state]);
+    const distinctRunCount = Number(patternSurface.promotion.distinct_run_count ?? 0);
+    const requiredDistinctRuns = Math.max(2, Number(patternSurface.promotion.required_distinct_runs ?? 2));
+    const counterEvidenceOpen = patternSurface.promotion.counter_evidence_open;
+    const credibilityStateRaw = patternSurface.credibility_state;
     const credibilityState: "candidate" | "trusted" | "contested" =
       credibilityStateRaw === "trusted" || credibilityStateRaw === "contested" || credibilityStateRaw === "candidate"
         ? credibilityStateRaw
@@ -291,7 +296,7 @@ async function recallToolSelectionPatterns(args: {
       suppression_reason: operatorOverride?.reason ?? null,
       suppressed_until: operatorOverride?.until ?? null,
       counter_evidence_open: counterEvidenceOpen,
-      last_transition: firstString([promotion?.last_transition]),
+      last_transition: patternSurface.promotion.last_transition,
       maintenance_state: firstString([maintenance?.maintenance_state]) as any,
       offline_priority: firstString([maintenance?.offline_priority]) as any,
       distinct_run_count: Number.isFinite(distinctRunCount) ? distinctRunCount : 0,

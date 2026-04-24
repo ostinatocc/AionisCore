@@ -1,3 +1,14 @@
+import {
+  resolveNodeCompressionLayer,
+  resolveNodeCredibilityState,
+  resolveNodeExecutionContractTrust,
+  resolveNodeSummaryKind,
+  resolveNodeAnchorKind,
+  parseNodeAnchor,
+  parseNodeExecutionNative,
+  resolveNodePolicyMemoryState,
+} from "./node-execution-surface.js";
+
 type NodePriorityValue = {
   salience: number;
   importance: number;
@@ -149,8 +160,8 @@ function extractFeedbackQuality(slots: Record<string, unknown> | null): number {
 }
 
 function deriveAnchorMetrics(slots: Record<string, unknown> | null) {
-  const anchor = asRecord(slots?.anchor_v1);
-  const execution = asRecord(slots?.execution_native_v1);
+  const anchor = parseNodeAnchor(slots);
+  const execution = parseNodeExecutionNative(slots);
   const metrics = asRecord(anchor?.metrics) ?? asRecord(slots?.metrics);
   const promotion = asRecord(anchor?.promotion) ?? asRecord(execution?.promotion);
   const workflowPromotion = asRecord(anchor?.workflow_promotion) ?? asRecord(execution?.workflow_promotion);
@@ -170,31 +181,18 @@ function deriveAnchorMetrics(slots: Record<string, unknown> | null) {
 }
 
 function deriveCredibilityState(slots: Record<string, unknown> | null): string | null {
-  const anchor = asRecord(slots?.anchor_v1);
-  const execution = asRecord(slots?.execution_native_v1);
-  const promotion = asRecord(anchor?.promotion) ?? asRecord(execution?.promotion);
-  const patternState = firstString(anchor?.pattern_state, execution?.pattern_state);
-  return firstString(
-    anchor?.credibility_state,
-    execution?.credibility_state,
-    promotion?.credibility_state,
-    patternState === "stable" ? "trusted" : null,
-  );
+  return resolveNodeCredibilityState(slots);
 }
 
 function deriveCompressionLayer(slots: Record<string, unknown> | null): string | null {
-  const anchor = asRecord(slots?.anchor_v1);
-  const execution = asRecord(slots?.execution_native_v1);
-  return firstString(
-    slots?.compression_layer,
-    execution?.compression_layer,
-    anchor?.anchor_level,
-  );
+  return resolveNodeCompressionLayer({
+    type: "concept",
+    slots,
+  });
 }
 
 function deriveSummaryKind(slots: Record<string, unknown> | null): string | null {
-  const execution = asRecord(slots?.execution_native_v1);
-  return firstString(slots?.summary_kind, execution?.summary_kind);
+  return resolveNodeSummaryKind(slots);
 }
 
 function derivePriorityProfile(args: ResolveNodePriorityProfileArgs): NodePriorityValue {
@@ -205,9 +203,9 @@ function derivePriorityProfile(args: ResolveNodePriorityProfileArgs): NodePriori
   profile = addProfile(profile, LAYER_BONUS[deriveCompressionLayer(slots) ?? ""]);
   profile = addProfile(profile, SUMMARY_KIND_BONUS[deriveSummaryKind(slots) ?? ""]);
 
-  const anchor = asRecord(slots?.anchor_v1);
-  const execution = asRecord(slots?.execution_native_v1);
-  const anchorKind = firstString(anchor?.anchor_kind, execution?.anchor_kind);
+  const anchor = parseNodeAnchor(slots);
+  const execution = parseNodeExecutionNative(slots);
+  const anchorKind = resolveNodeAnchorKind(slots);
   if (anchorKind === "workflow") {
     profile = addProfile(profile, { salience: 0.02, importance: 0.03, confidence: 0.03 });
   }
@@ -226,6 +224,24 @@ function derivePriorityProfile(args: ResolveNodePriorityProfileArgs): NodePriori
   const workflowPromotion = asRecord(anchor?.workflow_promotion) ?? asRecord(execution?.workflow_promotion);
   if (firstString(workflowPromotion?.promotion_state) === "stable") {
     profile = addProfile(profile, { salience: 0.04, importance: 0.05, confidence: 0.05 });
+  }
+
+  const summaryKind = deriveSummaryKind(slots);
+  const contractTrust = resolveNodeExecutionContractTrust({ slots });
+  const policyMemoryState = resolveNodePolicyMemoryState(slots);
+  if (summaryKind === "policy_memory") {
+    if (contractTrust === "authoritative") {
+      profile = addProfile(profile, { salience: 0.03, importance: 0.06, confidence: 0.08 });
+    } else if (contractTrust === "advisory") {
+      profile = addProfile(profile, { salience: 0.01, importance: 0.01, confidence: -0.04 });
+    } else if (contractTrust === "observational") {
+      profile = addProfile(profile, { salience: -0.01, importance: -0.02, confidence: -0.08 });
+    }
+    if (policyMemoryState === "contested") {
+      profile = addProfile(profile, { salience: -0.02, importance: -0.05, confidence: -0.08 });
+    } else if (policyMemoryState === "retired") {
+      profile = addProfile(profile, { salience: -0.04, importance: -0.08, confidence: -0.12 });
+    }
   }
 
   const anchorMetrics = deriveAnchorMetrics(slots);

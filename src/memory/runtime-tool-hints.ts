@@ -1,4 +1,9 @@
 import { buildAionisUri } from "./uri.js";
+import {
+  parseNodeAnchor,
+  resolveNodePatternExecutionSurface,
+  resolveNodeRehydrationDefaultMode,
+} from "./node-execution-surface.js";
 
 type AnchorNodeLike = {
   id: string;
@@ -72,17 +77,6 @@ function firstFinite(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function firstBoolean(value: unknown): boolean | null {
-  if (typeof value === "boolean") return value;
-  return null;
-}
-
-function mapExecutionKindToAnchorKind(executionKind: string | null): string | null {
-  if (executionKind === "workflow_anchor") return "workflow";
-  if (executionKind === "pattern_anchor") return "pattern";
-  return null;
-}
-
 export function buildRuntimeToolHintsFromAnchorNodes(args: {
   tenant_id: string;
   scope: string;
@@ -93,16 +87,14 @@ export function buildRuntimeToolHintsFromAnchorNodes(args: {
   const ranked = args.nodes
     .map<RuntimeToolHint | null>((node) => {
       const slots = asRecord(node.slots);
-      const executionNative = asRecord(slots?.execution_native_v1);
-      const anchor = asRecord(slots?.anchor_v1);
+      const anchor = parseNodeAnchor(slots);
       if (!anchor) return null;
-      const anchorKind = firstString(executionNative?.anchor_kind)
-        ?? mapExecutionKindToAnchorKind(firstString(executionNative?.execution_kind))
-        ?? firstString(anchor.anchor_kind);
-      const anchorLevel = firstString(executionNative?.anchor_level) ?? firstString(anchor.anchor_level);
+      const patternSurface = resolveNodePatternExecutionSurface({ slots });
+      const anchorKind = patternSurface.anchor_kind;
+      const anchorLevel = patternSurface.anchor_level;
       if (!anchorKind || !anchorLevel) return null;
       const rehydration = asRecord(anchor.rehydration);
-      const defaultModeRaw = firstString(rehydration?.default_mode);
+      const defaultModeRaw = resolveNodeRehydrationDefaultMode(slots);
       const mode = defaultModeRaw === "summary_only" || defaultModeRaw === "full" || defaultModeRaw === "partial" || defaultModeRaw === "differential"
         ? defaultModeRaw
         : "partial";
@@ -111,23 +103,16 @@ export function buildRuntimeToolHintsFromAnchorNodes(args: {
         ? payloadCostHintRaw
         : null;
       const toolSet = asStringList(anchor.tool_set);
-      const patternState = firstString(executionNative?.pattern_state ?? anchor.pattern_state);
-      const promotion = asRecord(executionNative?.promotion) ?? asRecord(anchor.promotion);
-      const credibilityStateRaw = firstString(executionNative?.credibility_state ?? anchor.credibility_state ?? promotion?.credibility_state);
-      const distinctRunCount = firstFinite(promotion?.distinct_run_count);
-      const requiredDistinctRuns = firstFinite(promotion?.required_distinct_runs);
-      const counterEvidenceCount = firstFinite(promotion?.counter_evidence_count);
-      const counterEvidenceOpen = firstBoolean(promotion?.counter_evidence_open) === true;
+      const patternState = patternSurface.pattern_state;
+      const distinctRunCount = patternSurface.promotion.distinct_run_count;
+      const requiredDistinctRuns = patternSurface.promotion.required_distinct_runs;
+      const counterEvidenceCount = patternSurface.promotion.counter_evidence_count;
+      const counterEvidenceOpen = patternSurface.promotion.counter_evidence_open;
       const credibilityState =
-        credibilityStateRaw === "candidate" || credibilityStateRaw === "trusted" || credibilityStateRaw === "contested"
-          ? credibilityStateRaw
-          : counterEvidenceOpen
-            ? "contested"
-            : patternState === "stable"
-              ? "trusted"
-              : "candidate";
+        patternSurface.credibility_state
+        ?? (counterEvidenceOpen ? "contested" : patternState === "stable" ? "trusted" : "candidate");
       const trusted = credibilityState === "trusted";
-      const selectedTool = firstString(executionNative?.selected_tool ?? anchor.selected_tool);
+      const selectedTool = patternSurface.selected_tool;
       const recommendedWhen = asStringList(rehydration?.recommended_when);
       const uri = buildAionisUri({
         tenant_id: args.tenant_id,
@@ -167,7 +152,7 @@ export function buildRuntimeToolHintsFromAnchorNodes(args: {
           required_distinct_runs: requiredDistinctRuns,
           counter_evidence_count: counterEvidenceCount,
           counter_evidence_open: counterEvidenceOpen,
-          last_transition: firstString(promotion?.last_transition),
+          last_transition: patternSurface.promotion.last_transition,
           selected_tool: selectedTool,
           outcome_status: outcomeStatus,
           tool_set: toolSet,

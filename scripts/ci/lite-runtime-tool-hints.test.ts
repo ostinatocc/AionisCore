@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildRuntimeToolHintsFromAnchorNodes } from "../../src/memory/runtime-tool-hints.ts";
 import { assembleLayeredContext } from "../../src/memory/context-orchestrator.ts";
+import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
 
 test("buildRuntimeToolHintsFromAnchorNodes derives rehydrate hints from anchor_v1 nodes", () => {
   const anchorId = "11111111-1111-4111-8111-111111111111";
@@ -100,6 +101,77 @@ test("buildRuntimeToolHintsFromAnchorNodes prefers execution_native_v1 trust fie
   assert.equal(hints[0]?.anchor.trusted, true);
   assert.equal(hints[0]?.anchor.distinct_run_count, 2);
   assert.equal(hints[0]?.anchor.required_distinct_runs, 2);
+});
+
+test("buildRuntimeToolHintsFromAnchorNodes prefers canonical execution contract when selected tool conflicts with legacy slots", () => {
+  const hints = buildRuntimeToolHintsFromAnchorNodes({
+    tenant_id: "default",
+    scope: "default",
+    nodes: [
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        type: "concept",
+        title: "Canonical pattern owner",
+        text_summary: "Canonical contract should control tool selection",
+        confidence: 0.77,
+        slots: {
+          anchor_v1: {
+            anchor_kind: "pattern",
+            anchor_level: "L3",
+            pattern_state: "stable",
+            selected_tool: "bash",
+            summary: "Legacy anchor payload",
+            tool_set: ["bash", "edit", "test"],
+            outcome: { status: "success" },
+            rehydration: {
+              default_mode: "partial",
+              payload_cost_hint: "low",
+              recommended_when: [],
+            },
+            promotion: {
+              distinct_run_count: 2,
+              required_distinct_runs: 2,
+              counter_evidence_count: 0,
+              counter_evidence_open: false,
+            },
+          },
+          execution_native_v1: {
+            schema_version: "execution_native_v1",
+            execution_kind: "pattern_anchor",
+            anchor_kind: "pattern",
+            anchor_level: "L3",
+            pattern_state: "stable",
+            selected_tool: "edit",
+            promotion: {
+              distinct_run_count: 2,
+              required_distinct_runs: 2,
+              counter_evidence_count: 0,
+              counter_evidence_open: false,
+            },
+          },
+          execution_contract_v1: buildExecutionContractFromProjection({
+            contract_trust: "authoritative",
+            selected_tool: "test",
+            workflow_signature: "workflow:canonical-pattern-owner",
+            target_files: ["src/runtime-tool-hints.ts"],
+            next_action: "reuse canonical tool guidance before rehydration",
+            workflow_steps: ["inspect canonical contract", "prefer canonical tool"],
+            pattern_hints: ["canonical contract overrides stale legacy slots"],
+            provenance: {
+              source_kind: "workflow_projection",
+              source_summary_version: "test",
+              source_anchor: "33333333-3333-4333-8333-333333333333",
+            },
+          }),
+        },
+      },
+    ],
+  });
+
+  assert.equal(hints.length, 1);
+  assert.equal(hints[0]?.anchor.selected_tool, "test");
+  assert.equal(hints[0]?.anchor.credibility_state, "trusted");
+  assert.equal(hints[0]?.anchor.anchor_kind, "pattern");
 });
 
 test("assembleLayeredContext adds runtime tool hints to the tools layer", () => {

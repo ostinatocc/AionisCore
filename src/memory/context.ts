@@ -1,4 +1,12 @@
 import type { MemoryLayerId, MemoryLayerPolicy } from "./layer-policy.js";
+import {
+  parseNodeExecutionNative,
+  resolveNodeAnchorKind,
+  resolveNodeCompressionLayer,
+  resolveNodeExecutionKind,
+  resolveNodeRehydrationDefaultMode,
+  resolveNodeSummaryKind,
+} from "./node-execution-surface.js";
 import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
 
 type RankedItem = { id: string; activation: number; score: number };
@@ -18,74 +26,23 @@ type NodeRow = {
   salience: number;
 };
 
-function executionNativeRecord(n: NodeRow): Record<string, unknown> | null {
-  const value = n.slots?.execution_native_v1;
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
-}
-
 function resolveExecutionKind(n: NodeRow): string | null {
-  const executionNative = executionNativeRecord(n);
-  return typeof executionNative?.execution_kind === "string" && executionNative.execution_kind.trim()
-    ? executionNative.execution_kind.trim()
-    : null;
+  return resolveNodeExecutionKind(n.slots ?? null);
 }
 
 function resolveAnchorKind(n: NodeRow): string | null {
-  const executionNative = executionNativeRecord(n);
-  const executionAnchorKind = typeof executionNative?.anchor_kind === "string" && executionNative.anchor_kind.trim()
-    ? executionNative.anchor_kind.trim()
-    : "";
-  if (executionAnchorKind) return executionAnchorKind;
-  const executionKind = resolveExecutionKind(n);
-  if (executionKind === "workflow_anchor") return "workflow";
-  if (executionKind === "pattern_anchor") return "pattern";
-  const anchorKind = typeof n.slots?.anchor_v1?.anchor_kind === "string" ? n.slots.anchor_v1.anchor_kind.trim() : "";
-  return anchorKind || null;
+  return resolveNodeAnchorKind(n.slots ?? null);
 }
 
 function resolveSummaryKind(n: NodeRow): string | null {
-  const executionSummaryKind = typeof n.slots?.execution_native_v1?.summary_kind === "string"
-    ? n.slots.execution_native_v1.summary_kind.trim()
-    : "";
-  if (executionSummaryKind) return executionSummaryKind;
-  const slotSummaryKind = typeof n.slots?.summary_kind === "string" ? n.slots.summary_kind.trim() : "";
-  return slotSummaryKind || null;
+  return resolveNodeSummaryKind(n.slots ?? null);
 }
 
 function resolveCompressionLayer(n: NodeRow): MemoryLayerId | null {
-  const executionLayer = typeof n.slots?.execution_native_v1?.compression_layer === "string"
-    ? n.slots.execution_native_v1.compression_layer.trim()
-    : "";
-  if (executionLayer === "L0" || executionLayer === "L1" || executionLayer === "L2" || executionLayer === "L3"
-    || executionLayer === "L4" || executionLayer === "L5") {
-    return executionLayer;
-  }
-  const anchorLevel = typeof n.slots?.execution_native_v1?.anchor_level === "string"
-    ? n.slots.execution_native_v1.anchor_level.trim()
-    : typeof n.slots?.anchor_v1?.anchor_level === "string"
-      ? n.slots.anchor_v1.anchor_level.trim()
-      : "";
-  if (anchorLevel === "L0" || anchorLevel === "L1" || anchorLevel === "L2" || anchorLevel === "L3" || anchorLevel === "L4" || anchorLevel === "L5") {
-    return anchorLevel;
-  }
-  if (n.type === "event") return "L0";
-  if (n.type === "evidence") {
-    if (resolveSummaryKind(n) === "write_distillation_evidence") return "L1";
-    return "L0";
-  }
-  if (n.type === "topic") return "L2";
-  if (n.type === "concept") {
-    if (typeof n.slots?.compression_layer === "string" && n.slots.compression_layer.trim()) {
-      const layer = n.slots.compression_layer.trim();
-      if (layer === "L0" || layer === "L1" || layer === "L2" || layer === "L3" || layer === "L4" || layer === "L5") {
-        return layer;
-      }
-      return null;
-    }
-    if (resolveSummaryKind(n) === "write_distillation_fact") return "L1";
-    if (resolveSummaryKind(n) === "compression_rollup") return "L3";
-  }
-  return null;
+  return resolveNodeCompressionLayer({
+    type: n.type,
+    slots: n.slots ?? null,
+  });
 }
 
 function semanticForgettingRecord(n: NodeRow): Record<string, unknown> | null {
@@ -119,18 +76,7 @@ function resolveArchivePayloadScope(n: NodeRow): "none" | "anchor_payload" | "no
 }
 
 function resolveRehydrationDefaultMode(n: NodeRow): "summary_only" | "partial" | "full" | "differential" | null {
-  const executionMode = typeof n.slots?.execution_native_v1?.rehydration_default_mode === "string"
-    ? n.slots.execution_native_v1.rehydration_default_mode.trim()
-    : "";
-  if (executionMode === "summary_only" || executionMode === "partial" || executionMode === "full" || executionMode === "differential") {
-    return executionMode;
-  }
-  const anchorMode = typeof n.slots?.anchor_v1?.rehydration?.default_mode === "string"
-    ? n.slots.anchor_v1.rehydration.default_mode.trim()
-    : "";
-  return anchorMode === "summary_only" || anchorMode === "partial" || anchorMode === "full" || anchorMode === "differential"
-    ? anchorMode
-    : null;
+  return resolveNodeRehydrationDefaultMode(n.slots ?? null);
 }
 
 type RuleDefRow = {
@@ -708,8 +654,8 @@ export function buildContext(
       } else if (isExecutionNativeWorkflowProcedure(n)) {
         const summaryKind = resolveSummaryKind(n) ?? "workflow_anchor";
         const layer = resolveCompressionLayer(n) ?? "unknown";
-        const taskSignature = typeof executionNativeRecord(n)?.task_signature === "string"
-          ? executionNativeRecord(n)?.task_signature as string
+        const taskSignature = typeof parseNodeExecutionNative(n.slots ?? null)?.task_signature === "string"
+          ? parseNodeExecutionNative(n.slots ?? null)?.task_signature as string
           : null;
         addLine(
           "topics",
