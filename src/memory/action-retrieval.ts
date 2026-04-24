@@ -22,6 +22,7 @@ import {
 import { buildExecutionMemoryIntrospectionLite } from "./execution-introspection.js";
 import { augmentTrajectoryAwareRequest } from "./trajectory-compile-runtime.js";
 import { selectTools } from "./tools-select.js";
+import { buildOutcomeContractGate } from "./contract-trust.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { LiteWriteStore } from "../store/lite-write-store.js";
@@ -481,6 +482,11 @@ export function readPersistedPolicyMemory(args: {
       contract,
       derivedPolicy,
     });
+    const outcomeContractGate = buildOutcomeContractGate({
+      executionContract,
+      requestedTrust: firstContractTrust(contract.contract_trust, executionContract.contract_trust),
+    });
+    if (!outcomeContractGate.allows_authoritative) continue;
     const entryWorkflowSignature = firstString(executionContract.workflow_signature, entry.workflow_signature);
     const entryTaskFamily = firstString(executionContract.task_family, derivedPolicy?.task_family, entry.task_family);
     const entryFilePath = firstString(executionContract.file_path, entry.file_path);
@@ -595,6 +601,7 @@ function scoreWorkflow(args: {
   if (contractTrust === "authoritative") score += 18;
   else if (contractTrust === "advisory") score -= 10;
   else if (contractTrust === "observational") score -= 72;
+  else score -= 24;
   score += overlap * 12;
   return {
     kind: args.kind,
@@ -818,7 +825,7 @@ export function workflowToolPreferenceState(args: {
   const toolSet = stringList(args.workflow.tool_set, 24);
   if (!toolSet.includes(selectedTool)) return "none";
   const contractTrust = firstContractTrust(args.workflow.contract_trust);
-  if (contractTrust === "observational") return "none";
+  if (contractTrust === "observational" || contractTrust === null) return "none";
   const anchorLevel = firstString(args.workflow.anchor_level);
   const promotionState = firstString(args.workflow.promotion_state);
   if (anchorLevel === "L2" || promotionState === "stable") {

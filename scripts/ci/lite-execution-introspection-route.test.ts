@@ -1363,6 +1363,8 @@ test("execution introspection derives workflow fields through canonical executio
     const workflow = body.recommended_workflows[0];
     assert.equal(workflow?.execution_contract_v1?.schema_version, "execution_contract_v1");
     assert.equal(workflow?.contract_trust, "authoritative");
+    assert.equal((workflow as any)?.outcome_contract_gate?.allows_authoritative, true);
+    assert.equal(body.outcome_contract_gate_summary.authoritative_allowed_count, 1);
     assert.equal(workflow?.task_family, "task:canonical_export_repair");
     assert.equal(workflow?.task_signature, "canonical-export-repair");
     assert.equal(workflow?.workflow_signature, "execution_workflow:canonical-export-repair");

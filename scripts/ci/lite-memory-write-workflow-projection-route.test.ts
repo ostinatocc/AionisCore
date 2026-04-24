@@ -1051,10 +1051,14 @@ test("memory/write governance review does not promote authoritative workflow wit
     assert.equal(promotePreview.admissibility?.admissible, true);
     assert.equal(policyEffect.applies, false);
     assert.equal(policyEffect.reason_code, "outcome_contract_insufficient");
+    assert.equal((policyEffect.outcome_contract_gate as any)?.status, "insufficient");
+    assert.ok((policyEffect.outcome_contract_gate as any)?.reasons?.includes("missing_verifiable_success_outcome"));
     assert.equal(policyEffect.effective_promotion_state, "candidate");
     assert.equal(decisionTrace.runtime_apply_changed_promotion_state, false);
     assert.ok(Array.isArray(decisionTrace.reason_codes));
     assert.ok(decisionTrace.reason_codes.includes("outcome_contract_insufficient"));
+    assert.ok(decisionTrace.reason_codes.includes("outcome_contract:missing_verifiable_success_outcome"));
+    assert.equal((reviewedCandidate?.slots?.outcome_contract_gate as any)?.status, "insufficient");
   } finally {
     await app.close();
     await liteWriteStore.close();

@@ -1338,6 +1338,8 @@ test("tools feedback materializes advisory trust as hint-only candidate policy m
     assert.equal(feedback.policy_memory?.policy_memory_state, "contested");
     assert.equal(feedback.policy_memory?.policy_contract.activation_mode, "hint");
     assert.equal(feedback.policy_memory?.policy_contract.policy_state, "candidate");
+    assert.equal((feedback.policy_memory?.policy_contract as any)?.outcome_contract_gate?.status, "insufficient");
+    assert.ok((feedback.policy_memory?.policy_contract as any)?.outcome_contract_gate?.reasons?.includes("missing_verifiable_success_outcome"));
     const policyMemoryId = feedback.policy_memory?.node_id;
     assert.ok(policyMemoryId);
     const persisted = await liteWriteStore.findNodes({
@@ -1461,6 +1463,7 @@ test("tools feedback downgrades authoritative trust without sufficient outcome c
     });
     const persistedSlots = (persisted.rows[0]?.slots ?? {}) as Record<string, unknown>;
     assert.equal((persistedSlots.execution_contract_v1 as Record<string, unknown>)?.contract_trust, "advisory");
+    assert.equal(((persistedSlots.policy_contract_v1 as Record<string, unknown>)?.outcome_contract_gate as any)?.status, "insufficient");
   } finally {
     await app.close();
     await liteRecallStore.close();

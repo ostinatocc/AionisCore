@@ -13,7 +13,9 @@ import type { ReplayMirrorNodeRecord, ReplayWriteMirror } from "./replay-write.j
 import {
   buildReplayProjectionExecutionContract,
   deriveReplayWorkflowContractFromSlots,
+  type ReplayWorkflowContract,
 } from "./replay-workflow-contract.js";
+import { buildOutcomeContractGate } from "./contract-trust.js";
 
 function asObject(v: unknown): Record<string, unknown> | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
@@ -104,6 +106,41 @@ function replayWriteNodeId(scopeKey: string, clientId: string): string {
   return stableUuid(`${scopeKey}:node:${clientId.trim()}`);
 }
 
+function outcomeGatedReplayWorkflowContract(args: {
+  base: ReplayWorkflowContract;
+  taskSignature: string;
+  workflowSignature: string;
+  sourceAnchor: string;
+  filePath?: string | null;
+  notes: string[];
+}): {
+  workflowContract: ReplayWorkflowContract;
+  outcomeContractGate: ReturnType<typeof buildOutcomeContractGate>;
+} {
+  const candidateExecutionContract = buildReplayProjectionExecutionContract({
+    base: args.base,
+    task_signature: args.taskSignature,
+    workflow_signature: args.workflowSignature,
+    source_anchor: args.sourceAnchor,
+    file_path: args.filePath ?? null,
+    notes: args.notes,
+  });
+  const outcomeContractGate = buildOutcomeContractGate({
+    executionContract: candidateExecutionContract,
+    requestedTrust: args.base.contract_trust,
+  });
+  if (args.base.contract_trust !== "authoritative" || outcomeContractGate.allows_authoritative) {
+    return { workflowContract: args.base, outcomeContractGate };
+  }
+  return {
+    workflowContract: {
+      ...args.base,
+      contract_trust: "advisory",
+    },
+    outcomeContractGate,
+  };
+}
+
 function buildReplayPlaybookAnchor(args: {
   scopeKey: string;
   playbookId: string;
@@ -138,7 +175,17 @@ function buildReplayPlaybookAnchor(args: {
   const stepsTotal = stepsTemplate.length;
   const anchorNodeId = replayWriteNodeId(args.scopeKey, args.clientId);
   const summary = args.textSummary ?? args.title ?? `Replay playbook ${args.playbookId}`;
-  const workflowContract = deriveReplayWorkflowContractFromSlots(args.slots);
+  const rawWorkflowContract = deriveReplayWorkflowContractFromSlots(args.slots);
+  const taskSignature = `replay_playbook:${args.playbookId}`;
+  const workflowSignature = deriveReplayWorkflowSignature(args.playbookId, stepsTemplate);
+  const { workflowContract, outcomeContractGate } = outcomeGatedReplayWorkflowContract({
+    base: rawWorkflowContract,
+    taskSignature,
+    workflowSignature,
+    sourceAnchor: args.clientId,
+    filePath: rawWorkflowContract.execution_contract_v1?.file_path ?? rawWorkflowContract.target_files[0] ?? null,
+    notes: ["replay_playbook_anchor_gate"],
+  });
   const payloadCostHint: "low" | "medium" | "high" =
     stepsTotal <= 4 ? "low" : stepsTotal <= 10 ? "medium" : "high";
   const promotionAt = new Date().toISOString();
@@ -146,10 +193,10 @@ function buildReplayPlaybookAnchor(args: {
     anchor_kind: "workflow",
     anchor_level: "L2",
     ...(workflowContract.contract_trust ? { contract_trust: workflowContract.contract_trust } : {}),
-    task_signature: `replay_playbook:${args.playbookId}`,
+    task_signature: taskSignature,
     task_class: "replay_playbook",
     ...(workflowContract.task_family ? { task_family: workflowContract.task_family } : {}),
-    workflow_signature: deriveReplayWorkflowSignature(args.playbookId, stepsTemplate),
+    workflow_signature: workflowSignature,
     summary,
     tool_set: toolSet,
     key_steps: workflowContract.workflow_steps.length > 0 ? workflowContract.workflow_steps : keySteps,
@@ -159,6 +206,7 @@ function buildReplayPlaybookAnchor(args: {
     ...(workflowContract.service_lifecycle_constraints.length > 0
       ? { service_lifecycle_constraints: workflowContract.service_lifecycle_constraints }
       : {}),
+    outcome_contract_gate: outcomeContractGate,
     outcome: {
       status: "success",
       result_class: args.status,
@@ -248,7 +296,15 @@ export async function buildStablePlaybookNodeFields(args: {
   });
   const existingExecutionNative = asObject(asObject(args.slots)?.execution_native_v1);
   const existingDistillation = asObject(existingExecutionNative?.distillation);
-  const workflowContract = deriveReplayWorkflowContractFromSlots(args.slots);
+  const rawWorkflowContract = deriveReplayWorkflowContractFromSlots(args.slots);
+  const { workflowContract, outcomeContractGate } = outcomeGatedReplayWorkflowContract({
+    base: rawWorkflowContract,
+    taskSignature: anchor.task_signature,
+    workflowSignature: anchor.workflow_signature,
+    sourceAnchor: args.clientId,
+    filePath: anchor.file_path ?? null,
+    notes: ["replay_stable_playbook_projection"],
+  });
   const executionContract = buildReplayProjectionExecutionContract({
     base: workflowContract,
     task_signature: anchor.task_signature,
@@ -278,6 +334,7 @@ export async function buildStablePlaybookNodeFields(args: {
     ...(workflowContract.service_lifecycle_constraints.length > 0
       ? { service_lifecycle_constraints: workflowContract.service_lifecycle_constraints }
       : {}),
+    outcome_contract_gate: outcomeContractGate,
     workflow_promotion: anchor.workflow_promotion,
     maintenance: anchor.maintenance,
     rehydration: anchor.rehydration,
@@ -290,6 +347,7 @@ export async function buildStablePlaybookNodeFields(args: {
     anchor_v1: anchor,
     execution_native_v1: executionNative,
     execution_contract_v1: executionContract,
+    outcome_contract_gate: outcomeContractGate,
   };
   const embedText = `${args.title}\n${anchor.summary}\n${anchor.tool_set.join(" ")}\n${anchor.task_signature}`;
   if (!args.embedder) {

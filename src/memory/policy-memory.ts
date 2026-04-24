@@ -24,6 +24,7 @@ import {
 import {
   buildExecutionContractFromProjection,
 } from "./execution-contract.js";
+import { buildOutcomeContractGate } from "./contract-trust.js";
 import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 import {
   resolveNodeErrorSignature,
@@ -255,6 +256,7 @@ function buildPolicyExecutionNative(args: {
     ...(args.taskSignature ? { task_signature: args.taskSignature } : {}),
     ...(args.errorSignature ? { error_signature: args.errorSignature } : {}),
     ...(args.workflowSignature ? { workflow_signature: args.workflowSignature } : {}),
+    ...(args.contract.outcome_contract_gate ? { outcome_contract_gate: args.contract.outcome_contract_gate } : {}),
     maintenance: buildPolicyMaintenanceMetadata({
       policy_memory_state: args.contract.policy_memory_state,
       activation_mode: args.contract.activation_mode,
@@ -506,10 +508,11 @@ function derivePolicyMemoryStateFromSlots(slots: Record<string, unknown> | null 
 function normalizePersistedPolicyLifecycleState(args: {
   requestedState: PolicyMemoryLifecycleState;
   contractTrust: ContractTrust | null;
+  outcomeAllowsAuthoritative: boolean;
 }): PolicyMemoryLifecycleState {
   if (args.requestedState === "retired") return "retired";
   if (args.requestedState === "contested") return "contested";
-  return args.contractTrust === "authoritative" ? "active" : "contested";
+  return args.contractTrust === "authoritative" && args.outcomeAllowsAuthoritative ? "active" : "contested";
 }
 
 function parseStoredPolicyContract(value: unknown, nodeId: string): PolicyContract | null {
@@ -531,18 +534,27 @@ function normalizePolicyContractLifecycle(args: {
   nodeId: string | null;
   nextState: PolicyMemoryLifecycleState;
 }): PolicyContract {
+  const outcomeContractGate = buildOutcomeContractGate({
+    executionContract: args.contract,
+    requestedTrust: normalizeContractTrust(args.contract.contract_trust),
+  });
   const effectiveState = normalizePersistedPolicyLifecycleState({
     requestedState: args.nextState,
     contractTrust: normalizeContractTrust(args.contract.contract_trust),
+    outcomeAllowsAuthoritative: outcomeContractGate.allows_authoritative,
   });
   const shouldDegrade = effectiveState !== "active";
   return PolicyContractSchema.parse({
     ...args.contract,
+    contract_trust: shouldDegrade && args.contract.contract_trust === "authoritative"
+      ? "advisory"
+      : args.contract.contract_trust,
     policy_state: shouldDegrade ? "candidate" : args.contract.policy_state,
     policy_memory_state: effectiveState,
     activation_mode: shouldDegrade ? "hint" : args.contract.activation_mode,
     materialization_state: "persisted",
     policy_memory_id: args.nodeId ?? null,
+    outcome_contract_gate: outcomeContractGate,
   });
 }
 
