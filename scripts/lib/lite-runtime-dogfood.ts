@@ -1,5 +1,11 @@
 import { buildExecutionContractFromTrajectoryCompile, type ExecutionContractV1 } from "../../src/memory/execution-contract.ts";
 import { buildOutcomeContractGate, type OutcomeContractGate } from "../../src/memory/contract-trust.ts";
+import {
+  assessExecutionEvidence,
+  buildExecutionEvidenceFromValidation,
+  type ExecutionEvidenceAssessmentV1,
+  type ExecutionEvidenceV1,
+} from "../../src/memory/execution-evidence.ts";
 import { buildTrajectoryCompileLite } from "../../src/memory/trajectory-compile.ts";
 import { applyTrajectoryCompileExecutionKernel } from "../../src/memory/trajectory-compile-runtime.ts";
 import type { TrajectoryCompileHintsInput, TrajectoryCompileResponse, TrajectoryCompileSourceInput } from "../../src/memory/schemas.ts";
@@ -17,6 +23,9 @@ type DogfoodExpectation = {
   after_exit_required: boolean;
   authoritative_gate_allows: boolean;
   gate_reasons_include?: string[];
+  evidence_allows_authoritative: boolean;
+  stable_promotion_allowed: boolean;
+  evidence_reasons_include?: string[];
 };
 
 export type RuntimeDogfoodTask = {
@@ -25,6 +34,7 @@ export type RuntimeDogfoodTask = {
   query_text: string;
   trajectory: TrajectoryCompileSourceInput;
   hints?: TrajectoryCompileHintsInput;
+  execution_evidence?: ExecutionEvidenceV1;
   expectations: DogfoodExpectation;
 };
 
@@ -51,6 +61,15 @@ export type RuntimeDogfoodScenarioResult = {
     expected_authoritative_gate_allows: boolean;
     gate_false_positive: boolean;
     gate_false_negative: boolean;
+    execution_validation_passed: boolean | null;
+    after_exit_revalidated: boolean | null;
+    fresh_shell_probe_passed: boolean | null;
+    execution_evidence_allows_authoritative: boolean;
+    execution_evidence_allows_stable_promotion: boolean;
+    stable_promotion_allowed: boolean;
+    false_confidence_detected: boolean;
+    false_confidence_blocked: boolean;
+    unblocked_false_confidence: boolean;
   };
   compiled: Pick<TrajectoryCompileResponse, "diagnostics"> & {
     target_files: string[];
@@ -58,6 +77,8 @@ export type RuntimeDogfoodScenarioResult = {
     next_action: string | null;
     outcome: ExecutionContractV1["outcome"];
     outcome_contract_gate: OutcomeContractGate;
+    execution_evidence: ExecutionEvidenceV1 | null;
+    execution_evidence_assessment: ExecutionEvidenceAssessmentV1;
     service_lifecycle_constraint_count: number;
   };
 };
@@ -76,6 +97,10 @@ export type RuntimeDogfoodSuiteResult = {
     retry_signal_count: number;
     gate_false_positive_rate: number;
     gate_false_negative_rate: number;
+    stable_promotion_allowed_rate: number;
+    false_confidence_detected_count: number;
+    false_confidence_blocked_count: number;
+    unblocked_false_confidence_rate: number;
   };
   scenarios: RuntimeDogfoodScenarioResult[];
 };
@@ -159,7 +184,15 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         service_lifecycle_required: true,
         after_exit_required: true,
         authoritative_gate_allows: true,
+        evidence_allows_authoritative: true,
+        stable_promotion_allowed: true,
       },
+      execution_evidence: buildExecutionEvidenceFromValidation({
+        validationPassed: true,
+        afterExitRevalidated: true,
+        freshShellProbePassed: true,
+        evidenceRefs: ["dogfood:service_after_exit:fresh_shell_probe"],
+      }),
     },
     {
       id: "publish_install",
@@ -191,7 +224,15 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         service_lifecycle_required: true,
         after_exit_required: true,
         authoritative_gate_allows: true,
+        evidence_allows_authoritative: true,
+        stable_promotion_allowed: true,
       },
+      execution_evidence: buildExecutionEvidenceFromValidation({
+        validationPassed: true,
+        afterExitRevalidated: true,
+        freshShellProbePassed: true,
+        evidenceRefs: ["dogfood:publish_install:pip_install_fresh_shell"],
+      }),
     },
     {
       id: "deploy_hook_web",
@@ -218,7 +259,14 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         service_lifecycle_required: false,
         after_exit_required: false,
         authoritative_gate_allows: true,
+        evidence_allows_authoritative: true,
+        stable_promotion_allowed: true,
       },
+      execution_evidence: buildExecutionEvidenceFromValidation({
+        validationPassed: true,
+        freshShellProbePassed: true,
+        evidenceRefs: ["dogfood:deploy_hook_web:external_curl_probe"],
+      }),
     },
     {
       id: "interrupted_resume",
@@ -244,7 +292,13 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         service_lifecycle_required: false,
         after_exit_required: false,
         authoritative_gate_allows: true,
+        evidence_allows_authoritative: true,
+        stable_promotion_allowed: true,
       },
+      execution_evidence: buildExecutionEvidenceFromValidation({
+        validationPassed: true,
+        evidenceRefs: ["dogfood:interrupted_resume:targeted_export_test"],
+      }),
     },
     {
       id: "cross_agent_db_handoff",
@@ -271,7 +325,13 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         service_lifecycle_required: false,
         after_exit_required: false,
         authoritative_gate_allows: true,
+        evidence_allows_authoritative: true,
+        stable_promotion_allowed: true,
       },
+      execution_evidence: buildExecutionEvidenceFromValidation({
+        validationPassed: true,
+        evidenceRefs: ["dogfood:cross_agent_db_handoff:integrity_check"],
+      }),
     },
     {
       id: "thin_service_missing_detach",
@@ -306,6 +366,64 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         after_exit_required: true,
         authoritative_gate_allows: false,
         gate_reasons_include: ["missing_service_detach_then_probe"],
+        evidence_allows_authoritative: true,
+        stable_promotion_allowed: false,
+      },
+      execution_evidence: buildExecutionEvidenceFromValidation({
+        validationPassed: true,
+        afterExitRevalidated: true,
+        freshShellProbePassed: true,
+        evidenceRefs: ["dogfood:thin_service_missing_detach:probe"],
+      }),
+    },
+    {
+      id: "service_after_exit_evidence_failed",
+      title: "Service after-exit execution evidence blocks false confidence",
+      query_text: "Keep the dashboard status service alive after the agent exits and verify it from a fresh shell.",
+      trajectory: {
+        title: "Dashboard service recovery with failed fresh-shell proof",
+        task_family: "service_publish_validate",
+        steps: [
+          { role: "assistant", text: "The dashboard status service responds during the agent session but must survive after the worker exits." },
+          { role: "tool", tool_name: "bash", command: "nohup node scripts/dev-server.mjs --port 4173 >/tmp/aionis-dashboard.log 2>&1 &" },
+          { role: "tool", tool_name: "bash", command: "curl -fsS http://127.0.0.1:4173/healthz" },
+          { role: "assistant", text: "Update scripts/dev-server.mjs, launch it detached, then rerun curl -fsS http://127.0.0.1:4173/healthz from a fresh shell after the agent exits." },
+        ],
+      },
+      execution_evidence: buildExecutionEvidenceFromValidation({
+        validationPassed: true,
+        afterExitRevalidated: false,
+        freshShellProbePassed: false,
+        failureReason: "fresh_shell_probe_connection_refused_after_agent_exit",
+        falseConfidenceDetected: true,
+        evidenceRefs: ["dogfood:service_after_exit_evidence_failed:fresh_shell_probe"],
+      }),
+      expectations: {
+        target_files_include: ["scripts/dev-server.mjs"],
+        acceptance_checks_match: [/curl -fsS http:\/\/127\.0\.0\.1:4173\/healthz/],
+        next_action_match: [/scripts\/dev-server\.mjs/i, /fresh shell/i],
+        success_invariants_include: ["fresh_shell_revalidation_passes"],
+        dependency_requirements_match: [/service launch must not depend on the agent shell/i],
+        environment_assumptions_include: [
+          "detached_process_supported",
+          "fresh_shell_available_for_revalidation",
+          "validation_can_run_from_fresh_shell",
+        ],
+        must_hold_after_exit_include: [
+          "task_result_remains_valid_after_agent_exit",
+          "fresh_shell_revalidation_still_passes_after_agent_exit",
+        ],
+        external_visibility_requirements_match: [/endpoint_reachable:http:\/\/127\.0\.0\.1:4173\/healthz/],
+        service_lifecycle_required: true,
+        after_exit_required: true,
+        authoritative_gate_allows: true,
+        evidence_allows_authoritative: false,
+        stable_promotion_allowed: false,
+        evidence_reasons_include: [
+          "after_exit_revalidation_failed",
+          "fresh_shell_probe_failed",
+          "false_confidence_detected",
+        ],
       },
     },
   ];
@@ -323,6 +441,11 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
   const contract = buildExecutionContractFromTrajectoryCompile(compiled);
   const outcomeContractGate = buildOutcomeContractGate({
     executionContract: contract,
+    requestedTrust: "authoritative",
+  });
+  const executionEvidenceAssessment = assessExecutionEvidence({
+    executionContract: contract,
+    evidence: task.execution_evidence ?? null,
     requestedTrust: "authoritative",
   });
   const kernel = applyTrajectoryCompileExecutionKernel({
@@ -410,6 +533,22 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
           `expected reasons ${(expectation.gate_reasons_include ?? []).join(", ")} in ${outcomeContractGate.reasons.join(" | ")}`,
         ),
   );
+  assertions.push(
+    executionEvidenceAssessment.allows_authoritative === expectation.evidence_allows_authoritative
+      ? pass("execution evidence gate matches expected authority")
+      : fail(
+          "execution evidence gate matches expected authority",
+          `expected ${expectation.evidence_allows_authoritative} but got ${executionEvidenceAssessment.allows_authoritative}; reasons: ${executionEvidenceAssessment.reasons.join(" | ")}`,
+        ),
+  );
+  assertions.push(
+    includesAll(executionEvidenceAssessment.reasons, expectation.evidence_reasons_include ?? [])
+      ? pass("execution evidence gate explains denied authority")
+      : fail(
+          "execution evidence gate explains denied authority",
+          `expected reasons ${(expectation.evidence_reasons_include ?? []).join(", ")} in ${executionEvidenceAssessment.reasons.join(" | ")}`,
+        ),
+  );
 
   const firstCorrectAction = assertions.find((assertion) => assertion.name === "next action is specific enough to start correctly")?.status === "pass";
   const afterExitCorrect = expectation.after_exit_required
@@ -421,10 +560,27 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
     : null;
   const gateFalsePositive = outcomeContractGate.allows_authoritative && !expectation.authoritative_gate_allows;
   const gateFalseNegative = !outcomeContractGate.allows_authoritative && expectation.authoritative_gate_allows;
+  const stablePromotionAllowed =
+    outcomeContractGate.allows_authoritative && executionEvidenceAssessment.allows_stable_promotion;
+  const falseConfidenceDetected = !!task.execution_evidence?.false_confidence_detected
+    || task.execution_evidence?.validation_passed === false
+    || task.execution_evidence?.after_exit_revalidated === false
+    || task.execution_evidence?.fresh_shell_probe_passed === false;
+  const falseConfidenceBlocked = falseConfidenceDetected && !stablePromotionAllowed;
+  const unblockedFalseConfidence = falseConfidenceDetected && stablePromotionAllowed;
   const falseConfidenceRisk =
     gateFalsePositive
+    || unblockedFalseConfidence
     || (expectation.authoritative_gate_allows && expectation.after_exit_required && afterExitCorrect !== true)
     || (expectation.success_invariants_include.length > 0 && contract.outcome.success_invariants.length === 0);
+  assertions.push(
+    stablePromotionAllowed === expectation.stable_promotion_allowed
+      ? pass("learning promotion respects execution evidence")
+      : fail(
+          "learning promotion respects execution evidence",
+          `expected ${expectation.stable_promotion_allowed} but got ${stablePromotionAllowed}`,
+        ),
+  );
 
   return {
     id: task.id,
@@ -443,6 +599,15 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
       expected_authoritative_gate_allows: expectation.authoritative_gate_allows,
       gate_false_positive: gateFalsePositive,
       gate_false_negative: gateFalseNegative,
+      execution_validation_passed: task.execution_evidence?.validation_passed ?? null,
+      after_exit_revalidated: task.execution_evidence?.after_exit_revalidated ?? null,
+      fresh_shell_probe_passed: task.execution_evidence?.fresh_shell_probe_passed ?? null,
+      execution_evidence_allows_authoritative: executionEvidenceAssessment.allows_authoritative,
+      execution_evidence_allows_stable_promotion: executionEvidenceAssessment.allows_stable_promotion,
+      stable_promotion_allowed: stablePromotionAllowed,
+      false_confidence_detected: falseConfidenceDetected,
+      false_confidence_blocked: falseConfidenceBlocked,
+      unblocked_false_confidence: unblockedFalseConfidence,
     },
     compiled: {
       diagnostics: compiled.diagnostics,
@@ -451,6 +616,8 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
       next_action: contract.next_action,
       outcome: contract.outcome,
       outcome_contract_gate: outcomeContractGate,
+      execution_evidence: task.execution_evidence ?? null,
+      execution_evidence_assessment: executionEvidenceAssessment,
       service_lifecycle_constraint_count: contract.service_lifecycle_constraints.length,
     },
   };
@@ -480,7 +647,7 @@ export function runRuntimeDogfoodSuite(tasks: RuntimeDogfoodTask[] = runtimeDogf
         scenarios.length,
       ),
       false_confidence_rate: rate(
-        scenarios.filter((scenario) => scenario.metrics.false_confidence_risk).length,
+        scenarios.filter((scenario) => scenario.metrics.unblocked_false_confidence).length,
         scenarios.length,
       ),
       after_exit_correct_rate: afterExitScenarios.length === 0
@@ -497,6 +664,16 @@ export function runRuntimeDogfoodSuite(tasks: RuntimeDogfoodTask[] = runtimeDogf
       ),
       gate_false_negative_rate: rate(
         scenarios.filter((scenario) => scenario.metrics.gate_false_negative).length,
+        scenarios.length,
+      ),
+      stable_promotion_allowed_rate: rate(
+        scenarios.filter((scenario) => scenario.metrics.stable_promotion_allowed).length,
+        scenarios.length,
+      ),
+      false_confidence_detected_count: scenarios.filter((scenario) => scenario.metrics.false_confidence_detected).length,
+      false_confidence_blocked_count: scenarios.filter((scenario) => scenario.metrics.false_confidence_blocked).length,
+      unblocked_false_confidence_rate: rate(
+        scenarios.filter((scenario) => scenario.metrics.unblocked_false_confidence).length,
         scenarios.length,
       ),
     },
@@ -521,6 +698,10 @@ export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult):
     `- retry_signal_count: ${result.summary.retry_signal_count}`,
     `- gate_false_positive_rate: ${result.summary.gate_false_positive_rate}`,
     `- gate_false_negative_rate: ${result.summary.gate_false_negative_rate}`,
+    `- stable_promotion_allowed_rate: ${result.summary.stable_promotion_allowed_rate}`,
+    `- false_confidence_detected_count: ${result.summary.false_confidence_detected_count}`,
+    `- false_confidence_blocked_count: ${result.summary.false_confidence_blocked_count}`,
+    `- unblocked_false_confidence_rate: ${result.summary.unblocked_false_confidence_rate}`,
     "",
   ];
   for (const scenario of result.scenarios) {
@@ -534,6 +715,12 @@ export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult):
     lines.push(`- outcome_gate_allows_authoritative: ${scenario.metrics.outcome_gate_allows_authoritative}`);
     lines.push(`- expected_authoritative_gate_allows: ${scenario.metrics.expected_authoritative_gate_allows}`);
     lines.push(`- gate_reasons: ${scenario.compiled.outcome_contract_gate.reasons.join(" | ") || "none"}`);
+    lines.push(`- execution_evidence_allows_authoritative: ${scenario.metrics.execution_evidence_allows_authoritative}`);
+    lines.push(`- stable_promotion_allowed: ${scenario.metrics.stable_promotion_allowed}`);
+    lines.push(`- execution_evidence_status: ${scenario.compiled.execution_evidence_assessment.status}`);
+    lines.push(`- execution_evidence_reasons: ${scenario.compiled.execution_evidence_assessment.reasons.join(" | ") || "none"}`);
+    lines.push(`- false_confidence_detected: ${scenario.metrics.false_confidence_detected}`);
+    lines.push(`- false_confidence_blocked: ${scenario.metrics.false_confidence_blocked}`);
     lines.push(`- target_files: ${scenario.compiled.target_files.join(" | ")}`);
     lines.push(`- next_action: ${scenario.compiled.next_action ?? "null"}`);
     lines.push("");

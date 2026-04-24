@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildExecutionPacketV1, ExecutionPacketV1Schema, ExecutionStateV1Schema } from "../../src/execution/index.ts";
 import { buildOutcomeContractGate } from "../../src/memory/contract-trust.ts";
+import { assessExecutionEvidence, buildExecutionEvidenceFromValidation } from "../../src/memory/execution-evidence.ts";
 import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
 
 test("execution packet carries service lifecycle constraints from execution state", () => {
@@ -115,4 +116,60 @@ test("outcome gate blocks authoritative service contracts without durable lifecy
   });
   assert.equal(durableGate.allows_authoritative, true);
   assert.equal(durableGate.status, "sufficient");
+});
+
+test("execution evidence blocks authoritative learning after failed after-exit proof", () => {
+  const contract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    task_family: "service_publish_validate",
+    target_files: ["scripts/dev-server.mjs"],
+    next_action: "Launch detached service and validate from a fresh shell after exit.",
+    service_lifecycle_constraints: [
+      {
+        version: 1,
+        service_kind: "http",
+        label: "service:http://localhost:4173/healthz",
+        launch_reference: "nohup node scripts/dev-server.mjs --port 4173 >/tmp/dev.log 2>&1 &",
+        endpoint: "http://localhost:4173/healthz",
+        must_survive_agent_exit: true,
+        revalidate_from_fresh_shell: true,
+        detach_then_probe: true,
+        health_checks: ["curl -fsS http://localhost:4173/healthz"],
+        teardown_notes: [],
+      },
+    ],
+    acceptance_checks: ["curl -fsS http://localhost:4173/healthz"],
+    success_invariants: ["fresh_shell_revalidation_passes"],
+    must_hold_after_exit: ["service_endpoint_still_serves_after_exit:http://localhost:4173/healthz"],
+    external_visibility_requirements: ["endpoint_reachable:http://localhost:4173/healthz"],
+    provenance: {
+      source_kind: "manual_context",
+    },
+  });
+  const outcomeGate = buildOutcomeContractGate({
+    executionContract: contract,
+    requestedTrust: "authoritative",
+  });
+  assert.equal(outcomeGate.allows_authoritative, true);
+
+  const failedEvidence = buildExecutionEvidenceFromValidation({
+    validationPassed: true,
+    afterExitRevalidated: false,
+    freshShellProbePassed: false,
+    failureReason: "fresh_shell_probe_connection_refused_after_agent_exit",
+    falseConfidenceDetected: true,
+    evidenceRefs: ["test:fresh-shell-probe"],
+  });
+  const assessment = assessExecutionEvidence({
+    executionContract: contract,
+    evidence: failedEvidence,
+    requestedTrust: "authoritative",
+  });
+  assert.equal(assessment.status, "failed");
+  assert.equal(assessment.allows_authoritative, false);
+  assert.equal(assessment.allows_stable_promotion, false);
+  assert.equal(assessment.effective_trust, "advisory");
+  assert.ok(assessment.reasons.includes("after_exit_revalidation_failed"));
+  assert.ok(assessment.reasons.includes("fresh_shell_probe_failed"));
+  assert.ok(assessment.reasons.includes("false_confidence_detected"));
 });

@@ -12,6 +12,10 @@ import {
   deriveReplayWorkflowContractFromSlots,
 } from "./replay-workflow-contract.js";
 import { buildOutcomeContractGate } from "./contract-trust.js";
+import {
+  assessExecutionEvidence,
+  extractExecutionEvidenceFromSlots,
+} from "./execution-evidence.js";
 
 export type ReplayLearningProjectionSource = {
   tenant_id: string;
@@ -228,21 +232,52 @@ export function buildReplayLearningProjectionArtifacts(args: {
   const ruleClientId = `replay:learning:rule:${args.source.playbook_id}:${args.matcherFingerprint}:${args.policyFingerprint}`;
   const episodeClientId = `replay:learning:episode:${args.source.playbook_id}:v${args.source.playbook_version}`;
   const workflowClientId = `replay:learning:workflow:${args.source.playbook_id}:${args.workflowSignature}`;
-  const workflowContract = deriveReplayWorkflowContractFromSlots(args.source.playbook_slots);
+  const rawWorkflowContract = deriveReplayWorkflowContractFromSlots(args.source.playbook_slots);
   const nodes: Array<Record<string, unknown>> = [];
   const edges: Array<Record<string, unknown>> = [];
-  const candidateExecutionContract = buildReplayProjectionExecutionContract({
-    base: workflowContract,
+  const initialCandidateExecutionContract = buildReplayProjectionExecutionContract({
+    base: rawWorkflowContract,
     task_signature: `replay_playbook:${args.source.playbook_id}`,
     workflow_signature: args.workflowSignature,
     source_anchor: episodeClientId,
     notes: ["replay_learning_candidate_projection"],
   });
+  const executionEvidence = extractExecutionEvidenceFromSlots({
+    slots: args.source.playbook_slots,
+    metrics: args.source.metrics,
+  });
+  const executionEvidenceAssessment = assessExecutionEvidence({
+    executionContract: initialCandidateExecutionContract,
+    evidence: executionEvidence,
+    requestedTrust: rawWorkflowContract.contract_trust,
+  });
+  const workflowContract =
+    rawWorkflowContract.contract_trust === "authoritative" && !executionEvidenceAssessment.allows_authoritative
+      ? {
+          ...rawWorkflowContract,
+          contract_trust: executionEvidenceAssessment.effective_trust,
+        }
+      : rawWorkflowContract;
+  const candidateExecutionContract = workflowContract === rawWorkflowContract
+    ? initialCandidateExecutionContract
+    : buildReplayProjectionExecutionContract({
+        base: workflowContract,
+        task_signature: `replay_playbook:${args.source.playbook_id}`,
+        workflow_signature: args.workflowSignature,
+        source_anchor: episodeClientId,
+        notes: [
+          "replay_learning_candidate_projection",
+          "execution_evidence_downgraded_authoritative_contract",
+        ],
+      });
   const outcomeContractGate = buildOutcomeContractGate({
     executionContract: candidateExecutionContract,
     requestedTrust: workflowContract.contract_trust,
   });
-  const shouldPromoteStableWorkflow = args.shouldPromoteStableWorkflow && outcomeContractGate.allows_authoritative;
+  const shouldPromoteStableWorkflow =
+    args.shouldPromoteStableWorkflow
+    && outcomeContractGate.allows_authoritative
+    && executionEvidenceAssessment.allows_stable_promotion;
 
   if (args.shouldCreateRule) {
     nodes.push({
@@ -301,6 +336,8 @@ export function buildReplayLearningProjectionArtifacts(args: {
         archive_candidate: true,
         execution_contract_v1: candidateExecutionContract,
         outcome_contract_gate: outcomeContractGate,
+        ...(executionEvidence ? { execution_evidence_v1: executionEvidence } : {}),
+        execution_evidence_assessment: executionEvidenceAssessment,
         ...(!shouldPromoteStableWorkflow
           ? {
               execution_native_v1: {
@@ -405,6 +442,8 @@ export function buildReplayLearningProjectionArtifacts(args: {
         anchor_v1: workflowAnchor,
         execution_contract_v1: stableExecutionContract,
         outcome_contract_gate: stableOutcomeContractGate,
+        ...(executionEvidence ? { execution_evidence_v1: executionEvidence } : {}),
+        execution_evidence_assessment: executionEvidenceAssessment,
         execution_native_v1: ExecutionNativeV1Schema.parse({
           schema_version: "execution_native_v1",
           execution_kind: "workflow_anchor",

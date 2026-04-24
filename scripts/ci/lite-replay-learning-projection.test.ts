@@ -270,6 +270,12 @@ test("replay-learning projection artifacts preserve richer recovery contract fie
         task_family: "service_publish_validate",
       },
     },
+    execution_evidence_v1: {
+      validation_passed: true,
+      after_exit_revalidated: true,
+      fresh_shell_probe_passed: true,
+      evidence_refs: ["test:replay-learning:fresh-shell-install"],
+    },
   });
   const plan = buildReplayLearningProjectionArtifacts({
     source,
@@ -308,4 +314,67 @@ test("replay-learning projection artifacts preserve richer recovery contract fie
   assert.ok(workflow?.slots?.execution_native_v1?.workflow_steps?.includes("python scripts/build_and_serve.py --port 8080"));
   assert.ok(workflow?.slots?.execution_native_v1?.pattern_hints?.includes("publish_then_install_from_clean_client_path"));
   assert.equal(workflow?.slots?.execution_native_v1?.service_lifecycle_constraints?.[0]?.revalidate_from_fresh_shell, true);
+  assert.equal(workflow?.slots?.execution_evidence_assessment?.allows_stable_promotion, true);
+});
+
+test("replay-learning projection artifacts keep failed after-exit evidence at advisory candidate level", () => {
+  const source = baseSource({
+    contract_trust: "authoritative",
+    task_family: "service_publish_validate",
+    target_files: ["scripts/build_and_serve.py"],
+    next_action: "Restart the package index and rerun validation from a fresh shell.",
+    acceptance_checks: ["curl http://localhost:8080/simple/vectorops/"],
+    success_invariants: ["fresh_shell_revalidation_passes"],
+    must_hold_after_exit: ["service_endpoint_still_serves_after_exit:http://localhost:8080/simple/vectorops/"],
+    external_visibility_requirements: ["endpoint_reachable:http://localhost:8080/simple/vectorops/"],
+    service_lifecycle_constraints: [
+      {
+        version: 1,
+        service_kind: "http",
+        label: "service:http://localhost:8080/simple/vectorops/",
+        launch_reference: "nohup python scripts/build_and_serve.py --port 8080 >/tmp/index.log 2>&1 &",
+        endpoint: "http://localhost:8080/simple/vectorops/",
+        must_survive_agent_exit: true,
+        revalidate_from_fresh_shell: true,
+        detach_then_probe: true,
+        health_checks: ["curl http://localhost:8080/simple/vectorops/"],
+        teardown_notes: [],
+      },
+    ],
+    execution_evidence_v1: {
+      validation_passed: true,
+      after_exit_revalidated: false,
+      fresh_shell_probe_passed: false,
+      failure_reason: "fresh_shell_probe_connection_refused_after_agent_exit",
+      false_confidence_detected: true,
+      evidence_refs: ["test:replay-learning:failed-fresh-shell-probe"],
+    },
+  });
+  const plan = buildReplayLearningProjectionArtifacts({
+    source,
+    matcherFingerprint: "matcher-fp",
+    policyFingerprint: "policy-fp",
+    duplicateRuleNodeId: null,
+    workflowSignature: "replay-learning-workflow-sig",
+    preferTools: ["edit", "test"],
+    shouldCreateRule: true,
+    shouldCreateEpisode: true,
+    shouldPromoteStableWorkflow: true,
+    observedWorkflowCount: 2,
+    projectedAt: "2026-03-20T00:00:00Z",
+    ttlExpiresAt: "2026-04-19T00:00:00Z",
+  });
+
+  const episode = plan.nodes.find((node) => node.client_id === plan.episodeClientId) as Record<string, any> | undefined;
+  const workflow = plan.nodes.find((node) => node.client_id === plan.workflowClientId);
+  assert.ok(episode);
+  assert.equal(plan.shouldPromoteStableWorkflow, false);
+  assert.equal(workflow, undefined);
+  assert.equal(episode?.slots?.summary_kind, "workflow_candidate");
+  assert.equal(episode?.slots?.execution_contract_v1?.contract_trust, "advisory");
+  assert.equal(episode?.slots?.execution_native_v1?.contract_trust, "advisory");
+  assert.equal(episode?.slots?.execution_native_v1?.workflow_promotion?.promotion_state, "candidate");
+  assert.equal(episode?.slots?.execution_evidence_assessment?.status, "failed");
+  assert.equal(episode?.slots?.execution_evidence_assessment?.allows_stable_promotion, false);
+  assert.ok(episode?.slots?.execution_evidence_assessment?.reasons?.includes("after_exit_revalidation_failed"));
 });
