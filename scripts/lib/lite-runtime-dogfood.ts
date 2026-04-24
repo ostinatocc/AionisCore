@@ -1,4 +1,5 @@
 import { buildExecutionContractFromTrajectoryCompile, type ExecutionContractV1 } from "../../src/memory/execution-contract.ts";
+import { buildOutcomeContractGate, type OutcomeContractGate } from "../../src/memory/contract-trust.ts";
 import { buildTrajectoryCompileLite } from "../../src/memory/trajectory-compile.ts";
 import { applyTrajectoryCompileExecutionKernel } from "../../src/memory/trajectory-compile-runtime.ts";
 import type { TrajectoryCompileHintsInput, TrajectoryCompileResponse, TrajectoryCompileSourceInput } from "../../src/memory/schemas.ts";
@@ -14,6 +15,8 @@ type DogfoodExpectation = {
   external_visibility_requirements_match: RegExp[];
   service_lifecycle_required: boolean;
   after_exit_required: boolean;
+  authoritative_gate_allows: boolean;
+  gate_reasons_include?: string[];
 };
 
 export type RuntimeDogfoodTask = {
@@ -44,12 +47,17 @@ export type RuntimeDogfoodScenarioResult = {
     retry_signal_count: number;
     false_confidence_risk: boolean;
     after_exit_correct: boolean | null;
+    outcome_gate_allows_authoritative: boolean;
+    expected_authoritative_gate_allows: boolean;
+    gate_false_positive: boolean;
+    gate_false_negative: boolean;
   };
   compiled: Pick<TrajectoryCompileResponse, "diagnostics"> & {
     target_files: string[];
     acceptance_checks: string[];
     next_action: string | null;
     outcome: ExecutionContractV1["outcome"];
+    outcome_contract_gate: OutcomeContractGate;
     service_lifecycle_constraint_count: number;
   };
 };
@@ -66,6 +74,8 @@ export type RuntimeDogfoodSuiteResult = {
     after_exit_correct_rate: number | null;
     wasted_step_count: number;
     retry_signal_count: number;
+    gate_false_positive_rate: number;
+    gate_false_negative_rate: number;
   };
   scenarios: RuntimeDogfoodScenarioResult[];
 };
@@ -148,6 +158,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         external_visibility_requirements_match: [/endpoint_reachable:http:\/\/127\.0\.0\.1:4173\/healthz/],
         service_lifecycle_required: true,
         after_exit_required: true,
+        authoritative_gate_allows: true,
       },
     },
     {
@@ -179,6 +190,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         external_visibility_requirements_match: [/package_install_visible_to_clean_client/],
         service_lifecycle_required: true,
         after_exit_required: true,
+        authoritative_gate_allows: true,
       },
     },
     {
@@ -205,6 +217,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         external_visibility_requirements_match: [/served_web_content_matches_deployed_revision/, /external_probe:curl -fsS http:\/\/localhost:8081\/index\.html/],
         service_lifecycle_required: false,
         after_exit_required: false,
+        authoritative_gate_allows: true,
       },
     },
     {
@@ -230,6 +243,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         external_visibility_requirements_match: [],
         service_lifecycle_required: false,
         after_exit_required: false,
+        authoritative_gate_allows: true,
       },
     },
     {
@@ -256,6 +270,42 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         external_visibility_requirements_match: [],
         service_lifecycle_required: false,
         after_exit_required: false,
+        authoritative_gate_allows: true,
+      },
+    },
+    {
+      id: "thin_service_missing_detach",
+      title: "Service after-exit claim without detach proof",
+      query_text: "Keep the dashboard status service alive after the agent exits and prove it remains reachable.",
+      trajectory: {
+        title: "Dashboard service thin handoff",
+        task_family: "service_publish_validate",
+        steps: [
+          { role: "assistant", text: "The dashboard service must remain available after the agent exits, but the current handoff only restarts it inline." },
+          { role: "tool", tool_name: "bash", command: "node scripts/dev-server.mjs --port 4173" },
+          { role: "tool", tool_name: "bash", command: "curl -fsS http://127.0.0.1:4173/healthz" },
+          { role: "assistant", text: "Update scripts/dev-server.mjs and rerun curl -fsS http://127.0.0.1:4173/healthz before declaring success." },
+        ],
+      },
+      expectations: {
+        target_files_include: ["scripts/dev-server.mjs"],
+        acceptance_checks_match: [/curl -fsS http:\/\/127\.0\.0\.1:4173\/healthz/],
+        next_action_match: [/scripts\/dev-server\.mjs/i, /curl -fsS http:\/\/127\.0\.0\.1:4173\/healthz/i],
+        success_invariants_include: ["fresh_shell_revalidation_passes"],
+        dependency_requirements_match: [/service launch must not depend on the agent shell/i],
+        environment_assumptions_include: [
+          "validation_can_run_from_fresh_shell",
+          "localhost_reachable_from_validation_environment",
+        ],
+        must_hold_after_exit_include: [
+          "task_result_remains_valid_after_agent_exit",
+          "fresh_shell_revalidation_still_passes_after_agent_exit",
+        ],
+        external_visibility_requirements_match: [/endpoint_reachable:http:\/\/127\.0\.0\.1:4173\/healthz/],
+        service_lifecycle_required: true,
+        after_exit_required: true,
+        authoritative_gate_allows: false,
+        gate_reasons_include: ["missing_service_detach_then_probe"],
       },
     },
   ];
@@ -271,6 +321,10 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
     defaultTenantId: "default",
   });
   const contract = buildExecutionContractFromTrajectoryCompile(compiled);
+  const outcomeContractGate = buildOutcomeContractGate({
+    executionContract: contract,
+    requestedTrust: "authoritative",
+  });
   const kernel = applyTrajectoryCompileExecutionKernel({
     compiled,
     queryText: task.query_text,
@@ -340,6 +394,22 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
       ? pass("execution packet carries pending validation work")
       : fail("execution packet carries pending validation work", "compiled acceptance checks did not enter execution packet pending validations"),
   );
+  assertions.push(
+    outcomeContractGate.allows_authoritative === expectation.authoritative_gate_allows
+      ? pass("outcome contract gate matches expected authority")
+      : fail(
+          "outcome contract gate matches expected authority",
+          `expected ${expectation.authoritative_gate_allows} but got ${outcomeContractGate.allows_authoritative}; reasons: ${outcomeContractGate.reasons.join(" | ")}`,
+        ),
+  );
+  assertions.push(
+    includesAll(outcomeContractGate.reasons, expectation.gate_reasons_include ?? [])
+      ? pass("outcome contract gate explains denied authority")
+      : fail(
+          "outcome contract gate explains denied authority",
+          `expected reasons ${(expectation.gate_reasons_include ?? []).join(", ")} in ${outcomeContractGate.reasons.join(" | ")}`,
+        ),
+  );
 
   const firstCorrectAction = assertions.find((assertion) => assertion.name === "next action is specific enough to start correctly")?.status === "pass";
   const afterExitCorrect = expectation.after_exit_required
@@ -349,8 +419,11 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
         constraint.must_survive_agent_exit && constraint.revalidate_from_fresh_shell && constraint.detach_then_probe
       ))
     : null;
+  const gateFalsePositive = outcomeContractGate.allows_authoritative && !expectation.authoritative_gate_allows;
+  const gateFalseNegative = !outcomeContractGate.allows_authoritative && expectation.authoritative_gate_allows;
   const falseConfidenceRisk =
-    (expectation.after_exit_required && afterExitCorrect !== true)
+    gateFalsePositive
+    || (expectation.authoritative_gate_allows && expectation.after_exit_required && afterExitCorrect !== true)
     || (expectation.success_invariants_include.length > 0 && contract.outcome.success_invariants.length === 0);
 
   return {
@@ -366,6 +439,10 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
       retry_signal_count: countRetrySignals(task.trajectory),
       false_confidence_risk: falseConfidenceRisk,
       after_exit_correct: afterExitCorrect,
+      outcome_gate_allows_authoritative: outcomeContractGate.allows_authoritative,
+      expected_authoritative_gate_allows: expectation.authoritative_gate_allows,
+      gate_false_positive: gateFalsePositive,
+      gate_false_negative: gateFalseNegative,
     },
     compiled: {
       diagnostics: compiled.diagnostics,
@@ -373,6 +450,7 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
       acceptance_checks: contract.outcome.acceptance_checks,
       next_action: contract.next_action,
       outcome: contract.outcome,
+      outcome_contract_gate: outcomeContractGate,
       service_lifecycle_constraint_count: contract.service_lifecycle_constraints.length,
     },
   };
@@ -385,7 +463,11 @@ function rate(count: number, total: number): number {
 
 export function runRuntimeDogfoodSuite(tasks: RuntimeDogfoodTask[] = runtimeDogfoodTasks()): RuntimeDogfoodSuiteResult {
   const scenarios = tasks.map(evaluateTask);
-  const afterExitScenarios = scenarios.filter((scenario) => scenario.metrics.after_exit_correct !== null);
+  const afterExitScenarios = scenarios.filter(
+    (scenario) =>
+      scenario.metrics.after_exit_correct !== null
+      && scenario.metrics.expected_authoritative_gate_allows,
+  );
   return {
     generated_at: new Date().toISOString(),
     suite_version: "runtime_dogfood_v1",
@@ -409,6 +491,14 @@ export function runRuntimeDogfoodSuite(tasks: RuntimeDogfoodTask[] = runtimeDogf
           ),
       wasted_step_count: scenarios.reduce((sum, scenario) => sum + scenario.metrics.wasted_step_count, 0),
       retry_signal_count: scenarios.reduce((sum, scenario) => sum + scenario.metrics.retry_signal_count, 0),
+      gate_false_positive_rate: rate(
+        scenarios.filter((scenario) => scenario.metrics.gate_false_positive).length,
+        scenarios.length,
+      ),
+      gate_false_negative_rate: rate(
+        scenarios.filter((scenario) => scenario.metrics.gate_false_negative).length,
+        scenarios.length,
+      ),
     },
     scenarios,
   };
@@ -429,6 +519,8 @@ export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult):
     `- after_exit_correct_rate: ${result.summary.after_exit_correct_rate ?? "n/a"}`,
     `- wasted_step_count: ${result.summary.wasted_step_count}`,
     `- retry_signal_count: ${result.summary.retry_signal_count}`,
+    `- gate_false_positive_rate: ${result.summary.gate_false_positive_rate}`,
+    `- gate_false_negative_rate: ${result.summary.gate_false_negative_rate}`,
     "",
   ];
   for (const scenario of result.scenarios) {
@@ -439,6 +531,9 @@ export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult):
     lines.push(`- first_correct_action: ${scenario.metrics.first_correct_action}`);
     lines.push(`- false_confidence_risk: ${scenario.metrics.false_confidence_risk}`);
     lines.push(`- after_exit_correct: ${scenario.metrics.after_exit_correct ?? "n/a"}`);
+    lines.push(`- outcome_gate_allows_authoritative: ${scenario.metrics.outcome_gate_allows_authoritative}`);
+    lines.push(`- expected_authoritative_gate_allows: ${scenario.metrics.expected_authoritative_gate_allows}`);
+    lines.push(`- gate_reasons: ${scenario.compiled.outcome_contract_gate.reasons.join(" | ") || "none"}`);
     lines.push(`- target_files: ${scenario.compiled.target_files.join(" | ")}`);
     lines.push(`- next_action: ${scenario.compiled.next_action ?? "null"}`);
     lines.push("");

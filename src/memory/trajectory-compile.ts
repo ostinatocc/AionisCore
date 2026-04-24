@@ -104,6 +104,18 @@ function compileCorpus(queryText: string, steps: NormalizedStep[]): string {
   return `${queryText}\n${steps.flatMap((step) => [...step.texts, ...step.commands]).join("\n")}`.toLowerCase();
 }
 
+function corpusHasFreshShellSignal(corpus: string): boolean {
+  return /\bfresh\s+shell\b|\bnew\s+shell\b|\bclean\s+(?:client|shell|environment)\b/i.test(corpus);
+}
+
+function corpusHasAfterExitSignal(corpus: string): boolean {
+  return /\bafter\b.*\b(?:exit|worker exits|agent exits|session ends)\b|\bsurvive\b.*\b(?:exit|agent|session|worker)\b/i.test(corpus);
+}
+
+function corpusHasDetachSignal(corpus: string): boolean {
+  return /\bnohup\b|\bsetsid\b|\bdisown\b|\bdaemon\b|\bdetach(?:ed)?\b|\bbackground\s+(?:process|service|server)\b/i.test(corpus);
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -277,18 +289,29 @@ function extractNoiseMarkers(steps: NormalizedStep[]): string[] {
   return uniqueStrings(out, 16);
 }
 
-function extractServiceLifecycleConstraints(steps: NormalizedStep[], acceptanceChecks: string[]): ServiceLifecycleConstraintV1[] {
+function extractServiceLifecycleConstraints(
+  queryText: string,
+  steps: NormalizedStep[],
+  acceptanceChecks: string[],
+): ServiceLifecycleConstraintV1[] {
   const commands = steps.flatMap((step) => step.commands);
+  const corpus = compileCorpus(queryText, steps);
   const urls = uniqueStrings(steps.flatMap((step) => step.urls), 16);
   const serviceCommands = commands.filter((command) => SERVICE_COMMAND_PATTERNS.some((pattern) => pattern.test(command)));
   const hasLaunchEvidence = serviceCommands.length > 0;
   if (!hasLaunchEvidence) return [];
   const launchReference = serviceCommands[0] ?? null;
   const endpoint = urls.find((url) => /localhost|127\.0\.0\.1/i.test(url)) ?? null;
-  const hasDetach = commands.some((command) => DETACH_PATTERNS.some((pattern) => pattern.test(command)));
+  const hasDetach = commands.some((command) => DETACH_PATTERNS.some((pattern) => pattern.test(command)))
+    || corpusHasDetachSignal(corpus);
   const serviceKind: ServiceLifecycleConstraintV1["service_kind"] =
     endpoint?.startsWith("http://") || endpoint?.startsWith("https://") ? "http" : "generic";
   const healthChecks = acceptanceChecks.filter((command) => /\bcurl\b|\bwget\b|\bpip\s+install\b|\bnc\b/i.test(command));
+  const shouldSurviveAgentExit = corpusHasAfterExitSignal(corpus) || hasDetach;
+  const shouldRevalidateFromFreshShell =
+    corpusHasFreshShellSignal(corpus)
+    || healthChecks.length > 0
+    || !!endpoint;
   return [
     ServiceLifecycleConstraintV1Schema.parse({
       version: 1,
@@ -296,9 +319,9 @@ function extractServiceLifecycleConstraints(steps: NormalizedStep[], acceptanceC
       label: endpoint ? `service:${endpoint}` : "background_service",
       launch_reference: launchReference,
       endpoint,
-      must_survive_agent_exit: true,
-      revalidate_from_fresh_shell: healthChecks.length > 0 || !!endpoint,
-      detach_then_probe: hasDetach || !!endpoint,
+      must_survive_agent_exit: shouldSurviveAgentExit,
+      revalidate_from_fresh_shell: shouldRevalidateFromFreshShell,
+      detach_then_probe: hasDetach && shouldRevalidateFromFreshShell,
       health_checks: healthChecks,
       teardown_notes: [],
     }),
@@ -306,13 +329,13 @@ function extractServiceLifecycleConstraints(steps: NormalizedStep[], acceptanceC
 }
 
 function hasFreshShellSignal(corpus: string, acceptanceChecks: string[], serviceConstraints: ServiceLifecycleConstraintV1[]): boolean {
-  return /\bfresh\s+shell\b|\bnew\s+shell\b|\bclean\s+(?:client|shell|environment)\b/i.test(corpus)
+  return corpusHasFreshShellSignal(corpus)
     || acceptanceChecks.some((check) => /\bpip\s+install\b|\bcurl\b|\bwget\b|\bnc\b/i.test(check))
     || serviceConstraints.some((constraint) => constraint.revalidate_from_fresh_shell);
 }
 
 function hasAfterExitSignal(corpus: string, serviceConstraints: ServiceLifecycleConstraintV1[]): boolean {
-  return /\bafter\b.*\b(?:exit|worker exits|agent exits|session ends)\b|\bsurvive\b.*\b(?:exit|agent|session|worker)\b/i.test(corpus)
+  return corpusHasAfterExitSignal(corpus)
     || serviceConstraints.some((constraint) => constraint.must_survive_agent_exit);
 }
 
@@ -519,7 +542,7 @@ export function buildTrajectoryCompileLite(body: unknown, defaults: {
     24,
   );
   const acceptanceChecks = extractAcceptanceChecks(steps, parsed.hints?.acceptance_checks ?? []);
-  const serviceConstraints = extractServiceLifecycleConstraints(steps, acceptanceChecks);
+  const serviceConstraints = extractServiceLifecycleConstraints(parsed.query_text, steps, acceptanceChecks);
   const likelyTool = inferLikelyTool(steps);
   const workflowSteps = extractWorkflowSteps(steps);
   const taskFamily = inferTaskFamily(parsed.query_text, steps, parsed.trajectory.task_family ?? null);
