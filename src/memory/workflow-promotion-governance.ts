@@ -28,6 +28,9 @@ export function deriveWorkflowPromotionSemanticPolicyEffect(args: {
   basePromotionState: "candidate" | "stable";
   contractTrust?: ContractTrust | null;
   executionContract?: unknown;
+  executionEvidenceAssessment?: {
+    allows_stable_promotion?: boolean;
+  } | null;
   review: MemoryPromoteSemanticReviewResult | null;
   admissibility: MemoryAdmissibilityResult | null;
   minPromotionConfidence?: number;
@@ -58,6 +61,11 @@ export function deriveWorkflowPromotionSemanticPolicyEffect(args: {
       {
         when: args.contractTrust === "authoritative" && !outcomeContractGate.allows_authoritative,
         reason: "outcome_contract_insufficient",
+        reviewSuggestedState: "stable",
+      },
+      {
+        when: args.executionEvidenceAssessment?.allows_stable_promotion === false,
+        reason: "execution_evidence_insufficient",
         reviewSuggestedState: "stable",
       },
       {
@@ -92,6 +100,10 @@ export async function buildWorkflowPromotionGovernancePreview(args: {
   candidateExamples: WorkflowPromotionCandidateExample[];
   contractTrust?: ContractTrust | null;
   executionContract?: unknown;
+  executionEvidenceAssessment?: {
+    allows_stable_promotion?: boolean;
+    reasons?: string[];
+  } | null;
   reviewResult?: MemoryPromoteSemanticReviewResult | null;
   reviewProvider?: PromoteMemoryGovernanceReviewProvider | null;
 }): Promise<{
@@ -126,6 +138,7 @@ export async function buildWorkflowPromotionGovernancePreview(args: {
           basePromotionState: "candidate",
           contractTrust: args.contractTrust ?? null,
           executionContract: args.executionContract,
+          executionEvidenceAssessment: args.executionEvidenceAssessment ?? null,
           review,
           admissibility,
         }),
@@ -152,6 +165,9 @@ export async function buildWorkflowPromotionGovernancePreview(args: {
             ...trace.reason_codes,
             ...(policyEffect.reason_code === "outcome_contract_insufficient"
               ? (policyEffect.outcome_contract_gate?.reasons ?? []).map((reason) => `outcome_contract:${reason}`)
+              : []),
+            ...(policyEffect.reason_code === "execution_evidence_insufficient"
+              ? (args.executionEvidenceAssessment?.reasons ?? []).map((reason) => `execution_evidence:${reason}`)
               : []),
           ])).slice(0, 8),
           outcome_contract_gate: policyEffect.outcome_contract_gate,

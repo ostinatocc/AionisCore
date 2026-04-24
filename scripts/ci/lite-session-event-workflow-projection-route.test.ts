@@ -173,6 +173,19 @@ function buildSessionEventPayload(args: {
     text_summary: args.taskBrief,
     input_text: `continue ${args.taskBrief}`,
     memory_lane: "private",
+    execution_result_summary: {
+      status: "passed",
+      summary: `Validation passed for ${args.taskBrief}`,
+      validation_passed: true,
+      after_exit_revalidated: true,
+      fresh_shell_probe_passed: true,
+    },
+    execution_evidence: [{
+      ref: `evidence://session-event/${args.eventId}`,
+      validation_passed: true,
+      after_exit_revalidated: true,
+      fresh_shell_probe_passed: true,
+    }],
     execution_state_v1: {
       version: 1,
       state_id: args.stateId,

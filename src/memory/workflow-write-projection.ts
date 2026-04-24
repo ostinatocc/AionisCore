@@ -33,6 +33,10 @@ import { stableUuid } from "../util/uuid.js";
 import type { PromoteMemoryGovernanceReviewProvider } from "./governance-provider-types.js";
 import { buildWorkflowPromotionGovernancePreview } from "./workflow-promotion-governance.js";
 import { buildOutcomeContractGate } from "./contract-trust.js";
+import {
+  assessExecutionEvidence,
+  extractExecutionEvidenceFromSlots,
+} from "./execution-evidence.js";
 
 type WriteProjectionSourceNode = {
   id: string;
@@ -844,6 +848,14 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
       executionContract,
       requestedTrust: contractTrust,
     });
+    const executionEvidence = extractExecutionEvidenceFromSlots({
+      slots: source.slots,
+    });
+    const executionEvidenceAssessment = assessExecutionEvidence({
+      executionContract,
+      evidence: executionEvidence,
+      requestedTrust: contractTrust,
+    });
     const distillationSourceKind = resolveWorkflowProjectionDistillationSourceKind(source);
 
     const executionNative = ExecutionNativeV1Schema.parse({
@@ -910,6 +922,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         ],
         contractTrust: governanceContractTrust,
         executionContract,
+        executionEvidenceAssessment,
         reviewResult: (promoteMemoryGovernanceReview?.review_result ?? null) as any,
         reviewProvider: args.governanceReviewProviders?.promote_memory ?? undefined,
       });
@@ -939,6 +952,8 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         ...(serviceLifecycleConstraints.length > 0 ? { service_lifecycle_constraints: serviceLifecycleConstraints } : {}),
         execution_contract_v1: executionContract,
         outcome_contract_gate: outcomeContractGate,
+        ...(executionEvidence ? { execution_evidence_v1: executionEvidence } : {}),
+        execution_evidence_assessment: executionEvidenceAssessment,
         execution_native_v1: executionNative,
         workflow_write_projection: {
           generated_by: "execution_write_projection_v1",
@@ -968,6 +983,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
       && governancePreview?.runtime_apply.promotion_state_override === "stable"
       && contractTrust === "authoritative"
       && outcomeContractGate.allows_authoritative
+      && executionEvidenceAssessment.allows_stable_promotion
     ) {
       const stableClientId = `workflow_projection:stable:${workflowSignature}`;
       const stableNodeId = stableUuid(`${args.scope}:node:${stableClientId}`);
@@ -1028,6 +1044,8 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
           anchor_v1: stableAnchor,
           execution_contract_v1: stableExecutionContract,
           outcome_contract_gate: stableOutcomeContractGate,
+          ...(executionEvidence ? { execution_evidence_v1: executionEvidence } : {}),
+          execution_evidence_assessment: executionEvidenceAssessment,
           execution_native_v1: {
             schema_version: "execution_native_v1",
             execution_kind: "workflow_anchor",

@@ -39,6 +39,83 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
+function nullableString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function booleanField(record: Record<string, unknown> | null, ...keys: string[]): boolean | null {
+  if (!record) return null;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "boolean") return value;
+  }
+  return null;
+}
+
+function statusToValidation(value: unknown): boolean | null {
+  const status = nullableString(value)?.toLowerCase();
+  if (!status) return null;
+  if (["ok", "pass", "passed", "success", "succeeded", "complete", "completed"].includes(status)) return true;
+  if (["fail", "failed", "failure", "error", "errored", "blocked", "timeout", "timed_out"].includes(status)) return false;
+  return null;
+}
+
+function uniqueEvidenceRefs(values: unknown[], limit = 32): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      for (const entry of uniqueEvidenceRefs(value, limit)) {
+        if (seen.has(entry)) continue;
+        seen.add(entry);
+        out.push(entry);
+        if (out.length >= limit) return out;
+      }
+      continue;
+    }
+    const record = asRecord(value);
+    if (record) {
+      for (const entry of uniqueEvidenceRefs([record.evidence_refs, record.evidenceRefs], limit)) {
+        if (seen.has(entry)) continue;
+        seen.add(entry);
+        out.push(entry);
+        if (out.length >= limit) return out;
+      }
+    }
+    const ref = record
+      ? nullableString(record.ref)
+        ?? nullableString(record.uri)
+        ?? nullableString(record.id)
+        ?? nullableString(record.evidence_ref)
+      : nullableString(value);
+    if (!ref || seen.has(ref)) continue;
+    seen.add(ref);
+    out.push(ref);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function firstFailureReason(values: unknown[]): string | null {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const nested = firstFailureReason(value);
+      if (nested) return nested;
+      continue;
+    }
+    const record = asRecord(value);
+    const reason =
+      nullableString(record?.failure_reason)
+      ?? nullableString(record?.failureReason)
+      ?? nullableString(record?.error)
+      ?? nullableString(record?.reason);
+    if (reason) return reason;
+  }
+  return null;
+}
+
 function normalizeTrust(value: unknown): ContractTrust | null {
   const parsed = ContractTrustSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
@@ -52,6 +129,90 @@ function parseEvidence(value: unknown): ExecutionEvidenceV1 | null {
     ...record,
   });
   return parsed.success ? parsed.data : null;
+}
+
+function compileEvidenceFromRecord(args: {
+  record: Record<string, unknown> | null;
+  evidenceRefs?: unknown[];
+}): ExecutionEvidenceV1 | null {
+  const record = args.record;
+  if (!record) return null;
+  const validationPassed =
+    booleanField(record, "validation_passed", "validationPassed", "passed", "ok", "success")
+    ?? statusToValidation(record.status)
+    ?? statusToValidation(record.result)
+    ?? statusToValidation(record.outcome);
+  const afterExitRevalidated = booleanField(
+    record,
+    "after_exit_revalidated",
+    "afterExitRevalidated",
+    "after_exit_validation_passed",
+    "must_hold_after_exit_passed",
+  );
+  const freshShellProbePassed = booleanField(
+    record,
+    "fresh_shell_probe_passed",
+    "freshShellProbePassed",
+    "fresh_shell_revalidated",
+    "fresh_shell_validation_passed",
+    "revalidate_from_fresh_shell_passed",
+  );
+  const failureReason =
+    nullableString(record.failure_reason)
+    ?? nullableString(record.error)
+    ?? nullableString(record.reason)
+    ?? firstFailureReason(args.evidenceRefs ?? [])
+    ?? (validationPassed === false ? nullableString(record.summary) : null);
+  const falseConfidenceDetected =
+    booleanField(record, "false_confidence_detected", "falseConfidenceDetected") === true
+    || (
+      statusToValidation(record.status) === true
+      && [validationPassed, afterExitRevalidated, freshShellProbePassed].some((value) => value === false)
+    );
+  const evidenceRefs = uniqueEvidenceRefs([
+    record.evidence_refs,
+    record.evidenceRefs,
+    record.ref,
+    record.uri,
+    record.id,
+    ...(args.evidenceRefs ?? []),
+  ]);
+
+  if (
+    validationPassed === null
+    && afterExitRevalidated === null
+    && freshShellProbePassed === null
+    && !failureReason
+    && !falseConfidenceDetected
+  ) {
+    return null;
+  }
+
+  return ExecutionEvidenceV1Schema.parse({
+    schema_version: "execution_evidence_v1",
+    validation_passed: validationPassed,
+    after_exit_revalidated: afterExitRevalidated,
+    fresh_shell_probe_passed: freshShellProbePassed,
+    failure_reason: failureReason,
+    false_confidence_detected: falseConfidenceDetected,
+    evidence_refs: evidenceRefs,
+  });
+}
+
+function compileEvidenceFromArray(value: unknown): ExecutionEvidenceV1 | null {
+  if (!Array.isArray(value)) return null;
+  for (const entry of value) {
+    const parsed = parseEvidence(entry);
+    if (parsed) return parsed;
+  }
+  for (const entry of value) {
+    const compiled = compileEvidenceFromRecord({
+      record: asRecord(entry),
+      evidenceRefs: value,
+    });
+    if (compiled) return compiled;
+  }
+  return null;
 }
 
 function metricEvidence(metrics: unknown): ExecutionEvidenceV1 | null {
@@ -120,6 +281,12 @@ export function extractExecutionEvidenceFromSlots(args: {
   const executionResultSummary = asRecord(slots.execution_result_summary);
   return parseEvidence(slots.execution_evidence_v1)
     ?? parseEvidence(executionResultSummary?.execution_evidence_v1)
+    ?? compileEvidenceFromRecord({
+      record: executionResultSummary,
+      evidenceRefs: [slots.execution_evidence, slots.execution_packet_v1],
+    })
+    ?? compileEvidenceFromArray(slots.execution_evidence)
+    ?? compileEvidenceFromArray(executionResultSummary?.execution_evidence)
     ?? metricEvidence(args.metrics);
 }
 
