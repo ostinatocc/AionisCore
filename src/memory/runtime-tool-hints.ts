@@ -1,8 +1,13 @@
 import { buildAionisUri } from "./uri.js";
 import {
-  parseNodeAnchor,
+  resolveNodeAnchorConfidence,
+  resolveNodeAnchorSummary,
+  resolveNodeExecutionKind,
+  resolveNodeOutcomeSurface,
   resolveNodePatternExecutionSurface,
   resolveNodeRehydrationDefaultMode,
+  resolveNodeRehydrationSurface,
+  resolveNodeToolSet,
 } from "./node-execution-surface.js";
 
 type AnchorNodeLike = {
@@ -87,13 +92,13 @@ export function buildRuntimeToolHintsFromAnchorNodes(args: {
   const ranked = args.nodes
     .map<RuntimeToolHint | null>((node) => {
       const slots = asRecord(node.slots);
-      const anchor = parseNodeAnchor(slots);
-      if (!anchor) return null;
       const patternSurface = resolveNodePatternExecutionSurface({ slots });
       const anchorKind = patternSurface.anchor_kind;
       const anchorLevel = patternSurface.anchor_level;
       if (!anchorKind || !anchorLevel) return null;
-      const rehydration = asRecord(anchor.rehydration);
+      const executionKind = resolveNodeExecutionKind(slots);
+      if (anchorKind === "workflow" && executionKind === "workflow_candidate") return null;
+      const rehydration = resolveNodeRehydrationSurface(slots);
       const defaultModeRaw = resolveNodeRehydrationDefaultMode(slots);
       const mode = defaultModeRaw === "summary_only" || defaultModeRaw === "full" || defaultModeRaw === "partial" || defaultModeRaw === "differential"
         ? defaultModeRaw
@@ -102,7 +107,7 @@ export function buildRuntimeToolHintsFromAnchorNodes(args: {
       const payloadCostHint = payloadCostHintRaw === "low" || payloadCostHintRaw === "medium" || payloadCostHintRaw === "high"
         ? payloadCostHintRaw
         : null;
-      const toolSet = asStringList(anchor.tool_set);
+      const toolSet = resolveNodeToolSet({ slots }).slice(0, 8);
       const patternState = patternSurface.pattern_state;
       const distinctRunCount = patternSurface.promotion.distinct_run_count;
       const requiredDistinctRuns = patternSurface.promotion.required_distinct_runs;
@@ -120,10 +125,10 @@ export function buildRuntimeToolHintsFromAnchorNodes(args: {
         type: node.type,
         id: node.id,
       });
-      const summary = firstString(anchor.summary) ?? node.text_summary ?? node.title ?? null;
-      const outcome = asRecord(anchor.outcome);
+      const summary = resolveNodeAnchorSummary(slots) ?? node.text_summary ?? node.title ?? null;
+      const outcome = resolveNodeOutcomeSurface(slots);
       const outcomeStatus = firstString(outcome?.status);
-      const confidence = firstFinite(anchor.anchor_confidence) ?? firstFinite(node.confidence);
+      const confidence = resolveNodeAnchorConfidence(slots) ?? firstFinite(node.confidence);
       const reasonParts = [
         `${anchorKind} anchor recalled`,
         patternState ? `state=${patternState}` : null,

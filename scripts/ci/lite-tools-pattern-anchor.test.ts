@@ -200,6 +200,192 @@ test("resolvePatternTaskAffinity uses trajectory compile task family when direct
   assert.equal(affinity.current_task_family, "task:package-index-server");
 });
 
+test("selectTools resolves trusted pattern identity from canonical execution contract before legacy slots", async () => {
+  const dbPath = tmpDbPath("pattern-canonical-identity-selector");
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  const [sharedEmbedding] = await FakeEmbeddingProvider.embed(["repair export failure pattern"]);
+  const canonicalContract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    task_family: "task:repair_export",
+    task_signature: "tools_select:repair-export-canonical",
+    workflow_signature: "execution_workflow:repair-export-canonical",
+    selected_tool: "edit",
+    file_path: "src/routes/export.ts",
+    target_files: ["src/routes/export.ts"],
+    next_action: "Patch src/routes/export.ts and rerun export tests.",
+    acceptance_checks: ["npm test -- export"],
+    provenance: {
+      source_kind: "manual_context",
+      source_summary_version: "test",
+      notes: ["canonical contract intentionally conflicts with legacy selected_tool"],
+    },
+  });
+  const legacyPattern = MemoryAnchorV1Schema.parse({
+    anchor_kind: "pattern",
+    anchor_level: "L3",
+    pattern_state: "stable",
+    credibility_state: "trusted",
+    task_signature: "tools_select:legacy-bash",
+    task_class: "tools_select_pattern",
+    task_family: "task:legacy_repair",
+    error_family: "error:node-export-mismatch",
+    pattern_signature: "legacy-bash-canonical-edit-pattern",
+    summary: "Stable legacy pattern whose canonical contract now points to edit.",
+    tool_set: ["bash", "edit", "test"],
+    selected_tool: "bash",
+    outcome: {
+      status: "success",
+      result_class: "tool_selection_pattern_stable",
+      success_score: 0.92,
+    },
+    source: {
+      source_kind: "tool_decision",
+      decision_id: randomUUID(),
+    },
+    payload_refs: {
+      node_ids: [],
+      decision_ids: [],
+      run_ids: [randomUUID(), randomUUID(), randomUUID()],
+      step_ids: [],
+      commit_ids: [],
+    },
+    metrics: {
+      usage_count: 0,
+      reuse_success_count: 3,
+      reuse_failure_count: 0,
+      distinct_run_count: 3,
+      last_used_at: null,
+    },
+    promotion: {
+      required_distinct_runs: 3,
+      distinct_run_count: 3,
+      observed_run_ids: [randomUUID(), randomUUID(), randomUUID()],
+      counter_evidence_count: 0,
+      counter_evidence_open: false,
+      credibility_state: "trusted",
+      previous_credibility_state: "candidate",
+      last_transition: "promoted_to_trusted",
+      last_transition_at: new Date().toISOString(),
+      stable_at: new Date().toISOString(),
+      last_validated_at: new Date().toISOString(),
+      last_counter_evidence_at: null,
+    },
+    maintenance: {
+      model: "lazy_online_v1",
+      maintenance_state: "retain",
+      offline_priority: "retain_trusted",
+      lazy_update_fields: ["usage_count", "last_used_at"],
+      last_maintenance_at: "2026-03-20T00:00:00Z",
+    },
+    schema_version: "anchor_v1",
+  });
+
+  try {
+    const prepared = await prepareMemoryWrite(
+      {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        input_text: "seed canonical contract pattern identity fixture",
+        auto_embed: false,
+        memory_lane: "shared",
+        nodes: [
+          {
+            id: randomUUID(),
+            type: "concept",
+            title: "Canonical edit pattern over legacy bash",
+            text_summary: legacyPattern.summary,
+            slots: {
+              summary_kind: "pattern_anchor",
+              compression_layer: "L3",
+              anchor_v1: legacyPattern,
+              execution_contract_v1: canonicalContract,
+              execution_native_v1: {
+                schema_version: "execution_native_v1",
+                execution_kind: "pattern_anchor",
+                summary_kind: "pattern_anchor",
+                compression_layer: "L3",
+                task_signature: "tools_select:legacy-bash",
+                task_family: "task:legacy_repair",
+                error_family: "error:node-export-mismatch",
+                pattern_signature: legacyPattern.pattern_signature,
+                anchor_kind: "pattern",
+                anchor_level: "L3",
+                tool_set: legacyPattern.tool_set,
+                selected_tool: "bash",
+                pattern_state: "stable",
+                credibility_state: "trusted",
+                promotion: legacyPattern.promotion,
+                maintenance: legacyPattern.maintenance,
+              },
+            },
+            embedding: sharedEmbedding,
+            embedding_model: FakeEmbeddingProvider.name,
+            salience: 0.8,
+            importance: 0.9,
+            confidence: 0.9,
+          },
+        ],
+        edges: [],
+      },
+      "default",
+      "default",
+      {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        allowCrossScopeEdges: false,
+      },
+      null,
+    );
+    await liteWriteStore.withTx(() =>
+      applyMemoryWrite({} as any, prepared, {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        allowCrossScopeEdges: false,
+        shadowDualWriteEnabled: false,
+        shadowDualWriteStrict: false,
+        associativeLinkOrigin: "memory_write",
+        write_access: liteWriteStore,
+      }),
+    );
+
+    const recalled = await selectTools(null, {
+      tenant_id: "default",
+      scope: "default",
+      run_id: randomUUID(),
+      context: {
+        task_kind: "repair_export",
+        goal: "repair export failure in node tests",
+        error: {
+          signature: "node-export-mismatch",
+        },
+      },
+      candidates: ["bash", "edit", "test"],
+      include_shadow: false,
+      rules_limit: 20,
+      strict: true,
+      reorder_candidates: true,
+    }, "default", "default", {
+      embedder: FakeEmbeddingProvider,
+      recallAccess: liteRecallStore.createRecallAccess(),
+      liteWriteStore,
+    });
+
+    assert.equal(recalled.rules.matched, 0);
+    assert.equal(recalled.selection.selected, "edit");
+    assert.equal(recalled.pattern_matches.trusted, 1);
+    assert.equal(recalled.pattern_matches.anchors[0]?.selected_tool, "edit");
+    assert.equal(recalled.pattern_matches.anchors[0]?.task_family, "task:repair_export");
+    assert.equal(recalled.pattern_matches.anchors[0]?.affinity_level, "same_task_family");
+    assert.deepEqual(recalled.decision.pattern_summary.used_trusted_pattern_tools, ["edit"]);
+    assert.deepEqual(recalled.selection_summary.used_trusted_pattern_tools, ["edit"]);
+  } finally {
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
 test("recall ranking prefers stable pattern anchors over counter-evidence-open candidates", async () => {
   const dbPath = tmpDbPath("pattern-recall-ranking");
   const liteWriteStore = createLiteWriteStore(dbPath);

@@ -190,6 +190,44 @@ export function resolveNodeErrorSignature(
   );
 }
 
+export function resolveNodeErrorFamily(
+  slots: Record<string, unknown> | null | undefined,
+): string | null {
+  return firstString(
+    slots?.error_family,
+    parseNodeExecutionNative(slots)?.error_family,
+    parseNodeAnchor(slots)?.error_family,
+  );
+}
+
+export function resolveNodeAnchorSummary(
+  slots: Record<string, unknown> | null | undefined,
+): string | null {
+  return firstString(parseNodeAnchor(slots)?.summary);
+}
+
+export function resolveNodeAnchorMetricsSurface(
+  slots: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  return asRecord(parseNodeAnchor(slots)?.metrics) ?? asRecord(slots?.metrics);
+}
+
+export function resolveNodeOutcomeSurface(
+  slots: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  return asRecord(parseNodeExecutionNative(slots)?.outcome)
+    ?? asRecord(parseNodeAnchor(slots)?.outcome);
+}
+
+export function resolveNodeAnchorConfidence(
+  slots: Record<string, unknown> | null | undefined,
+): number | null {
+  return firstFinite(
+    parseNodeExecutionNative(slots)?.anchor_confidence,
+    parseNodeAnchor(slots)?.anchor_confidence,
+  );
+}
+
 export function resolveNodeFilePath(args: {
   slots: Record<string, unknown> | null | undefined;
   executionResultSummary?: Record<string, unknown> | null;
@@ -305,6 +343,71 @@ export function resolveNodeSelectedTool(args: {
   );
 }
 
+export function resolveNodeToolSet(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): string[] {
+  const selectedTool = resolveNodeSelectedTool(args);
+  return firstNonEmptyStringList(
+    parseNodeExecutionNative(args.slots)?.tool_set,
+    parseNodeAnchor(args.slots)?.tool_set,
+    selectedTool ? [selectedTool] : [],
+  );
+}
+
+export function resolveNodeMaintenanceSurface(
+  slots: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  return asRecord(parseNodeExecutionNative(slots)?.maintenance)
+    ?? asRecord(parseNodeAnchor(slots)?.maintenance);
+}
+
+export function resolveNodeWorkflowPromotionSurface(
+  slots: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  return asRecord(parseNodeExecutionNative(slots)?.workflow_promotion)
+    ?? asRecord(parseNodeAnchor(slots)?.workflow_promotion);
+}
+
+export function resolveNodeDistillationSurface(
+  slots: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  return asRecord(parseNodeExecutionNative(slots)?.distillation)
+    ?? asRecord(parseNodeAnchor(slots)?.distillation);
+}
+
+export function resolveNodeRehydrationSurface(
+  slots: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  const explicit = asRecord(parseNodeExecutionNative(slots)?.rehydration)
+    ?? asRecord(parseNodeAnchor(slots)?.rehydration);
+  if (explicit) return explicit;
+  const defaultMode = resolveNodeRehydrationDefaultMode(slots);
+  return defaultMode ? { default_mode: defaultMode } : null;
+}
+
+export function resolveNodeWorkflowSourceKind(
+  slots: Record<string, unknown> | null | undefined,
+): string | null {
+  const anchor = parseNodeAnchor(slots);
+  const explicitSourceKind = firstString(asRecord(anchor?.source)?.source_kind);
+  if (explicitSourceKind) return explicitSourceKind;
+  const workflowPromotion = resolveNodeWorkflowPromotionSurface(slots);
+  const promotionOrigin = firstString(workflowPromotion?.promotion_origin);
+  const executionKind = resolveNodeExecutionKind(slots);
+  if (
+    promotionOrigin === "replay_promote"
+    || promotionOrigin === "replay_stable_normalization"
+    || promotionOrigin === "replay_learning_episode"
+    || promotionOrigin === "replay_learning_auto_promotion"
+    || executionKind === "workflow_candidate"
+    || executionKind === "workflow_anchor"
+  ) {
+    return "playbook";
+  }
+  return null;
+}
+
 export function resolveNodePatternState(
   slots: Record<string, unknown> | null | undefined,
 ): string | null {
@@ -375,6 +478,19 @@ export function resolveNodeCredibilityState(
   return state === "candidate" || state === "trusted" || state === "contested" ? state : null;
 }
 
+export function resolveNodePatternMaintenance(
+  slots: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  return resolveNodeMaintenanceSurface(slots);
+}
+
+export function resolveNodePatternTrustHardening(
+  slots: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  return asRecord(parseNodeExecutionNative(slots)?.trust_hardening)
+    ?? asRecord(parseNodeAnchor(slots)?.trust_hardening);
+}
+
 export type NodePatternPromotionSurface = {
   distinct_run_count: number | null;
   required_distinct_runs: number | null;
@@ -403,10 +519,16 @@ export type NodePatternExecutionSurface = {
   anchor_kind: string | null;
   anchor_level: MemoryLayerId | null;
   selected_tool: string | null;
+  task_signature: string | null;
+  task_family: string | null;
+  error_family: string | null;
+  tool_set: string[];
   pattern_state: string | null;
   credibility_state: "candidate" | "trusted" | "contested" | null;
   contract_trust: ContractTrust | null;
   promotion: NodePatternPromotionSurface;
+  maintenance: Record<string, unknown> | null;
+  trust_hardening: Record<string, unknown> | null;
 };
 
 export function resolveNodePatternExecutionSurface(args: {
@@ -417,10 +539,16 @@ export function resolveNodePatternExecutionSurface(args: {
     anchor_kind: resolveNodeAnchorKind(args.slots),
     anchor_level: resolveNodeAnchorLevel(args.slots),
     selected_tool: resolveNodeSelectedTool(args),
+    task_signature: resolveNodeTaskSignature(args),
+    task_family: resolveNodeTaskFamily(args),
+    error_family: resolveNodeErrorFamily(args.slots),
+    tool_set: resolveNodeToolSet(args),
     pattern_state: resolveNodePatternState(args.slots),
     credibility_state: resolveNodeCredibilityState(args.slots),
     contract_trust: resolveNodeExecutionContractTrust(args),
     promotion: resolveNodePatternPromotionSurface(args.slots),
+    maintenance: resolveNodePatternMaintenance(args.slots),
+    trust_hardening: resolveNodePatternTrustHardening(args.slots),
   };
 }
 

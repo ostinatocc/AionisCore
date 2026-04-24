@@ -16,19 +16,22 @@ import { dedupeWorkflowCandidatesBySignature } from "./workflow-candidate-aggreg
 import { explainWorkflowProjectionForSourceNode } from "./workflow-write-projection.js";
 import { isPatternSuppressed, readPatternOperatorOverride } from "./pattern-operator-override.js";
 import {
-  parseNodeAnchor,
-  parseNodeExecutionNative,
+  resolveNodeAnchorSummary,
   resolveNodeAnchorLevel,
   resolveNodeCompressionLayer,
+  resolveNodeDistillationSurface,
   resolveNodeExecutionContract,
   resolveNodeExecutionContractTrust,
   resolveNodeExecutionKind,
+  resolveNodeErrorFamily,
   resolveNodeErrorSignature,
   resolveNodeFilePath,
+  resolveNodeMaintenanceSurface,
   resolveNodeNextAction,
   resolveNodePatternExecutionSurface,
   resolveNodePatternHints,
   resolveNodePolicyMemorySurface,
+  resolveNodeRehydrationSurface,
   resolveNodeRehydrationDefaultMode,
   resolveNodeSelectedTool,
   resolveNodeServiceLifecycleConstraints,
@@ -36,7 +39,10 @@ import {
   resolveNodeTargetFiles,
   resolveNodeTaskFamily,
   resolveNodeTaskSignature,
+  resolveNodeToolSet,
+  resolveNodeWorkflowPromotionSurface,
   resolveNodeWorkflowSignature,
+  resolveNodeWorkflowSourceKind,
   resolveNodeWorkflowSteps,
 } from "./node-execution-surface.js";
 
@@ -87,27 +93,6 @@ function stringList(value: unknown, limit = 16): string[] {
   return out;
 }
 
-function deriveWorkflowSourceKind(args: {
-  anchor: Record<string, unknown>;
-  workflowPromotion: Record<string, unknown>;
-  executionKind: string | null;
-}): string | null {
-  const explicitSourceKind = firstString(args.anchor?.source && asRecord(args.anchor.source)?.source_kind);
-  if (explicitSourceKind) return explicitSourceKind;
-  const promotionOrigin = firstString(args.workflowPromotion?.promotion_origin);
-  if (
-    promotionOrigin === "replay_promote"
-    || promotionOrigin === "replay_stable_normalization"
-    || promotionOrigin === "replay_learning_episode"
-    || promotionOrigin === "replay_learning_auto_promotion"
-    || args.executionKind === "workflow_candidate"
-    || args.executionKind === "workflow_anchor"
-  ) {
-    return "playbook";
-  }
-  return null;
-}
-
 function deriveWorkflowProjectionMeta(slots: Record<string, unknown>) {
   const projection = asRecord(slots.workflow_write_projection);
   const generatedBy = firstString(projection.generated_by);
@@ -123,15 +108,13 @@ function deriveWorkflowProjectionMeta(slots: Record<string, unknown>) {
 
 function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope: string) {
   const slots = asRecord(row.slots);
-  const execution = parseNodeExecutionNative(slots) ?? {};
-  const anchor = parseNodeAnchor(slots) ?? {};
   const executionContract = resolveNodeExecutionContract({ slots });
   const semanticForgetting = asRecord(slots.semantic_forgetting_v1);
   const archiveRelocation = asRecord(slots.archive_relocation_v1);
-  const workflowPromotion = asRecord(execution.workflow_promotion ?? anchor.workflow_promotion);
-  const maintenance = asRecord(execution.maintenance ?? anchor.maintenance);
-  const rehydration = asRecord(execution.rehydration ?? anchor.rehydration);
-  const distillation = asRecord(execution.distillation);
+  const workflowPromotion = resolveNodeWorkflowPromotionSurface(slots) ?? {};
+  const maintenance = resolveNodeMaintenanceSurface(slots) ?? {};
+  const rehydration = resolveNodeRehydrationSurface(slots) ?? {};
+  const distillation = resolveNodeDistillationSurface(slots) ?? {};
   const projectionMeta = deriveWorkflowProjectionMeta(slots);
   const targetFiles = resolveNodeTargetFiles({ slots });
   const filePath = resolveNodeFilePath({ slots });
@@ -152,14 +135,10 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     uri: toNodeUri(tenantId, scope, row.type, row.id),
     type: row.type,
     title: firstString(row.title),
-    summary: firstString(row.text_summary, anchor.summary),
+    summary: firstString(row.text_summary, resolveNodeAnchorSummary(slots)),
     anchor_level: resolveNodeAnchorLevel(slots),
     execution_contract_v1: executionContract,
-    source_kind: deriveWorkflowSourceKind({
-      anchor,
-      workflowPromotion,
-      executionKind: firstString(execution.execution_kind),
-    }),
+    source_kind: resolveNodeWorkflowSourceKind(slots),
     promotion_origin: firstString(workflowPromotion.promotion_origin),
     promotion_state: firstString(workflowPromotion.promotion_state),
     contract_trust: resolveNodeExecutionContractTrust({ slots }),
@@ -175,7 +154,7 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     archive_relocation_target: firstString(archiveRelocation.relocation_target),
     archive_payload_scope: firstString(archiveRelocation.payload_scope),
     rehydration_default_mode: resolveNodeRehydrationDefaultMode(slots) ?? firstString(rehydration.default_mode),
-    tool_set: stringList(execution.tool_set, 16).length > 0 ? stringList(execution.tool_set, 16) : stringList(anchor.tool_set, 16),
+    tool_set: resolveNodeToolSet({ slots }).slice(0, 16),
     maintenance_state: firstString(maintenance.maintenance_state),
     offline_priority: firstString(maintenance.offline_priority),
     last_maintenance_at: firstString(maintenance.last_maintenance_at),
@@ -200,12 +179,10 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
 
 function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope: string) {
   const slots = asRecord(row.slots);
-  const execution = parseNodeExecutionNative(slots) ?? {};
-  const anchor = parseNodeAnchor(slots) ?? {};
   const patternSurface = resolveNodePatternExecutionSurface({ slots });
   const executionContract = resolveNodeExecutionContract({ slots });
-  const trustHardening = asRecord(execution.trust_hardening ?? anchor.trust_hardening);
-  const maintenance = asRecord(execution.maintenance ?? anchor.maintenance);
+  const trustHardening = patternSurface.trust_hardening ?? {};
+  const maintenance = patternSurface.maintenance ?? {};
   const operatorOverride = readPatternOperatorOverride(slots);
   const suppressed = isPatternSuppressed(operatorOverride);
   const credibilityState = patternSurface.credibility_state ?? "candidate";
@@ -218,13 +195,13 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
     uri: toNodeUri(tenantId, scope, row.type, row.id),
     type: row.type,
     title: firstString(row.title),
-    summary: firstString(row.text_summary, anchor.summary),
+    summary: firstString(row.text_summary, resolveNodeAnchorSummary(slots)),
     anchor_level: patternSurface.anchor_level,
     execution_contract_v1: executionContract,
     contract_trust: patternSurface.contract_trust,
     selected_tool: patternSurface.selected_tool,
-    task_family: resolveNodeTaskFamily({ slots }),
-    error_family: firstString(execution.error_family, anchor.error_family),
+    task_family: patternSurface.task_family,
+    error_family: patternSurface.error_family ?? resolveNodeErrorFamily(slots),
     pattern_state: patternSurface.pattern_state ?? "provisional",
     credibility_state: credibilityState,
     trusted: credibilityState === "trusted",
@@ -299,8 +276,7 @@ function toPolicyMemoryEntry(
   const slots = asRecord(row.slots);
   const contract = asRecord(slots.policy_contract_v1);
   const executionContract = resolveNodeExecutionContract({ slots });
-  const execution = parseNodeExecutionNative(slots) ?? {};
-  const maintenance = asRecord(execution?.maintenance);
+  const maintenance = resolveNodeMaintenanceSurface(slots) ?? {};
   const policySurface = resolveNodePolicyMemorySurface(slots);
   return {
     kind: "policy_memory",
@@ -343,9 +319,8 @@ function toDistillationEntry(
   scope: string,
 ) {
   const slots = asRecord(row.slots);
-  const execution = parseNodeExecutionNative(slots) ?? {};
-  const distillation = asRecord(execution.distillation);
-  const maintenance = asRecord(execution.maintenance);
+  const distillation = resolveNodeDistillationSurface(slots) ?? {};
+  const maintenance = resolveNodeMaintenanceSurface(slots) ?? {};
   return {
     kind: firstString(resolveNodeExecutionKind(slots), resolveNodeSummaryKind(slots), row.type) ?? "unknown",
     summary_kind: resolveNodeSummaryKind(slots),

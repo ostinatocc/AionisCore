@@ -7,9 +7,10 @@ import {
   type ExecutionStateV1,
 } from "../execution/types.js";
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema } from "./schemas.js";
-import { buildExecutionContractFromProjection, parseExecutionContract } from "./execution-contract.js";
+import { buildExecutionContractFromProjection } from "./execution-contract.js";
 import {
   resolveNodeAnchorKind,
+  resolveNodeExecutionContract,
   resolveNodeExecutionContractTrust,
   resolveNodeExecutionKind,
   resolveNodeFilePath,
@@ -161,12 +162,8 @@ function uniqueLifecycleConstraints(
   return out;
 }
 
-function firstRecord(value: unknown): Record<string, unknown> | null {
-  return asRecord(value);
-}
-
 function readSourceExecutionContract(source: WriteProjectionSourceNode) {
-  return parseExecutionContract(firstRecord(source.slots)?.execution_contract_v1);
+  return resolveNodeExecutionContract({ slots: source.slots });
 }
 
 function collectWorkflowSteps(source: WriteProjectionSourceNode): string[] {
@@ -234,8 +231,7 @@ function synthesizePacketFromLightweightHandoff(source: WriteProjectionSourceNod
   const mustKeep = stringList(slots.must_keep);
   const serviceLifecycleConstraints = uniqueLifecycleConstraints([
     ...(executionContract?.service_lifecycle_constraints ?? []),
-    ...((slots.service_lifecycle_constraints as unknown[]) ?? []),
-    ...((firstRecord(slots.execution_native_v1)?.service_lifecycle_constraints as unknown[]) ?? []),
+    ...resolveNodeServiceLifecycleConstraints({ slots }),
   ]);
   const risk = firstString(slots.risk);
   const stateId = `handoff:${sha256Hex(stableStringify({
