@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  authorityVisibilityBlocksPromotionReadiness,
   authorityVisibilityFromValue,
   authorityVisibilityPrimaryBlocker,
   authorityVisibilityRequiresInspection,
@@ -43,6 +44,20 @@ test("authority-producing Runtime surfaces use the unified authority gate", () =
   assertContains(policyMemory, "buildRuntimeAuthorityGate", "policy memory must build runtime authority gates");
   assertContains(policyMemory, "buildPolicyAuthoritySurfaces", "policy memory must centralize policy authority surfaces");
   assertContains(policyMemory, "authority_gate_v1", "policy memory must persist authority gate state");
+});
+
+test("authority-consuming Runtime boundaries use the shared authority consumption helper", () => {
+  const actionRetrieval = read("src/memory/action-retrieval.ts");
+  assertContains(actionRetrieval, "authority-consumption.js", "action retrieval must consume the shared authority helper");
+  assertContains(actionRetrieval, "demoteExecutionContractForAuthorityVisibility", "action retrieval must demote blocked execution contracts through the helper");
+
+  const contextOrchestrator = read("src/memory/context-orchestrator.ts");
+  assertContains(contextOrchestrator, "authority-consumption.js", "context orchestration must consume the shared authority helper");
+  assertContains(contextOrchestrator, "authority_requires_inspection", "planner packet text must expose inspect-first authority state");
+
+  const reviewerPacks = read("src/memory/reviewer-packs.ts");
+  assertContains(reviewerPacks, "authority-consumption.js", "reviewer packs must consume the shared authority helper");
+  assertContains(reviewerPacks, "authorityConsumptionAllowsActionReuse", "reviewer packs must filter blocked action reuse through the helper");
 });
 
 test("pattern surfaces cannot masquerade as authoritative Runtime contracts", () => {
@@ -134,4 +149,81 @@ test("authority consumption helper demotes blocked authority to inspect-first gu
   assert.equal(demoted.contract_trust, "advisory");
   assert.match(demoted.next_action ?? "", /Inspect src\/routes\/export\.ts/);
   assert.ok(demoted.provenance.notes.includes("authority_visibility_requires_inspection:execution_evidence:after_exit_revalidation_failed"));
+});
+
+test("authority consumption keeps candidate readiness separate from action reuse authority", () => {
+  const incompletePromotionVisibility = authorityVisibilityFromValue({
+    authority_visibility: {
+      surface_version: "runtime_authority_visibility_v1",
+      node_id: "wf_candidate",
+      node_kind: "workflow",
+      title: "Candidate workflow",
+      requested_trust: "advisory",
+      effective_trust: "advisory",
+      status: "insufficient",
+      allows_authoritative: false,
+      allows_stable_promotion: false,
+      authority_blocked: false,
+      stable_promotion_blocked: true,
+      primary_blocker: "execution_evidence:missing_validation",
+      authority_reasons: ["execution_evidence:missing_validation"],
+      outcome_contract_reasons: [],
+      execution_evidence_reasons: ["missing_validation"],
+      execution_evidence_status: "incomplete",
+      false_confidence_detected: false,
+    },
+  });
+
+  assert.equal(authorityVisibilityRequiresInspection(incompletePromotionVisibility), true);
+  assert.equal(authorityVisibilityBlocksPromotionReadiness(incompletePromotionVisibility), false);
+
+  const authorityBlockedVisibility = authorityVisibilityFromValue({
+    authority_visibility: {
+      surface_version: "runtime_authority_visibility_v1",
+      node_id: "wf_authority_blocked",
+      node_kind: "workflow",
+      title: "Authority blocked workflow",
+      requested_trust: "authoritative",
+      effective_trust: "advisory",
+      status: "insufficient",
+      allows_authoritative: false,
+      allows_stable_promotion: false,
+      authority_blocked: true,
+      stable_promotion_blocked: true,
+      primary_blocker: "execution_evidence:missing_validation",
+      authority_reasons: ["execution_evidence:missing_validation"],
+      outcome_contract_reasons: [],
+      execution_evidence_reasons: ["missing_validation"],
+      execution_evidence_status: "incomplete",
+      false_confidence_detected: false,
+    },
+  });
+
+  assert.equal(authorityVisibilityRequiresInspection(authorityBlockedVisibility), true);
+  assert.equal(authorityVisibilityBlocksPromotionReadiness(authorityBlockedVisibility), false);
+
+  const failedVisibility = authorityVisibilityFromValue({
+    authority_visibility: {
+      surface_version: "runtime_authority_visibility_v1",
+      node_id: "wf_failed",
+      node_kind: "workflow",
+      title: "Failed workflow",
+      requested_trust: "advisory",
+      effective_trust: "advisory",
+      status: "insufficient",
+      allows_authoritative: false,
+      allows_stable_promotion: false,
+      authority_blocked: false,
+      stable_promotion_blocked: true,
+      primary_blocker: "execution_evidence:after_exit_revalidation_failed",
+      authority_reasons: ["execution_evidence:after_exit_revalidation_failed"],
+      outcome_contract_reasons: [],
+      execution_evidence_reasons: ["after_exit_revalidation_failed"],
+      execution_evidence_status: "failed",
+      false_confidence_detected: true,
+    },
+  });
+
+  assert.equal(authorityVisibilityRequiresInspection(failedVisibility), true);
+  assert.equal(authorityVisibilityBlocksPromotionReadiness(failedVisibility), true);
 });

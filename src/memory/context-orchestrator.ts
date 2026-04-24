@@ -1,3 +1,10 @@
+import {
+  authorityVisibilityBlocksPromotionReadiness,
+  authorityVisibilityFromValue,
+  authorityVisibilityPrimaryBlocker,
+  authorityVisibilityRequiresInspection,
+} from "./authority-consumption.js";
+
 export type ContextLayerName = "facts" | "episodes" | "rules" | "static" | "decisions" | "tools" | "citations";
 type MemoryTier = "hot" | "warm" | "cold" | "archive";
 type ForgetReason = "tier" | "lifecycle" | "salience";
@@ -129,6 +136,16 @@ function firstBoolean(v: unknown): boolean | null {
   return null;
 }
 
+function authorityConsumptionBlockerLabel(entry: unknown): string | null {
+  const visibility = authorityVisibilityFromValue(entry);
+  if (!authorityVisibilityRequiresInspection(visibility)) return null;
+  return authorityVisibilityPrimaryBlocker(visibility) ?? "unknown";
+}
+
+function authorityConsumptionBlocksPromotionReadiness(entry: unknown): boolean {
+  return authorityVisibilityBlocksPromotionReadiness(authorityVisibilityFromValue(entry));
+}
+
 type PatternSignal = {
   anchor_id: string;
   anchor_level: string | null;
@@ -251,7 +268,7 @@ function collectWorkflowSignals(packet: ReturnType<typeof normalizeActionRecallP
           && Number(requiredObservations) > 0
           && Number(observedCount) >= Number(requiredObservations)
         )
-      );
+      ) && !authorityConsumptionBlocksPromotionReadiness(entry);
       return {
         anchor_id: String(entry?.anchor_id || "").trim(),
         anchor_level: String(entry?.anchor_level || "").trim() || null,
@@ -483,8 +500,8 @@ function buildPlannerPacketText(packet: ReturnType<typeof normalizeActionRecallP
       String(entry?.last_transition || "").trim() ? `transition=${String(entry.last_transition).trim()}` : null,
       String(entry?.maintenance_state || "").trim() ? `maintenance=${String(entry.maintenance_state).trim()}` : null,
       String(entry?.offline_priority || "").trim() ? `priority=${String(entry.offline_priority).trim()}` : null,
-      entry?.authority_visibility?.authority_blocked === true
-        ? `authority_blocked=${String(entry.authority_visibility.primary_blocker || "unknown").trim()}`
+      authorityConsumptionBlockerLabel(entry)
+        ? `authority_requires_inspection=${authorityConsumptionBlockerLabel(entry)}`
         : null,
     ])
   );
@@ -503,8 +520,8 @@ function buildPlannerPacketText(packet: ReturnType<typeof normalizeActionRecallP
       String(entry?.last_transition || "").trim() ? `transition=${String(entry.last_transition).trim()}` : null,
       String(entry?.maintenance_state || "").trim() ? `maintenance=${String(entry.maintenance_state).trim()}` : null,
       String(entry?.offline_priority || "").trim() ? `priority=${String(entry.offline_priority).trim()}` : null,
-      entry?.authority_visibility?.authority_blocked === true
-        ? `authority_blocked=${String(entry.authority_visibility.primary_blocker || "unknown").trim()}`
+      authorityConsumptionBlockerLabel(entry)
+        ? `authority_requires_inspection=${authorityConsumptionBlockerLabel(entry)}`
         : null,
     ])
   );

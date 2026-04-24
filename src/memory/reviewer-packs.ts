@@ -2,6 +2,11 @@ import { recoverHandoff } from "./handoff.js";
 import { buildEvolutionInspectStateLite } from "./evolution-inspect.js";
 import { parseExecutionContract } from "./execution-contract.js";
 import {
+  authorityVisibilityBlocksPromotionReadiness,
+  authorityVisibilityFromValue,
+  authorityVisibilityRequiresInspection,
+} from "./authority-consumption.js";
+import {
   ContinuityReviewPackResponseSchema,
   EvolutionReviewPackResponseSchema,
 } from "./schemas.js";
@@ -29,6 +34,14 @@ function stringList(value: unknown): string[] {
 
 function safeArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function authorityConsumptionAllowsActionReuse(entry: unknown): boolean {
+  return !authorityVisibilityRequiresInspection(authorityVisibilityFromValue(entry));
+}
+
+function authorityConsumptionAllowsPromotionReadiness(entry: unknown): boolean {
+  return !authorityVisibilityBlocksPromotionReadiness(authorityVisibilityFromValue(entry));
 }
 
 function toContinuityFocusItem(handoff: Record<string, unknown> | null | undefined) {
@@ -152,20 +165,22 @@ export async function buildEvolutionReviewPackLite(args: {
   const candidateWorkflows = Array.isArray(introspection.candidate_workflows) ? introspection.candidate_workflows : [];
   const trustedPatterns = Array.isArray(introspection.trusted_patterns) ? introspection.trusted_patterns : [];
   const contestedPatterns = Array.isArray(introspection.contested_patterns) ? introspection.contested_patterns : [];
-  const stableWorkflow = (recommendedWorkflows[0] as Record<string, unknown> | undefined) ?? null;
+  const stableWorkflow =
+    (recommendedWorkflows.find((entry) => authorityConsumptionAllowsActionReuse(entry)) as Record<string, unknown> | undefined)
+    ?? null;
   const promotionReadyWorkflow =
-    (candidateWorkflows.find((entry) => asRecord(entry).promotion_ready === true) as Record<string, unknown> | undefined)
-    ?? (recommendedWorkflows.find((entry) => asRecord(entry).promotion_ready === true) as Record<string, unknown> | undefined)
+    (candidateWorkflows.find((entry) => asRecord(entry).promotion_ready === true && authorityConsumptionAllowsPromotionReadiness(entry)) as Record<string, unknown> | undefined)
+    ?? (recommendedWorkflows.find((entry) => asRecord(entry).promotion_ready === true && authorityConsumptionAllowsPromotionReadiness(entry)) as Record<string, unknown> | undefined)
     ?? null;
   const trustedPattern = (trustedPatterns[0] as Record<string, unknown> | undefined) ?? null;
   const contestedPattern = (contestedPatterns[0] as Record<string, unknown> | undefined) ?? null;
   const authorityVisibilitySummary = asRecord(introspection.authority_visibility_summary);
   const authorityBlockers = [...recommendedWorkflows, ...candidateWorkflows, ...safeArray(introspection.supporting_knowledge)]
-    .map((entry) => asRecord(asRecord(entry).authority_visibility))
-    .filter((entry) => entry.authority_blocked === true || entry.stable_promotion_blocked === true)
+    .map((entry) => authorityVisibilityFromValue(entry))
+    .filter((entry) => authorityVisibilityRequiresInspection(entry))
     .slice(0, 8);
   const promotionReadyAnchorIds = [...recommendedWorkflows, ...candidateWorkflows]
-    .filter((entry) => asRecord(entry).promotion_ready === true)
+    .filter((entry) => asRecord(entry).promotion_ready === true && authorityConsumptionAllowsPromotionReadiness(entry))
     .map((entry) => firstString(asRecord(entry).anchor_id))
     .filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
   const executionContract = parseExecutionContract(experience.execution_contract_v1);
