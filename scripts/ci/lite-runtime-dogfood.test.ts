@@ -12,6 +12,9 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.equal(result.summary.wasted_step_count, 0);
   assert.equal(result.summary.gate_false_positive_rate, 0);
   assert.equal(result.summary.gate_false_negative_rate, 0);
+  assert.equal(result.summary.false_confidence_detected_count, 1);
+  assert.equal(result.summary.false_confidence_blocked_count, 1);
+  assert.equal(result.summary.unblocked_false_confidence_rate, 0);
 
   const serviceScenario = result.scenarios.find((scenario) => scenario.id === "service_after_exit");
   assert.ok(serviceScenario);
@@ -30,4 +33,14 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.equal(thinServiceScenario.metrics.false_confidence_risk, false);
   assert.equal(thinServiceScenario.metrics.after_exit_correct, false);
   assert.ok(thinServiceScenario.compiled.outcome_contract_gate.reasons.includes("missing_service_detach_then_probe"));
+
+  const failedEvidenceScenario = result.scenarios.find((scenario) => scenario.id === "service_after_exit_evidence_failed");
+  assert.ok(failedEvidenceScenario);
+  assert.equal(failedEvidenceScenario.metrics.outcome_gate_allows_authoritative, true);
+  assert.equal(failedEvidenceScenario.metrics.execution_evidence_allows_authoritative, false);
+  assert.equal(failedEvidenceScenario.metrics.stable_promotion_allowed, false);
+  assert.equal(failedEvidenceScenario.metrics.false_confidence_detected, true);
+  assert.equal(failedEvidenceScenario.metrics.false_confidence_blocked, true);
+  assert.equal(failedEvidenceScenario.metrics.unblocked_false_confidence, false);
+  assert.ok(failedEvidenceScenario.compiled.execution_evidence_assessment.reasons.includes("after_exit_revalidation_failed"));
 });
