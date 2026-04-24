@@ -1054,6 +1054,8 @@ export type AionisSessionCreateRequest = {
   text_summary?: string;
   input_text?: string;
   metadata?: Record<string, unknown>;
+  execution_result_summary?: Record<string, unknown>;
+  execution_evidence?: Array<Record<string, unknown>>;
   auto_embed?: boolean;
   memory_lane?: "private" | "shared";
   producer_agent_id?: string;
@@ -1078,9 +1080,24 @@ export type AionisSessionEventWriteRequest = {
   actor?: string;
   session_id: string;
   event_text?: string;
+  event_id?: string;
+  title?: string;
+  text_summary?: string;
   input_text?: string;
   input_sha256?: string;
   metadata?: Record<string, unknown>;
+  execution_result_summary?: Record<string, unknown>;
+  execution_evidence?: Array<Record<string, unknown>>;
+  execution_state_v1?: Record<string, unknown>;
+  execution_packet_v1?: Record<string, unknown>;
+  execution_transitions_v1?: Array<Record<string, unknown>>;
+  auto_embed?: boolean;
+  memory_lane?: "private" | "shared";
+  producer_agent_id?: string;
+  owner_agent_id?: string;
+  owner_team_id?: string;
+  edge_weight?: number;
+  edge_confidence?: number;
 } & AionisRequestPayload;
 
 export type AionisSessionEventsQuery = {

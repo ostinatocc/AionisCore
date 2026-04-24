@@ -187,6 +187,9 @@ function buildExecutionWritePayload(args: {
   ownedFiles?: string[];
   pendingValidations?: string[];
   contractTrust?: "authoritative" | "advisory" | "observational";
+  serviceLifecycleConstraints?: Array<Record<string, unknown>>;
+  executionResultSummary?: Record<string, unknown>;
+  executionEvidence?: Array<Record<string, unknown>>;
   workflowPromotionGovernanceReview?: Record<string, unknown>;
 }) {
   const updatedAt = "2026-03-21T12:00:00.000Z";
@@ -221,6 +224,7 @@ function buildExecutionWritePayload(args: {
             rejected_paths: [],
             unresolved_blockers: [],
             rollback_notes: [],
+            service_lifecycle_constraints: args.serviceLifecycleConstraints ?? [],
             reviewer_contract: null,
             resume_anchor: {
               anchor: `resume:${args.filePath}`,
@@ -244,6 +248,7 @@ function buildExecutionWritePayload(args: {
             pending_validations: pendingValidations,
             unresolved_blockers: [],
             rollback_notes: [],
+            service_lifecycle_constraints: args.serviceLifecycleConstraints ?? [],
             review_contract: null,
             resume_anchor: {
               anchor: `resume:${args.filePath}`,
@@ -254,6 +259,12 @@ function buildExecutionWritePayload(args: {
             artifact_refs: [],
             evidence_refs: [],
           },
+          ...(args.executionResultSummary
+            ? { execution_result_summary: args.executionResultSummary }
+            : {}),
+          ...(args.executionEvidence
+            ? { execution_evidence: args.executionEvidence }
+            : {}),
           ...(args.workflowPromotionGovernanceReview
             ? { workflow_promotion_governance_review: args.workflowPromotionGovernanceReview }
             : {}),
@@ -351,6 +362,38 @@ function buildLightweightHandoffWritePayload(args: {
       },
     ],
     edges: [],
+  };
+}
+
+function passedExecutionEvidence(ref: string): {
+  executionResultSummary: Record<string, unknown>;
+  executionEvidence: Array<Record<string, unknown>>;
+} {
+  return {
+    executionResultSummary: {
+      status: "passed",
+      summary: "Validation completed successfully.",
+      validation_passed: true,
+    },
+    executionEvidence: [{
+      ref,
+      validation_passed: true,
+    }],
+  };
+}
+
+function serviceLifecycleConstraint(): Record<string, unknown> {
+  return {
+    version: 1,
+    service_kind: "http",
+    label: "service:http://127.0.0.1:8080/health",
+    launch_reference: "nohup npm run start > /tmp/aionis-service.log 2>&1 &",
+    endpoint: "http://127.0.0.1:8080/health",
+    must_survive_agent_exit: true,
+    revalidate_from_fresh_shell: true,
+    detach_then_probe: true,
+    health_checks: ["curl -fsS http://127.0.0.1:8080/health"],
+    teardown_notes: [],
   };
 }
 
@@ -569,6 +612,7 @@ test("memory/write stable workflow governance preview evaluates admitted review 
         stateId: `state:${randomUUID()}`,
         filePath: "src/routes/export.ts",
         modifiedFiles: ["src/routes/export.ts"],
+        ...passedExecutionEvidence("evidence://export/governance-review/run-1"),
       }),
     });
     assert.equal(firstWrite.statusCode, 200);
@@ -585,6 +629,7 @@ test("memory/write stable workflow governance preview evaluates admitted review 
         filePath: "src/routes/export.ts",
         modifiedFiles: ["src/routes/export.ts"],
         contractTrust: "authoritative",
+        ...passedExecutionEvidence("evidence://export/governance-review/run-2"),
         workflowPromotionGovernanceReview: {
           promote_memory: {
             review_result: {
@@ -670,6 +715,146 @@ test("memory/write stable workflow governance preview evaluates admitted review 
   }
 });
 
+test("memory/write stable workflow governance blocks promotion when execution evidence fails lifecycle revalidation", async () => {
+  const dbPath = tmpDbPath("projection-governance-evidence-blocked");
+  const app = Fastify();
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  try {
+    registerApp({ app, liteWriteStore, liteRecallStore });
+
+    const serviceConstraint = serviceLifecycleConstraint();
+    const firstWrite = await app.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildExecutionWritePayload({
+        eventId: randomUUID(),
+        title: "Patch service publish path",
+        inputText: "continue fixing service publish path",
+        taskBrief: "Fix service publish validation",
+        stateId: `state:${randomUUID()}`,
+        filePath: "src/routes/service.ts",
+        modifiedFiles: ["src/routes/service.ts"],
+        contractTrust: "authoritative",
+        serviceLifecycleConstraints: [serviceConstraint],
+        executionResultSummary: {
+          status: "passed",
+          summary: "Service validation passed and survived the agent exit.",
+          validation_passed: true,
+          after_exit_revalidated: true,
+          fresh_shell_probe_passed: true,
+        },
+        executionEvidence: [{
+          ref: "evidence://service/run-1",
+          validation_passed: true,
+          after_exit_revalidated: true,
+          fresh_shell_probe_passed: true,
+        }],
+      }),
+    });
+    assert.equal(firstWrite.statusCode, 200);
+
+    const secondWrite = await app.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildExecutionWritePayload({
+        eventId: randomUUID(),
+        title: "Patch service publish path with failed lifecycle evidence",
+        inputText: "continue fixing service publish path second run",
+        taskBrief: "Fix service publish validation",
+        stateId: `state:${randomUUID()}`,
+        filePath: "src/routes/service.ts",
+        modifiedFiles: ["src/routes/service.ts"],
+        contractTrust: "authoritative",
+        serviceLifecycleConstraints: [serviceConstraint],
+        executionResultSummary: {
+          status: "passed",
+          summary: "Agent-side validation looked green, but lifecycle revalidation failed.",
+          validation_passed: true,
+          after_exit_revalidated: false,
+          fresh_shell_probe_passed: false,
+        },
+        executionEvidence: [{
+          ref: "evidence://service/run-2",
+          validation_passed: true,
+          after_exit_revalidated: false,
+          fresh_shell_probe_passed: false,
+          failure_reason: "service_not_reachable_after_agent_exit",
+        }],
+        workflowPromotionGovernanceReview: {
+          promote_memory: {
+            review_result: {
+              review_version: "promote_memory_semantic_review_v1",
+              adjudication: {
+                operation: "promote_memory",
+                disposition: "recommend",
+                target_kind: "workflow",
+                target_level: "L2",
+                reason: "stable workflow promotion would normally be valuable here",
+                confidence: 0.92,
+                strategic_value: "high",
+              },
+            },
+          },
+        },
+      }),
+    });
+    assert.equal(secondWrite.statusCode, 200);
+
+    const storedStable = await liteWriteStore.findNodes({
+      scope: "default",
+      type: "procedure",
+      slotsContains: {
+        summary_kind: "workflow_anchor",
+      },
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 20,
+      offset: 0,
+    });
+    assert.equal(storedStable.rows.length, 0);
+
+    const storedCandidates = await liteWriteStore.findNodes({
+      scope: "default",
+      type: "event",
+      slotsContains: {
+        summary_kind: "workflow_candidate",
+      },
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 20,
+      offset: 0,
+    });
+    const reviewedCandidate = storedCandidates.rows.find((row) => {
+      const projection = (row.slots?.workflow_write_projection ?? null) as Record<string, unknown> | null;
+      const preview = (projection?.governance_preview ?? null) as Record<string, unknown> | null;
+      return preview?.promote_memory != null;
+    }) ?? null;
+    assert.ok(reviewedCandidate);
+    const assessment = reviewedCandidate.slots?.execution_evidence_assessment as Record<string, unknown>;
+    assert.equal(assessment.status, "failed");
+    assert.equal(assessment.allows_stable_promotion, false);
+    assert.ok((assessment.reasons as string[]).includes("after_exit_revalidation_failed"));
+    assert.ok((assessment.reasons as string[]).includes("fresh_shell_probe_failed"));
+
+    const reviewedProjection = (reviewedCandidate.slots?.workflow_write_projection ?? {}) as Record<string, unknown>;
+    const governancePreview = (reviewedProjection.governance_preview ?? {}) as Record<string, unknown>;
+    const promotePreview = (governancePreview.promote_memory ?? {}) as Record<string, unknown>;
+    const policyEffect = (promotePreview.policy_effect ?? {}) as Record<string, unknown>;
+    const decisionTrace = (promotePreview.decision_trace ?? {}) as Record<string, unknown>;
+
+    assert.equal(policyEffect.applies, false);
+    assert.equal(policyEffect.reason_code, "execution_evidence_insufficient");
+    assert.equal(policyEffect.effective_promotion_state, "candidate");
+    assert.ok((decisionTrace.reason_codes as string[]).includes("execution_evidence_insufficient"));
+    assert.ok((decisionTrace.reason_codes as string[]).includes("execution_evidence:after_exit_revalidation_failed"));
+    assert.equal(decisionTrace.runtime_apply_changed_promotion_state, false);
+  } finally {
+    await app.close();
+    await liteWriteStore.close();
+  }
+});
+
 test("memory/write stable workflow governance can use internal static provider without explicit review", async () => {
   const dbPath = tmpDbPath("projection-governance-provider");
   const app = Fastify();
@@ -697,6 +882,7 @@ test("memory/write stable workflow governance can use internal static provider w
         filePath: "src/routes/export.ts",
         modifiedFiles: ["src/routes/export.ts"],
         contractTrust: "authoritative",
+        ...passedExecutionEvidence("evidence://export/static-provider/run-1"),
       }),
     });
     assert.equal(firstWrite.statusCode, 200);
@@ -713,6 +899,7 @@ test("memory/write stable workflow governance can use internal static provider w
         filePath: "src/routes/export.ts",
         modifiedFiles: ["src/routes/export.ts"],
         contractTrust: "authoritative",
+        ...passedExecutionEvidence("evidence://export/static-provider/run-2"),
       }),
     });
     assert.equal(secondWrite.statusCode, 200);

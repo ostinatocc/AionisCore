@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildExecutionPacketV1, ExecutionPacketV1Schema, ExecutionStateV1Schema } from "../../src/execution/index.ts";
 import { buildOutcomeContractGate } from "../../src/memory/contract-trust.ts";
-import { assessExecutionEvidence, buildExecutionEvidenceFromValidation } from "../../src/memory/execution-evidence.ts";
+import {
+  assessExecutionEvidence,
+  buildExecutionEvidenceFromValidation,
+  extractExecutionEvidenceFromSlots,
+} from "../../src/memory/execution-evidence.ts";
 import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
 
 test("execution packet carries service lifecycle constraints from execution state", () => {
@@ -172,4 +176,35 @@ test("execution evidence blocks authoritative learning after failed after-exit p
   assert.ok(assessment.reasons.includes("after_exit_revalidation_failed"));
   assert.ok(assessment.reasons.includes("fresh_shell_probe_failed"));
   assert.ok(assessment.reasons.includes("false_confidence_detected"));
+});
+
+test("execution evidence compiler normalizes route side outputs into execution_evidence_v1", () => {
+  const evidence = extractExecutionEvidenceFromSlots({
+    slots: {
+      execution_result_summary: {
+        status: "passed",
+        summary: "Agent-side validation passed, but after-exit probe failed.",
+        validation_passed: true,
+        after_exit_revalidated: false,
+        fresh_shell_probe_passed: false,
+      },
+      execution_evidence: [{
+        ref: "evidence://service/fresh-shell-probe",
+        failure_reason: "connection_refused_after_agent_exit",
+      }],
+      execution_packet_v1: {
+        evidence_refs: ["packet:evidence:fresh-shell-probe"],
+      },
+    },
+  });
+
+  assert.ok(evidence);
+  assert.equal(evidence.schema_version, "execution_evidence_v1");
+  assert.equal(evidence.validation_passed, true);
+  assert.equal(evidence.after_exit_revalidated, false);
+  assert.equal(evidence.fresh_shell_probe_passed, false);
+  assert.deepEqual(evidence.evidence_refs, [
+    "evidence://service/fresh-shell-probe",
+    "packet:evidence:fresh-shell-probe",
+  ]);
 });

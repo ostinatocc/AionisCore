@@ -203,6 +203,19 @@ function buildHandoffPayload(args: {
     handoff_text: `Continue ${args.summary}`,
     target_files: [args.filePath],
     next_action: `Patch ${args.filePath} and rerun export tests`,
+    execution_result_summary: {
+      status: "passed",
+      summary: `Validation passed for ${args.summary}`,
+      validation_passed: true,
+      after_exit_revalidated: true,
+      fresh_shell_probe_passed: true,
+    },
+    execution_evidence: [{
+      ref: `evidence://handoff/${args.stateId}`,
+      validation_passed: true,
+      after_exit_revalidated: true,
+      fresh_shell_probe_passed: true,
+    }],
     execution_state_v1: {
       version: 1,
       state_id: args.stateId,
