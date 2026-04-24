@@ -15,6 +15,7 @@ import type { LiteExecutionNativeNodeRow, LiteWriteStore } from "../store/lite-w
 import { dedupeWorkflowCandidatesBySignature } from "./workflow-candidate-aggregation.js";
 import { explainWorkflowProjectionForSourceNode } from "./workflow-write-projection.js";
 import { isPatternSuppressed, readPatternOperatorOverride } from "./pattern-operator-override.js";
+import { buildOutcomeContractGate, type OutcomeContractGate } from "./contract-trust.js";
 import {
   resolveNodeAnchorSummary,
   resolveNodeAnchorLevel,
@@ -109,6 +110,11 @@ function deriveWorkflowProjectionMeta(slots: Record<string, unknown>) {
 function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope: string) {
   const slots = asRecord(row.slots);
   const executionContract = resolveNodeExecutionContract({ slots });
+  const contractTrust = resolveNodeExecutionContractTrust({ slots });
+  const outcomeContractGate = buildOutcomeContractGate({
+    executionContract,
+    requestedTrust: contractTrust,
+  });
   const semanticForgetting = asRecord(slots.semantic_forgetting_v1);
   const archiveRelocation = asRecord(slots.archive_relocation_v1);
   const workflowPromotion = resolveNodeWorkflowPromotionSurface(slots) ?? {};
@@ -141,7 +147,8 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     source_kind: resolveNodeWorkflowSourceKind(slots),
     promotion_origin: firstString(workflowPromotion.promotion_origin),
     promotion_state: firstString(workflowPromotion.promotion_state),
-    contract_trust: resolveNodeExecutionContractTrust({ slots }),
+    contract_trust: contractTrust,
+    outcome_contract_gate: outcomeContractGate,
     task_family: resolveNodeTaskFamily({ slots }),
     observed_count: Number.isFinite(observedCount) ? observedCount : null,
     required_observations: Number.isFinite(requiredObservations) ? requiredObservations : null,
@@ -181,6 +188,10 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
   const slots = asRecord(row.slots);
   const patternSurface = resolveNodePatternExecutionSurface({ slots });
   const executionContract = resolveNodeExecutionContract({ slots });
+  const outcomeContractGate = buildOutcomeContractGate({
+    executionContract,
+    requestedTrust: patternSurface.contract_trust,
+  });
   const trustHardening = patternSurface.trust_hardening ?? {};
   const maintenance = patternSurface.maintenance ?? {};
   const operatorOverride = readPatternOperatorOverride(slots);
@@ -199,6 +210,7 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
     anchor_level: patternSurface.anchor_level,
     execution_contract_v1: executionContract,
     contract_trust: patternSurface.contract_trust,
+    outcome_contract_gate: outcomeContractGate,
     selected_tool: patternSurface.selected_tool,
     task_family: patternSurface.task_family,
     error_family: patternSurface.error_family ?? resolveNodeErrorFamily(slots),
@@ -265,6 +277,31 @@ function toWorkflowSignal(entry: ReturnType<typeof toWorkflowEntry>) {
     maintenance_state: entry.maintenance_state,
     offline_priority: entry.offline_priority,
     last_maintenance_at: entry.last_maintenance_at,
+    outcome_contract_gate: entry.outcome_contract_gate,
+  };
+}
+
+function buildOutcomeContractGateSummary(gates: OutcomeContractGate[]) {
+  const reasonCounts: Record<string, number> = {};
+  for (const gate of gates) {
+    for (const reason of gate.reasons) {
+      reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1;
+    }
+  }
+  return {
+    summary_version: "outcome_contract_gate_summary_v1" as const,
+    sufficient_count: gates.filter((gate) => gate.status === "sufficient").length,
+    insufficient_count: gates.filter((gate) => gate.status === "insufficient").length,
+    authoritative_allowed_count: gates.filter((gate) => gate.allows_authoritative).length,
+    authoritative_blocked_count: gates.filter(
+      (gate) => gate.requested_trust === "authoritative" && !gate.allows_authoritative,
+    ).length,
+    service_lifecycle_gap_count: gates.filter(
+      (gate) =>
+        gate.reasons.includes("missing_must_hold_after_exit")
+        || gate.reasons.includes("missing_external_visibility_requirements"),
+    ).length,
+    reason_counts: reasonCounts,
   };
 }
 
@@ -276,6 +313,10 @@ function toPolicyMemoryEntry(
   const slots = asRecord(row.slots);
   const contract = asRecord(slots.policy_contract_v1);
   const executionContract = resolveNodeExecutionContract({ slots });
+  const outcomeContractGate = buildOutcomeContractGate({
+    executionContract,
+    requestedTrust: executionContract?.contract_trust ?? contract?.contract_trust,
+  });
   const maintenance = resolveNodeMaintenanceSurface(slots) ?? {};
   const policySurface = resolveNodePolicyMemorySurface(slots);
   return {
@@ -287,6 +328,7 @@ function toPolicyMemoryEntry(
     title: firstString(row.title),
     summary: firstString(row.text_summary),
     execution_contract_v1: executionContract,
+    outcome_contract_gate: outcomeContractGate,
     selected_tool: resolveNodeSelectedTool({ slots }),
     workflow_signature: resolveNodeWorkflowSignature({ slots }),
     file_path: resolveNodeFilePath({ slots }),
@@ -619,6 +661,14 @@ export async function buildExecutionMemoryIntrospectionLite(
     ...policyMemoryNodes.rows.map((row) => toPolicyMemoryEntry(row, tenantId, scope)),
     ...distillationKnowledge,
   ];
+  const outcomeContractGateSummary = buildOutcomeContractGateSummary([
+    ...recommendedWorkflows.map((entry) => entry.outcome_contract_gate),
+    ...candidateWorkflows.map((entry) => entry.outcome_contract_gate),
+    ...patternEntries.map((entry) => entry.outcome_contract_gate),
+    ...supportingKnowledge
+      .map((entry) => asRecord(entry).outcome_contract_gate)
+      .filter((entry): entry is OutcomeContractGate => asRecord(entry).gate_version === "outcome_contract_gate_v1"),
+  ]);
   const surface = {
     action_recall_packet: {
       packet_version: "action_recall_v1" as const,
@@ -728,6 +778,7 @@ export async function buildExecutionMemoryIntrospectionLite(
     supporting_knowledge: supportingKnowledge,
     pattern_signals: patternSignals,
     workflow_signals: workflowSignals,
+    outcome_contract_gate_summary: outcomeContractGateSummary,
     ...summaryBundle,
   };
 }

@@ -20,7 +20,7 @@ import {
   type PromoteMemoryCandidateExample,
 } from "./promote-memory-governance.js";
 import { runPromoteMemoryGovernancePreview } from "./promote-memory-governance-shared.js";
-import { evaluateAuthoritativeOutcomeContract } from "./contract-trust.js";
+import { buildOutcomeContractGate } from "./contract-trust.js";
 
 type WorkflowPromotionCandidateExample = PromoteMemoryCandidateExample;
 
@@ -33,7 +33,10 @@ export function deriveWorkflowPromotionSemanticPolicyEffect(args: {
   minPromotionConfidence?: number;
 }): WorkflowWriteProjectionGovernancePolicyEffect {
   const minPromotionConfidence = args.minPromotionConfidence ?? 0.85;
-  const outcomeEvaluation = evaluateAuthoritativeOutcomeContract(args.executionContract);
+  const outcomeContractGate = buildOutcomeContractGate({
+    executionContract: args.executionContract,
+    requestedTrust: args.contractTrust ?? null,
+  });
   const derived = deriveGovernedStateRaisePreview({
     baseState: args.basePromotionState,
     review: args.review,
@@ -53,7 +56,7 @@ export function deriveWorkflowPromotionSemanticPolicyEffect(args: {
         reviewSuggestedState: "stable",
       },
       {
-        when: args.contractTrust === "authoritative" && !outcomeEvaluation.ok,
+        when: args.contractTrust === "authoritative" && !outcomeContractGate.allows_authoritative,
         reason: "outcome_contract_insufficient",
         reviewSuggestedState: "stable",
       },
@@ -78,6 +81,7 @@ export function deriveWorkflowPromotionSemanticPolicyEffect(args: {
     review_suggested_promotion_state: derived.reviewSuggestedState,
     effective_promotion_state: derived.effectiveState,
     reason_code: derived.reasonCode,
+    outcome_contract_gate: outcomeContractGate,
   });
 }
 
@@ -144,7 +148,13 @@ export async function buildWorkflowPromotionGovernancePreview(args: {
           effective_promotion_state: trace.effectiveState,
           runtime_apply_changed_promotion_state: false,
           stage_order: trace.stage_order as WorkflowWriteProjectionGovernanceDecisionTrace["stage_order"],
-          reason_codes: trace.reason_codes,
+          reason_codes: Array.from(new Set([
+            ...trace.reason_codes,
+            ...(policyEffect.reason_code === "outcome_contract_insufficient"
+              ? (policyEffect.outcome_contract_gate?.reasons ?? []).map((reason) => `outcome_contract:${reason}`)
+              : []),
+          ])).slice(0, 8),
+          outcome_contract_gate: policyEffect.outcome_contract_gate,
         });
       },
     });

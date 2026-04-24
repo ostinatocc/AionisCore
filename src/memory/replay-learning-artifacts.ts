@@ -11,6 +11,7 @@ import {
   buildReplayProjectionExecutionContract,
   deriveReplayWorkflowContractFromSlots,
 } from "./replay-workflow-contract.js";
+import { buildOutcomeContractGate } from "./contract-trust.js";
 
 export type ReplayLearningProjectionSource = {
   tenant_id: string;
@@ -40,10 +41,6 @@ export type ReplayLearningProjectionArtifacts = {
 };
 
 export const REPLAY_LEARNING_WORKFLOW_REQUIRED_OBSERVATIONS = 2;
-
-function allowsStableReplayPromotion(contractTrust: unknown): boolean {
-  return contractTrust !== "advisory" && contractTrust !== "observational";
-}
 
 function stableNodeIdFromClientId(scope: string, clientId: string): string {
   return stableUuid(`${scope}:node:${clientId.trim()}`);
@@ -232,7 +229,6 @@ export function buildReplayLearningProjectionArtifacts(args: {
   const episodeClientId = `replay:learning:episode:${args.source.playbook_id}:v${args.source.playbook_version}`;
   const workflowClientId = `replay:learning:workflow:${args.source.playbook_id}:${args.workflowSignature}`;
   const workflowContract = deriveReplayWorkflowContractFromSlots(args.source.playbook_slots);
-  const shouldPromoteStableWorkflow = args.shouldPromoteStableWorkflow && allowsStableReplayPromotion(workflowContract.contract_trust);
   const nodes: Array<Record<string, unknown>> = [];
   const edges: Array<Record<string, unknown>> = [];
   const candidateExecutionContract = buildReplayProjectionExecutionContract({
@@ -242,6 +238,11 @@ export function buildReplayLearningProjectionArtifacts(args: {
     source_anchor: episodeClientId,
     notes: ["replay_learning_candidate_projection"],
   });
+  const outcomeContractGate = buildOutcomeContractGate({
+    executionContract: candidateExecutionContract,
+    requestedTrust: workflowContract.contract_trust,
+  });
+  const shouldPromoteStableWorkflow = args.shouldPromoteStableWorkflow && outcomeContractGate.allows_authoritative;
 
   if (args.shouldCreateRule) {
     nodes.push({
@@ -299,6 +300,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
         ttl_expires_at: args.ttlExpiresAt,
         archive_candidate: true,
         execution_contract_v1: candidateExecutionContract,
+        outcome_contract_gate: outcomeContractGate,
         ...(!shouldPromoteStableWorkflow
           ? {
               execution_native_v1: {
@@ -320,6 +322,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
                   ...(workflowContract.service_lifecycle_constraints.length > 0
                     ? { service_lifecycle_constraints: workflowContract.service_lifecycle_constraints }
                     : {}),
+                  outcome_contract_gate: outcomeContractGate,
                   workflow_promotion: buildWorkflowPromotionMetadata({
                     promotion_state: "candidate",
                     promotion_origin: "replay_learning_episode",
@@ -387,6 +390,10 @@ export function buildReplayLearningProjectionArtifacts(args: {
       file_path: workflowAnchor.file_path ?? null,
       notes: ["replay_learning_stable_projection"],
     });
+    const stableOutcomeContractGate = buildOutcomeContractGate({
+      executionContract: stableExecutionContract,
+      requestedTrust: workflowContract.contract_trust,
+    });
     nodes.push({
       client_id: workflowClientId,
       type: "procedure",
@@ -397,6 +404,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
         compression_layer: "L2",
         anchor_v1: workflowAnchor,
         execution_contract_v1: stableExecutionContract,
+        outcome_contract_gate: stableOutcomeContractGate,
         execution_native_v1: ExecutionNativeV1Schema.parse({
           schema_version: "execution_native_v1",
           execution_kind: "workflow_anchor",
@@ -415,6 +423,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
           ...(workflowAnchor.service_lifecycle_constraints
             ? { service_lifecycle_constraints: workflowAnchor.service_lifecycle_constraints }
             : {}),
+          outcome_contract_gate: stableOutcomeContractGate,
           workflow_promotion: workflowAnchor.workflow_promotion,
           maintenance: workflowAnchor.maintenance,
           rehydration: workflowAnchor.rehydration,

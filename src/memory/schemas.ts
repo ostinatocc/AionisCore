@@ -9,7 +9,7 @@ import {
   ExecutionStateV1Schema,
 } from "../execution/types.js";
 import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
-import { ContractTrustSchema } from "./contract-trust.js";
+import { ContractTrustSchema, OutcomeContractGateSchema } from "./contract-trust.js";
 import { ExecutionContractV1Schema } from "./execution-contract.js";
 
 export const UUID = z.string().uuid();
@@ -452,6 +452,7 @@ export const MemoryAnchorV1Schema = z.object({
   key_steps: MemoryAnchorStringList.optional(),
   pattern_hints: MemoryAnchorStringList.optional(),
   service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema).max(16).optional(),
+  outcome_contract_gate: OutcomeContractGateSchema.optional(),
   outcome: MemoryAnchorOutcomeSchema,
   source: MemoryAnchorSourceSchema,
   payload_refs: MemoryAnchorPayloadRefsSchema,
@@ -500,6 +501,7 @@ export const ExecutionNativeV1Schema = z.object({
   workflow_steps: MemoryAnchorStringList.optional(),
   pattern_hints: MemoryAnchorStringList.optional(),
   service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema).max(16).optional(),
+  outcome_contract_gate: OutcomeContractGateSchema.optional(),
   workflow_promotion: MemoryWorkflowPromotionSchema.optional(),
   promotion: MemoryPatternPromotionSchema.optional(),
   trust_hardening: MemoryPatternTrustHardeningSchema.optional(),
@@ -1321,6 +1323,7 @@ export const PolicyContractSchema = z.object({
   environment_assumptions: z.array(z.string()).optional(),
   must_hold_after_exit: z.array(z.string()).optional(),
   external_visibility_requirements: z.array(z.string()).optional(),
+  outcome_contract_gate: OutcomeContractGateSchema.optional(),
   rehydration_mode: z.string().nullable(),
   confidence: z.number().min(0).max(1),
   source_anchor_ids: z.array(z.string()),
@@ -2019,6 +2022,23 @@ export const ExecutionMemoryIntrospectionResponseSchema = z.object({
   policy_lifecycle_summary: PolicyLifecycleSummarySchema,
   policy_maintenance_summary: PolicyMaintenanceSummarySchema,
   continuity_carrier_summary: ContinuityCarrierSummarySchema,
+  outcome_contract_gate_summary: z.object({
+    summary_version: z.literal("outcome_contract_gate_summary_v1"),
+    sufficient_count: z.number().int().min(0),
+    insufficient_count: z.number().int().min(0),
+    authoritative_allowed_count: z.number().int().min(0),
+    authoritative_blocked_count: z.number().int().min(0),
+    service_lifecycle_gap_count: z.number().int().min(0),
+    reason_counts: z.record(z.number().int().min(0)),
+  }).default({
+    summary_version: "outcome_contract_gate_summary_v1",
+    sufficient_count: 0,
+    insufficient_count: 0,
+    authoritative_allowed_count: 0,
+    authoritative_blocked_count: 0,
+    service_lifecycle_gap_count: 0,
+    reason_counts: {},
+  }),
 });
 
 export type ExecutionMemoryIntrospectionResponse = z.infer<typeof ExecutionMemoryIntrospectionResponseSchema>;
@@ -2675,6 +2695,7 @@ export const WorkflowWriteProjectionGovernanceDecisionTraceSchema = z.object({
     "runtime_policy_applied",
   ])).min(2).max(5),
   reason_codes: z.array(z.string().min(1).max(128)).max(8).default([]),
+  outcome_contract_gate: OutcomeContractGateSchema.optional(),
 }).passthrough();
 
 export type WorkflowWriteProjectionGovernanceDecisionTrace = z.infer<typeof WorkflowWriteProjectionGovernanceDecisionTraceSchema>;
@@ -2694,6 +2715,7 @@ export const WorkflowWriteProjectionGovernancePolicyEffectSchema = z.object({
     "review_did_not_raise_promotion_state",
     "high_confidence_workflow_promotion",
   ]),
+  outcome_contract_gate: OutcomeContractGateSchema.optional(),
 }).passthrough();
 
 export type WorkflowWriteProjectionGovernancePolicyEffect = z.infer<typeof WorkflowWriteProjectionGovernancePolicyEffectSchema>;
