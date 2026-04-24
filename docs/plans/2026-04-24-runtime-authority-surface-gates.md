@@ -1,5 +1,6 @@
 # Runtime Authority Surface Gates
 
+Document status: Approved working plan
 Date: 2026-04-24
 
 This plan hardens AionisRuntime without adding a new memory subsystem or benchmark-specific route. The Runtime remains organized around four cores:
