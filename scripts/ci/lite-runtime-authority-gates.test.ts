@@ -2,6 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import {
+  authorityVisibilityFromValue,
+  authorityVisibilityPrimaryBlocker,
+  authorityVisibilityRequiresInspection,
+  buildAuthorityInspectionNextAction,
+  demoteContractTrustForAuthorityBlock,
+  demoteExecutionContractForAuthorityVisibility,
+} from "../../src/memory/authority-consumption.ts";
+import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 
@@ -58,4 +67,71 @@ test("authority surface documentation records the intended Runtime boundary", ()
   assertContains(doc, "Replay learning auto-promotion", "authority surface doc must cover replay learning promotion");
   assertContains(doc, "Policy memory materialization", "authority surface doc must cover policy memory");
   assertContains(doc, "Tools pattern anchors", "authority surface doc must separate pattern guidance from authoritative policy");
+});
+
+test("authority consumption helper demotes blocked authority to inspect-first guidance", () => {
+  const visibility = authorityVisibilityFromValue({
+    authority_visibility: {
+      surface_version: "runtime_authority_visibility_v1",
+      node_id: "wf_blocked",
+      node_kind: "workflow",
+      title: "Blocked workflow",
+      requested_trust: "authoritative",
+      effective_trust: "advisory",
+      status: "insufficient",
+      allows_authoritative: false,
+      allows_stable_promotion: false,
+      authority_blocked: true,
+      stable_promotion_blocked: true,
+      primary_blocker: "execution_evidence:after_exit_revalidation_failed",
+      authority_reasons: ["execution_evidence:after_exit_revalidation_failed"],
+      outcome_contract_reasons: [],
+      execution_evidence_reasons: ["after_exit_revalidation_failed"],
+      execution_evidence_status: "failed",
+      false_confidence_detected: true,
+    },
+  });
+
+  assert.equal(authorityVisibilityRequiresInspection(visibility), true);
+  assert.equal(authorityVisibilityPrimaryBlocker(visibility), "execution_evidence:after_exit_revalidation_failed");
+  assert.equal(demoteContractTrustForAuthorityBlock("authoritative", true), "advisory");
+  assert.equal(demoteContractTrustForAuthorityBlock("observational", true), "observational");
+  assert.equal(
+    buildAuthorityInspectionNextAction({
+      selectedTool: "edit",
+      filePath: "src/routes/export.ts",
+      blocker: authorityVisibilityPrimaryBlocker(visibility),
+    }),
+    "Inspect src/routes/export.ts and revalidate current context before reusing edit; authority blocked by execution_evidence:after_exit_revalidation_failed.",
+  );
+
+  const contract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    task_family: "task:repair_export",
+    workflow_signature: "execution_workflow:repair-export",
+    selected_tool: "edit",
+    file_path: "src/routes/export.ts",
+    target_files: ["src/routes/export.ts"],
+    next_action: "Patch src/routes/export.ts and rerun export tests.",
+    acceptance_checks: ["npm test -- export"],
+    success_invariants: ["export route returns valid serialized payload"],
+    provenance: {
+      source_kind: "workflow_projection",
+      source_summary_version: "lite-runtime-authority-gates-test",
+      source_anchor: "wf_blocked",
+      evidence_refs: ["wf_blocked"],
+      notes: ["blocked workflow test"],
+    },
+  });
+  const demoted = demoteExecutionContractForAuthorityVisibility({
+    contract,
+    visibility,
+    selectedTool: "edit",
+    filePath: "src/routes/export.ts",
+    reuseTarget: "the learned workflow",
+  });
+
+  assert.equal(demoted.contract_trust, "advisory");
+  assert.match(demoted.next_action ?? "", /Inspect src\/routes\/export\.ts/);
+  assert.ok(demoted.provenance.notes.includes("authority_visibility_requires_inspection:execution_evidence:after_exit_revalidation_failed"));
 });
