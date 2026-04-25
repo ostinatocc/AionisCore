@@ -135,7 +135,91 @@ export type RuntimeDogfoodScenarioResult = {
   };
 };
 
-export type RuntimeDogfoodSuiteResult = {
+export type RuntimeDogfoodAuthorityGateResult =
+  | "authoritative_allowed"
+  | "blocked_by_outcome_contract"
+  | "blocked_by_execution_evidence"
+  | "blocked_by_outcome_and_execution_evidence";
+
+export type RuntimeDogfoodScenarioReport = {
+  report_version: "runtime_dogfood_scenario_report_v1";
+  id: string;
+  title: string;
+  status: RuntimeDogfoodScenarioResult["status"];
+  product_status:
+    | "pass_authority_safe"
+    | "pass_advisory_only"
+    | "fail_contract_or_evidence"
+    | "fail_unblocked_false_confidence";
+  task_family: string | null;
+  workflow_signature: string | null;
+  evidence_source: RuntimeDogfoodEvidenceSourceKind;
+  live_external_validation: boolean;
+  authority_gate_result: RuntimeDogfoodAuthorityGateResult;
+  authority_blockers: string[];
+  product_metrics: {
+    first_correct_action: boolean;
+    wasted_steps: number;
+    retries: number;
+    false_confidence_risk: boolean;
+    false_confidence_detected: boolean;
+    false_confidence_blocked: boolean;
+    unblocked_false_confidence: boolean;
+    after_exit_contract_correct: boolean | null;
+    after_exit_evidence_passed: boolean | null;
+    cross_shell_revalidation_passed: boolean | null;
+    stable_promotion_allowed: boolean;
+  };
+  contract_excerpt: {
+    target_files: string[];
+    acceptance_checks: string[];
+    next_action: string | null;
+    success_invariants: string[];
+    dependency_requirements: string[];
+    environment_assumptions: string[];
+    must_hold_after_exit: string[];
+    external_visibility_requirements: string[];
+  };
+  failed_assertions: RuntimeDogfoodAssertion[];
+  recommended_next_action: string;
+};
+
+export type RuntimeDogfoodReportV1 = {
+  report_version: "runtime_dogfood_report_v1";
+  generated_at: string;
+  suite_version: "runtime_dogfood_v1";
+  overall_status: "pass" | "fail";
+  product_status:
+    | "pass_live_evidence"
+    | "pass_fixture_evidence_only"
+    | "fail_contract_or_evidence"
+    | "fail_unblocked_false_confidence";
+  proof_boundary: RuntimeDogfoodProofBoundary;
+  coverage: RuntimeDogfoodCoverage;
+  product_metrics: {
+    passed_scenarios: number;
+    total_scenarios: number;
+    first_correct_action_rate: number;
+    wasted_steps: number;
+    retries: number;
+    false_confidence_rate: number;
+    false_confidence_detected_count: number;
+    false_confidence_blocked_count: number;
+    unblocked_false_confidence_rate: number;
+    after_exit_contract_correctness_rate: number | null;
+    after_exit_evidence_success_rate: number | null;
+    cross_shell_revalidation_success_rate: number | null;
+    authority_gate_false_positive_rate: number;
+    authority_gate_false_negative_rate: number;
+    stable_promotion_allowed_rate: number;
+    live_execution_coverage_rate: number;
+  };
+  blocking_risks: string[];
+  next_actions: string[];
+  scenarios: RuntimeDogfoodScenarioReport[];
+};
+
+export type RuntimeDogfoodSuiteWithoutReport = {
   generated_at: string;
   suite_version: "runtime_dogfood_v1";
   overall_status: "pass" | "fail";
@@ -157,6 +241,10 @@ export type RuntimeDogfoodSuiteResult = {
     unblocked_false_confidence_rate: number;
   };
   scenarios: RuntimeDogfoodScenarioResult[];
+};
+
+export type RuntimeDogfoodSuiteResult = RuntimeDogfoodSuiteWithoutReport & {
+  report: RuntimeDogfoodReportV1;
 };
 
 function pass(name: string): RuntimeDogfoodAssertion {
@@ -860,6 +948,109 @@ function rate(count: number, total: number): number {
   return Math.round((count / total) * 1000) / 1000;
 }
 
+function nullableRate(values: (boolean | null)[]): number | null {
+  const measured = values.filter((value): value is boolean => value !== null);
+  if (measured.length === 0) return null;
+  return rate(measured.filter(Boolean).length, measured.length);
+}
+
+function authorityGateResult(scenario: RuntimeDogfoodScenarioResult): RuntimeDogfoodAuthorityGateResult {
+  const outcomeAllows = scenario.metrics.outcome_gate_allows_authoritative;
+  const evidenceAllows = scenario.metrics.execution_evidence_allows_authoritative;
+  if (outcomeAllows && evidenceAllows) return "authoritative_allowed";
+  if (!outcomeAllows && !evidenceAllows) return "blocked_by_outcome_and_execution_evidence";
+  if (!outcomeAllows) return "blocked_by_outcome_contract";
+  return "blocked_by_execution_evidence";
+}
+
+function scenarioAuthorityBlockers(scenario: RuntimeDogfoodScenarioResult): string[] {
+  const blockers = new Set<string>();
+  if (!scenario.metrics.outcome_gate_allows_authoritative) {
+    for (const reason of scenario.compiled.outcome_contract_gate.reasons) {
+      blockers.add(`outcome_contract:${reason}`);
+    }
+  }
+  if (!scenario.metrics.execution_evidence_allows_authoritative) {
+    for (const reason of scenario.compiled.execution_evidence_assessment.reasons) {
+      blockers.add(`execution_evidence:${reason}`);
+    }
+  }
+  if (scenario.metrics.false_confidence_risk) blockers.add("runtime:false_confidence_risk");
+  if (scenario.metrics.unblocked_false_confidence) blockers.add("runtime:unblocked_false_confidence");
+  for (const assertion of scenario.assertions) {
+    if (assertion.status === "fail") blockers.add(`assertion:${assertion.name}`);
+  }
+  return [...blockers];
+}
+
+function scenarioProductStatus(scenario: RuntimeDogfoodScenarioResult): RuntimeDogfoodScenarioReport["product_status"] {
+  if (scenario.metrics.unblocked_false_confidence) return "fail_unblocked_false_confidence";
+  if (scenario.status === "fail") return "fail_contract_or_evidence";
+  if (scenario.metrics.stable_promotion_allowed) return "pass_authority_safe";
+  return "pass_advisory_only";
+}
+
+function scenarioRecommendedNextAction(scenario: RuntimeDogfoodScenarioResult): string {
+  if (scenario.metrics.unblocked_false_confidence) {
+    return "Block stable promotion when execution evidence reports false confidence or failed after-exit/fresh-shell proof.";
+  }
+  const failedAssertions = scenario.assertions.filter((assertion) => assertion.status === "fail");
+  if (failedAssertions.length > 0) {
+    return `Fix Contract Compiler output for failed assertions: ${failedAssertions.map((assertion) => assertion.name).join("; ")}.`;
+  }
+  if (!scenario.metrics.outcome_gate_allows_authoritative) {
+    return "Keep the workflow advisory until the outcome contract includes durable success, visibility, and lifecycle requirements.";
+  }
+  if (!scenario.metrics.execution_evidence_allows_authoritative) {
+    return "Keep the workflow advisory until host execution evidence proves validation, after-exit durability, and fresh-shell visibility.";
+  }
+  if (!scenario.proof.live_external_validation) {
+    return "Replace fixture evidence with an external_probe run before making live product claims for this task family.";
+  }
+  return "No blocking action; keep this scenario in recurring dogfood coverage.";
+}
+
+function buildScenarioReport(scenario: RuntimeDogfoodScenarioResult): RuntimeDogfoodScenarioReport {
+  return {
+    report_version: "runtime_dogfood_scenario_report_v1",
+    id: scenario.id,
+    title: scenario.title,
+    status: scenario.status,
+    product_status: scenarioProductStatus(scenario),
+    task_family: scenario.task_family,
+    workflow_signature: scenario.workflow_signature,
+    evidence_source: scenario.proof.evidence_source,
+    live_external_validation: scenario.proof.live_external_validation,
+    authority_gate_result: authorityGateResult(scenario),
+    authority_blockers: scenarioAuthorityBlockers(scenario),
+    product_metrics: {
+      first_correct_action: scenario.metrics.first_correct_action,
+      wasted_steps: scenario.metrics.wasted_step_count,
+      retries: scenario.metrics.retry_signal_count,
+      false_confidence_risk: scenario.metrics.false_confidence_risk,
+      false_confidence_detected: scenario.metrics.false_confidence_detected,
+      false_confidence_blocked: scenario.metrics.false_confidence_blocked,
+      unblocked_false_confidence: scenario.metrics.unblocked_false_confidence,
+      after_exit_contract_correct: scenario.metrics.after_exit_correct,
+      after_exit_evidence_passed: scenario.metrics.after_exit_revalidated,
+      cross_shell_revalidation_passed: scenario.metrics.fresh_shell_probe_passed,
+      stable_promotion_allowed: scenario.metrics.stable_promotion_allowed,
+    },
+    contract_excerpt: {
+      target_files: scenario.compiled.target_files,
+      acceptance_checks: scenario.compiled.acceptance_checks,
+      next_action: scenario.compiled.next_action,
+      success_invariants: scenario.compiled.outcome.success_invariants,
+      dependency_requirements: scenario.compiled.outcome.dependency_requirements,
+      environment_assumptions: scenario.compiled.outcome.environment_assumptions,
+      must_hold_after_exit: scenario.compiled.outcome.must_hold_after_exit,
+      external_visibility_requirements: scenario.compiled.outcome.external_visibility_requirements,
+    },
+    failed_assertions: scenario.assertions.filter((assertion) => assertion.status === "fail"),
+    recommended_next_action: scenarioRecommendedNextAction(scenario),
+  };
+}
+
 function buildRuntimeDogfoodProofBoundary(scenarios: RuntimeDogfoodScenarioResult[]): RuntimeDogfoodProofBoundary {
   return {
     boundary_version: "runtime_dogfood_proof_boundary_v1",
@@ -895,6 +1086,111 @@ function buildRuntimeDogfoodCoverage(scenarios: RuntimeDogfoodScenarioResult[]):
   };
 }
 
+function reportProductStatus(args: {
+  overallStatus: "pass" | "fail";
+  proofBoundary: RuntimeDogfoodProofBoundary;
+  summary: RuntimeDogfoodSuiteWithoutReport["summary"];
+}): RuntimeDogfoodReportV1["product_status"] {
+  if (args.summary.unblocked_false_confidence_rate > 0) return "fail_unblocked_false_confidence";
+  if (args.overallStatus === "fail") return "fail_contract_or_evidence";
+  if (args.proofBoundary.live_execution_scenarios > 0) return "pass_live_evidence";
+  return "pass_fixture_evidence_only";
+}
+
+function reportBlockingRisks(args: {
+  proofBoundary: RuntimeDogfoodProofBoundary;
+  summary: RuntimeDogfoodSuiteWithoutReport["summary"];
+  scenarios: RuntimeDogfoodScenarioResult[];
+}): string[] {
+  const risks: string[] = [];
+  if (args.summary.unblocked_false_confidence_rate > 0) {
+    risks.push("unblocked false confidence reached stable promotion");
+  }
+  if (args.summary.passed_scenarios < args.summary.total_scenarios) {
+    risks.push("one or more dogfood scenarios failed contract, evidence, or authority assertions");
+  }
+  if (args.summary.gate_false_positive_rate > 0) {
+    risks.push("outcome contract gate allowed authority when the scenario expected denial");
+  }
+  if (args.summary.gate_false_negative_rate > 0) {
+    risks.push("outcome contract gate denied authority when the scenario expected allowance");
+  }
+  if (args.proofBoundary.live_execution_scenarios === 0) {
+    risks.push("suite is fixture-backed only; live external product proof still requires external_probe coverage");
+  }
+  return risks;
+}
+
+function reportNextActions(args: {
+  productStatus: RuntimeDogfoodReportV1["product_status"];
+  proofBoundary: RuntimeDogfoodProofBoundary;
+  scenarios: RuntimeDogfoodScenarioResult[];
+}): string[] {
+  const actions: string[] = [];
+  if (args.productStatus === "fail_unblocked_false_confidence") {
+    actions.push("Fix Trust Gate before adding more dogfood scenarios.");
+  }
+  if (args.productStatus === "fail_contract_or_evidence") {
+    actions.push("Fix Contract Compiler or execution-evidence assessment for failing scenarios before promoting learned workflows.");
+  }
+  if (args.proofBoundary.live_execution_scenarios === 0) {
+    actions.push("Run at least one external_probe dogfood slice before using this report as live product evidence.");
+  }
+  for (const scenario of args.scenarios) {
+    const nextAction = scenarioRecommendedNextAction(scenario);
+    if (!actions.includes(nextAction)) actions.push(nextAction);
+  }
+  return actions.slice(0, 8);
+}
+
+function buildRuntimeDogfoodReport(base: RuntimeDogfoodSuiteWithoutReport): RuntimeDogfoodReportV1 {
+  const afterExitEvidenceScenarios = base.scenarios.filter((scenario) => scenario.metrics.after_exit_revalidated !== null);
+  const freshShellScenarios = base.scenarios.filter((scenario) => scenario.metrics.fresh_shell_probe_passed !== null);
+  const productStatus = reportProductStatus({
+    overallStatus: base.overall_status,
+    proofBoundary: base.proof_boundary,
+    summary: base.summary,
+  });
+  return {
+    report_version: "runtime_dogfood_report_v1",
+    generated_at: base.generated_at,
+    suite_version: base.suite_version,
+    overall_status: base.overall_status,
+    product_status: productStatus,
+    proof_boundary: base.proof_boundary,
+    coverage: base.coverage,
+    product_metrics: {
+      passed_scenarios: base.summary.passed_scenarios,
+      total_scenarios: base.summary.total_scenarios,
+      first_correct_action_rate: base.summary.first_correct_action_rate,
+      wasted_steps: base.summary.wasted_step_count,
+      retries: base.summary.retry_signal_count,
+      false_confidence_rate: base.summary.unblocked_false_confidence_rate,
+      false_confidence_detected_count: base.summary.false_confidence_detected_count,
+      false_confidence_blocked_count: base.summary.false_confidence_blocked_count,
+      unblocked_false_confidence_rate: base.summary.unblocked_false_confidence_rate,
+      after_exit_contract_correctness_rate: base.summary.after_exit_correct_rate,
+      after_exit_evidence_success_rate: nullableRate(afterExitEvidenceScenarios.map((scenario) => scenario.metrics.after_exit_revalidated)),
+      cross_shell_revalidation_success_rate: nullableRate(freshShellScenarios.map((scenario) => scenario.metrics.fresh_shell_probe_passed)),
+      authority_gate_false_positive_rate: base.summary.gate_false_positive_rate,
+      authority_gate_false_negative_rate: base.summary.gate_false_negative_rate,
+      stable_promotion_allowed_rate: base.summary.stable_promotion_allowed_rate,
+      live_execution_coverage_rate: rate(base.proof_boundary.live_execution_scenarios, base.summary.total_scenarios),
+    },
+    blocking_risks: reportBlockingRisks({
+      proofBoundary: base.proof_boundary,
+      summary: base.summary,
+      scenarios: base.scenarios,
+    }),
+    next_actions: reportNextActions({
+      productStatus,
+      proofBoundary: base.proof_boundary,
+      scenarios: base.scenarios,
+    }),
+    scenarios: base.scenarios.map(buildScenarioReport),
+  };
+}
+
 export function runRuntimeDogfoodSuite(tasks: RuntimeDogfoodTask[] = runtimeDogfoodTasks()): RuntimeDogfoodSuiteResult {
   const scenarios = tasks.map(evaluateTask);
   const afterExitScenarios = scenarios.filter(
@@ -902,12 +1198,16 @@ export function runRuntimeDogfoodSuite(tasks: RuntimeDogfoodTask[] = runtimeDogf
       scenario.metrics.after_exit_correct !== null
       && scenario.metrics.expected_authoritative_gate_allows,
   );
-  return {
-    generated_at: new Date().toISOString(),
+  const generatedAt = new Date().toISOString();
+  const proofBoundary = buildRuntimeDogfoodProofBoundary(scenarios);
+  const coverage = buildRuntimeDogfoodCoverage(scenarios);
+  const overallStatus = scenarios.every((scenario) => scenario.status === "pass") ? "pass" : "fail";
+  const base: RuntimeDogfoodSuiteWithoutReport = {
+    generated_at: generatedAt,
     suite_version: "runtime_dogfood_v1",
-    overall_status: scenarios.every((scenario) => scenario.status === "pass") ? "pass" : "fail",
-    proof_boundary: buildRuntimeDogfoodProofBoundary(scenarios),
-    coverage: buildRuntimeDogfoodCoverage(scenarios),
+    overall_status: overallStatus,
+    proof_boundary: proofBoundary,
+    coverage,
     summary: {
       passed_scenarios: scenarios.filter((scenario) => scenario.status === "pass").length,
       total_scenarios: scenarios.length,
@@ -948,6 +1248,10 @@ export function runRuntimeDogfoodSuite(tasks: RuntimeDogfoodTask[] = runtimeDogf
     },
     scenarios,
   };
+  return {
+    ...base,
+    report: buildRuntimeDogfoodReport(base),
+  };
 }
 
 export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult): string {
@@ -956,6 +1260,31 @@ export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult):
     "",
     `Generated at: ${result.generated_at}`,
     `Status: ${result.overall_status}`,
+    `Product status: ${result.report.product_status}`,
+    `Report version: ${result.report.report_version}`,
+    "",
+    "## Product Metrics",
+    "",
+    `- first_correct_action_rate: ${result.report.product_metrics.first_correct_action_rate}`,
+    `- wasted_steps: ${result.report.product_metrics.wasted_steps}`,
+    `- retries: ${result.report.product_metrics.retries}`,
+    `- false_confidence_rate: ${result.report.product_metrics.false_confidence_rate}`,
+    `- false_confidence_detected_count: ${result.report.product_metrics.false_confidence_detected_count}`,
+    `- false_confidence_blocked_count: ${result.report.product_metrics.false_confidence_blocked_count}`,
+    `- after_exit_contract_correctness_rate: ${result.report.product_metrics.after_exit_contract_correctness_rate ?? "n/a"}`,
+    `- after_exit_evidence_success_rate: ${result.report.product_metrics.after_exit_evidence_success_rate ?? "n/a"}`,
+    `- cross_shell_revalidation_success_rate: ${result.report.product_metrics.cross_shell_revalidation_success_rate ?? "n/a"}`,
+    `- live_execution_coverage_rate: ${result.report.product_metrics.live_execution_coverage_rate}`,
+    "",
+    "## Blocking Risks",
+    "",
+    ...(result.report.blocking_risks.length > 0
+      ? result.report.blocking_risks.map((risk) => `- ${risk}`)
+      : ["- none"]),
+    "",
+    "## Next Actions",
+    "",
+    ...result.report.next_actions.map((action) => `- ${action}`),
     "",
     "## Proof Boundary",
     "",
@@ -999,6 +1328,11 @@ export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult):
     lines.push(`- evidence_source: ${scenario.proof.evidence_source}`);
     lines.push(`- authority_claim_scope: ${scenario.proof.authority_claim_scope}`);
     lines.push(`- live_external_validation: ${scenario.proof.live_external_validation}`);
+    const scenarioReport = result.report.scenarios.find((entry) => entry.id === scenario.id);
+    lines.push(`- product_status: ${scenarioReport?.product_status ?? "unknown"}`);
+    lines.push(`- authority_gate_result: ${scenarioReport?.authority_gate_result ?? "unknown"}`);
+    lines.push(`- authority_blockers: ${scenarioReport?.authority_blockers.join(" | ") || "none"}`);
+    lines.push(`- recommended_next_action: ${scenarioReport?.recommended_next_action ?? "unknown"}`);
     lines.push(`- execution_evidence_supplied: ${scenario.proof.execution_evidence_supplied}`);
     lines.push(`- after_exit_evidence_supplied: ${scenario.proof.after_exit_evidence_supplied}`);
     lines.push(`- fresh_shell_probe_evidence_supplied: ${scenario.proof.fresh_shell_probe_evidence_supplied}`);
