@@ -3,33 +3,50 @@ import type { AionisRequestPayload } from "./types.js";
 export type AionisPassthroughObject = Record<string, unknown>;
 export type AionisRuntimeResponse = AionisPassthroughObject;
 
+export type AionisRuntimeBoundaryInventoryAuthorityEntry = {
+  source: "authority";
+  inventory_id: string;
+  source_id: string;
+  file: string;
+  layer: "Contract Compiler" | "Trust Gate" | "Orchestrator" | "Learning Loop" | "Schema Boundary";
+  role:
+    | "registry_manifest"
+    | "trust_gate_evaluator"
+    | "authority_producer"
+    | "authority_consumer"
+    | "advisory_pattern_producer"
+    | "read_side_summary"
+    | "schema_boundary";
+  producer_kind: "stable_workflow" | "authoritative_policy" | "advisory_pattern" | null;
+  capabilities: {
+    may_use_runtime_authority_gate: boolean;
+    may_use_outcome_contract_gate: boolean;
+    may_assess_execution_evidence: boolean;
+    may_read_raw_authority_surface: boolean;
+    may_use_stable_workflow_literal: boolean;
+    may_use_stable_pattern_literal: boolean;
+  };
+  required_source_markers: string[];
+};
+
+export type AionisRuntimeBoundaryInventoryLegacyAccessEntry = {
+  source: "legacy_access";
+  inventory_id: string;
+  source_id: string;
+  file: string;
+  legacy_access_kind:
+    | "manifest"
+    | "schema"
+    | "contract_resolver"
+    | "write_projection"
+    | "archive_rehydrate"
+    | "store_adapter";
+  reason: string;
+};
+
 export type AionisRuntimeBoundaryInventoryEntry =
-  | ({
-      source: "authority";
-      inventory_id: string;
-      source_id: string;
-      file: string;
-      layer: string;
-      role: string;
-      producer_kind: string | null;
-      capabilities: {
-        may_use_runtime_authority_gate: boolean;
-        may_use_outcome_contract_gate: boolean;
-        may_assess_execution_evidence: boolean;
-        may_read_raw_authority_surface: boolean;
-        may_use_stable_workflow_literal: boolean;
-        may_use_stable_pattern_literal: boolean;
-      };
-      required_source_markers: string[];
-    } & AionisPassthroughObject)
-  | ({
-      source: "legacy_access";
-      inventory_id: string;
-      source_id: string;
-      file: string;
-      legacy_access_kind: string;
-      reason: string;
-    } & AionisPassthroughObject);
+  | AionisRuntimeBoundaryInventoryAuthorityEntry
+  | AionisRuntimeBoundaryInventoryLegacyAccessEntry;
 
 export type AionisRuntimeBoundaryInventoryResponse = {
   surface_version: "runtime_boundary_inventory_response_v1";
@@ -40,7 +57,7 @@ export type AionisRuntimeBoundaryInventoryResponse = {
     authority_effect: "none";
     runtime_decision_effect: "none";
     intended_use: "operator_debug_boundary_audit";
-  } & AionisPassthroughObject;
+  };
   summary: {
     total_entries: number;
     total_files: number;
@@ -48,14 +65,14 @@ export type AionisRuntimeBoundaryInventoryResponse = {
     legacy_access_entries: number;
     authority_producer_entries: number;
     legacy_direct_access_files: number;
-  } & AionisPassthroughObject;
+  };
   files: string[];
   entries: AionisRuntimeBoundaryInventoryEntry[];
   sources: {
-    authority: AionisRuntimeBoundaryInventoryEntry[];
-    legacy_access: AionisRuntimeBoundaryInventoryEntry[];
-  } & AionisPassthroughObject;
-} & AionisRuntimeResponse;
+    authority: AionisRuntimeBoundaryInventoryAuthorityEntry[];
+    legacy_access: AionisRuntimeBoundaryInventoryLegacyAccessEntry[];
+  };
+};
 
 export type AionisWriteNode = {
   id?: string;

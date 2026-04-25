@@ -6,60 +6,106 @@ import {
   RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY,
   type RuntimeLegacyAccessBoundaryDeclaration,
 } from "./legacy-access-registry.js";
+import { z } from "zod";
 
 export type RuntimeBoundaryInventorySource = "authority" | "legacy_access";
 
-export type RuntimeBoundaryInventoryEntry =
-  | {
-      source: "authority";
-      inventory_id: string;
-      source_id: string;
-      file: string;
-      layer: RuntimeAuthorityBoundaryDeclaration["layer"];
-      role: RuntimeAuthorityBoundaryDeclaration["role"];
-      producer_kind: RuntimeAuthorityBoundaryDeclaration["producerKind"] | null;
-      capabilities: {
-        may_use_runtime_authority_gate: boolean;
-        may_use_outcome_contract_gate: boolean;
-        may_assess_execution_evidence: boolean;
-        may_read_raw_authority_surface: boolean;
-        may_use_stable_workflow_literal: boolean;
-        may_use_stable_pattern_literal: boolean;
-      };
-      required_source_markers: readonly string[];
-    }
-  | {
-      source: "legacy_access";
-      inventory_id: string;
-      source_id: string;
-      file: string;
-      legacy_access_kind: RuntimeLegacyAccessBoundaryDeclaration["kind"];
-      reason: string;
-    };
+export const RuntimeBoundaryInventorySourceSchema = z.enum(["authority", "legacy_access"]);
+export const RuntimeBoundaryInventoryAuthorityLayerSchema = z.enum([
+  "Contract Compiler",
+  "Trust Gate",
+  "Orchestrator",
+  "Learning Loop",
+  "Schema Boundary",
+]);
+export const RuntimeBoundaryInventoryAuthorityRoleSchema = z.enum([
+  "registry_manifest",
+  "trust_gate_evaluator",
+  "authority_producer",
+  "authority_consumer",
+  "advisory_pattern_producer",
+  "read_side_summary",
+  "schema_boundary",
+]);
+export const RuntimeBoundaryInventoryProducerKindSchema = z.enum([
+  "stable_workflow",
+  "authoritative_policy",
+  "advisory_pattern",
+]);
+export const RuntimeBoundaryInventoryLegacyAccessKindSchema = z.enum([
+  "manifest",
+  "schema",
+  "contract_resolver",
+  "write_projection",
+  "archive_rehydrate",
+  "store_adapter",
+]);
+export const RuntimeBoundaryInventoryAuthorityCapabilitiesSchema = z.object({
+  may_use_runtime_authority_gate: z.boolean(),
+  may_use_outcome_contract_gate: z.boolean(),
+  may_assess_execution_evidence: z.boolean(),
+  may_read_raw_authority_surface: z.boolean(),
+  may_use_stable_workflow_literal: z.boolean(),
+  may_use_stable_pattern_literal: z.boolean(),
+}).strict();
+export const RuntimeBoundaryInventoryAuthorityEntrySchema = z.object({
+  source: z.literal("authority"),
+  inventory_id: z.string().min(1),
+  source_id: z.string().min(1),
+  file: z.string().min(1),
+  layer: RuntimeBoundaryInventoryAuthorityLayerSchema,
+  role: RuntimeBoundaryInventoryAuthorityRoleSchema,
+  producer_kind: RuntimeBoundaryInventoryProducerKindSchema.nullable(),
+  capabilities: RuntimeBoundaryInventoryAuthorityCapabilitiesSchema,
+  required_source_markers: z.array(z.string().min(1)),
+}).strict();
+export const RuntimeBoundaryInventoryLegacyAccessEntrySchema = z.object({
+  source: z.literal("legacy_access"),
+  inventory_id: z.string().min(1),
+  source_id: z.string().min(1),
+  file: z.string().min(1),
+  legacy_access_kind: RuntimeBoundaryInventoryLegacyAccessKindSchema,
+  reason: z.string().min(1),
+}).strict();
+export const RuntimeBoundaryInventoryEntrySchema = z.discriminatedUnion("source", [
+  RuntimeBoundaryInventoryAuthorityEntrySchema,
+  RuntimeBoundaryInventoryLegacyAccessEntrySchema,
+]);
+export const RuntimeBoundaryInventorySummarySchema = z.object({
+  total_entries: z.number().int().nonnegative(),
+  total_files: z.number().int().nonnegative(),
+  authority_entries: z.number().int().nonnegative(),
+  legacy_access_entries: z.number().int().nonnegative(),
+  authority_producer_entries: z.number().int().nonnegative(),
+  legacy_direct_access_files: z.number().int().nonnegative(),
+}).strict();
+export const RuntimeBoundaryInventoryResponseSchema = z.object({
+  surface_version: z.literal("runtime_boundary_inventory_response_v1"),
+  inventory_source: z.literal("source_boundary_manifests"),
+  surface_semantics: z.object({
+    read_only: z.literal(true),
+    persistence_effect: z.literal("none"),
+    authority_effect: z.literal("none"),
+    runtime_decision_effect: z.literal("none"),
+    intended_use: z.literal("operator_debug_boundary_audit"),
+  }).strict(),
+  summary: RuntimeBoundaryInventorySummarySchema,
+  files: z.array(z.string().min(1)),
+  entries: z.array(RuntimeBoundaryInventoryEntrySchema),
+  sources: z.object({
+    authority: z.array(RuntimeBoundaryInventoryAuthorityEntrySchema),
+    legacy_access: z.array(RuntimeBoundaryInventoryLegacyAccessEntrySchema),
+  }).strict(),
+}).strict();
+
+export type RuntimeBoundaryInventoryEntry = z.infer<typeof RuntimeBoundaryInventoryEntrySchema>;
 
 export type RuntimeAuthorityBoundaryInventoryEntry = Extract<RuntimeBoundaryInventoryEntry, { source: "authority" }>;
 export type RuntimeLegacyAccessBoundaryInventoryEntry = Extract<RuntimeBoundaryInventoryEntry, { source: "legacy_access" }>;
 export type RuntimeAuthorityInventoryCapability = keyof RuntimeAuthorityBoundaryInventoryEntry["capabilities"];
 export type RuntimeLegacyAccessInventoryKind = RuntimeLegacyAccessBoundaryInventoryEntry["legacy_access_kind"];
 
-export type RuntimeBoundaryInventoryResponse = {
-  surface_version: "runtime_boundary_inventory_response_v1";
-  inventory_source: "source_boundary_manifests";
-  surface_semantics: {
-    read_only: true;
-    persistence_effect: "none";
-    authority_effect: "none";
-    runtime_decision_effect: "none";
-    intended_use: "operator_debug_boundary_audit";
-  };
-  summary: ReturnType<typeof runtimeBoundaryInventorySummary>;
-  files: string[];
-  entries: RuntimeBoundaryInventoryEntry[];
-  sources: {
-    authority: RuntimeBoundaryInventoryEntry[];
-    legacy_access: RuntimeBoundaryInventoryEntry[];
-  };
-};
+export type RuntimeBoundaryInventoryResponse = z.infer<typeof RuntimeBoundaryInventoryResponseSchema>;
 
 function authorityInventoryEntry(entry: RuntimeAuthorityBoundaryDeclaration): RuntimeBoundaryInventoryEntry {
   return {
@@ -204,7 +250,7 @@ export function runtimeBoundaryInventorySummary(): {
 export function buildRuntimeBoundaryInventoryResponse(): RuntimeBoundaryInventoryResponse {
   const authorityEntries = runtimeBoundaryInventoryEntriesBySource("authority");
   const legacyAccessEntries = runtimeBoundaryInventoryEntriesBySource("legacy_access");
-  return {
+  return RuntimeBoundaryInventoryResponseSchema.parse({
     surface_version: "runtime_boundary_inventory_response_v1",
     inventory_source: "source_boundary_manifests",
     surface_semantics: {
@@ -221,5 +267,5 @@ export function buildRuntimeBoundaryInventoryResponse(): RuntimeBoundaryInventor
       authority: authorityEntries,
       legacy_access: legacyAccessEntries,
     },
-  };
+  });
 }

@@ -271,6 +271,8 @@ The unified inventory surface is `src/memory/runtime-boundary-inventory.ts`.
 
 The local operator/debug route is `GET /v1/runtime/boundary-inventory`, registered by `src/routes/runtime-boundary-inventory.ts`.
 
+The public response contract is `RuntimeBoundaryInventoryResponseSchema`. It is strict: route consumers may rely on the documented fields, and new passthrough debug fields must not be added without an explicit contract change.
+
 Responsibilities:
 
 1. expose all declared authority and legacy direct-access boundaries through one read-only inventory
@@ -278,6 +280,7 @@ Responsibilities:
 3. make cross-cutting boundary ownership visible without adding new producer or consumer authority
 4. let CI verify inventory consistency against source manifests and consume inventory selectors instead of duplicating path allowlists
 5. expose the same source-owned inventory through a read-only local API surface for operator audit and SDK debugging
+6. validate the public API response through a strict schema instead of returning an extensible debug blob
 
 Boundary rule:
 
