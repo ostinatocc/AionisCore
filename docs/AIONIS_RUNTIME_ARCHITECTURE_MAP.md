@@ -258,6 +258,48 @@ Learning modules can create canonical write artifacts through write/projection b
 
 Learning modules may consume shared contract, trust, and policy-materialization surfaces. They must not call Orchestrator response builders directly; feedback-driven learning should materialize reusable policy/workflow memory through canonical learning or write boundaries, not by re-entering planner assembly.
 
+## Memory retention and semantic forgetting
+
+Memory retention is part of the Learning Loop, not a separate memory subsystem.
+
+Owned by:
+
+1. `src/memory/semantic-forgetting.ts`
+2. `src/memory/importance-dynamics.ts`
+3. `src/app/planning-summary-forgetting.ts`
+4. `src/memory/evolution-operators.ts`
+5. `src/memory/archive-relocation.ts`
+6. `src/memory/differential-rehydration.ts`
+7. `src/memory/lifecycle-lite.ts`
+
+Purpose:
+
+Decide whether memory should remain visible, move colder, be archived, or require review without losing canonical execution evidence.
+
+Decision inputs:
+
+1. node type, tier, title, and summary quality
+2. salience, importance, and confidence
+3. workflow, pattern, policy, and anchor surfaces resolved through `node-execution-surface`
+4. trust state, policy memory state, credibility state, and lifecycle state
+5. feedback quality and activation recency
+6. archive relocation and rehydration metadata
+
+Stable decision outputs:
+
+1. `retain`
+2. `demote`
+3. `archive`
+4. `review`
+
+Public summary surface:
+
+The planner-facing contract is `execution_forgetting_summary_v1`, exposed through planning and assembly summaries. It reports substrate mode, suppressed pattern counts, semantic action counts, lifecycle state counts, archive relocation counts, rehydration mode counts, stale signal counts, and the recommended maintenance action.
+
+Boundary rule:
+
+Semantic forgetting may reduce visibility, move memory to colder tiers, mark contested or retired memory for review, and recommend archive or rehydrate actions. It must not delete canonical evidence, upgrade trust, bypass the Trust Gate, or create new authority. Archive is a cold-storage lifecycle state; return to active use must go through explicit rehydration or activation boundaries.
+
 ## Boundary inventory
 
 Runtime boundary manifests are source-owned, not CI-owned.
@@ -328,7 +370,7 @@ Complete today:
 7. local automation kernel
 8. local sandbox execution surface
 9. execution contract, trust gate, authority gate, and evidence surfaces
-10. replay learning, workflow anchors, policy memory, semantic forgetting, and lifecycle feedback
+10. replay learning, workflow anchors, policy memory, memory retention, semantic forgetting, archive relocation, and lifecycle feedback
 11. SDK, runtime package, examples, and CI proof surfaces
 
 Not complete by design in Lite:

@@ -1,6 +1,6 @@
 # Aionis Runtime Local Runtime Architecture
 
-Last reviewed: 2026-04-24
+Last reviewed: 2026-04-25
 
 Document status: living technical architecture reference
 
@@ -361,6 +361,50 @@ Pattern and workflow memory are not equivalent to persisted policy memory:
 3. Advisory candidate policy memory may be persisted as hint/governance state; persistence does not make it authoritative.
 4. Feedback materialization may use the current canonical execution contract as outcome evidence, but a pattern-only advisory contract does not become authoritative without explicit trust and outcome requirements.
 
+## Memory retention and semantic forgetting
+
+Lite has an explicit memory-retention path. It is part of the Learning Loop and memory lifecycle, not a new standalone subsystem.
+
+The core retention modules are:
+
+1. `src/memory/semantic-forgetting.ts`
+   Owns the semantic forgetting decision: `retain`, `demote`, `archive`, or `review`.
+2. `src/memory/importance-dynamics.ts`
+   Owns salience, importance, confidence, feedback, recency, and retention-score calculation.
+3. `src/app/planning-summary-forgetting.ts`
+   Projects memory-retention signals into `execution_forgetting_summary_v1`.
+4. `src/memory/archive-relocation.ts`
+   Carries cold archive relocation state and payload scope.
+5. `src/memory/differential-rehydration.ts`
+   Carries partial or differential rehydration candidates.
+6. `src/memory/lifecycle-lite.ts`
+   Owns Lite rehydrate and activation routes against the local SQLite-backed store.
+
+The decision model is intentionally semantic rather than age-only:
+
+1. stable workflow anchors with reuse success and recent activation are retained
+2. contested patterns are demoted or reviewed before they can steer future work
+3. retired policy memory is archived
+4. advisory or observational policy memory is treated as contested unless stronger contract trust exists
+5. low-retention or negative-feedback memory moves colder before it can pollute recall
+
+The public summary contract is `execution_forgetting_summary_v1`. It reports:
+
+1. whether the substrate is stable, suppression-present, or actively forgetting
+2. forgotten item counts and reasons
+3. suppressed pattern counts and sources
+4. semantic action counts for retain, demote, archive, and review
+5. lifecycle state counts for active, contested, retired, and archived memory
+6. archive relocation, payload scope, and rehydration mode counts
+7. stale signal counts and the recommended maintenance action
+
+This retention layer has a hard boundary:
+
+1. forgetting cannot silently delete canonical execution evidence
+2. forgetting cannot upgrade trust or bypass authority gates
+3. archived memory cannot become active again without explicit rehydrate or activation
+4. retained memory still has to pass the normal Contract Compiler, Trust Gate, and Orchestrator paths before it can steer execution
+
 ## Public route surface in Lite
 
 At a high level, the Lite runtime registers these capability groups:
@@ -372,8 +416,9 @@ At a high level, the Lite runtime registers these capability groups:
 5. feedback, rules, and tool selection
 6. replay and playbook core
 7. governed replay subset
-8. local automation kernel
-9. local sandbox kernel
+8. memory lifecycle, archive rehydrate, and activation
+9. local automation kernel
+10. local sandbox kernel
 
 The exact route list and status matrix live in [LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md).
 
