@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runRuntimeDogfoodSuite, runtimeDogfoodTasksFromSpecs } from "../lib/lite-runtime-dogfood.ts";
+import { runRuntimeDogfoodExternalProbe } from "../lib/lite-runtime-dogfood-external-probe.ts";
 
 test("runtime dogfood slice compiles real task families into outcome-backed contracts", () => {
   const result = runRuntimeDogfoodSuite();
@@ -123,4 +124,23 @@ test("runtime dogfood task specs can carry external probe evidence without code 
   assert.equal(scenario?.proof.live_external_validation, true);
   assert.equal(scenario?.proof.authority_claim_scope, "contract_with_external_probe_evidence");
   assert.equal(scenario?.metrics.stable_promotion_allowed, true);
+});
+
+test("runtime dogfood external probe runs a detached service and produces live evidence", async () => {
+  const run = await runRuntimeDogfoodExternalProbe();
+  assert.equal(run.run_version, "runtime_dogfood_external_probe_run_v1");
+  assert.equal(run.launcher_exit_code, 0);
+  assert.ok(run.service_pid);
+  assert.equal(run.fresh_shell_probe_passed, true);
+  assert.equal(run.dogfood_result.overall_status, "pass");
+  assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 1);
+  assert.equal(run.dogfood_result.proof_boundary.fixture_evidence_scenarios, 0);
+  assert.equal(run.dogfood_result.summary.after_exit_correct_rate, 1);
+
+  const scenario = run.dogfood_result.scenarios[0];
+  assert.equal(scenario?.proof.evidence_source, "external_probe");
+  assert.equal(scenario?.proof.live_external_validation, true);
+  assert.equal(scenario?.metrics.execution_evidence_allows_authoritative, true);
+  assert.equal(scenario?.metrics.stable_promotion_allowed, true);
+  assert.match(run.fresh_shell_probe_output, /"ok":true/);
 });
