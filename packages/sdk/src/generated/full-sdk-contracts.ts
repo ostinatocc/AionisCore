@@ -875,9 +875,14 @@ export type AionisExecutionSummary = {
   workflow_signal_summary: AionisPassthroughObject;
   workflow_lifecycle_summary: AionisPassthroughObject;
   workflow_maintenance_summary: AionisPassthroughObject;
+  authority_visibility_summary: AionisPassthroughObject;
+  distillation_signal_summary: AionisPassthroughObject;
   pattern_lifecycle_summary: AionisPassthroughObject;
   pattern_maintenance_summary: AionisPassthroughObject;
-} & AionisRuntimeResponse;
+  policy_lifecycle_summary: AionisPassthroughObject;
+  policy_maintenance_summary: AionisPassthroughObject;
+  continuity_carrier_summary: AionisPassthroughObject;
+};
 
 export type AionisExecutionIntrospectResponse = {
   summary_version: "execution_memory_introspection_v1";

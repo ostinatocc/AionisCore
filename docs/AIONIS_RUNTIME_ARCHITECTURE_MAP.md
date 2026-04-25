@@ -358,6 +358,18 @@ Runtime consumers outside those categories must use:
 
 This rule is enforced by `scripts/ci/lite-runtime-legacy-boundary.test.ts`, which must consume `src/memory/runtime-boundary-inventory.ts` instead of carrying an independent path allowlist.
 
+## Passthrough schema boundary
+
+Runtime public contracts should be strict by default. Any remaining `.passthrough()` in `src/memory/schemas.ts` must be explicitly classified in `src/memory/passthrough-schema-registry.ts` as one of:
+
+1. `compatibility_boundary_allowed`
+2. `debug_operator_payload_allowed`
+3. `legacy_storage_allowed`
+
+Stable public contracts that should reject undeclared fields must be registered as `public_contract_should_be_strict` with `disposition: "must_be_strict"` and `passthrough_count: 0`.
+
+This rule is enforced by `scripts/ci/lite-runtime-passthrough-boundary.test.ts`. Adding a new open schema surface without classification is a CI failure.
+
 ## Product completeness assessment
 
 Complete today:
