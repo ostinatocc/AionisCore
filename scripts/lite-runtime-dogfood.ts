@@ -10,7 +10,9 @@ import {
 
 type CliOptions = {
   json: boolean;
+  reportJson: boolean;
   outJson: string | null;
+  outReportJson: string | null;
   outMarkdown: string | null;
   tasksJson: string | null;
 };
@@ -18,7 +20,7 @@ type CliOptions = {
 function usage(): string {
   return [
     "Usage:",
-    "  npx tsx scripts/lite-runtime-dogfood.ts [--json] [--tasks-json /path/tasks.json] [--out-json /path/result.json] [--out-md /path/result.md]",
+    "  npx tsx scripts/lite-runtime-dogfood.ts [--json|--report-json] [--tasks-json /path/tasks.json] [--out-json /path/result.json] [--out-report-json /path/report.json] [--out-md /path/result.md]",
     "",
     "Runs a product dogfood slice over real Runtime task families.",
     "",
@@ -28,7 +30,9 @@ function usage(): string {
 
 function parseArgs(argv: string[]): CliOptions {
   let json = false;
+  let reportJson = false;
   let outJson: string | null = null;
+  let outReportJson: string | null = null;
   let outMarkdown: string | null = null;
   let tasksJson: string | null = null;
   for (let i = 0; i < argv.length; i += 1) {
@@ -37,8 +41,17 @@ function parseArgs(argv: string[]): CliOptions {
       json = true;
       continue;
     }
+    if (arg === "--report-json") {
+      reportJson = true;
+      continue;
+    }
     if (arg === "--out-json") {
       outJson = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    if (arg === "--out-report-json") {
+      outReportJson = argv[i + 1] ?? null;
       i += 1;
       continue;
     }
@@ -58,7 +71,7 @@ function parseArgs(argv: string[]): CliOptions {
     }
     throw new Error(`unknown argument: ${arg}`);
   }
-  return { json, outJson, outMarkdown, tasksJson };
+  return { json, reportJson, outJson, outReportJson, outMarkdown, tasksJson };
 }
 
 function ensureParent(filePath: string): void {
@@ -88,11 +101,17 @@ function main(): void {
     ensureParent(options.outJson);
     fs.writeFileSync(options.outJson, `${JSON.stringify(result, null, 2)}\n`);
   }
+  if (options.outReportJson) {
+    ensureParent(options.outReportJson);
+    fs.writeFileSync(options.outReportJson, `${JSON.stringify(result.report, null, 2)}\n`);
+  }
   if (options.outMarkdown) {
     ensureParent(options.outMarkdown);
     fs.writeFileSync(options.outMarkdown, formatRuntimeDogfoodMarkdown(result));
   }
-  if (options.json) {
+  if (options.reportJson) {
+    console.log(JSON.stringify(result.report, null, 2));
+  } else if (options.json) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     console.log(formatRuntimeDogfoodMarkdown(result));

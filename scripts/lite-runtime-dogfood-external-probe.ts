@@ -6,7 +6,9 @@ import { runRuntimeDogfoodExternalProbe } from "./lib/lite-runtime-dogfood-exter
 
 type CliOptions = {
   json: boolean;
+  reportJson: boolean;
   outJson: string | null;
+  outReportJson: string | null;
   outMarkdown: string | null;
   outTasksJson: string | null;
   port: number | null;
@@ -15,7 +17,7 @@ type CliOptions = {
 function usage(): string {
   return [
     "Usage:",
-    "  npx tsx scripts/lite-runtime-dogfood-external-probe.ts [--json] [--port 43000] [--out-json /path/result.json] [--out-md /path/result.md] [--out-tasks-json /path/tasks.json]",
+    "  npx tsx scripts/lite-runtime-dogfood-external-probe.ts [--json|--report-json] [--port 43000] [--out-json /path/result.json] [--out-report-json /path/report.json] [--out-md /path/result.md] [--out-tasks-json /path/tasks.json]",
     "",
     "Runs a Runtime dogfood slice backed by a real detached local service and fresh-shell external probe evidence.",
   ].join("\n");
@@ -23,7 +25,9 @@ function usage(): string {
 
 function parseArgs(argv: string[]): CliOptions {
   let json = false;
+  let reportJson = false;
   let outJson: string | null = null;
+  let outReportJson: string | null = null;
   let outMarkdown: string | null = null;
   let outTasksJson: string | null = null;
   let port: number | null = null;
@@ -33,8 +37,17 @@ function parseArgs(argv: string[]): CliOptions {
       json = true;
       continue;
     }
+    if (arg === "--report-json") {
+      reportJson = true;
+      continue;
+    }
     if (arg === "--out-json") {
       outJson = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    if (arg === "--out-report-json") {
+      outReportJson = argv[i + 1] ?? null;
       i += 1;
       continue;
     }
@@ -61,7 +74,7 @@ function parseArgs(argv: string[]): CliOptions {
     }
     throw new Error(`unknown argument: ${arg}`);
   }
-  return { json, outJson, outMarkdown, outTasksJson, port };
+  return { json, reportJson, outJson, outReportJson, outMarkdown, outTasksJson, port };
 }
 
 function ensureParent(filePath: string): void {
@@ -77,6 +90,10 @@ async function main(): Promise<void> {
     ensureParent(options.outJson);
     fs.writeFileSync(options.outJson, `${JSON.stringify(run, null, 2)}\n`);
   }
+  if (options.outReportJson) {
+    ensureParent(options.outReportJson);
+    fs.writeFileSync(options.outReportJson, `${JSON.stringify(run.dogfood_result.report, null, 2)}\n`);
+  }
   if (options.outTasksJson) {
     ensureParent(options.outTasksJson);
     fs.writeFileSync(options.outTasksJson, `${JSON.stringify({ tasks: run.task_specs }, null, 2)}\n`);
@@ -85,7 +102,9 @@ async function main(): Promise<void> {
     ensureParent(options.outMarkdown);
     fs.writeFileSync(options.outMarkdown, formatRuntimeDogfoodMarkdown(run.dogfood_result));
   }
-  if (options.json) {
+  if (options.reportJson) {
+    console.log(JSON.stringify(run.dogfood_result.report, null, 2));
+  } else if (options.json) {
     console.log(JSON.stringify(run, null, 2));
   } else {
     console.log(formatRuntimeDogfoodMarkdown(run.dogfood_result));

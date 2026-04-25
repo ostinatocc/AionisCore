@@ -29,6 +29,16 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.equal(result.summary.false_confidence_detected_count, 1);
   assert.equal(result.summary.false_confidence_blocked_count, 1);
   assert.equal(result.summary.unblocked_false_confidence_rate, 0);
+  assert.equal(result.report.report_version, "runtime_dogfood_report_v1");
+  assert.equal(result.report.product_status, "pass_fixture_evidence_only");
+  assert.equal(result.report.product_metrics.first_correct_action_rate, 1);
+  assert.equal(result.report.product_metrics.false_confidence_rate, 0);
+  assert.equal(result.report.product_metrics.after_exit_contract_correctness_rate, 1);
+  assert.equal(result.report.product_metrics.after_exit_evidence_success_rate, 0.75);
+  assert.equal(result.report.product_metrics.cross_shell_revalidation_success_rate, 0.8);
+  assert.equal(result.report.product_metrics.live_execution_coverage_rate, 0);
+  assert.ok(result.report.blocking_risks.some((risk) => risk.includes("fixture-backed only")));
+  assert.ok(result.report.next_actions.some((action) => action.includes("external_probe")));
 
   const serviceScenario = result.scenarios.find((scenario) => scenario.id === "service_after_exit");
   assert.ok(serviceScenario);
@@ -74,6 +84,13 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.equal(failedEvidenceScenario.metrics.false_confidence_blocked, true);
   assert.equal(failedEvidenceScenario.metrics.unblocked_false_confidence, false);
   assert.ok(failedEvidenceScenario.compiled.execution_evidence_assessment.reasons.includes("after_exit_revalidation_failed"));
+
+  const failedEvidenceReport = result.report.scenarios.find((scenario) => scenario.id === "service_after_exit_evidence_failed");
+  assert.ok(failedEvidenceReport);
+  assert.equal(failedEvidenceReport.product_status, "pass_advisory_only");
+  assert.equal(failedEvidenceReport.authority_gate_result, "blocked_by_execution_evidence");
+  assert.ok(failedEvidenceReport.authority_blockers.some((blocker) => blocker.includes("after_exit_revalidation_failed")));
+  assert.equal(failedEvidenceReport.product_metrics.false_confidence_blocked, true);
 });
 
 test("runtime dogfood task specs can carry external probe evidence without code changes", () => {
@@ -132,6 +149,10 @@ test("runtime dogfood task specs can carry external probe evidence without code 
   assert.equal(result.coverage.task_families.service_publish_validate, 1);
   assert.equal(result.summary.first_correct_action_rate, 1);
   assert.equal(result.summary.after_exit_correct_rate, 1);
+  assert.equal(result.report.product_status, "pass_live_evidence");
+  assert.equal(result.report.product_metrics.live_execution_coverage_rate, 1);
+  assert.equal(result.report.product_metrics.after_exit_evidence_success_rate, 1);
+  assert.equal(result.report.product_metrics.cross_shell_revalidation_success_rate, 1);
 
   const scenario = result.scenarios[0];
   assert.equal(scenario?.proof.evidence_source, "external_probe");
@@ -150,6 +171,8 @@ test("runtime dogfood external probe runs a detached service and produces live e
   assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 1);
   assert.equal(run.dogfood_result.proof_boundary.fixture_evidence_scenarios, 0);
   assert.equal(run.dogfood_result.summary.after_exit_correct_rate, 1);
+  assert.equal(run.dogfood_result.report.product_status, "pass_live_evidence");
+  assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_rate, 1);
 
   const scenario = run.dogfood_result.scenarios[0];
   assert.equal(scenario?.proof.evidence_source, "external_probe");

@@ -311,7 +311,27 @@ Current complete SDK surface includes:
 9. sandbox and automation surfaces
 10. host bridge integration
 
-## 14. Run bundled SDK examples
+## 14. Host execution-memory loop
+
+Hosts should treat Aionis as an execution-memory runtime, not as a replacement for real validation.
+
+Use this loop:
+
+```text
+taskStartPlan -> execute -> validate -> storeExecutionOutcome -> retrieveWorkflowContract -> reuse or keep advisory
+```
+
+Authority comes from `retrieveWorkflowContract.authority_summary`, not from recall strength alone. For service and publish paths, pass execution evidence through `storeExecutionOutcome.metrics`, including:
+
+1. `validation_passed`
+2. `after_exit_revalidated`
+3. `fresh_shell_probe_passed`
+4. `false_confidence_detected`
+5. `evidence_refs`
+
+Read [RUNTIME_HOST_INTEGRATION_RUNBOOK.md](RUNTIME_HOST_INTEGRATION_RUNBOOK.md) for the full host contract and [RUNTIME_DOGFOOD_REPORTING.md](RUNTIME_DOGFOOD_REPORTING.md) for product dogfood reporting.
+
+## 15. Run bundled SDK examples
 
 ```bash
 cd /path/to/AionisRuntime
