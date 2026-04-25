@@ -637,14 +637,94 @@ export type AionisTaskStartResponse = Omit<AionisKickoffRecommendationResponse, 
   first_action: AionisTaskStartAction | null;
 };
 
+export type AionisTaskStartGateAction = Exclude<
+  AionisActionRetrievalUncertainty["recommended_actions"][number],
+  "proceed"
+>;
+
+export type AionisTaskStartPlanRequest = AionisKickoffRecommendationRequest & Partial<Pick<
+  AionisPlanningContextRequest,
+  | "recall_strategy"
+  | "recall_mode"
+  | "recall_class_aware"
+  | "include_shadow"
+  | "rules_limit"
+  | "run_id"
+  | "tool_strict"
+  | "limit"
+  | "neighborhood_hops"
+  | "return_debug"
+  | "include_embeddings"
+  | "include_meta"
+  | "include_slots"
+  | "include_slots_preview"
+  | "slots_preview_keys"
+  | "max_nodes"
+  | "max_edges"
+  | "ranked_limit"
+  | "min_edge_weight"
+  | "min_edge_confidence"
+  | "context_token_budget"
+  | "context_char_budget"
+  | "context_compaction_profile"
+  | "context_optimization_profile"
+  | "memory_layer_preference"
+  | "return_layered_context"
+  | "context_layers"
+  | "static_context_blocks"
+  | "static_injection"
+  | "execution_result_summary"
+  | "execution_artifacts"
+  | "execution_evidence"
+  | "execution_state_v1"
+  | "execution_packet_v1"
+>>;
+
+export type AionisTaskStartPlanResponse = {
+  summary_version: "task_start_plan_v1";
+  resolution_source: "kickoff" | "planning_context";
+  tenant_id: string;
+  scope: string;
+  query_text: string;
+  kickoff_recommendation: AionisKickoffRecommendation | null;
+  gate_action: AionisTaskStartGateAction | null;
+  action_retrieval_uncertainty: AionisActionRetrievalUncertainty | null;
+  first_action: AionisTaskStartAction | null;
+  planner_explanation: string | null;
+  planner_packet: AionisPassthroughObject | null;
+  rationale: {
+    summary: string;
+  } & AionisPassthroughObject;
+} & AionisPassthroughObject;
+
 export type AionisContextAssembleRequest = AionisPlanningContextRequest;
 export type AionisExecutionIntrospectRequest = {
   tenant_id?: string;
   scope?: string;
+  consumer_agent_id?: string;
+  consumer_team_id?: string;
   run_id?: string;
   session_id?: string;
   limit?: number;
 } & AionisRequestPayload;
+
+export type AionisRetrieveWorkflowContractRequest = AionisExecutionIntrospectRequest & {
+  anchor_id?: string;
+  workflow_signature?: string;
+  task_family?: string;
+  file_path?: string;
+  include_introspection?: boolean;
+};
+
+export type AionisRetrieveWorkflowContractResponse = {
+  summary_version: "retrieve_workflow_contract_v1";
+  tenant_id: string | null;
+  scope: string | null;
+  selected_source: "recommended_workflows" | "candidate_workflows" | "none";
+  selected_workflow: AionisPassthroughObject | null;
+  execution_contract_v1: AionisPassthroughObject | null;
+  introspection: AionisExecutionIntrospectResponse | null;
+};
 
 export type AionisExecutionPacketAssemblySummary = {
   packet_source_mode: string | null;
@@ -1945,6 +2025,64 @@ export type AionisReplayRunEndRequest = {
   metrics?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 } & AionisRequestPayload;
+
+export type AionisStoreExecutionOutcomeStep = {
+  step_id?: string;
+  decision_id?: string;
+  step_index?: number;
+  tool_name: string;
+  tool_input: unknown;
+  expected_output_signature?: unknown;
+  preconditions?: Array<Record<string, unknown>>;
+  retry_policy?: Record<string, unknown>;
+  safety_level?: "auto_ok" | "needs_confirm" | "manual_only";
+  status: "success" | "failed" | "skipped" | "partial";
+  output_signature?: unknown;
+  postconditions?: Array<Record<string, unknown>>;
+  artifact_refs?: string[];
+  repair_applied?: boolean;
+  repair_note?: string;
+  error?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type AionisStoreExecutionOutcomeRequest = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  consumer_agent_id?: string;
+  consumer_team_id?: string;
+  memory_lane?: "private" | "shared";
+  producer_agent_id?: string;
+  owner_agent_id?: string;
+  owner_team_id?: string;
+  run_id?: string;
+  goal: string;
+  status: "success" | "failed" | "partial";
+  summary?: string;
+  context_snapshot_ref?: string;
+  context_snapshot_hash?: string;
+  success_criteria?: Record<string, unknown>;
+  metrics?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  steps?: AionisStoreExecutionOutcomeStep[];
+} & AionisRequestPayload;
+
+export type AionisStoreExecutionOutcomeResponse = {
+  summary_version: "store_execution_outcome_v1";
+  tenant_id: string | null;
+  scope: string | null;
+  run_id: string;
+  status: "success" | "failed" | "partial";
+  started: AionisRuntimeResponse;
+  steps: Array<{
+    step_index: number;
+    step_id: string | null;
+    before: AionisRuntimeResponse;
+    after: AionisRuntimeResponse;
+  }>;
+  ended: AionisRuntimeResponse;
+};
 
 export type AionisReplayRunGetRequest = {
   tenant_id?: string;

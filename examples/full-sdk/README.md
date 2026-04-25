@@ -65,7 +65,7 @@ Examples:
 - `07-agent-memory-inspect.ts`
   seeds continuity state, then calls `memory.agent.inspect/reviewPack/resumePack/handoffPack` to show the new agent-facing public SDK façade
 - `08-self-evolving-task-start.ts`
-  proves that a repeated task can get a better second `taskStart` after successful execution memory is written back
+  proves that a repeated task can get a better second `taskStart`, and use `taskStartPlan` when kickoff needs planning fallback
 - `09-policy-memory-materialization.ts`
   records repeated positive tool feedback and shows persisted `policy memory` through evolution review and agent inspect
 - `10-policy-governance-loop.ts`
