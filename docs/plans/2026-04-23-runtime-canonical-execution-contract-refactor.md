@@ -304,6 +304,17 @@ Primary metrics:
 - false-confidence rate
 - after-exit correctness
 
+Dogfood reports must also declare their proof boundary:
+
+- whether execution evidence is `declared_fixture`, `external_probe`, or absent
+- how many scenarios are live external execution validations
+- which Runtime task families are covered
+- which scenarios are negative controls for authority denial or false-confidence blocking
+
+This prevents a contract compilation slice from being misread as live product execution proof.
+
+The dogfood runner must also accept serializable task specs through `--tasks-json`, so real task traces and external probe evidence can be evaluated without adding task-specific code paths.
+
 Benchmarks are allowed only as validation after this dogfood pass.
 
 ## Implementation rules
