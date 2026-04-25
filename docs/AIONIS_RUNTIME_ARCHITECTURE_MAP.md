@@ -185,6 +185,8 @@ Trust modules may consume canonical execution contracts and evidence surfaces. T
 
 Authority-producing modules must be declared Trust Gate producers before they call `buildRuntimeAuthorityGate`. Outcome-contract and execution-evidence gates must stay in declared trust-evaluation or authority-consuming boundaries.
 
+Workflow and policy producers that persist `stable`, `active`, or `authoritative` reusable memory must bind the write to `runtime_authority_gate_v1`, `outcome_contract_gate_v1`, and execution-evidence assessment for that produced surface. Pattern producers are separate: a stable trusted pattern is advisory guidance only, must remain non-authoritative, and must carry promotion/revalidation or governance provenance.
+
 ### 3. Orchestrator
 
 Purpose:
