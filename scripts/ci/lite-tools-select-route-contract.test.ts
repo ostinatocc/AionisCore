@@ -24,6 +24,139 @@ import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
 import { createLiteWriteStore } from "../../src/store/lite-write-store.ts";
 import { InflightGate } from "../../src/util/inflight_gate.ts";
 
+const TOOLS_SELECT_ROUTE_KEYS = [
+  "candidates",
+  "decision",
+  "execution_kernel",
+  "pattern_matches",
+  "scope",
+  "selection",
+  "selection_summary",
+  "tenant_id",
+  "rules",
+].sort();
+
+const TOOLS_SELECT_SELECTION_KEYS = [
+  "allowed",
+  "candidates",
+  "denied",
+  "fallback",
+  "ordered",
+  "preferred",
+  "selected",
+].sort();
+
+const TOOLS_SELECT_FALLBACK_KEYS = ["applied", "effective_mode", "note", "reason"].sort();
+
+const TOOLS_SELECT_EXECUTION_KERNEL_KEYS = [
+  "active_role",
+  "candidate_families",
+  "control_profile_origin",
+  "current_stage",
+  "execution_artifacts_count",
+  "execution_evidence_count",
+  "execution_result_summary_present",
+  "execution_state_v1_present",
+  "family_aware_ordering_applied",
+  "tool_registry_present",
+].sort();
+
+const TOOLS_SELECT_RULES_KEYS = [
+  "agent_visibility_summary",
+  "applied",
+  "considered",
+  "invalid_then_sample",
+  "matched",
+  "skipped_invalid_then",
+  "tool_conflicts_summary",
+].sort();
+
+const TOOLS_SELECT_PATTERN_MATCHES_KEYS = ["anchors", "matched", "preferred_tools", "trusted"].sort();
+
+const TOOLS_SELECT_DECISION_KEYS = [
+  "created_at",
+  "decision_id",
+  "decision_uri",
+  "pattern_summary",
+  "policy_sha256",
+  "run_id",
+  "selected_tool",
+  "source_rule_ids",
+].sort();
+
+const TOOLS_SELECT_PATTERN_SUMMARY_KEYS = [
+  "skipped_contested_pattern_affinity_levels",
+  "skipped_contested_pattern_anchor_ids",
+  "skipped_contested_pattern_tools",
+  "skipped_suppressed_pattern_affinity_levels",
+  "skipped_suppressed_pattern_anchor_ids",
+  "skipped_suppressed_pattern_tools",
+  "used_trusted_pattern_affinity_levels",
+  "used_trusted_pattern_anchor_ids",
+  "used_trusted_pattern_tools",
+].sort();
+
+const TOOLS_SELECT_SELECTION_SUMMARY_KEYS = [
+  "allowed_count",
+  "candidate_count",
+  "contested_pattern_count",
+  "denied_count",
+  "fallback_applied",
+  "fallback_reason",
+  "matched_rules",
+  "pattern_lifecycle_summary",
+  "pattern_maintenance_summary",
+  "preferred_count",
+  "provenance_explanation",
+  "selected_tool",
+  "shadow_selected_tool",
+  "skipped_contested_pattern_affinity_levels",
+  "skipped_contested_pattern_tools",
+  "skipped_suppressed_pattern_affinity_levels",
+  "skipped_suppressed_pattern_tools",
+  "source_rule_count",
+  "summary_version",
+  "suppressed_pattern_count",
+  "tool_conflicts",
+  "trusted_pattern_count",
+  "used_trusted_pattern_affinity_levels",
+  "used_trusted_pattern_tools",
+].sort();
+
+function assertToolsSelectExactKeySurface(body: {
+  selection: { fallback?: unknown };
+  execution_kernel: unknown;
+  rules: unknown;
+  pattern_matches: unknown;
+  decision: { pattern_summary: unknown };
+  selection_summary: unknown;
+}) {
+  assert.deepEqual(Object.keys(body as Record<string, unknown>).sort(), TOOLS_SELECT_ROUTE_KEYS);
+  assert.deepEqual(Object.keys(body.selection as Record<string, unknown>).sort(), TOOLS_SELECT_SELECTION_KEYS);
+  assert.deepEqual(
+    Object.keys(body.selection.fallback as Record<string, unknown>).sort(),
+    TOOLS_SELECT_FALLBACK_KEYS,
+  );
+  assert.deepEqual(
+    Object.keys(body.execution_kernel as Record<string, unknown>).sort(),
+    TOOLS_SELECT_EXECUTION_KERNEL_KEYS,
+  );
+  assert.deepEqual(Object.keys(body.rules as Record<string, unknown>).sort(), TOOLS_SELECT_RULES_KEYS);
+  assert.deepEqual(
+    Object.keys(body.pattern_matches as Record<string, unknown>).sort(),
+    TOOLS_SELECT_PATTERN_MATCHES_KEYS,
+  );
+  assert.deepEqual(Object.keys(body.decision as Record<string, unknown>).sort(), TOOLS_SELECT_DECISION_KEYS);
+  assert.deepEqual(
+    Object.keys(body.decision.pattern_summary as Record<string, unknown>).sort(),
+    TOOLS_SELECT_PATTERN_SUMMARY_KEYS,
+  );
+  assert.deepEqual(
+    Object.keys(body.selection_summary as Record<string, unknown>).sort(),
+    TOOLS_SELECT_SELECTION_SUMMARY_KEYS,
+  );
+}
+
 function tmpDbPath(name: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-lite-tools-select-route-"));
   return path.join(dir, `${name}.sqlite`);
@@ -676,6 +809,34 @@ test("tools_select route returns the stable execution-memory contract surface", 
 
     assert.equal(response.statusCode, 200);
     const body = ToolsSelectRouteContractSchema.parse(response.json());
+    assertToolsSelectExactKeySurface(body);
+    assert.throws(() =>
+      ToolsSelectRouteContractSchema.parse({
+        ...body,
+        debug_passthrough: true,
+      }),
+    );
+    assert.throws(() =>
+      ToolsSelectRouteContractSchema.parse({
+        ...body,
+        selection: {
+          ...body.selection,
+          debug_passthrough: true,
+        },
+      }),
+    );
+    assert.throws(() =>
+      ToolsSelectRouteContractSchema.parse({
+        ...body,
+        decision: {
+          ...body.decision,
+          pattern_summary: {
+            ...body.decision.pattern_summary,
+            debug_passthrough: true,
+          },
+        },
+      }),
+    );
     assert.equal(body.selection.selected, "bash");
     assert.deepEqual(body.selection.preferred, ["bash"]);
     assert.deepEqual(body.selection.ordered.slice(0, 2), ["bash", "edit"]);
