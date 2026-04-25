@@ -30,6 +30,34 @@ The current change belongs to the Trust Gate. Its rule is:
 | Form pattern governance | `src/memory/form-pattern-governance.ts` | Semantic L3 pattern governance | Multiple examples plus semantic review | L3 pattern stabilization only, not authoritative contract promotion |
 | Handoff, session, archive, rehydrate, store boundaries | Boundary modules | No direct authority production | Carry or normalize existing execution surfaces | Evidence carrier or schema boundary only |
 
+## Authority Consumption Boundary
+
+Raw authority fields are not a general Runtime consumption API. They are allowed only at producer, schema, normalization, summary, and reporting boundaries.
+
+The consumer path is:
+
+`runtime_authority_visibility_v1` / `runtime_authority_gate_v1` -> `authorityConsumptionStateFromValue` -> action, planning, context, and reviewer consumers.
+
+The normalized consumption state is the only supported way for action/planning/reviewer code to decide:
+
+- whether learned execution memory requires inspect-first reuse;
+- whether a candidate is blocked from promotion-readiness by failed evidence or false confidence;
+- which blocker should be shown to the planner or reviewer.
+
+Allowed direct raw authority access:
+
+- `src/memory/authority-consumption.ts` and `src/memory/authority-visibility.ts` for normalization.
+- `src/memory/authority-gate.ts`, `src/memory/execution-evidence.ts`, and Trust Gate producers for gate construction.
+- Workflow/replay/policy producers that persist `authority_gate_v1` and `execution_evidence_assessment`.
+- Schema, introspection, planning summary, and reporting surfaces that carry or summarize authority state.
+
+Forbidden direct raw authority access:
+
+- action retrieval must not call visibility parser helpers directly;
+- planning summary assembly must not trust legacy booleans such as `experiencePath.authority_blocked`;
+- context orchestration and reviewer packs must not recompute authority semantics locally;
+- new action/planning/reviewer consumers must go through `authorityConsumptionStateFromValue`.
+
 ## Non-Goals
 
 - Do not add another memory layer.

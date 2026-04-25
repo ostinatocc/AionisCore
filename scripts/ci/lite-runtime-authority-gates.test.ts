@@ -24,6 +24,21 @@ function assertContains(text: string, needle: string, message: string): void {
   assert.ok(text.includes(needle), message);
 }
 
+function listSourceTsFiles(dir: string): string[] {
+  const absoluteDir = path.join(ROOT, dir);
+  const out: string[] = [];
+  for (const entry of fs.readdirSync(absoluteDir, { withFileTypes: true })) {
+    const absolute = path.join(absoluteDir, entry.name);
+    const relative = path.relative(ROOT, absolute);
+    if (entry.isDirectory()) {
+      out.push(...listSourceTsFiles(relative));
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith(".ts")) out.push(relative);
+  }
+  return out.sort();
+}
+
 test("authority-producing Runtime surfaces use the unified authority gate", () => {
   const workflowWriteProjection = read("src/memory/workflow-write-projection.ts");
   assertContains(workflowWriteProjection, "buildRuntimeAuthorityGate", "workflow write projection must build runtime authority gates");
@@ -67,6 +82,59 @@ test("authority-consuming Runtime boundaries use the shared authority consumptio
   assertContains(reviewerPacks, "authorityConsumptionAllowsActionReuse", "reviewer packs must filter blocked action reuse through the helper");
 });
 
+test("authority raw field and visibility parser access stays behind declared boundaries", () => {
+  const sourceFiles = [...listSourceTsFiles("src/app"), ...listSourceTsFiles("src/memory")];
+  const visibilityParserSymbols = [
+    "authorityVisibilityFromValue",
+    "authorityVisibilityRequiresInspection",
+    "authorityVisibilityPrimaryBlocker",
+  ];
+  const parserAllowlist = new Set([
+    "src/memory/authority-consumption.ts",
+  ]);
+  for (const file of sourceFiles) {
+    if (parserAllowlist.has(file)) continue;
+    const text = read(file);
+    const matched = visibilityParserSymbols.filter((symbol) => text.includes(symbol));
+    assert.deepEqual(matched, [], `${file} must consume authority through authorityConsumptionStateFromValue`);
+  }
+
+  const rawAuthorityFieldTokens = [
+    "authority_gate_v1",
+    "execution_evidence_assessment",
+    "stable_promotion_blocked",
+  ];
+  const rawFieldBoundaryAllowlist = new Set([
+    "src/app/planning-summary-surfaces.ts",
+    "src/app/planning-summary.ts",
+    "src/memory/authority-consumption.ts",
+    "src/memory/authority-gate.ts",
+    "src/memory/authority-visibility.ts",
+    "src/memory/execution-evidence.ts",
+    "src/memory/execution-introspection.ts",
+    "src/memory/policy-memory.ts",
+    "src/memory/replay-learning-artifacts.ts",
+    "src/memory/replay-stable-anchor-helpers.ts",
+    "src/memory/schemas.ts",
+    "src/memory/workflow-write-projection.ts",
+  ]);
+  for (const file of sourceFiles) {
+    if (rawFieldBoundaryAllowlist.has(file)) continue;
+    const text = read(file);
+    const matched = rawAuthorityFieldTokens.filter((token) => text.includes(token));
+    assert.deepEqual(matched, [], `${file} must not read raw authority gate/evidence fields directly`);
+  }
+
+  for (const file of [
+    "src/memory/action-retrieval.ts",
+    "src/memory/context-orchestrator.ts",
+    "src/memory/reviewer-packs.ts",
+    "src/app/planning-summary-assembly.ts",
+  ]) {
+    assertContains(read(file), "authorityConsumptionStateFromValue", `${file} must consume normalized authority state`);
+  }
+});
+
 test("pattern surfaces cannot masquerade as authoritative Runtime contracts", () => {
   const toolsPatternAnchor = read("src/memory/tools-pattern-anchor.ts");
   assert.equal(toolsPatternAnchor.includes("\"authoritative\""), false, "tools pattern anchors must not grant authoritative trust");
@@ -89,6 +157,8 @@ test("authority surface documentation records the intended Runtime boundary", ()
   assertContains(doc, "Replay learning auto-promotion", "authority surface doc must cover replay learning promotion");
   assertContains(doc, "Policy memory materialization", "authority surface doc must cover policy memory");
   assertContains(doc, "Tools pattern anchors", "authority surface doc must separate pattern guidance from authoritative policy");
+  assertContains(doc, "Authority Consumption Boundary", "authority surface doc must cover the consumer boundary");
+  assertContains(doc, "authorityConsumptionStateFromValue", "authority surface doc must name the shared consumption state helper");
 });
 
 test("authority consumption helper demotes blocked authority to inspect-first guidance", () => {
