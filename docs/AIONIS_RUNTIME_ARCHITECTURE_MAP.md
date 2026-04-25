@@ -265,6 +265,8 @@ The following legacy slot names are storage compatibility details:
 1. `execution_native_v1`
 2. `anchor_v1`
 
+The direct-access manifest for these storage compatibility details is `src/memory/legacy-access-registry.ts`.
+
 Direct access to those names is allowed only in these boundary categories:
 
 1. schema definitions
@@ -283,7 +285,7 @@ Runtime consumers outside those categories must use:
 6. `resolveNodeServiceLifecycleConstraints`
 7. other resolver helpers from `src/memory/node-execution-surface.ts`
 
-This rule is enforced by `scripts/ci/lite-runtime-legacy-boundary.test.ts`.
+This rule is enforced by `scripts/ci/lite-runtime-legacy-boundary.test.ts`, which must consume `src/memory/legacy-access-registry.ts` instead of carrying an independent path allowlist.
 
 ## Product completeness assessment
 
