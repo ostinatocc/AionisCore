@@ -29,6 +29,7 @@ import {
   buildExecutionRoutingSignalSummary,
 } from "./planning-summary-routing.js";
 import { buildExecutionMemorySummaryBundle } from "./planning-summary-surfaces.js";
+import { authorityConsumptionStateFromValue } from "../memory/authority-consumption.js";
 import { parseExecutionContract, type ExecutionContractV1 } from "../memory/execution-contract.js";
 
 type ExperienceRecommendationProjection = {
@@ -285,6 +286,7 @@ export function buildPlanningSummary(args: {
     experienceRecommendation?.path && typeof experienceRecommendation.path === "object"
       ? (experienceRecommendation.path as Record<string, unknown>)
       : null;
+  const experienceAuthorityState = authorityConsumptionStateFromValue(experiencePath);
   const experiencePolicyContract =
     args.experience_intelligence && typeof args.experience_intelligence === "object"
       ? ((args.experience_intelligence as Record<string, unknown>).policy_contract as Record<string, unknown> | undefined)
@@ -341,11 +343,8 @@ export function buildPlanningSummary(args: {
             ? experienceRecommendation.combined_next_action
             : null,
         action_retrieval_uncertainty: actionRetrievalUncertainty,
-        authority_blocked: experiencePath?.authority_blocked === true,
-        authority_primary_blocker:
-          typeof experiencePath?.authority_primary_blocker === "string"
-            ? experiencePath.authority_primary_blocker
-            : null,
+        authority_blocked: experienceAuthorityState.requires_inspection,
+        authority_primary_blocker: experienceAuthorityState.primary_blocker,
       }
     : null;
   const selectedTool =

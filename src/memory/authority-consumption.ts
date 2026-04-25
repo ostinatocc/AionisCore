@@ -5,6 +5,14 @@ import {
 import { parseExecutionContract, type ExecutionContractV1 } from "./execution-contract.js";
 import type { ContractTrust } from "./contract-trust.js";
 
+export type AuthorityConsumptionStateV1 = {
+  state_version: "runtime_authority_consumption_state_v1";
+  visibility: RuntimeAuthorityVisibilityV1 | null;
+  requires_inspection: boolean;
+  blocks_promotion_readiness: boolean;
+  primary_blocker: string | null;
+};
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
@@ -53,6 +61,37 @@ export function authorityVisibilityPrimaryBlocker(
     visibility.stable_promotion_blocked ? "stable_promotion_blocked" : null,
     visibility.authority_blocked ? "authority_blocked" : null,
   );
+}
+
+export function authorityConsumptionStateFromValue(value: unknown): AuthorityConsumptionStateV1 {
+  const visibility = authorityVisibilityFromValue(value);
+  const record = asRecord(value);
+  const fallbackExecutionEvidenceStatus = firstString(record?.execution_evidence_status);
+  const fallbackFalseConfidence = record?.false_confidence_detected === true;
+  const requiresInspection = visibility
+    ? authorityVisibilityRequiresInspection(visibility)
+    : record?.authority_blocked === true
+      || record?.stable_promotion_blocked === true
+      || fallbackExecutionEvidenceStatus === "failed";
+  const blocksPromotionReadiness = visibility
+    ? authorityVisibilityBlocksPromotionReadiness(visibility)
+    : fallbackExecutionEvidenceStatus === "failed" || fallbackFalseConfidence;
+  const primaryBlocker = visibility
+    ? authorityVisibilityPrimaryBlocker(visibility)
+    : firstString(
+        record?.authority_primary_blocker,
+        record?.primary_blocker,
+        fallbackExecutionEvidenceStatus === "failed" ? "execution_evidence:failed" : null,
+        record?.stable_promotion_blocked === true ? "stable_promotion_blocked" : null,
+        record?.authority_blocked === true ? "authority_blocked" : null,
+      );
+  return {
+    state_version: "runtime_authority_consumption_state_v1",
+    visibility,
+    requires_inspection: requiresInspection,
+    blocks_promotion_readiness: blocksPromotionReadiness,
+    primary_blocker: primaryBlocker,
+  };
 }
 
 export function demoteContractTrustForAuthorityBlock(

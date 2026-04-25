@@ -1,8 +1,5 @@
 import {
-  authorityVisibilityBlocksPromotionReadiness,
-  authorityVisibilityFromValue,
-  authorityVisibilityPrimaryBlocker,
-  authorityVisibilityRequiresInspection,
+  authorityConsumptionStateFromValue,
 } from "./authority-consumption.js";
 
 export type ContextLayerName = "facts" | "episodes" | "rules" | "static" | "decisions" | "tools" | "citations";
@@ -137,13 +134,13 @@ function firstBoolean(v: unknown): boolean | null {
 }
 
 function authorityConsumptionBlockerLabel(entry: unknown): string | null {
-  const visibility = authorityVisibilityFromValue(entry);
-  if (!authorityVisibilityRequiresInspection(visibility)) return null;
-  return authorityVisibilityPrimaryBlocker(visibility) ?? "unknown";
+  const state = authorityConsumptionStateFromValue(entry);
+  if (!state.requires_inspection) return null;
+  return state.primary_blocker ?? "unknown";
 }
 
 function authorityConsumptionBlocksPromotionReadiness(entry: unknown): boolean {
-  return authorityVisibilityBlocksPromotionReadiness(authorityVisibilityFromValue(entry));
+  return authorityConsumptionStateFromValue(entry).blocks_promotion_readiness;
 }
 
 type PatternSignal = {
