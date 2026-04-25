@@ -38,6 +38,7 @@ npm run example:sdk:continuity-provenance
 npm run example:sdk:session-continuity
 npm run example:sdk:semantic-forgetting
 npm run example:sdk:dogfood-loop
+npm run example:sdk:service-lifecycle-dogfood
 ```
 
 The same SDK client can also call Lite lifecycle mutations directly:
@@ -81,3 +82,5 @@ Examples:
   calls `memory.actionRetrieval(...)`, then shows how `planningContext(...)` exposes uncertainty gates and operator action hints for host-side integration
 - `15-public-sdk-dogfood-loop.ts`
   runs the public SDK closure: `taskStartPlan`, `storeExecutionOutcome`, optional playbook compile/simulate, `retrieveWorkflowContract`, and a second `taskStartPlan` with execution evidence attached
+- `16-service-lifecycle-dogfood.ts`
+  launches a real detached local service, probes it from a fresh shell, stores after-exit/fresh-shell evidence through `storeExecutionOutcome`, and inspects workflow authority/outcome state

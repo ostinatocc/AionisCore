@@ -76,4 +76,11 @@ Use real Runtime tasks before expanding benchmark coverage:
 - After-exit correctness.
 - Cross-shell revalidation correctness.
 
+Service lifecycle dogfood has a stricter authority rule:
+
+- `validation_passed=true` is not enough for `authoritative` when the contract requires a durable service outcome.
+- If `must_hold_after_exit` or `must_survive_agent_exit` is present, evidence must include `after_exit_revalidated=true`.
+- If `revalidate_from_fresh_shell` or fresh-shell external visibility is present, evidence must include `fresh_shell_probe_passed=true`.
+- Missing or failed after-exit/fresh-shell evidence must keep the workflow advisory or insufficient and count toward false-confidence risk.
+
 The next Runtime hardening pass should keep shrinking direct legacy access and keep every authority-producing path behind `runtime_authority_gate_v1`.

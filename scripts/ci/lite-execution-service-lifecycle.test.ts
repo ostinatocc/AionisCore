@@ -8,6 +8,7 @@ import {
   extractExecutionEvidenceFromSlots,
 } from "../../src/memory/execution-evidence.ts";
 import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
+import { buildRuntimeAuthorityGate } from "../../src/memory/authority-gate.ts";
 import {
   resolveNodeAcceptanceChecks,
   resolveNodeServiceLifecycleConstraints,
@@ -227,6 +228,72 @@ test("execution evidence blocks authoritative learning after failed after-exit p
   assert.ok(assessment.reasons.includes("after_exit_revalidation_failed"));
   assert.ok(assessment.reasons.includes("fresh_shell_probe_failed"));
   assert.ok(assessment.reasons.includes("false_confidence_detected"));
+});
+
+test("runtime authority gate rejects validation-only evidence for after-exit service contracts", () => {
+  const contract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    task_family: "service_publish_validate",
+    target_files: ["scripts/dev-server.mjs"],
+    next_action: "Keep the detached service alive and validate from a fresh shell.",
+    service_lifecycle_constraints: [
+      {
+        version: 1,
+        service_kind: "http",
+        label: "service:http://localhost:4173/healthz",
+        launch_reference: "nohup node scripts/dev-server.mjs --port 4173 >/tmp/dev.log 2>&1 &",
+        endpoint: "http://localhost:4173/healthz",
+        must_survive_agent_exit: true,
+        revalidate_from_fresh_shell: true,
+        detach_then_probe: true,
+        health_checks: ["curl -fsS http://localhost:4173/healthz"],
+        teardown_notes: [],
+      },
+    ],
+    acceptance_checks: ["curl -fsS http://localhost:4173/healthz"],
+    success_invariants: ["fresh_shell_revalidation_passes"],
+    must_hold_after_exit: ["service_endpoint_still_serves_after_exit:http://localhost:4173/healthz"],
+    external_visibility_requirements: ["endpoint_reachable_from_fresh_shell:http://localhost:4173/healthz"],
+    provenance: {
+      source_kind: "manual_context",
+    },
+  });
+
+  const authority = buildRuntimeAuthorityGate({
+    executionContract: contract,
+    requestedTrust: "authoritative",
+    evidence: buildExecutionEvidenceFromValidation({
+      validationPassed: true,
+      evidenceRefs: ["test:agent-side-validation-only"],
+    }),
+  });
+
+  assert.equal(authority.outcomeContractGate.allows_authoritative, true);
+  assert.equal(authority.executionEvidenceAssessment.status, "incomplete");
+  assert.equal(authority.authorityGate.allows_authoritative, false);
+  assert.equal(authority.authorityGate.allows_stable_promotion, false);
+  assert.equal(authority.authorityGate.effective_trust, "advisory");
+  assert.ok(authority.authorityGate.reasons.includes("execution_evidence:missing_after_exit_revalidation"));
+  assert.ok(authority.authorityGate.reasons.includes("execution_evidence:missing_fresh_shell_probe"));
+});
+
+test("execution evidence compiler preserves service lifecycle proof from metrics", () => {
+  const evidence = extractExecutionEvidenceFromSlots({
+    metrics: {
+      success_ratio: 1,
+      after_exit_revalidated: true,
+      fresh_shell_probe_passed: true,
+      evidence_refs: ["metrics:fresh-shell-probe"],
+    },
+  });
+
+  assert.ok(evidence);
+  assert.equal(evidence.validation_passed, true);
+  assert.equal(evidence.after_exit_revalidated, true);
+  assert.equal(evidence.fresh_shell_probe_passed, true);
+  assert.equal(evidence.failure_reason, null);
+  assert.equal(evidence.false_confidence_detected, false);
+  assert.deepEqual(evidence.evidence_refs, ["metrics:fresh-shell-probe"]);
 });
 
 test("execution evidence compiler normalizes route side outputs into execution_evidence_v1", () => {
