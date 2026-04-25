@@ -315,6 +315,8 @@ This prevents a contract compilation slice from being misread as live product ex
 
 The dogfood runner must also accept serializable task specs through `--tasks-json`, so real task traces and external probe evidence can be evaluated without adding task-specific code paths.
 
+The Runtime dogfood suite also includes an `external-probe` runner that starts a real detached local service, waits for the launcher process to exit, validates the health endpoint from a fresh shell, and feeds the resulting evidence back through the same task-spec dogfood path.
+
 Benchmarks are allowed only as validation after this dogfood pass.
 
 ## Implementation rules

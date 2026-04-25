@@ -1,0 +1,103 @@
+import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { formatRuntimeDogfoodMarkdown } from "./lib/lite-runtime-dogfood.ts";
+import { runRuntimeDogfoodExternalProbe } from "./lib/lite-runtime-dogfood-external-probe.ts";
+
+type CliOptions = {
+  json: boolean;
+  outJson: string | null;
+  outMarkdown: string | null;
+  outTasksJson: string | null;
+  port: number | null;
+};
+
+function usage(): string {
+  return [
+    "Usage:",
+    "  npx tsx scripts/lite-runtime-dogfood-external-probe.ts [--json] [--port 43000] [--out-json /path/result.json] [--out-md /path/result.md] [--out-tasks-json /path/tasks.json]",
+    "",
+    "Runs a Runtime dogfood slice backed by a real detached local service and fresh-shell external probe evidence.",
+  ].join("\n");
+}
+
+function parseArgs(argv: string[]): CliOptions {
+  let json = false;
+  let outJson: string | null = null;
+  let outMarkdown: string | null = null;
+  let outTasksJson: string | null = null;
+  let port: number | null = null;
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--json") {
+      json = true;
+      continue;
+    }
+    if (arg === "--out-json") {
+      outJson = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    if (arg === "--out-md") {
+      outMarkdown = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    if (arg === "--out-tasks-json") {
+      outTasksJson = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    if (arg === "--port") {
+      const parsed = Number.parseInt(argv[i + 1] ?? "", 10);
+      if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`invalid --port: ${argv[i + 1] ?? ""}`);
+      port = parsed;
+      i += 1;
+      continue;
+    }
+    if (arg === "-h" || arg === "--help") {
+      console.log(usage());
+      process.exit(0);
+    }
+    throw new Error(`unknown argument: ${arg}`);
+  }
+  return { json, outJson, outMarkdown, outTasksJson, port };
+}
+
+function ensureParent(filePath: string): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+}
+
+async function main(): Promise<void> {
+  const options = parseArgs(process.argv.slice(2));
+  const run = await runRuntimeDogfoodExternalProbe({
+    port: options.port ?? undefined,
+  });
+  if (options.outJson) {
+    ensureParent(options.outJson);
+    fs.writeFileSync(options.outJson, `${JSON.stringify(run, null, 2)}\n`);
+  }
+  if (options.outTasksJson) {
+    ensureParent(options.outTasksJson);
+    fs.writeFileSync(options.outTasksJson, `${JSON.stringify({ tasks: run.task_specs }, null, 2)}\n`);
+  }
+  if (options.outMarkdown) {
+    ensureParent(options.outMarkdown);
+    fs.writeFileSync(options.outMarkdown, formatRuntimeDogfoodMarkdown(run.dogfood_result));
+  }
+  if (options.json) {
+    console.log(JSON.stringify(run, null, 2));
+  } else {
+    console.log(formatRuntimeDogfoodMarkdown(run.dogfood_result));
+  }
+  if (run.dogfood_result.overall_status !== "pass" || !run.fresh_shell_probe_passed) {
+    process.exitCode = 1;
+  }
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}
