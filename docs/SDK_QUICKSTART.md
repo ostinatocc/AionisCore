@@ -330,6 +330,7 @@ npm run example:sdk:sandbox
 npm run example:sdk:host-bridge
 npm run example:sdk:action-retrieval
 npm run example:sdk:dogfood-loop
+npm run example:sdk:service-lifecycle-dogfood
 npm run example:integration:host-task-start
 npm run example:integration:task-start-learning-loop
 ```

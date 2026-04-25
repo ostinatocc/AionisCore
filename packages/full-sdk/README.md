@@ -201,6 +201,7 @@ npm run example:sdk:continuity-provenance
 npm run example:sdk:session-continuity
 npm run example:sdk:semantic-forgetting
 npm run example:sdk:dogfood-loop
+npm run example:sdk:service-lifecycle-dogfood
 ```
 
 Agent-memory façade example:

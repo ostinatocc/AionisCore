@@ -219,18 +219,60 @@ function compileEvidenceFromArray(value: unknown): ExecutionEvidenceV1 | null {
 
 function metricEvidence(metrics: unknown): ExecutionEvidenceV1 | null {
   const record = asRecord(metrics);
+  if (!record) return null;
   const successRatio = record && typeof record.success_ratio === "number" && Number.isFinite(record.success_ratio)
     ? record.success_ratio
     : null;
-  if (successRatio == null) return null;
+  const validationPassed =
+    booleanField(record, "validation_passed", "validationPassed", "passed", "ok", "success")
+    ?? statusToValidation(record.status)
+    ?? statusToValidation(record.validation_status)
+    ?? (successRatio == null ? null : successRatio >= 1);
+  const afterExitRevalidated = booleanField(
+    record,
+    "after_exit_revalidated",
+    "afterExitRevalidated",
+    "after_exit_validation_passed",
+    "must_hold_after_exit_passed",
+  );
+  const freshShellProbePassed = booleanField(
+    record,
+    "fresh_shell_probe_passed",
+    "freshShellProbePassed",
+    "fresh_shell_revalidated",
+    "fresh_shell_validation_passed",
+    "revalidate_from_fresh_shell_passed",
+  );
+  const failureReason =
+    nullableString(record.failure_reason)
+    ?? nullableString(record.error)
+    ?? nullableString(record.reason)
+    ?? (validationPassed === false ? "source_metrics_validation_failed" : null)
+    ?? (successRatio != null && successRatio < 1 ? "source_metrics_success_ratio_below_one" : null);
+  const falseConfidenceDetected =
+    booleanField(record, "false_confidence_detected", "falseConfidenceDetected") === true
+    || (
+      statusToValidation(record.status) === true
+      && [validationPassed, afterExitRevalidated, freshShellProbePassed].some((value) => value === false)
+    );
+  const evidenceRefs = uniqueEvidenceRefs([record.evidence_refs, record.evidenceRefs, record.ref, record.uri, record.id]);
+  if (
+    validationPassed === null
+    && afterExitRevalidated === null
+    && freshShellProbePassed === null
+    && !failureReason
+    && !falseConfidenceDetected
+  ) {
+    return null;
+  }
   return ExecutionEvidenceV1Schema.parse({
     schema_version: "execution_evidence_v1",
-    validation_passed: successRatio >= 1,
-    after_exit_revalidated: null,
-    fresh_shell_probe_passed: null,
-    failure_reason: successRatio >= 1 ? null : "source_metrics_success_ratio_below_one",
-    false_confidence_detected: false,
-    evidence_refs: ["source.metrics.success_ratio"],
+    validation_passed: validationPassed,
+    after_exit_revalidated: afterExitRevalidated,
+    fresh_shell_probe_passed: freshShellProbePassed,
+    failure_reason: failureReason,
+    false_confidence_detected: falseConfidenceDetected,
+    evidence_refs: evidenceRefs.length > 0 ? evidenceRefs : ["source.metrics"],
   });
 }
 
