@@ -1,6 +1,6 @@
 # Aionis Runtime API Capability Matrix
 
-Last reviewed: 2026-04-20
+Last reviewed: 2026-04-25
 
 Document status: living technical capability reference
 
@@ -245,6 +245,30 @@ Unsupported governance/orchestration routes:
 ## Memory Lifecycle
 
 Lite now exposes the local execution-memory lifecycle routes directly against the SQLite-backed store.
+
+Memory retention and semantic forgetting are part of the local execution-memory lifecycle. They are not a separate deletion service and they do not grant authority. The Runtime uses `semantic_forgetting_v1`, archive relocation metadata, and `execution_forgetting_summary_v1` to decide and report whether memory should be retained, demoted, archived, reviewed, suppressed, or rehydrated.
+
+Retention inputs:
+
+1. node type, current tier, title, summary, and resolved execution surfaces
+2. salience, importance, confidence, feedback quality, and activation recency
+3. policy memory state, pattern credibility, execution contract trust, and lifecycle state
+4. archive relocation state and rehydration mode
+
+Retention outputs:
+
+1. `retain` keeps useful memory visible in its current tier
+2. `demote` moves memory colder when it is still useful but should not stay hot
+3. `archive` moves retired or low-retention memory into the archive lifecycle
+4. `review` prevents archive-tier memory from being implicitly reactivated without an explicit decision
+
+Planner-facing summary:
+
+`execution_forgetting_summary_v1` is visible through planning/context and context/assembly responses. It reports semantic action counts, lifecycle state counts, suppressed patterns, archive relocation counts, rehydration mode counts, stale signal counts, and a maintenance recommendation.
+
+Boundary rule:
+
+Forgetting may reduce visibility or require review, but it must not silently delete canonical evidence, upgrade trust, bypass the Trust Gate, or turn stale recall into authoritative guidance. Returning archived memory to active use must go through explicit rehydrate or activation routes.
 
 Supported lifecycle routes:
 
