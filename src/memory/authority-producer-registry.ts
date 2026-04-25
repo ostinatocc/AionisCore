@@ -6,6 +6,7 @@ export type RuntimeAuthorityLayer =
   | "Schema Boundary";
 
 export type RuntimeAuthorityBoundaryRole =
+  | "registry_manifest"
   | "trust_gate_evaluator"
   | "authority_producer"
   | "authority_consumer"
@@ -34,6 +35,12 @@ export type RuntimeAuthorityBoundaryDeclaration = {
 };
 
 export const RUNTIME_AUTHORITY_BOUNDARY_REGISTRY = [
+  {
+    id: "authority_boundary_manifest",
+    file: "src/memory/authority-producer-registry.ts",
+    layer: "Trust Gate",
+    role: "registry_manifest",
+  },
   {
     id: "trust_gate_core",
     file: "src/memory/authority-gate.ts",

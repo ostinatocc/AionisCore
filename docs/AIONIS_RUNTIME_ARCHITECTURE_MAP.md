@@ -258,6 +258,28 @@ Learning modules can create canonical write artifacts through write/projection b
 
 Learning modules may consume shared contract, trust, and policy-materialization surfaces. They must not call Orchestrator response builders directly; feedback-driven learning should materialize reusable policy/workflow memory through canonical learning or write boundaries, not by re-entering planner assembly.
 
+## Boundary inventory
+
+Runtime boundary manifests are source-owned, not CI-owned.
+
+The current boundary manifests are:
+
+1. `src/memory/authority-producer-registry.ts`
+2. `src/memory/legacy-access-registry.ts`
+
+The unified inventory surface is `src/memory/runtime-boundary-inventory.ts`.
+
+Responsibilities:
+
+1. expose all declared authority and legacy direct-access boundaries through one read-only inventory
+2. preserve each entry's source registry, source id, file, role or boundary kind, and guard metadata
+3. make cross-cutting boundary ownership visible without adding new producer or consumer authority
+4. let CI verify inventory consistency against source manifests instead of duplicating path allowlists
+
+Boundary rule:
+
+The inventory is observational. It may aggregate manifests and expose summaries, but it must not decide trust, promote memory, parse legacy slots, or grant new direct-access privileges.
+
 ## Direct legacy access boundary
 
 The following legacy slot names are storage compatibility details:
