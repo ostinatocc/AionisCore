@@ -12,6 +12,13 @@ import {
   demoteContractTrustForAuthorityBlock,
   demoteExecutionContractForAuthorityVisibility,
 } from "../../src/memory/authority-consumption.ts";
+import {
+  RUNTIME_AUTHORITY_BOUNDARY_REGISTRY,
+  runtimeAuthorityProducerDeclarations,
+  runtimeRawAuthoritySurfaceBoundaryFiles,
+  runtimeStablePatternLiteralBoundaryFiles,
+  runtimeStableWorkflowLiteralBoundaryFiles,
+} from "../../src/memory/authority-producer-registry.ts";
 import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
@@ -39,31 +46,39 @@ function listSourceTsFiles(dir: string): string[] {
   return out.sort();
 }
 
+test("authority producer registry declares unique Runtime boundary entries", () => {
+  assert.ok(RUNTIME_AUTHORITY_BOUNDARY_REGISTRY.length > 0, "authority boundary registry must not be empty");
+  const ids = RUNTIME_AUTHORITY_BOUNDARY_REGISTRY.map((entry) => entry.id);
+  assert.equal(new Set(ids).size, ids.length, "authority boundary registry ids must be unique");
+
+  for (const entry of RUNTIME_AUTHORITY_BOUNDARY_REGISTRY) {
+    assert.ok(entry.file.startsWith("src/"), `${entry.id} must point at a Runtime source file`);
+    assert.ok(fs.existsSync(path.join(ROOT, entry.file)), `${entry.id} must point at an existing source file`);
+    if (entry.role === "authority_producer") {
+      assert.ok(entry.producerKind, `${entry.id} must declare producer kind`);
+      assert.equal(entry.mayUseRuntimeAuthorityGate, true, `${entry.id} must be gate-backed`);
+      assert.ok((entry.requiredSourceMarkers?.length ?? 0) > 0, `${entry.id} must declare source markers`);
+    }
+    if (entry.role === "advisory_pattern_producer") {
+      assert.equal(entry.producerKind, "advisory_pattern", `${entry.id} must stay advisory pattern scoped`);
+      assert.equal(entry.mayUseRuntimeAuthorityGate, undefined, `${entry.id} must not mint Runtime authority`);
+    }
+  }
+});
+
 test("authority-producing Runtime surfaces use the unified authority gate", () => {
-  const workflowWriteProjection = read("src/memory/workflow-write-projection.ts");
-  assertContains(workflowWriteProjection, "buildRuntimeAuthorityGate", "workflow write projection must build runtime authority gates");
-  assertContains(workflowWriteProjection, "authority_gate_v1", "workflow write projection must persist authority gate state");
-  assertContains(workflowWriteProjection, "authorityGate.allows_stable_promotion", "stable workflow projection must depend on authority gate promotion");
+  const producers = runtimeAuthorityProducerDeclarations()
+    .filter((producer) => producer.mayUseRuntimeAuthorityGate);
+  assert.ok(producers.length > 0, "authority producer registry must declare gate-backed producers");
 
-  const replayLearningArtifacts = read("src/memory/replay-learning-artifacts.ts");
-  assertContains(replayLearningArtifacts, "buildRuntimeAuthorityGate", "replay learning artifacts must build runtime authority gates");
-  assertContains(replayLearningArtifacts, "authority_gate_v1", "replay learning artifacts must persist authority gate state");
-  assertContains(replayLearningArtifacts, "authorityGate.allows_authoritative", "replay stable promotion must require authoritative authority gate");
-  assertContains(replayLearningArtifacts, "authorityGate.allows_stable_promotion", "replay stable promotion must require stable-promotion authority gate");
-  assertContains(replayLearningArtifacts, "authorityGate: stableAuthorityGate", "replay stable workflow nodes must build a stable-node authority gate");
-  assertContains(replayLearningArtifacts, "execution_evidence_assessment: stableExecutionEvidenceAssessment", "replay stable workflow nodes must persist stable-node evidence assessment");
-
-  const replayStableAnchorHelpers = read("src/memory/replay-stable-anchor-helpers.ts");
-  assertContains(replayStableAnchorHelpers, "buildRuntimeAuthorityGate", "replay stable anchors must build runtime authority gates");
-  assertContains(replayStableAnchorHelpers, "authority_gate_v1", "replay stable anchors must persist authority gate state");
-  assertContains(replayStableAnchorHelpers, "authority.authorityGate.allows_stable_promotion", "replay playbook anchors must degrade to candidate when authority is insufficient");
-
-  const policyMemory = read("src/memory/policy-memory.ts");
-  assertContains(policyMemory, "buildRuntimeAuthorityGate", "policy memory must build runtime authority gates");
-  assertContains(policyMemory, "buildPolicyAuthoritySurfaces", "policy memory must centralize policy authority surfaces");
-  assertContains(policyMemory, "authority_gate_v1", "policy memory must persist authority gate state");
-  assertContains(policyMemory, "normalizePersistedPolicyLifecycleState", "policy memory must normalize active lifecycle through authority gates");
-  assertContains(policyMemory, "outcomeAllowsAuthoritative: authority.authorityGate.allows_authoritative", "policy memory active lifecycle must depend on authority outcome");
+  for (const producer of producers) {
+    const text = read(producer.file);
+    assertContains(text, "buildRuntimeAuthorityGate", `${producer.file} must build runtime authority gates`);
+    assertContains(text, "authority_gate_v1", `${producer.file} must persist authority gate state`);
+    for (const token of producer.requiredSourceMarkers ?? []) {
+      assertContains(text, token, `${producer.file} must keep ${producer.id} backed by ${token}`);
+    }
+  }
 });
 
 test("stable and authoritative producer literals stay in declared producer classes", () => {
@@ -73,11 +88,7 @@ test("stable and authoritative producer literals stay in declared producer class
     .sort();
   assert.deepEqual(
     stableWorkflowLiteralFiles,
-    [
-      "src/memory/context-orchestrator.ts",
-      "src/memory/replay-learning-artifacts.ts",
-      "src/memory/workflow-write-projection.ts",
-    ],
+    runtimeStableWorkflowLiteralBoundaryFiles(),
     "Stable workflow promotion literals must stay limited to declared producers and read-side orchestration summaries.",
   );
 
@@ -86,10 +97,7 @@ test("stable and authoritative producer literals stay in declared producer class
     .sort();
   assert.deepEqual(
     stablePatternLiteralFiles,
-    [
-      "src/memory/context-orchestrator.ts",
-      "src/memory/tools-pattern-anchor.ts",
-    ],
+    runtimeStablePatternLiteralBoundaryFiles(),
     "Stable pattern literals must stay limited to pattern anchoring and read-side orchestration summaries.",
   );
 });
@@ -186,20 +194,7 @@ test("authority raw field and visibility parser access stays behind declared bou
     "execution_evidence_assessment",
     "stable_promotion_blocked",
   ];
-  const rawFieldBoundaryAllowlist = new Set([
-    "src/app/planning-summary-surfaces.ts",
-    "src/app/planning-summary.ts",
-    "src/memory/authority-consumption.ts",
-    "src/memory/authority-gate.ts",
-    "src/memory/authority-visibility.ts",
-    "src/memory/execution-evidence.ts",
-    "src/memory/execution-introspection.ts",
-    "src/memory/policy-memory.ts",
-    "src/memory/replay-learning-artifacts.ts",
-    "src/memory/replay-stable-anchor-helpers.ts",
-    "src/memory/schemas.ts",
-    "src/memory/workflow-write-projection.ts",
-  ]);
+  const rawFieldBoundaryAllowlist = new Set(runtimeRawAuthoritySurfaceBoundaryFiles());
   for (const file of sourceFiles) {
     if (rawFieldBoundaryAllowlist.has(file)) continue;
     const text = read(file);
