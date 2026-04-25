@@ -290,6 +290,70 @@ export type AionisKickoffRecommendationResponse = {
 
 export type AionisActionRetrievalRequest = AionisKickoffRecommendationRequest;
 
+export type AionisServiceLifecycleConstraintV1 = {
+  version: 1;
+  service_kind: "generic" | "http" | "tcp" | "process";
+  label: string;
+  launch_reference: string | null;
+  endpoint: string | null;
+  must_survive_agent_exit: boolean;
+  revalidate_from_fresh_shell: boolean;
+  detach_then_probe: boolean;
+  health_checks: string[];
+  teardown_notes: string[];
+};
+
+export type AionisRuntimeAuthorityVisibility = {
+  surface_version: "runtime_authority_visibility_v1";
+  node_id: string | null;
+  node_kind: string | null;
+  title: string | null;
+  requested_trust: string | null;
+  effective_trust: string | null;
+  status: "sufficient" | "insufficient" | "unknown";
+  allows_authoritative: boolean;
+  allows_stable_promotion: boolean;
+  authority_blocked: boolean;
+  stable_promotion_blocked: boolean;
+  primary_blocker: string | null;
+  authority_reasons: string[];
+  outcome_contract_reasons: string[];
+  execution_evidence_reasons: string[];
+  execution_evidence_status: string | null;
+  false_confidence_detected: boolean;
+};
+
+export type AionisActionRecommendationTool = {
+  selected_tool: string | null;
+  ordered_tools: string[];
+  preferred_tools: string[];
+  allowed_tools: string[];
+  trusted_pattern_anchor_ids: string[];
+  candidate_pattern_anchor_ids: string[];
+  suppressed_pattern_anchor_ids: string[];
+};
+
+export type AionisActionRecommendationPath = {
+  source_kind: "recommended_workflow" | "candidate_workflow" | "none";
+  anchor_id: string | null;
+  contract_trust?: "authoritative" | "advisory" | "observational";
+  task_family?: string | null;
+  workflow_signature: string | null;
+  title: string | null;
+  summary: string | null;
+  file_path: string | null;
+  target_files: string[];
+  next_action: string | null;
+  workflow_steps?: string[];
+  pattern_hints?: string[];
+  service_lifecycle_constraints?: AionisServiceLifecycleConstraintV1[];
+  confidence: number | null;
+  tool_set: string[];
+  authority_visibility?: AionisRuntimeAuthorityVisibility | null;
+  authority_blocked?: boolean;
+  authority_primary_blocker?: string | null;
+};
+
 export type AionisActionRetrievalEvidenceEntry = {
   source_kind:
     | "persisted_policy_memory"
@@ -304,9 +368,15 @@ export type AionisActionRetrievalEvidenceEntry = {
   workflow_signature: string | null;
   file_path: string | null;
   target_files: string[];
+  workflow_steps?: string[];
+  pattern_hints?: string[];
+  service_lifecycle_constraints?: AionisServiceLifecycleConstraintV1[];
+  authority_visibility?: AionisRuntimeAuthorityVisibility | null;
+  authority_blocked?: boolean;
+  authority_primary_blocker?: string | null;
   confidence: number | null;
   reason: string;
-} & AionisPassthroughObject;
+};
 
 export type AionisActionRetrievalEvidence = {
   stable_workflow_count: number;
@@ -317,7 +387,7 @@ export type AionisActionRetrievalEvidence = {
   persisted_policy_memory_id: string | null;
   selected_path_anchor_id: string | null;
   entries: AionisActionRetrievalEvidenceEntry[];
-} & AionisPassthroughObject;
+};
 
 export type AionisActionRetrievalUncertainty = {
   summary_version: "action_retrieval_uncertainty_v1";
@@ -327,7 +397,7 @@ export type AionisActionRetrievalUncertainty = {
   reasons: string[];
   recommended_actions:
     Array<"proceed" | "widen_recall" | "rehydrate_payload" | "inspect_context" | "request_operator_review">;
-} & AionisPassthroughObject;
+};
 
 export type AionisDelegationLearningSummary = {
   task_family: string | null;
@@ -518,27 +588,8 @@ export type AionisExperienceIntelligenceResponse = {
   action_retrieval: AionisActionRetrievalResponse;
   recommendation: {
     history_applied: boolean;
-    tool: {
-      selected_tool: string | null;
-      ordered_tools: string[];
-      preferred_tools: string[];
-      allowed_tools: string[];
-      trusted_pattern_anchor_ids: string[];
-      candidate_pattern_anchor_ids: string[];
-      suppressed_pattern_anchor_ids: string[];
-    } & AionisPassthroughObject;
-    path: {
-      source_kind: "recommended_workflow" | "candidate_workflow" | "none";
-      anchor_id: string | null;
-      workflow_signature: string | null;
-      title: string | null;
-      summary: string | null;
-      file_path: string | null;
-      target_files: string[];
-      next_action: string | null;
-      confidence: number | null;
-      tool_set: string[];
-    } & AionisPassthroughObject;
+    tool: AionisActionRecommendationTool;
+    path: AionisActionRecommendationPath;
     combined_next_action: string | null;
   } & AionisPassthroughObject;
   policy_hints: AionisPolicyHintPack;
@@ -562,35 +613,8 @@ export type AionisActionRetrievalResponse = {
   recommended_file_path: string | null;
   recommended_next_action: string | null;
   execution_contract_v1: AionisPassthroughObject | null;
-  tool: {
-    selected_tool: string | null;
-    ordered_tools: string[];
-    preferred_tools: string[];
-    allowed_tools: string[];
-    trusted_pattern_anchor_ids: string[];
-    candidate_pattern_anchor_ids: string[];
-    suppressed_pattern_anchor_ids: string[];
-  } & AionisPassthroughObject;
-  path: {
-    source_kind: "recommended_workflow" | "candidate_workflow" | "none";
-    anchor_id: string | null;
-    contract_trust?: "authoritative" | "advisory" | "observational";
-    task_family?: string | null;
-    workflow_signature: string | null;
-    title: string | null;
-    summary: string | null;
-    file_path: string | null;
-    target_files: string[];
-    next_action: string | null;
-    workflow_steps?: string[];
-    pattern_hints?: string[];
-    service_lifecycle_constraints?: AionisPassthroughObject[];
-    authority_visibility?: AionisPassthroughObject | null;
-    authority_blocked?: boolean;
-    authority_primary_blocker?: string | null;
-    confidence: number | null;
-    tool_set: string[];
-  } & AionisPassthroughObject;
+  tool: AionisActionRecommendationTool;
+  path: AionisActionRecommendationPath;
   evidence: AionisActionRetrievalEvidence;
   uncertainty: AionisActionRetrievalUncertainty;
   rationale: {

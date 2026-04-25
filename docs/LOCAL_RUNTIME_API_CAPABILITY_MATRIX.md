@@ -135,7 +135,7 @@ Recommended integrator read path:
 
 `execution_summary_v1` is a strict top-level public contract and exposes strict child contracts for packet assembly, strategy, collaboration, continuity snapshot, routing signals, maintenance, forgetting, collaboration routing, delegation records, and instrumentation. These are public response contracts, not open-ended diagnostic blobs.
 
-`/v1/memory/action/retrieval` and `/v1/memory/tools/select` now reject undeclared top-level route fields. `action_retrieval_v1.rationale` is also strict; its shared path/tool/evidence/uncertainty sub-surfaces remain declared compatibility boundaries until each upstream source has a strict subtype. `tools_select` exposes strict selection, execution-kernel, rules, decision, pattern-match, and selection-summary subcontracts while pattern anchors remain a declared legacy-storage compatibility boundary.
+`/v1/memory/action/retrieval` and `/v1/memory/tools/select` now reject undeclared top-level route fields. `action_retrieval_v1` also rejects undeclared fields in `rationale`, `tool`, `path`, `evidence`, `evidence.entries[]`, `uncertainty`, and the downstream `action_retrieval_gate` subcontracts; the route now exposes declared workflow, pattern, lifecycle, and authority fields instead of relying on passthrough metadata. `tools_select` exposes strict selection, execution-kernel, rules, decision, pattern-match, and selection-summary subcontracts while pattern anchors remain a declared legacy-storage compatibility boundary.
 
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |

@@ -1093,6 +1093,26 @@ export const ContinuityReviewPackResponseSchema = z.object({
 
 export type ContinuityReviewPackResponse = z.infer<typeof ContinuityReviewPackResponseSchema>;
 
+export const RuntimeAuthorityVisibilityContractSchema = z.object({
+  surface_version: z.literal("runtime_authority_visibility_v1"),
+  node_id: z.string().nullable(),
+  node_kind: z.string().nullable(),
+  title: z.string().nullable(),
+  requested_trust: z.string().nullable(),
+  effective_trust: z.string().nullable(),
+  status: z.enum(["sufficient", "insufficient", "unknown"]),
+  allows_authoritative: z.boolean(),
+  allows_stable_promotion: z.boolean(),
+  authority_blocked: z.boolean(),
+  stable_promotion_blocked: z.boolean(),
+  primary_blocker: z.string().nullable(),
+  authority_reasons: z.array(z.string()),
+  outcome_contract_reasons: z.array(z.string()),
+  execution_evidence_reasons: z.array(z.string()),
+  execution_evidence_status: z.string().nullable(),
+  false_confidence_detected: z.boolean(),
+}).strict();
+
 export const ExperienceIntelligencePathRecommendationSchema = z.object({
   source_kind: z.enum(["recommended_workflow", "candidate_workflow", "none"]),
   anchor_id: z.string().nullable(),
@@ -1109,7 +1129,10 @@ export const ExperienceIntelligencePathRecommendationSchema = z.object({
   service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema).max(16).optional(),
   confidence: z.number().nullable(),
   tool_set: z.array(z.string()),
-}).passthrough();
+  authority_visibility: RuntimeAuthorityVisibilityContractSchema.nullable().optional(),
+  authority_blocked: z.boolean().optional(),
+  authority_primary_blocker: z.string().nullable().optional(),
+}).strict();
 
 export const ExperienceIntelligenceToolRecommendationSchema = z.object({
   selected_tool: z.string().nullable(),
@@ -1119,7 +1142,7 @@ export const ExperienceIntelligenceToolRecommendationSchema = z.object({
   trusted_pattern_anchor_ids: z.array(z.string()),
   candidate_pattern_anchor_ids: z.array(z.string()),
   suppressed_pattern_anchor_ids: z.array(z.string()),
-}).passthrough();
+}).strict();
 
 export const ActionRetrievalEvidenceEntrySchema = z.object({
   source_kind: z.enum([
@@ -1136,9 +1159,15 @@ export const ActionRetrievalEvidenceEntrySchema = z.object({
   workflow_signature: z.string().nullable(),
   file_path: z.string().nullable(),
   target_files: z.array(z.string()),
+  workflow_steps: z.array(z.string()).optional(),
+  pattern_hints: z.array(z.string()).optional(),
+  service_lifecycle_constraints: z.array(ServiceLifecycleConstraintV1Schema).max(16).optional(),
+  authority_visibility: RuntimeAuthorityVisibilityContractSchema.nullable().optional(),
+  authority_blocked: z.boolean().optional(),
+  authority_primary_blocker: z.string().nullable().optional(),
   confidence: z.number().nullable(),
   reason: z.string(),
-}).passthrough();
+}).strict();
 
 export type ActionRetrievalEvidenceEntry = z.infer<typeof ActionRetrievalEvidenceEntrySchema>;
 
@@ -1151,7 +1180,7 @@ export const ActionRetrievalEvidenceSchema = z.object({
   persisted_policy_memory_id: z.string().nullable(),
   selected_path_anchor_id: z.string().nullable(),
   entries: z.array(ActionRetrievalEvidenceEntrySchema),
-}).passthrough();
+}).strict();
 
 export type ActionRetrievalEvidence = z.infer<typeof ActionRetrievalEvidenceSchema>;
 
@@ -1168,7 +1197,7 @@ export const ActionRetrievalUncertaintySchema = z.object({
     "inspect_context",
     "request_operator_review",
   ])),
-}).passthrough();
+}).strict();
 
 export type ActionRetrievalUncertainty = z.infer<typeof ActionRetrievalUncertaintySchema>;
 
@@ -1190,7 +1219,7 @@ export const ActionRetrievalGateRehydrationHintSchema = z.object({
   mode: z.enum(["summary_only", "partial", "full", "differential"]).nullable(),
   example_call: z.string().nullable(),
   payload_cost_hint: z.enum(["low", "medium", "high"]).nullable(),
-}).passthrough();
+}).strict();
 
 export type ActionRetrievalGateRehydrationHint = z.infer<typeof ActionRetrievalGateRehydrationHintSchema>;
 
@@ -1204,7 +1233,7 @@ export const ActionRetrievalGateSummarySchema = z.object({
   instruction: z.string().nullable(),
   rehydration_candidate_count: z.number().int().min(0),
   preferred_rehydration: ActionRetrievalGateRehydrationHintSchema.nullable(),
-}).passthrough();
+}).strict();
 
 export type ActionRetrievalGateSummary = z.infer<typeof ActionRetrievalGateSummarySchema>;
 
