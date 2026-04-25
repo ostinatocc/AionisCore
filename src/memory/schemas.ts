@@ -1813,6 +1813,45 @@ export const ExecutionContinuitySnapshotSummarySchema = z.object({
 
 export type ExecutionContinuitySnapshotSummary = z.infer<typeof ExecutionContinuitySnapshotSummarySchema>;
 
+const ExecutionForgettingCountSchema = z.object({
+  retain: z.number().int().min(0),
+  demote: z.number().int().min(0),
+  archive: z.number().int().min(0),
+  review: z.number().int().min(0),
+}).strict();
+
+const ExecutionForgettingLifecycleStateCountsSchema = z.object({
+  active: z.number().int().min(0),
+  contested: z.number().int().min(0),
+  retired: z.number().int().min(0),
+  archived: z.number().int().min(0),
+}).strict();
+
+const ExecutionArchiveRelocationStateCountsSchema = z.object({
+  none: z.number().int().min(0),
+  candidate: z.number().int().min(0),
+  cold_archive: z.number().int().min(0),
+}).strict();
+
+const ExecutionArchiveRelocationTargetCountsSchema = z.object({
+  none: z.number().int().min(0),
+  local_cold_store: z.number().int().min(0),
+  external_object_store: z.number().int().min(0),
+}).strict();
+
+const ExecutionArchivePayloadScopeCountsSchema = z.object({
+  none: z.number().int().min(0),
+  anchor_payload: z.number().int().min(0),
+  node: z.number().int().min(0),
+}).strict();
+
+const ExecutionRehydrationModeCountsSchema = z.object({
+  summary_only: z.number().int().min(0),
+  partial: z.number().int().min(0),
+  full: z.number().int().min(0),
+  differential: z.number().int().min(0),
+}).strict();
+
 export const ExecutionForgettingSummarySchema = z.object({
   summary_version: z.literal("execution_forgetting_summary_v1"),
   substrate_mode: z.enum(["stable", "suppression_present", "forgetting_active"]),
@@ -1823,44 +1862,17 @@ export const ExecutionForgettingSummarySchema = z.object({
   suppressed_pattern_anchor_ids: z.array(z.string()),
   suppressed_pattern_sources: z.array(z.string()),
   selected_memory_layers: z.array(z.string()),
-  semantic_action_counts: z.object({
-    retain: z.number().int().min(0),
-    demote: z.number().int().min(0),
-    archive: z.number().int().min(0),
-    review: z.number().int().min(0),
-  }),
-  lifecycle_state_counts: z.object({
-    active: z.number().int().min(0),
-    contested: z.number().int().min(0),
-    retired: z.number().int().min(0),
-    archived: z.number().int().min(0),
-  }),
-  archive_relocation_state_counts: z.object({
-    none: z.number().int().min(0),
-    candidate: z.number().int().min(0),
-    cold_archive: z.number().int().min(0),
-  }),
-  archive_relocation_target_counts: z.object({
-    none: z.number().int().min(0),
-    local_cold_store: z.number().int().min(0),
-    external_object_store: z.number().int().min(0),
-  }),
-  archive_payload_scope_counts: z.object({
-    none: z.number().int().min(0),
-    anchor_payload: z.number().int().min(0),
-    node: z.number().int().min(0),
-  }),
-  rehydration_mode_counts: z.object({
-    summary_only: z.number().int().min(0),
-    partial: z.number().int().min(0),
-    full: z.number().int().min(0),
-    differential: z.number().int().min(0),
-  }),
+  semantic_action_counts: ExecutionForgettingCountSchema,
+  lifecycle_state_counts: ExecutionForgettingLifecycleStateCountsSchema,
+  archive_relocation_state_counts: ExecutionArchiveRelocationStateCountsSchema,
+  archive_relocation_target_counts: ExecutionArchiveRelocationTargetCountsSchema,
+  archive_payload_scope_counts: ExecutionArchivePayloadScopeCountsSchema,
+  rehydration_mode_counts: ExecutionRehydrationModeCountsSchema,
   differential_rehydration_candidate_count: z.number().int().min(0),
   primary_savings_levers: z.array(z.string()),
   stale_signal_count: z.number().int().min(0),
   recommended_action: z.string(),
-}).passthrough();
+}).strict();
 
 export type ExecutionForgettingSummary = z.infer<typeof ExecutionForgettingSummarySchema>;
 

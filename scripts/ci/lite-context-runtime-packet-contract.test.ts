@@ -153,6 +153,35 @@ function assertExecutionKernelBundle(body: {
   assert.deepEqual(body.execution_summary.continuity_carrier_summary, expected.continuity_carrier_summary);
 }
 
+const EXECUTION_FORGETTING_SUMMARY_KEYS = [
+  "archive_payload_scope_counts",
+  "archive_relocation_state_counts",
+  "archive_relocation_target_counts",
+  "differential_rehydration_candidate_count",
+  "forgotten_by_reason",
+  "forgotten_items",
+  "lifecycle_state_counts",
+  "primary_forgetting_reason",
+  "primary_savings_levers",
+  "recommended_action",
+  "rehydration_mode_counts",
+  "selected_memory_layers",
+  "semantic_action_counts",
+  "stale_signal_count",
+  "substrate_mode",
+  "summary_version",
+  "suppressed_pattern_anchor_ids",
+  "suppressed_pattern_count",
+  "suppressed_pattern_sources",
+].sort();
+
+const EXECUTION_FORGETTING_ACTION_COUNT_KEYS = ["archive", "demote", "retain", "review"].sort();
+const EXECUTION_FORGETTING_LIFECYCLE_COUNT_KEYS = ["active", "archived", "contested", "retired"].sort();
+const EXECUTION_ARCHIVE_RELOCATION_STATE_COUNT_KEYS = ["candidate", "cold_archive", "none"].sort();
+const EXECUTION_ARCHIVE_RELOCATION_TARGET_COUNT_KEYS = ["external_object_store", "local_cold_store", "none"].sort();
+const EXECUTION_ARCHIVE_PAYLOAD_SCOPE_COUNT_KEYS = ["anchor_payload", "node", "none"].sort();
+const EXECUTION_REHYDRATION_MODE_COUNT_KEYS = ["differential", "full", "partial", "summary_only"].sort();
+
 function assertKernelMatchesRouteSurface(body: {
   planner_packet: unknown;
   pattern_signals: unknown[];
@@ -558,6 +587,32 @@ function assertKernelMatchesRouteSurface(body: {
   assert.equal(
     body.execution_summary.forgetting_summary.primary_forgetting_reason,
     forgettingReasons[0]?.[0] ?? null,
+  );
+  const forgettingSummary = body.execution_summary.forgetting_summary as Record<string, unknown>;
+  assert.deepEqual(Object.keys(forgettingSummary).sort(), EXECUTION_FORGETTING_SUMMARY_KEYS);
+  assert.deepEqual(
+    Object.keys(forgettingSummary.semantic_action_counts as Record<string, unknown>).sort(),
+    EXECUTION_FORGETTING_ACTION_COUNT_KEYS,
+  );
+  assert.deepEqual(
+    Object.keys(forgettingSummary.lifecycle_state_counts as Record<string, unknown>).sort(),
+    EXECUTION_FORGETTING_LIFECYCLE_COUNT_KEYS,
+  );
+  assert.deepEqual(
+    Object.keys(forgettingSummary.archive_relocation_state_counts as Record<string, unknown>).sort(),
+    EXECUTION_ARCHIVE_RELOCATION_STATE_COUNT_KEYS,
+  );
+  assert.deepEqual(
+    Object.keys(forgettingSummary.archive_relocation_target_counts as Record<string, unknown>).sort(),
+    EXECUTION_ARCHIVE_RELOCATION_TARGET_COUNT_KEYS,
+  );
+  assert.deepEqual(
+    Object.keys(forgettingSummary.archive_payload_scope_counts as Record<string, unknown>).sort(),
+    EXECUTION_ARCHIVE_PAYLOAD_SCOPE_COUNT_KEYS,
+  );
+  assert.deepEqual(
+    Object.keys(forgettingSummary.rehydration_mode_counts as Record<string, unknown>).sort(),
+    EXECUTION_REHYDRATION_MODE_COUNT_KEYS,
   );
   assert.equal(
     body.execution_summary.collaboration_routing_summary.summary_version,

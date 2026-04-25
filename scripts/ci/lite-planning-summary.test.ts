@@ -16,6 +16,7 @@ import {
 } from "../../src/app/planning-summary.ts";
 import { resolveContractTrustForSteering } from "../../src/memory/contract-trust.ts";
 import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
+import { ExecutionForgettingSummarySchema } from "../../src/memory/schemas.ts";
 
 const layeredContextFixture = {
   action_recall_packet: {
@@ -1038,6 +1039,45 @@ test("buildAssemblySummary surfaces semantic forgetting, relocation, and rehydra
   assert.equal(
     summary.forgetting_summary.recommended_action,
     "rehydrate archived execution memory only when the task proves it still needs the colder payload",
+  );
+});
+
+test("execution forgetting summary contract rejects passthrough fields", () => {
+  const summary = buildAssemblySummary({
+    rules: { considered: 1, matched: 0 },
+    tools: null,
+    layered_context: layeredContextFixture,
+    cost_signals: null,
+    context_est_tokens: 320,
+    context_compaction_profile: "balanced",
+    optimization_profile: "balanced",
+    recall_mode: "tool_first",
+  }).forgetting_summary;
+
+  assert.deepEqual(ExecutionForgettingSummarySchema.parse(summary), summary);
+  assert.throws(() =>
+    ExecutionForgettingSummarySchema.parse({
+      ...summary,
+      debug_passthrough: true,
+    }),
+  );
+  assert.throws(() =>
+    ExecutionForgettingSummarySchema.parse({
+      ...summary,
+      semantic_action_counts: {
+        ...summary.semantic_action_counts,
+        hidden_count: 1,
+      },
+    }),
+  );
+  assert.throws(() =>
+    ExecutionForgettingSummarySchema.parse({
+      ...summary,
+      rehydration_mode_counts: {
+        ...summary.rehydration_mode_counts,
+        speculative: 1,
+      },
+    }),
   );
 });
 

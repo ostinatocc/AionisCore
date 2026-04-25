@@ -730,7 +730,7 @@ export type AionisExecutionForgettingSummary = {
   primary_savings_levers: string[];
   stale_signal_count: number;
   recommended_action: string;
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionCollaborationRoutingSummary = {
   summary_version: "execution_collaboration_routing_v1";

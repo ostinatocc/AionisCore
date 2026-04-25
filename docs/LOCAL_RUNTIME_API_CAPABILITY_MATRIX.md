@@ -264,7 +264,7 @@ Retention outputs:
 
 Planner-facing summary:
 
-`execution_forgetting_summary_v1` is visible through planning/context and context/assembly responses. It reports semantic action counts, lifecycle state counts, suppressed patterns, archive relocation counts, rehydration mode counts, stale signal counts, and a maintenance recommendation.
+`execution_forgetting_summary_v1` is visible through planning/context and context/assembly responses. It is validated as a strict contract and reports semantic action counts, lifecycle state counts, suppressed patterns, archive relocation counts, rehydration mode counts, stale signal counts, and a maintenance recommendation.
 
 Boundary rule:
 

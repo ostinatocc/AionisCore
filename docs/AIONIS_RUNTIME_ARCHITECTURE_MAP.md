@@ -294,7 +294,7 @@ Stable decision outputs:
 
 Public summary surface:
 
-The planner-facing contract is `execution_forgetting_summary_v1`, exposed through planning and assembly summaries. It reports substrate mode, suppressed pattern counts, semantic action counts, lifecycle state counts, archive relocation counts, rehydration mode counts, stale signal counts, and the recommended maintenance action.
+The planner-facing contract is `execution_forgetting_summary_v1`, exposed through planning and assembly summaries. It is a strict response contract, not an open-ended diagnostic blob. It reports substrate mode, suppressed pattern counts, semantic action counts, lifecycle state counts, archive relocation counts, rehydration mode counts, stale signal counts, and the recommended maintenance action.
 
 Boundary rule:
 
