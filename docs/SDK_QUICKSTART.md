@@ -253,6 +253,8 @@ await aionis.memory.storeExecutionOutcome({
     status: "success",
     output_signature: { summary: "billing retry tests passed" },
   }],
+  compile_playbook: true,
+  simulate_playbook: true,
 });
 ```
 
@@ -266,6 +268,7 @@ const workflow = await aionis.memory.retrieveWorkflowContract({
 });
 
 console.log(workflow.execution_contract_v1);
+console.log(workflow.authority_summary);
 ```
 
 ## 12. Inspect host bridge task context
@@ -326,6 +329,7 @@ npm run example:sdk:automation
 npm run example:sdk:sandbox
 npm run example:sdk:host-bridge
 npm run example:sdk:action-retrieval
+npm run example:sdk:dogfood-loop
 npm run example:integration:host-task-start
 npm run example:integration:task-start-learning-loop
 ```

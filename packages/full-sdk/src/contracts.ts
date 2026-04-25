@@ -716,6 +716,23 @@ export type AionisRetrieveWorkflowContractRequest = AionisExecutionIntrospectReq
   include_introspection?: boolean;
 };
 
+export type AionisWorkflowContractAuthoritySummary = {
+  summary_version: "workflow_contract_authority_summary_v1";
+  contract_trust: "authoritative" | "advisory" | "observational" | string | null;
+  status: "sufficient" | "insufficient" | "unknown";
+  allows_authoritative: boolean | null;
+  allows_stable_promotion: boolean | null;
+  authority_blocked: boolean | null;
+  stable_promotion_blocked: boolean | null;
+  primary_blocker: string | null;
+  outcome_contract_status: "sufficient" | "insufficient" | "unknown";
+  outcome_contract_allows_authoritative: boolean | null;
+  outcome_contract_reasons: string[];
+  execution_evidence_status: string | null;
+  execution_evidence_reasons: string[];
+  false_confidence_detected: boolean | null;
+};
+
 export type AionisRetrieveWorkflowContractResponse = {
   summary_version: "retrieve_workflow_contract_v1";
   tenant_id: string | null;
@@ -723,6 +740,10 @@ export type AionisRetrieveWorkflowContractResponse = {
   selected_source: "recommended_workflows" | "candidate_workflows" | "none";
   selected_workflow: AionisPassthroughObject | null;
   execution_contract_v1: AionisPassthroughObject | null;
+  contract_trust: "authoritative" | "advisory" | "observational" | string | null;
+  outcome_contract_gate: AionisPassthroughObject | null;
+  authority_visibility: AionisRuntimeAuthorityVisibility | AionisPassthroughObject | null;
+  authority_summary: AionisWorkflowContractAuthoritySummary;
   introspection: AionisExecutionIntrospectResponse | null;
 };
 
@@ -2066,6 +2087,13 @@ export type AionisStoreExecutionOutcomeRequest = {
   metrics?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   steps?: AionisStoreExecutionOutcomeStep[];
+  compile_playbook?: boolean;
+  compile?: Pick<
+    AionisReplayPlaybookCompileFromRunRequest,
+    "playbook_id" | "name" | "version" | "matchers" | "success_criteria" | "risk_profile" | "allow_partial" | "metadata"
+  >;
+  simulate_playbook?: boolean;
+  simulate?: Pick<AionisReplayPlaybookRunRequest, "version" | "deterministic_gate" | "params" | "max_steps">;
 } & AionisRequestPayload;
 
 export type AionisStoreExecutionOutcomeResponse = {
@@ -2082,6 +2110,8 @@ export type AionisStoreExecutionOutcomeResponse = {
     after: AionisRuntimeResponse;
   }>;
   ended: AionisRuntimeResponse;
+  playbook_compile: AionisRuntimeResponse | null;
+  playbook_simulation: AionisRuntimeResponse | null;
 };
 
 export type AionisReplayRunGetRequest = {

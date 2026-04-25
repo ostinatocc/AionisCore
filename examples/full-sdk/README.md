@@ -37,6 +37,7 @@ npm run example:sdk:policy-governance
 npm run example:sdk:continuity-provenance
 npm run example:sdk:session-continuity
 npm run example:sdk:semantic-forgetting
+npm run example:sdk:dogfood-loop
 ```
 
 The same SDK client can also call Lite lifecycle mutations directly:
@@ -78,3 +79,5 @@ Examples:
   proves that archived workflow memory can surface semantic forgetting and archive relocation, use differential payload rehydration, and be brought back into the active tier without deleting the colder-memory recommendation
 - `14-action-retrieval-and-gates.ts`
   calls `memory.actionRetrieval(...)`, then shows how `planningContext(...)` exposes uncertainty gates and operator action hints for host-side integration
+- `15-public-sdk-dogfood-loop.ts`
+  runs the public SDK closure: `taskStartPlan`, `storeExecutionOutcome`, optional playbook compile/simulate, `retrieveWorkflowContract`, and a second `taskStartPlan` with execution evidence attached

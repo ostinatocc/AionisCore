@@ -90,6 +90,35 @@ console.log(taskStartPlan.first_action);
 console.log(taskStartPlan.gate_action);
 ```
 
+After execution, a host can store the validated outcome and optionally compile/simulate a replay playbook without manually stitching replay routes:
+
+```ts
+const outcome = await aionis.memory.storeExecutionOutcome({
+  tenant_id: "default",
+  scope: "default",
+  actor: "sdk-host",
+  goal: "debug the failed replay run",
+  status: "success",
+  steps: [{
+    tool_name: "bash",
+    tool_input: { argv: ["npm", "run", "-s", "test:lite"] },
+    status: "success",
+    output_signature: { summary: "lite validation passed" },
+  }],
+  compile_playbook: true,
+  simulate_playbook: true,
+});
+
+const workflow = await aionis.memory.retrieveWorkflowContract({
+  tenant_id: "default",
+  scope: "default",
+  file_path: "src/routes/replay.ts",
+});
+
+console.log(outcome.run_id);
+console.log(workflow.authority_summary);
+```
+
 Explicit action-retrieval example:
 
 ```ts
@@ -171,6 +200,7 @@ WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED=true npm run lite:sta
 npm run example:sdk:continuity-provenance
 npm run example:sdk:session-continuity
 npm run example:sdk:semantic-forgetting
+npm run example:sdk:dogfood-loop
 ```
 
 Agent-memory façade example:
