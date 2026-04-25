@@ -1913,7 +1913,7 @@ export const ExecutionDelegationRecordsSummarySchema = z.object({
   delegation_packets: z.array(ExecutionDelegationPacketRecordV1Schema),
   delegation_returns: z.array(ExecutionDelegationReturnRecordV1Schema),
   artifact_routing_records: z.array(ExecutionArtifactRoutingRecordV1Schema),
-}).passthrough();
+}).strict();
 
 export type ExecutionDelegationRecordsSummary = z.infer<typeof ExecutionDelegationRecordsSummarySchema>;
 
