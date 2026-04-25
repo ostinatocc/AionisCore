@@ -269,16 +269,19 @@ The current boundary manifests are:
 
 The unified inventory surface is `src/memory/runtime-boundary-inventory.ts`.
 
+The local operator/debug route is `GET /v1/runtime/boundary-inventory`, registered by `src/routes/runtime-boundary-inventory.ts`.
+
 Responsibilities:
 
 1. expose all declared authority and legacy direct-access boundaries through one read-only inventory
 2. preserve each entry's source registry, source id, file, role or boundary kind, and guard metadata
 3. make cross-cutting boundary ownership visible without adding new producer or consumer authority
 4. let CI verify inventory consistency against source manifests instead of duplicating path allowlists
+5. expose the same source-owned inventory through a read-only local API surface for operator audit and SDK debugging
 
 Boundary rule:
 
-The inventory is observational. It may aggregate manifests and expose summaries, but it must not decide trust, promote memory, parse legacy slots, or grant new direct-access privileges.
+The inventory is observational. It may aggregate manifests and expose summaries, but it must not decide trust, promote memory, mutate persistence, parse legacy slots, or grant new direct-access privileges.
 
 ## Direct legacy access boundary
 

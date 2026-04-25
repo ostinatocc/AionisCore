@@ -58,6 +58,14 @@ Endpoint status labels used below:
 | --- | --- | --- | --- |
 | `GET` | `/health` | Supported | Stable Lite health contract with `runtime`, `storage`, `lite`, and `sandbox` envelopes. |
 
+## Runtime Boundary And Introspection
+
+These surfaces are local operator/debug views. They are read-only and do not grant authority, mutate memory, or change runtime decisions.
+
+| Method | Path | Status | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/v1/runtime/boundary-inventory` | Supported | Source-owned boundary inventory for authority producers and allowed legacy direct-access boundaries. Returns summary counts, files, grouped entries, and read-only semantics. |
+
 ## Memory Write And Handoff
 
 | Method | Path | Status | Notes |

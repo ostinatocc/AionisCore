@@ -19,6 +19,7 @@ import { registerMemoryReplayGovernedRoutes } from "../routes/memory-replay-gove
 import { registerMemorySandboxRoutes } from "../routes/memory-sandbox.js";
 import { registerMemoryWriteRoutes } from "../routes/memory-write.js";
 import { registerAutomationRoutes } from "../routes/automations.js";
+import { registerRuntimeBoundaryInventoryRoutes } from "../routes/runtime-boundary-inventory.js";
 import { getSharedExecutionStateStore } from "../execution/state-store.js";
 import { buildLiteRouteMatrix, registerLiteServerOnlyRoutes } from "./lite-edition.js";
 import { createErrorResponse, HttpError } from "../util/http.js";
@@ -602,6 +603,10 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
 
 export function registerApplicationRoutes(args: RegisterApplicationRoutesArgs) {
   assertLiteOnlySourceTree(args.env);
+  registerRuntimeBoundaryInventoryRoutes({
+    app: args.app,
+    env: args.env,
+  });
   registerAdminRoutes(args);
   registerMemoryRoutes(args);
 }

@@ -37,6 +37,25 @@ export type RuntimeBoundaryInventoryEntry =
       reason: string;
     };
 
+export type RuntimeBoundaryInventoryResponse = {
+  surface_version: "runtime_boundary_inventory_response_v1";
+  inventory_source: "source_boundary_manifests";
+  surface_semantics: {
+    read_only: true;
+    persistence_effect: "none";
+    authority_effect: "none";
+    runtime_decision_effect: "none";
+    intended_use: "operator_debug_boundary_audit";
+  };
+  summary: ReturnType<typeof runtimeBoundaryInventorySummary>;
+  files: string[];
+  entries: RuntimeBoundaryInventoryEntry[];
+  sources: {
+    authority: RuntimeBoundaryInventoryEntry[];
+    legacy_access: RuntimeBoundaryInventoryEntry[];
+  };
+};
+
 function authorityInventoryEntry(entry: RuntimeAuthorityBoundaryDeclaration): RuntimeBoundaryInventoryEntry {
   return {
     source: "authority",
@@ -69,13 +88,24 @@ function legacyAccessInventoryEntry(entry: RuntimeLegacyAccessBoundaryDeclaratio
   };
 }
 
+function cloneInventoryEntry(entry: RuntimeBoundaryInventoryEntry): RuntimeBoundaryInventoryEntry {
+  if (entry.source === "authority") {
+    return {
+      ...entry,
+      capabilities: { ...entry.capabilities },
+      required_source_markers: [...entry.required_source_markers],
+    };
+  }
+  return { ...entry };
+}
+
 export const RUNTIME_BOUNDARY_INVENTORY: readonly RuntimeBoundaryInventoryEntry[] = [
   ...RUNTIME_AUTHORITY_BOUNDARY_REGISTRY.map(authorityInventoryEntry),
   ...RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY.map(legacyAccessInventoryEntry),
 ];
 
 export function runtimeBoundaryInventoryEntries(): RuntimeBoundaryInventoryEntry[] {
-  return RUNTIME_BOUNDARY_INVENTORY.map((entry) => ({ ...entry }));
+  return RUNTIME_BOUNDARY_INVENTORY.map(cloneInventoryEntry);
 }
 
 export function runtimeBoundaryInventoryEntriesBySource(
@@ -83,7 +113,7 @@ export function runtimeBoundaryInventoryEntriesBySource(
 ): RuntimeBoundaryInventoryEntry[] {
   return RUNTIME_BOUNDARY_INVENTORY
     .filter((entry) => entry.source === source)
-    .map((entry) => ({ ...entry }));
+    .map(cloneInventoryEntry);
 }
 
 export function runtimeBoundaryInventoryFiles(): string[] {
@@ -93,7 +123,7 @@ export function runtimeBoundaryInventoryFiles(): string[] {
 export function runtimeBoundaryInventoryEntriesByFile(file: string): RuntimeBoundaryInventoryEntry[] {
   return RUNTIME_BOUNDARY_INVENTORY
     .filter((entry) => entry.file === file)
-    .map((entry) => ({ ...entry }));
+    .map(cloneInventoryEntry);
 }
 
 export function runtimeBoundaryInventorySummary(): {
@@ -116,5 +146,28 @@ export function runtimeBoundaryInventorySummary(): {
       && (entry.role === "authority_producer" || entry.role === "advisory_pattern_producer")
     ).length,
     legacy_direct_access_files: new Set(legacyAccessEntries.map((entry) => entry.file)).size,
+  };
+}
+
+export function buildRuntimeBoundaryInventoryResponse(): RuntimeBoundaryInventoryResponse {
+  const authorityEntries = runtimeBoundaryInventoryEntriesBySource("authority");
+  const legacyAccessEntries = runtimeBoundaryInventoryEntriesBySource("legacy_access");
+  return {
+    surface_version: "runtime_boundary_inventory_response_v1",
+    inventory_source: "source_boundary_manifests",
+    surface_semantics: {
+      read_only: true,
+      persistence_effect: "none",
+      authority_effect: "none",
+      runtime_decision_effect: "none",
+      intended_use: "operator_debug_boundary_audit",
+    },
+    summary: runtimeBoundaryInventorySummary(),
+    files: runtimeBoundaryInventoryFiles(),
+    entries: [...authorityEntries, ...legacyAccessEntries],
+    sources: {
+      authority: authorityEntries,
+      legacy_access: legacyAccessEntries,
+    },
   };
 }

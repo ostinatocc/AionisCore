@@ -1,4 +1,5 @@
 export const AIONIS_SHARED_ROUTE_PATHS = {
+  runtimeBoundaryInventory: "/v1/runtime/boundary-inventory",
   memoryWrite: "/v1/memory/write",
   planningContext: "/v1/memory/planning/context",
   contextAssemble: "/v1/memory/context/assemble",

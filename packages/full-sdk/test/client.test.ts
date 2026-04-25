@@ -248,6 +248,7 @@ test("createAionisRuntimeClient exposes the full Aionis Core SDK surface and map
     scope: "runtime-sdk",
     automation_id: "nightly-repair",
   });
+  await client.system.boundaryInventory();
 
   assert.deepEqual(
     calls.map((entry) => entry.url),
@@ -275,10 +276,12 @@ test("createAionisRuntimeClient exposes the full Aionis Core SDK surface and map
       "http://127.0.0.1:3001/v1/memory/delegation/records/find",
       "http://127.0.0.1:3001/v1/memory/delegation/records/aggregate",
       "http://127.0.0.1:3001/v1/automations/run",
+      "http://127.0.0.1:3001/v1/runtime/boundary-inventory",
     ],
   );
 
   assert.equal(calls[0]?.init?.method, "GET");
+  assert.equal(calls[23]?.init?.method, "GET");
   assert.equal(calls[1]?.init?.method, "POST");
   assert.equal(calls[2]?.init?.method, "POST");
   assert.equal(calls[3]?.init?.method, "POST");
