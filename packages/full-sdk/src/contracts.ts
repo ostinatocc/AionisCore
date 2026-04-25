@@ -297,6 +297,7 @@ export type AionisActionRetrievalEvidenceEntry = {
     | "rehydration_candidate";
   anchor_id: string | null;
   selected_tool: string | null;
+  task_family?: string | null;
   workflow_signature: string | null;
   file_path: string | null;
   target_files: string[];
@@ -557,6 +558,7 @@ export type AionisActionRetrievalResponse = {
   selected_tool: string | null;
   recommended_file_path: string | null;
   recommended_next_action: string | null;
+  execution_contract_v1: AionisPassthroughObject | null;
   tool: {
     selected_tool: string | null;
     ordered_tools: string[];
@@ -569,12 +571,20 @@ export type AionisActionRetrievalResponse = {
   path: {
     source_kind: "recommended_workflow" | "candidate_workflow" | "none";
     anchor_id: string | null;
+    contract_trust?: "authoritative" | "advisory" | "observational";
+    task_family?: string | null;
     workflow_signature: string | null;
     title: string | null;
     summary: string | null;
     file_path: string | null;
     target_files: string[];
     next_action: string | null;
+    workflow_steps?: string[];
+    pattern_hints?: string[];
+    service_lifecycle_constraints?: AionisPassthroughObject[];
+    authority_visibility?: AionisPassthroughObject | null;
+    authority_blocked?: boolean;
+    authority_primary_blocker?: string | null;
     confidence: number | null;
     tool_set: string[];
   } & AionisPassthroughObject;
@@ -582,8 +592,8 @@ export type AionisActionRetrievalResponse = {
   uncertainty: AionisActionRetrievalUncertainty;
   rationale: {
     summary: string;
-  } & AionisPassthroughObject;
-} & AionisRuntimeResponse;
+  };
+};
 
 export type AionisTaskStartRequest = AionisKickoffRecommendationRequest;
 

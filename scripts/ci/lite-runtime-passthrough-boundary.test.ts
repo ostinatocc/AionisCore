@@ -44,6 +44,16 @@ test("runtime passthrough schema registry covers every open schema surface", () 
       );
       assert.equal(entry.passthrough_count, 0);
       assert.equal(entry.category, "public_contract_should_be_strict");
+    } else {
+      assert.equal(
+        sourceCounts.get(entry.schema_name) ?? 0,
+        entry.passthrough_count,
+        `${entry.schema_name} passthrough registry entry is stale; update its disposition or count`,
+      );
+      assert.ok(
+        entry.passthrough_count > 0,
+        `${entry.schema_name} should be marked must_be_strict once it no longer uses passthrough`,
+      );
     }
   }
 

@@ -23,6 +23,24 @@ import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
 import { createLiteWriteStore } from "../../src/store/lite-write-store.ts";
 import { InflightGate } from "../../src/util/inflight_gate.ts";
 
+const ACTION_RETRIEVAL_RESPONSE_KEYS = [
+  "evidence",
+  "execution_contract_v1",
+  "history_applied",
+  "path",
+  "query_text",
+  "rationale",
+  "recommended_file_path",
+  "recommended_next_action",
+  "scope",
+  "selected_tool",
+  "summary_version",
+  "tenant_id",
+  "tool",
+  "tool_source_kind",
+  "uncertainty",
+].sort();
+
 function tmpDbPath(name: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-lite-experience-intelligence-"));
   return path.join(dir, `${name}.sqlite`);
@@ -776,6 +794,23 @@ test("action retrieval route exposes explicit retrieval evidence and low uncerta
 
     assert.equal(response.statusCode, 200);
     const body = ActionRetrievalResponseSchema.parse(response.json());
+    assert.deepEqual(Object.keys(body).sort(), ACTION_RETRIEVAL_RESPONSE_KEYS);
+    assert.deepEqual(Object.keys(body.rationale).sort(), ["summary"]);
+    assert.throws(() =>
+      ActionRetrievalResponseSchema.parse({
+        ...body,
+        debug_passthrough: true,
+      }),
+    );
+    assert.throws(() =>
+      ActionRetrievalResponseSchema.parse({
+        ...body,
+        rationale: {
+          ...body.rationale,
+          debug_passthrough: true,
+        },
+      }),
+    );
     assert.equal(body.history_applied, true);
     assert.equal(body.selected_tool, "edit");
     assert.equal(body.recommended_file_path, "src/routes/export.ts");

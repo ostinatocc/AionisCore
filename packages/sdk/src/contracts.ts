@@ -335,6 +335,12 @@ export type AionisAgentMemoryInspectResponse = {
 export type AionisToolsSelectionSummary = {
   summary_version: "tools_selection_summary_v1";
   selected_tool: string | null;
+  candidate_count: number;
+  allowed_count: number;
+  denied_count: number;
+  preferred_count: number;
+  matched_rules: number;
+  source_rule_count: number;
   trusted_pattern_count: number;
   contested_pattern_count: number;
   suppressed_pattern_count: number;
@@ -345,43 +351,92 @@ export type AionisToolsSelectionSummary = {
   skipped_suppressed_pattern_tools: string[];
   skipped_suppressed_pattern_affinity_levels?: string[];
   fallback_applied: boolean;
-  fallback_reason: string;
-  provenance_explanation: string;
+  fallback_reason: string | null;
+  provenance_explanation: string | null;
   pattern_lifecycle_summary: AionisPassthroughObject;
   pattern_maintenance_summary: AionisPassthroughObject;
-} & AionisPassthroughObject;
+  shadow_selected_tool: string | null;
+  tool_conflicts: string[];
+};
+
+export type AionisToolsSelectSelection = {
+  candidates: string[];
+  selected: string | null;
+  ordered: string[];
+  preferred: string[];
+  allowed: string[];
+  denied: Array<{ name: string; reason: "deny_list" | "not_in_allow_list" | "control_profile" }>;
+  fallback?: {
+    applied: boolean;
+    reason: "none" | "allowlist_filtered_all" | "deny_filtered_all";
+    note: string;
+    effective_mode: "allow_and_deny" | "deny_only";
+  };
+};
 
 export type AionisToolsSelectResponse = {
   tenant_id: string;
   scope: string;
   candidates: string[];
-  selection: {
-    selected: string | null;
-    ordered: string[];
-    preferred: string[];
-    allowed: string[];
-  } & AionisPassthroughObject;
-  execution_kernel: AionisPassthroughObject;
+  selection: AionisToolsSelectSelection;
+  execution_kernel: {
+    control_profile_origin: string;
+    execution_state_v1_present: boolean;
+    execution_result_summary_present: boolean;
+    execution_artifacts_count: number;
+    execution_evidence_count: number;
+    current_stage: string | null;
+    active_role: string | null;
+    tool_registry_present: boolean;
+    family_aware_ordering_applied: boolean;
+    candidate_families: Array<{
+      tool_name: string;
+      capability_family: string | null;
+      quality_tier: "experimental" | "supported" | "preferred" | "deprecated" | null;
+      status: "active" | "disabled" | "shadow_only" | null;
+      replacement_for: string[];
+      replaced_by: string[];
+    }>;
+  };
   rules: {
     considered: number;
     matched: number;
-  } & AionisPassthroughObject;
+    skipped_invalid_then: number;
+    invalid_then_sample: Array<{ rule_node_id: string; state: string; commit_id: string }>;
+    agent_visibility_summary: unknown;
+    applied: unknown;
+    tool_conflicts_summary: string[];
+    shadow_selection?: AionisToolsSelectSelection;
+    shadow_tool_conflicts_summary?: string[];
+  };
   pattern_matches: {
     matched: number;
     trusted: number;
     preferred_tools: string[];
     anchors: AionisPassthroughObject[];
-  } & AionisPassthroughObject;
+  };
   decision: {
     decision_id: string;
     decision_uri: string;
     run_id: string | null;
     selected_tool: string | null;
+    policy_sha256: string;
     source_rule_ids: string[];
-    pattern_summary: AionisPassthroughObject;
-  } & AionisPassthroughObject;
+    created_at: string | null;
+    pattern_summary: {
+      used_trusted_pattern_anchor_ids: string[];
+      used_trusted_pattern_tools: string[];
+      used_trusted_pattern_affinity_levels?: string[];
+      skipped_contested_pattern_anchor_ids: string[];
+      skipped_contested_pattern_tools: string[];
+      skipped_contested_pattern_affinity_levels?: string[];
+      skipped_suppressed_pattern_anchor_ids: string[];
+      skipped_suppressed_pattern_tools: string[];
+      skipped_suppressed_pattern_affinity_levels?: string[];
+    };
+  };
   selection_summary: AionisToolsSelectionSummary;
-} & AionisPassthroughObject;
+};
 
 export type AionisToolsFeedbackResponse = {
   ok: true;

@@ -1225,8 +1225,8 @@ export const ActionRetrievalResponseSchema = z.object({
   uncertainty: ActionRetrievalUncertaintySchema,
   rationale: z.object({
     summary: z.string(),
-  }).passthrough(),
-}).passthrough();
+  }).strict(),
+}).strict();
 
 export type ActionRetrievalResponse = z.infer<typeof ActionRetrievalResponseSchema>;
 
@@ -2519,7 +2519,7 @@ export const DecisionPatternSummaryContractSchema = z.object({
   skipped_suppressed_pattern_anchor_ids: z.array(z.string()),
   skipped_suppressed_pattern_tools: z.array(z.string()),
   skipped_suppressed_pattern_affinity_levels: z.array(z.string()).optional(),
-});
+}).strict();
 
 export type DecisionPatternSummaryContract = z.infer<typeof DecisionPatternSummaryContractSchema>;
 
@@ -2553,9 +2553,95 @@ export const PatternMatchAnchorContractSchema = z.object({
 
 export type PatternMatchAnchorContract = z.infer<typeof PatternMatchAnchorContractSchema>;
 
+export const ToolsSelectionDeniedEntryContractSchema = z.object({
+  name: z.string(),
+  reason: z.enum(["deny_list", "not_in_allow_list", "control_profile"]),
+}).strict();
+
+export const ToolsSelectionFallbackContractSchema = z.object({
+  applied: z.boolean(),
+  reason: z.enum(["none", "allowlist_filtered_all", "deny_filtered_all"]),
+  note: z.string(),
+  effective_mode: z.enum(["allow_and_deny", "deny_only"]),
+}).strict();
+
+export const ToolsSelectionContractSchema = z.object({
+  candidates: z.array(z.string()),
+  allowed: z.array(z.string()),
+  denied: z.array(ToolsSelectionDeniedEntryContractSchema),
+  preferred: z.array(z.string()),
+  ordered: z.array(z.string()),
+  selected: z.string().nullable(),
+  fallback: ToolsSelectionFallbackContractSchema.optional(),
+}).strict();
+
+export const ToolsCandidateFamilyContractSchema = z.object({
+  tool_name: z.string(),
+  capability_family: z.string().nullable(),
+  quality_tier: z.enum(["experimental", "supported", "preferred", "deprecated"]).nullable(),
+  status: z.enum(["active", "disabled", "shadow_only"]).nullable(),
+  replacement_for: z.array(z.string()),
+  replaced_by: z.array(z.string()),
+}).strict();
+
+export const ToolsExecutionKernelContractSchema = z.object({
+  control_profile_origin: z.string(),
+  execution_state_v1_present: z.boolean(),
+  execution_result_summary_present: z.boolean(),
+  execution_artifacts_count: z.number().int().min(0),
+  execution_evidence_count: z.number().int().min(0),
+  current_stage: z.string().nullable(),
+  active_role: z.string().nullable(),
+  tool_registry_present: z.boolean(),
+  family_aware_ordering_applied: z.boolean(),
+  candidate_families: z.array(ToolsCandidateFamilyContractSchema),
+}).strict();
+
+export const ToolsInvalidThenSampleContractSchema = z.object({
+  rule_node_id: z.string(),
+  state: z.string(),
+  commit_id: z.string(),
+}).strict();
+
+export const ToolsRulesContractSchema = z.object({
+  considered: z.number().int().min(0),
+  matched: z.number().int().min(0),
+  skipped_invalid_then: z.number().int().min(0),
+  invalid_then_sample: z.array(ToolsInvalidThenSampleContractSchema),
+  agent_visibility_summary: z.unknown(),
+  applied: z.unknown(),
+  tool_conflicts_summary: z.array(z.string()),
+  shadow_selection: ToolsSelectionContractSchema.optional(),
+  shadow_tool_conflicts_summary: z.array(z.string()).optional(),
+}).strict();
+
+export const ToolsPatternMatchesContractSchema = z.object({
+  matched: z.number().int().min(0),
+  trusted: z.number().int().min(0),
+  preferred_tools: z.array(z.string()),
+  anchors: z.array(PatternMatchAnchorContractSchema),
+}).strict();
+
+export const ToolsDecisionContractSchema = z.object({
+  decision_id: z.string(),
+  decision_uri: z.string(),
+  run_id: z.string().nullable(),
+  selected_tool: z.string().nullable(),
+  policy_sha256: z.string(),
+  source_rule_ids: z.array(z.string()),
+  created_at: z.string().nullable(),
+  pattern_summary: DecisionPatternSummaryContractSchema,
+}).strict();
+
 export const ToolsSelectionSummaryContractSchema = z.object({
   summary_version: z.literal("tools_selection_summary_v1"),
   selected_tool: z.string().nullable(),
+  candidate_count: z.number().int().min(0),
+  allowed_count: z.number().int().min(0),
+  denied_count: z.number().int().min(0),
+  preferred_count: z.number().int().min(0),
+  matched_rules: z.number().int().min(0),
+  source_rule_count: z.number().int().min(0),
   trusted_pattern_count: z.number().int().min(0),
   contested_pattern_count: z.number().int().min(0),
   suppressed_pattern_count: z.number().int().min(0),
@@ -2565,10 +2651,14 @@ export const ToolsSelectionSummaryContractSchema = z.object({
   skipped_contested_pattern_affinity_levels: z.array(z.string()).optional(),
   skipped_suppressed_pattern_tools: z.array(z.string()),
   skipped_suppressed_pattern_affinity_levels: z.array(z.string()).optional(),
+  fallback_applied: z.boolean(),
+  fallback_reason: z.string().nullable(),
   provenance_explanation: z.string().nullable(),
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
-}).passthrough();
+  shadow_selected_tool: z.string().nullable(),
+  tool_conflicts: z.array(z.string()),
+}).strict();
 
 export type ToolsSelectionSummaryContract = z.infer<typeof ToolsSelectionSummaryContractSchema>;
 
@@ -2576,33 +2666,13 @@ export const ToolsSelectRouteContractSchema = z.object({
   tenant_id: z.string(),
   scope: z.string(),
   candidates: z.array(z.string()),
-  selection: z.object({
-    selected: z.string().nullable(),
-    ordered: z.array(z.string()),
-    preferred: z.array(z.string()),
-    allowed: z.array(z.string()),
-  }).passthrough(),
-  execution_kernel: z.object({}).passthrough(),
-  rules: z.object({
-    considered: z.number().int().min(0),
-    matched: z.number().int().min(0),
-  }).passthrough(),
-  pattern_matches: z.object({
-    matched: z.number().int().min(0),
-    trusted: z.number().int().min(0),
-    preferred_tools: z.array(z.string()),
-    anchors: z.array(PatternMatchAnchorContractSchema),
-  }).passthrough(),
-  decision: z.object({
-    decision_id: z.string(),
-    decision_uri: z.string(),
-    run_id: z.string().nullable(),
-    selected_tool: z.string().nullable(),
-    source_rule_ids: z.array(z.string()),
-    pattern_summary: DecisionPatternSummaryContractSchema,
-  }).passthrough(),
+  selection: ToolsSelectionContractSchema,
+  execution_kernel: ToolsExecutionKernelContractSchema,
+  rules: ToolsRulesContractSchema,
+  pattern_matches: ToolsPatternMatchesContractSchema,
+  decision: ToolsDecisionContractSchema,
   selection_summary: ToolsSelectionSummaryContractSchema,
-}).passthrough();
+}).strict();
 
 export type ToolsSelectRouteContract = z.infer<typeof ToolsSelectRouteContractSchema>;
 
