@@ -20,6 +20,7 @@ export function buildLiteRouteMatrix() {
       "memory-feedback-tools",
     ],
     optional_routes: [
+      "runtime-boundary-inventory",
       "memory-lifecycle-lite",
       "memory-sandbox",
       "memory-replay-governed-partial",

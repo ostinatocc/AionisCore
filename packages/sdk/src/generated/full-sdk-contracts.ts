@@ -6,6 +6,60 @@ import type { AionisRequestPayload } from "../types.js";
 export type AionisPassthroughObject = Record<string, unknown>;
 export type AionisRuntimeResponse = AionisPassthroughObject;
 
+export type AionisRuntimeBoundaryInventoryEntry =
+  | ({
+      source: "authority";
+      inventory_id: string;
+      source_id: string;
+      file: string;
+      layer: string;
+      role: string;
+      producer_kind: string | null;
+      capabilities: {
+        may_use_runtime_authority_gate: boolean;
+        may_use_outcome_contract_gate: boolean;
+        may_assess_execution_evidence: boolean;
+        may_read_raw_authority_surface: boolean;
+        may_use_stable_workflow_literal: boolean;
+        may_use_stable_pattern_literal: boolean;
+      };
+      required_source_markers: string[];
+    } & AionisPassthroughObject)
+  | ({
+      source: "legacy_access";
+      inventory_id: string;
+      source_id: string;
+      file: string;
+      legacy_access_kind: string;
+      reason: string;
+    } & AionisPassthroughObject);
+
+export type AionisRuntimeBoundaryInventoryResponse = {
+  surface_version: "runtime_boundary_inventory_response_v1";
+  inventory_source: "source_boundary_manifests";
+  surface_semantics: {
+    read_only: true;
+    persistence_effect: "none";
+    authority_effect: "none";
+    runtime_decision_effect: "none";
+    intended_use: "operator_debug_boundary_audit";
+  } & AionisPassthroughObject;
+  summary: {
+    total_entries: number;
+    total_files: number;
+    authority_entries: number;
+    legacy_access_entries: number;
+    authority_producer_entries: number;
+    legacy_direct_access_files: number;
+  } & AionisPassthroughObject;
+  files: string[];
+  entries: AionisRuntimeBoundaryInventoryEntry[];
+  sources: {
+    authority: AionisRuntimeBoundaryInventoryEntry[];
+    legacy_access: AionisRuntimeBoundaryInventoryEntry[];
+  } & AionisPassthroughObject;
+} & AionisRuntimeResponse;
+
 export type AionisWriteNode = {
   id?: string;
   client_id?: string;

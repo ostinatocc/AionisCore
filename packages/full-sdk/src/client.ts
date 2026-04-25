@@ -72,6 +72,7 @@ import type {
   AionisReplayRunStartRequest,
   AionisReplayStepAfterRequest,
   AionisReplayStepBeforeRequest,
+  AionisRuntimeBoundaryInventoryResponse,
   AionisRuleStateRequest,
   AionisRulesEvaluateRequest,
   AionisRuntimeResponse,
@@ -141,6 +142,10 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
   return {
     system: {
       health: createGetMethod<Record<string, never>, AionisHealthResponse>(http, "/health"),
+      boundaryInventory: createGetMethod<Record<string, never>, AionisRuntimeBoundaryInventoryResponse>(
+        http,
+        AIONIS_SHARED_ROUTE_PATHS.runtimeBoundaryInventory,
+      ),
     },
     handoff: {
       store: createPostMethod<AionisHandoffStoreRequest>(http, "/v1/handoff/store"),
