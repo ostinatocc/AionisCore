@@ -60,6 +60,10 @@ Responsibilities:
 3. return structured unsupported responses for server-only route groups
 4. keep endpoint behavior aligned with `LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md`
 
+Boundary rule:
+
+Route modules must not import Trust Gate internals, build authority gates, assess execution evidence, or construct promotion/trust policy surfaces directly. They may assemble request identity, validation, rate limits, and stable app/runtime services, then call the appropriate memory or app boundary.
+
 ### 3. SDK and package surface
 
 Owned by:
@@ -178,6 +182,8 @@ Stable decisions:
 Boundary rule:
 
 Trust modules may consume canonical execution contracts and evidence surfaces. They must not recover authority by directly reading legacy storage slots.
+
+Authority-producing modules must be declared Trust Gate producers before they call `buildRuntimeAuthorityGate`. Outcome-contract and execution-evidence gates must stay in declared trust-evaluation or authority-consuming boundaries.
 
 ### 3. Orchestrator
 
