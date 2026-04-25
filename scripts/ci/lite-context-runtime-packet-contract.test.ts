@@ -11,6 +11,7 @@ import { registerHostErrorHandler } from "../../src/host/http-host.ts";
 import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
 import { registerMemoryContextRuntimeRoutes } from "../../src/routes/memory-context-runtime.ts";
 import {
+  ActionRetrievalGateSummarySchema,
   ContextAssembleRouteContractSchema,
   DelegationRecordsWriteResponseSchema,
   MemoryAnchorV1Schema,
@@ -1836,7 +1837,9 @@ test("planning_context returns aligned planner packet, action packet summary, an
     assert.equal(planningFirstStep?.execution_contract_v1?.workflow_signature, "fix-export-failure-workflow");
     assert.equal(body.planning_summary.action_retrieval_uncertainty?.summary_version, "action_retrieval_uncertainty_v1");
     assert.ok(body.planning_summary.action_retrieval_uncertainty?.recommended_actions.includes("inspect_context"));
-    assert.deepEqual(body.planning_summary.action_retrieval_gate, {
+    const planningActionRetrievalGate = body.planning_summary.action_retrieval_gate;
+    assert.ok(planningActionRetrievalGate);
+    assert.deepEqual(planningActionRetrievalGate, {
       summary_version: "action_retrieval_gate_v1",
       gate_action: "inspect_context",
       escalates_task_start: true,
@@ -1847,6 +1850,16 @@ test("planning_context returns aligned planner packet, action packet summary, an
       rehydration_candidate_count: body.planning_summary.action_packet_summary.rehydration_candidate_count,
       preferred_rehydration: null,
     });
+    assert.deepEqual(
+      ActionRetrievalGateSummarySchema.parse(planningActionRetrievalGate),
+      planningActionRetrievalGate,
+    );
+    assert.throws(() =>
+      ActionRetrievalGateSummarySchema.parse({
+        ...planningActionRetrievalGate,
+        debug_passthrough: true,
+      }),
+    );
     assert.ok(!("first_step_recommendation" in body), "default planning_context should not expose the legacy top-level first_step_recommendation mirror");
     assert.deepEqual(body.kickoff_recommendation, body.planning_summary.first_step_recommendation);
     assertActionPacketSummaryMatchesPacket(body.planning_summary.action_packet_summary, body);
@@ -2632,7 +2645,9 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     assert.equal(assemblyFirstStep?.execution_contract_v1?.workflow_signature, "fix-export-failure-workflow");
     assert.equal(body.assembly_summary.action_retrieval_uncertainty?.summary_version, "action_retrieval_uncertainty_v1");
     assert.ok(body.assembly_summary.action_retrieval_uncertainty?.recommended_actions.includes("inspect_context"));
-    assert.deepEqual(body.assembly_summary.action_retrieval_gate, {
+    const assemblyActionRetrievalGate = body.assembly_summary.action_retrieval_gate;
+    assert.ok(assemblyActionRetrievalGate);
+    assert.deepEqual(assemblyActionRetrievalGate, {
       summary_version: "action_retrieval_gate_v1",
       gate_action: "inspect_context",
       escalates_task_start: true,
@@ -2643,6 +2658,16 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
       rehydration_candidate_count: body.assembly_summary.action_packet_summary.rehydration_candidate_count,
       preferred_rehydration: null,
     });
+    assert.deepEqual(
+      ActionRetrievalGateSummarySchema.parse(assemblyActionRetrievalGate),
+      assemblyActionRetrievalGate,
+    );
+    assert.throws(() =>
+      ActionRetrievalGateSummarySchema.parse({
+        ...assemblyActionRetrievalGate,
+        debug_passthrough: true,
+      }),
+    );
     assert.ok(!("first_step_recommendation" in body), "default context_assemble should not expose the legacy top-level first_step_recommendation mirror");
     assert.deepEqual(body.kickoff_recommendation, body.assembly_summary.first_step_recommendation);
     assertActionPacketSummaryMatchesPacket(body.assembly_summary.action_packet_summary, body);

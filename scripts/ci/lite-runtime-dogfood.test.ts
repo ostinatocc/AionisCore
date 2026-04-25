@@ -18,6 +18,8 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.equal(result.coverage.external_visibility_required_scenarios, 5);
   assert.equal(result.coverage.negative_control_scenarios, 2);
   assert.equal(result.coverage.task_families.service_publish_validate, 3);
+  assert.equal(result.coverage.task_families.handoff_resume, 1);
+  assert.equal(result.coverage.task_families.agent_takeover, 1);
   assert.equal(result.summary.first_correct_action_rate, 1);
   assert.equal(result.summary.false_confidence_rate, 0);
   assert.equal(result.summary.after_exit_correct_rate, 1);
@@ -42,6 +44,18 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.ok(deployScenario);
   assert.equal(deployScenario.task_family, "git_deploy_webserver");
   assert.ok(deployScenario.compiled.outcome.dependency_requirements.some((entry) => entry.includes("git deploy or hook path")));
+
+  const nextDayHandoffScenario = result.scenarios.find((scenario) => scenario.id === "handoff_next_day");
+  assert.ok(nextDayHandoffScenario);
+  assert.equal(nextDayHandoffScenario.task_family, "handoff_resume");
+  assert.equal(nextDayHandoffScenario.metrics.first_correct_action, true);
+  assert.equal(nextDayHandoffScenario.metrics.stable_promotion_allowed, true);
+
+  const agentTakeoverScenario = result.scenarios.find((scenario) => scenario.id === "agent_takeover");
+  assert.ok(agentTakeoverScenario);
+  assert.equal(agentTakeoverScenario.task_family, "agent_takeover");
+  assert.equal(agentTakeoverScenario.metrics.first_correct_action, true);
+  assert.equal(agentTakeoverScenario.metrics.stable_promotion_allowed, true);
 
   const thinServiceScenario = result.scenarios.find((scenario) => scenario.id === "thin_service_missing_detach");
   assert.ok(thinServiceScenario);

@@ -41,6 +41,95 @@ const ACTION_RETRIEVAL_RESPONSE_KEYS = [
   "uncertainty",
 ].sort();
 
+const ACTION_RETRIEVAL_TOOL_KEYS = [
+  "allowed_tools",
+  "candidate_pattern_anchor_ids",
+  "ordered_tools",
+  "preferred_tools",
+  "selected_tool",
+  "suppressed_pattern_anchor_ids",
+  "trusted_pattern_anchor_ids",
+].sort();
+
+const ACTION_RETRIEVAL_PATH_KEYS = [
+  "anchor_id",
+  "authority_blocked",
+  "authority_primary_blocker",
+  "authority_visibility",
+  "confidence",
+  "contract_trust",
+  "file_path",
+  "next_action",
+  "pattern_hints",
+  "service_lifecycle_constraints",
+  "source_kind",
+  "summary",
+  "target_files",
+  "task_family",
+  "title",
+  "tool_set",
+  "workflow_signature",
+  "workflow_steps",
+].sort();
+
+const ACTION_RETRIEVAL_EVIDENCE_KEYS = [
+  "candidate_workflow_count",
+  "contested_pattern_count",
+  "entries",
+  "persisted_policy_memory_id",
+  "rehydration_candidate_count",
+  "selected_path_anchor_id",
+  "stable_workflow_count",
+  "trusted_pattern_count",
+].sort();
+
+const ACTION_RETRIEVAL_STABLE_EVIDENCE_ENTRY_KEYS = [
+  "anchor_id",
+  "authority_blocked",
+  "authority_primary_blocker",
+  "authority_visibility",
+  "confidence",
+  "file_path",
+  "pattern_hints",
+  "reason",
+  "selected_tool",
+  "service_lifecycle_constraints",
+  "source_kind",
+  "target_files",
+  "task_family",
+  "workflow_signature",
+  "workflow_steps",
+].sort();
+
+const ACTION_RETRIEVAL_UNCERTAINTY_KEYS = [
+  "confidence",
+  "evidence_gap_count",
+  "level",
+  "reasons",
+  "recommended_actions",
+  "summary_version",
+].sort();
+
+const RUNTIME_AUTHORITY_VISIBILITY_KEYS = [
+  "allows_authoritative",
+  "allows_stable_promotion",
+  "authority_blocked",
+  "authority_reasons",
+  "effective_trust",
+  "execution_evidence_reasons",
+  "execution_evidence_status",
+  "false_confidence_detected",
+  "node_id",
+  "node_kind",
+  "outcome_contract_reasons",
+  "primary_blocker",
+  "requested_trust",
+  "stable_promotion_blocked",
+  "status",
+  "surface_version",
+  "title",
+].sort();
+
 function tmpDbPath(name: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-lite-experience-intelligence-"));
   return path.join(dir, `${name}.sqlite`);
@@ -796,6 +885,13 @@ test("action retrieval route exposes explicit retrieval evidence and low uncerta
     const body = ActionRetrievalResponseSchema.parse(response.json());
     assert.deepEqual(Object.keys(body).sort(), ACTION_RETRIEVAL_RESPONSE_KEYS);
     assert.deepEqual(Object.keys(body.rationale).sort(), ["summary"]);
+    assert.deepEqual(Object.keys(body.tool).sort(), ACTION_RETRIEVAL_TOOL_KEYS);
+    assert.deepEqual(Object.keys(body.path).sort(), ACTION_RETRIEVAL_PATH_KEYS);
+    assert.deepEqual(Object.keys(body.evidence).sort(), ACTION_RETRIEVAL_EVIDENCE_KEYS);
+    assert.deepEqual(Object.keys(body.uncertainty).sort(), ACTION_RETRIEVAL_UNCERTAINTY_KEYS);
+    const stableEvidenceEntry = body.evidence.entries.find((entry) => entry.source_kind === "stable_workflow");
+    assert.ok(stableEvidenceEntry);
+    assert.deepEqual(Object.keys(stableEvidenceEntry).sort(), ACTION_RETRIEVAL_STABLE_EVIDENCE_ENTRY_KEYS);
     assert.throws(() =>
       ActionRetrievalResponseSchema.parse({
         ...body,
@@ -807,6 +903,54 @@ test("action retrieval route exposes explicit retrieval evidence and low uncerta
         ...body,
         rationale: {
           ...body.rationale,
+          debug_passthrough: true,
+        },
+      }),
+    );
+    assert.throws(() =>
+      ActionRetrievalResponseSchema.parse({
+        ...body,
+        tool: {
+          ...body.tool,
+          debug_passthrough: true,
+        },
+      }),
+    );
+    assert.throws(() =>
+      ActionRetrievalResponseSchema.parse({
+        ...body,
+        path: {
+          ...body.path,
+          debug_passthrough: true,
+        },
+      }),
+    );
+    assert.throws(() =>
+      ActionRetrievalResponseSchema.parse({
+        ...body,
+        evidence: {
+          ...body.evidence,
+          debug_passthrough: true,
+        },
+      }),
+    );
+    assert.throws(() =>
+      ActionRetrievalResponseSchema.parse({
+        ...body,
+        evidence: {
+          ...body.evidence,
+          entries: [{
+            ...stableEvidenceEntry,
+            debug_passthrough: true,
+          }],
+        },
+      }),
+    );
+    assert.throws(() =>
+      ActionRetrievalResponseSchema.parse({
+        ...body,
+        uncertainty: {
+          ...body.uncertainty,
           debug_passthrough: true,
         },
       }),
@@ -913,9 +1057,11 @@ test("action retrieval demotes blocked authoritative workflow to inspect-first g
     const body = ActionRetrievalResponseSchema.parse(response.json());
     assert.equal(body.history_applied, true);
     assert.equal(body.path.source_kind, "recommended_workflow");
-    assert.equal((body.path as any).contract_trust, "advisory");
-    assert.equal((body.path as any).authority_blocked, true);
-    assert.equal((body.path as any).authority_primary_blocker, "execution_evidence:after_exit_revalidation_failed");
+    assert.equal(body.path.contract_trust, "advisory");
+    assert.equal(body.path.authority_blocked, true);
+    assert.equal(body.path.authority_primary_blocker, "execution_evidence:after_exit_revalidation_failed");
+    assert.ok(body.path.authority_visibility);
+    assert.deepEqual(Object.keys(body.path.authority_visibility).sort(), RUNTIME_AUTHORITY_VISIBILITY_KEYS);
     assert.equal(body.execution_contract_v1?.contract_trust, "advisory");
     assert.match(body.recommended_next_action ?? "", /Inspect src\/routes\/export\.ts/);
     assert.match(body.recommended_next_action ?? "", /authority blocked by execution_evidence:after_exit_revalidation_failed/);
@@ -926,7 +1072,8 @@ test("action retrieval demotes blocked authoritative workflow to inspect-first g
     assert.equal(
       body.evidence.entries.some((entry) =>
         entry.source_kind === "stable_workflow"
-        && (entry as any).authority_blocked === true
+        && entry.authority_blocked === true
+        && entry.authority_visibility?.primary_blocker === "execution_evidence:after_exit_revalidation_failed"
       ),
       true,
     );
