@@ -1,10 +1,12 @@
 # Aionis Runtime Local Runtime Source Boundary
 
-Last reviewed: 2026-04-16
+Last reviewed: 2026-04-25
 
 Document status: living technical source-boundary reference
 
 This document records the local-runtime source boundary inside the Aionis Runtime repository.
+
+For the current four-layer architecture map and direct legacy slot access rule, see [AIONIS_RUNTIME_ARCHITECTURE_MAP.md](AIONIS_RUNTIME_ARCHITECTURE_MAP.md).
 
 Current source boundary:
 - `apps/lite/` owns the local runtime shell.
@@ -24,6 +26,8 @@ Current source boundary:
 - `src/host/http-host.ts` is local-runtime-only and rejects non-local source startup.
 - `src/routes/automations.ts` is reintroduced as a local automation kernel surface.
 - `src/app/replay-repair-review-policy.ts` is narrowed to global plus endpoint defaults only.
+- `src/memory/node-execution-surface.ts` is the canonical resolver boundary for legacy execution slots.
+- `scripts/ci/lite-runtime-legacy-boundary.test.ts` enforces that direct legacy execution slot access stays inside schema, write/projection, contract resolver, archive, rehydrate, and store-adapter boundaries.
 - `src/jobs/` is reduced to kernel-linked helpers only:
   - `associative-linking-lib.ts`
   - `topicClusterLib.ts`
@@ -42,8 +46,7 @@ The local automation kernel currently supports:
 - default local identity via `LITE_LOCAL_ACTOR_ID` so replay/playbook/automation flows work without multi-tenant identity payloads
 
 Still outside the current local runtime shell:
-- archive rehydrate and node activation lifecycle routes
-- server-style archive lifecycle orchestration remains unsupported even though Lite may rehydrate anchor-linked payloads locally
+- server-style archive lifecycle orchestration remains unsupported even though Lite exposes local archive rehydrate and node activation routes
 - reviewer workflows
 - promotion/control-plane flows
 - server alerting and admin automation surfaces

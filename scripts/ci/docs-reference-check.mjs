@@ -6,6 +6,7 @@ const repoRoot = process.cwd();
 const publicFiles = [
   "README.md",
   "docs/README.md",
+  "docs/AIONIS_RUNTIME_ARCHITECTURE_MAP.md",
   "docs/OPEN_CORE_BOUNDARY.md",
   "docs/SDK_QUICKSTART.md",
   "docs/LOCAL_RUNTIME_ARCHITECTURE_AND_COMPLETION.md",

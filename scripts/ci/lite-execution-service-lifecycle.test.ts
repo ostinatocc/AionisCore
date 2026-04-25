@@ -8,6 +8,10 @@ import {
   extractExecutionEvidenceFromSlots,
 } from "../../src/memory/execution-evidence.ts";
 import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
+import {
+  resolveNodeAcceptanceChecks,
+  resolveNodeServiceLifecycleConstraints,
+} from "../../src/memory/node-execution-surface.ts";
 
 test("execution packet carries service lifecycle constraints from execution state", () => {
   const state = ExecutionStateV1Schema.parse({
@@ -51,6 +55,53 @@ test("execution packet carries service lifecycle constraints from execution stat
   assert.equal(parsed.service_lifecycle_constraints[0]?.revalidate_from_fresh_shell, true);
   assert.equal(parsed.service_lifecycle_constraints[0]?.detach_then_probe, true);
   assert.equal(parsed.service_lifecycle_constraints[0]?.endpoint, "http://localhost:8080/healthz");
+});
+
+test("node execution surface exposes acceptance checks and lifecycle constraints through canonical contract", () => {
+  const contract = buildExecutionContractFromProjection({
+    contract_trust: "advisory",
+    task_family: "service_publish_validate",
+    target_files: ["scripts/dev-server.mjs"],
+    next_action: "Validate detached service from a fresh shell.",
+    service_lifecycle_constraints: [
+      {
+        version: 1,
+        service_kind: "http",
+        label: "service:http://localhost:4173/healthz",
+        launch_reference: "nohup node scripts/dev-server.mjs --port 4173 >/tmp/dev.log 2>&1 &",
+        endpoint: "http://localhost:4173/healthz",
+        must_survive_agent_exit: true,
+        revalidate_from_fresh_shell: true,
+        detach_then_probe: true,
+        health_checks: ["curl -fsS http://localhost:4173/healthz"],
+        teardown_notes: [],
+      },
+    ],
+    acceptance_checks: ["curl -fsS http://localhost:4173/healthz"],
+    provenance: {
+      source_kind: "trajectory_compile",
+    },
+  });
+  const slots = {
+    execution_contract_v1: contract,
+    acceptance_checks: ["legacy check should not win"],
+  };
+
+  assert.deepEqual(resolveNodeAcceptanceChecks({ slots }), ["curl -fsS http://localhost:4173/healthz"]);
+  assert.deepEqual(
+    resolveNodeServiceLifecycleConstraints({ slots }).map((constraint) => ({
+      label: constraint.label,
+      must_survive_agent_exit: constraint.must_survive_agent_exit,
+      revalidate_from_fresh_shell: constraint.revalidate_from_fresh_shell,
+      detach_then_probe: constraint.detach_then_probe,
+    })),
+    [{
+      label: "service:http://localhost:4173/healthz",
+      must_survive_agent_exit: true,
+      revalidate_from_fresh_shell: true,
+      detach_then_probe: true,
+    }],
+  );
 });
 
 test("outcome gate blocks authoritative service contracts without durable lifecycle proof", () => {
