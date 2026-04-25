@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  authorityConsumptionStateFromValue,
   authorityVisibilityBlocksPromotionReadiness,
   authorityVisibilityFromValue,
   authorityVisibilityPrimaryBlocker,
@@ -49,11 +50,17 @@ test("authority-producing Runtime surfaces use the unified authority gate", () =
 test("authority-consuming Runtime boundaries use the shared authority consumption helper", () => {
   const actionRetrieval = read("src/memory/action-retrieval.ts");
   assertContains(actionRetrieval, "authority-consumption.js", "action retrieval must consume the shared authority helper");
+  assertContains(actionRetrieval, "authorityConsumptionStateFromValue", "action retrieval must derive authority consumption state through the helper");
   assertContains(actionRetrieval, "demoteExecutionContractForAuthorityVisibility", "action retrieval must demote blocked execution contracts through the helper");
+  assert.equal(actionRetrieval.includes("authorityVisibilityFromValue"), false, "action retrieval must not bypass authority consumption state");
 
   const contextOrchestrator = read("src/memory/context-orchestrator.ts");
   assertContains(contextOrchestrator, "authority-consumption.js", "context orchestration must consume the shared authority helper");
   assertContains(contextOrchestrator, "authority_requires_inspection", "planner packet text must expose inspect-first authority state");
+
+  const planningSummaryAssembly = read("src/app/planning-summary-assembly.ts");
+  assertContains(planningSummaryAssembly, "authorityConsumptionStateFromValue", "planning summary assembly must derive authority state through the helper");
+  assert.equal(planningSummaryAssembly.includes("experiencePath?.authority_blocked"), false, "planning summary assembly must not trust legacy authority booleans directly");
 
   const reviewerPacks = read("src/memory/reviewer-packs.ts");
   assertContains(reviewerPacks, "authority-consumption.js", "reviewer packs must consume the shared authority helper");
@@ -176,6 +183,10 @@ test("authority consumption keeps candidate readiness separate from action reuse
 
   assert.equal(authorityVisibilityRequiresInspection(incompletePromotionVisibility), true);
   assert.equal(authorityVisibilityBlocksPromotionReadiness(incompletePromotionVisibility), false);
+  const incompleteState = authorityConsumptionStateFromValue({ authority_visibility: incompletePromotionVisibility });
+  assert.equal(incompleteState.requires_inspection, true);
+  assert.equal(incompleteState.blocks_promotion_readiness, false);
+  assert.equal(incompleteState.primary_blocker, "execution_evidence:missing_validation");
 
   const authorityBlockedVisibility = authorityVisibilityFromValue({
     authority_visibility: {
@@ -226,4 +237,10 @@ test("authority consumption keeps candidate readiness separate from action reuse
 
   assert.equal(authorityVisibilityRequiresInspection(failedVisibility), true);
   assert.equal(authorityVisibilityBlocksPromotionReadiness(failedVisibility), true);
+  const legacyFallbackState = authorityConsumptionStateFromValue({
+    authority_blocked: true,
+    authority_primary_blocker: "legacy:blocker",
+  });
+  assert.equal(legacyFallbackState.requires_inspection, true);
+  assert.equal(legacyFallbackState.primary_blocker, "legacy:blocker");
 });

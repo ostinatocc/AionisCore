@@ -24,9 +24,7 @@ import { augmentTrajectoryAwareRequest } from "./trajectory-compile-runtime.js";
 import { selectTools } from "./tools-select.js";
 import { buildOutcomeContractGate } from "./contract-trust.js";
 import {
-  authorityVisibilityFromValue,
-  authorityVisibilityPrimaryBlocker,
-  authorityVisibilityRequiresInspection,
+  authorityConsumptionStateFromValue,
   buildAuthorityInspectionNextAction,
   demoteContractTrustForAuthorityVisibility,
   demoteExecutionContractForAuthorityVisibility,
@@ -156,10 +154,8 @@ export function workflowEvidenceParts(workflow: WorkflowEntry): string[] {
   const reuseSuccessCount = Math.max(0, Number(workflow.reuse_success_count ?? 0));
   const reuseFailureCount = Math.max(0, Number(workflow.reuse_failure_count ?? 0));
   const feedbackQuality = numeric(workflow.feedback_quality);
-  const authorityVisibility = authorityVisibilityFromValue(workflow);
-  const authorityBlocker = authorityVisibilityRequiresInspection(authorityVisibility)
-    ? authorityVisibilityPrimaryBlocker(authorityVisibility)
-    : null;
+  const authorityState = authorityConsumptionStateFromValue(workflow);
+  const authorityBlocker = authorityState.requires_inspection ? authorityState.primary_blocker : null;
   return [
     usageCount > 0 ? `usage_count=${usageCount}` : null,
     reuseSuccessCount > 0 ? `reuse_success=${reuseSuccessCount}` : null,
@@ -312,22 +308,24 @@ function buildExecutionContractFromWorkflowEntry(args: {
   sourceKind: "workflow_projection" | "action_retrieval";
   summaryVersion: string;
 }): ExecutionContractV1 {
+  const authorityState = authorityConsumptionStateFromValue(args.workflow);
+  const workflowFilePath = firstString(args.workflow.file_path, args.workflow.target_files?.[0] ?? null);
   const projected = buildExecutionContractFromProjection({
     contract_trust: demoteContractTrustForAuthorityVisibility(
       args.workflow.contract_trust ?? null,
-      authorityVisibilityFromValue(args.workflow),
+      authorityState.visibility,
     ),
     task_family: args.workflow.task_family ?? null,
     workflow_signature: args.workflow.workflow_signature ?? null,
     selected_tool: args.selectedTool ?? null,
     file_path: args.workflow.file_path ?? null,
     target_files: args.workflow.target_files ?? [],
-    next_action: authorityVisibilityRequiresInspection(authorityVisibilityFromValue(args.workflow))
+    next_action: authorityState.requires_inspection
       ? buildAuthorityInspectionNextAction({
           selectedTool: args.selectedTool,
-          filePath: firstString(args.workflow.file_path, args.workflow.target_files?.[0] ?? null),
+          filePath: workflowFilePath,
           nextAction: args.workflow.next_action ?? null,
-          blocker: authorityVisibilityPrimaryBlocker(authorityVisibilityFromValue(args.workflow)),
+          blocker: authorityState.primary_blocker,
           reuseTarget: "the learned workflow",
         })
       : args.workflow.next_action ?? null,
@@ -348,9 +346,9 @@ function buildExecutionContractFromWorkflowEntry(args: {
     : projected;
   return demoteExecutionContractForAuthorityVisibility({
     contract: merged,
-    visibility: authorityVisibilityFromValue(args.workflow),
+    visibility: authorityState.visibility,
     selectedTool: args.selectedTool,
-    filePath: firstString(args.workflow.file_path, args.workflow.target_files?.[0] ?? null),
+    filePath: workflowFilePath,
     reuseTarget: "the learned workflow",
   });
 }
@@ -515,7 +513,7 @@ export function readPersistedPolicyMemory(args: {
       contract,
       derivedPolicy,
     });
-    if (authorityVisibilityRequiresInspection(authorityVisibilityFromValue(entry))) continue;
+    if (authorityConsumptionStateFromValue(entry).requires_inspection) continue;
     const outcomeContractGate = buildOutcomeContractGate({
       executionContract,
       requestedTrust: firstContractTrust(contract.contract_trust, executionContract.contract_trust),
@@ -621,8 +619,7 @@ function scoreWorkflow(args: {
     ? Math.max(-1, Math.min(1, Number(args.workflow.feedback_quality)))
     : 0;
   const contractTrust = firstContractTrust(args.workflow.contract_trust);
-  const authorityVisibility = authorityVisibilityFromValue(args.workflow);
-  const requiresAuthorityInspection = authorityVisibilityRequiresInspection(authorityVisibility);
+  const authorityState = authorityConsumptionStateFromValue(args.workflow);
   let score = args.kind === "recommended_workflow" ? 200 : 120;
   if (toolAligned) score += 60;
   if (familyMatch) score += 55;
@@ -638,7 +635,7 @@ function scoreWorkflow(args: {
   else if (contractTrust === "advisory") score -= 10;
   else if (contractTrust === "observational") score -= 72;
   else score -= 24;
-  if (requiresAuthorityInspection) score -= 95;
+  if (authorityState.requires_inspection) score -= 95;
   score += overlap * 12;
   return {
     kind: args.kind,
@@ -707,22 +704,20 @@ export function choosePathRecommendation(args: {
   const filePath = firstString(top.workflow.file_path, targetFiles[0] ?? null);
   const summary = firstString(top.workflow.summary);
   const title = firstString(top.workflow.title);
-  const authorityVisibility = authorityVisibilityFromValue(top.workflow);
-  const authorityBlocked = authorityVisibilityRequiresInspection(authorityVisibility);
-  const authorityBlocker = authorityVisibilityPrimaryBlocker(authorityVisibility);
+  const authorityState = authorityConsumptionStateFromValue(top.workflow);
   const rawContractTrust = firstContractTrust(top.workflow.contract_trust);
-  const contractTrust = demoteContractTrustForAuthorityVisibility(rawContractTrust, authorityVisibility);
+  const contractTrust = demoteContractTrustForAuthorityVisibility(rawContractTrust, authorityState.visibility);
   const rawNextAction = firstString(
     top.workflow.next_action,
     filePath && args.selectedTool ? `Use ${args.selectedTool} on ${filePath} and continue along the learned workflow.` : null,
     filePath ? `Continue with ${filePath} as the next working target.` : null,
   );
-  const nextAction = authorityBlocked
+  const nextAction = authorityState.requires_inspection
     ? buildAuthorityInspectionNextAction({
         selectedTool: args.selectedTool,
         filePath,
         nextAction: rawNextAction,
-        blocker: authorityBlocker,
+        blocker: authorityState.primary_blocker,
         reuseTarget: "the learned workflow",
       })
     : rawNextAction;
@@ -745,16 +740,16 @@ export function choosePathRecommendation(args: {
       : [],
     confidence: Number.isFinite(top.workflow.confidence) ? (top.workflow.confidence ?? null) : null,
     tool_set: stringList(top.workflow.tool_set),
-    authority_visibility: authorityVisibility,
-    authority_blocked: authorityBlocked,
-    authority_primary_blocker: authorityBlocker,
+    authority_visibility: authorityState.visibility,
+    authority_blocked: authorityState.requires_inspection,
+    authority_primary_blocker: authorityState.primary_blocker,
     reason: [
       top.kind === "recommended_workflow" ? "stable workflow memory matched this request" : "candidate workflow memory matched this request",
       top.tool_aligned && args.selectedTool ? `tool alignment=${args.selectedTool}` : null,
       top.family_match && currentTaskFamily ? `task_family=${currentTaskFamily}` : null,
       top.overlap > 0 ? `token_overlap=${top.overlap}` : null,
       ...workflowEvidenceParts(top.workflow),
-      authorityBlocked ? "requires_inspection_before_reuse" : null,
+      authorityState.requires_inspection ? "requires_inspection_before_reuse" : null,
       targetFiles.length > 0 ? `targets=${targetFiles.join(", ")}` : null,
       summary ? `summary=${summary}` : null,
     ].filter(Boolean).join("; "),
@@ -880,7 +875,7 @@ export function workflowToolPreferenceState(args: {
 }): "none" | "candidate" | "stable" {
   const selectedTool = firstString(args.selectedTool);
   if (!selectedTool || !args.workflow) return "none";
-  if (authorityVisibilityRequiresInspection(authorityVisibilityFromValue(args.workflow))) return "none";
+  if (authorityConsumptionStateFromValue(args.workflow).requires_inspection) return "none";
   const toolSet = stringList(args.workflow.tool_set, 24);
   if (!toolSet.includes(selectedTool)) return "none";
   const contractTrust = firstContractTrust(args.workflow.contract_trust);
@@ -935,10 +930,12 @@ function buildActionRetrievalUncertainty(args: {
   const recommendedActions = new Set<"proceed" | "widen_recall" | "rehydrate_payload" | "inspect_context" | "request_operator_review">();
   const contestedSelected = !!args.selectedTool
     && args.contestedPatterns.some((entry) => entry.selected_tool === args.selectedTool);
-  const pathAuthorityVisibility = authorityVisibilityFromValue((args.path as Record<string, unknown>).authority_visibility)
-    ?? authorityVisibilityFromValue(args.selectedWorkflow);
-  const pathAuthorityBlocked = authorityVisibilityRequiresInspection(pathAuthorityVisibility);
-  const pathAuthorityBlocker = authorityVisibilityPrimaryBlocker(pathAuthorityVisibility);
+  const pathAuthorityState = authorityConsumptionStateFromValue(args.path);
+  const workflowAuthorityState = authorityConsumptionStateFromValue(args.selectedWorkflow);
+  const authorityState =
+    pathAuthorityState.visibility || pathAuthorityState.requires_inspection
+      ? pathAuthorityState
+      : workflowAuthorityState;
 
   if (!args.selectedTool) {
     reasons.push("no tool selection was available for this request");
@@ -958,8 +955,8 @@ function buildActionRetrievalUncertainty(args: {
     reasons.push(`selected tool ${args.selectedTool} has contested execution evidence`);
     recommendedActions.add("request_operator_review");
   }
-  if (pathAuthorityBlocked) {
-    reasons.push(`selected workflow authority is blocked: ${pathAuthorityBlocker ?? "unknown"}`);
+  if (authorityState.requires_inspection) {
+    reasons.push(`selected workflow authority is blocked: ${authorityState.primary_blocker ?? "unknown"}`);
     recommendedActions.add("inspect_context");
   }
   if (args.rehydrationCandidates.length > 0 && args.path.source_kind !== "recommended_workflow") {
@@ -979,7 +976,7 @@ function buildActionRetrievalUncertainty(args: {
   if (args.persistedPolicy) confidence += 0.28;
   confidence += clamp01(numeric(args.path.confidence) ?? 0) * 0.12;
   if (contestedSelected) confidence -= 0.18;
-  if (pathAuthorityBlocked) confidence -= 0.22;
+  if (authorityState.requires_inspection) confidence -= 0.22;
   if (!args.selectedTool) confidence -= 0.1;
   confidence = clamp01(confidence);
 
@@ -1082,11 +1079,14 @@ export function buildActionRetrievalResponse(args: {
     buildExecutionContractFromToolSelection(selectedTool),
     "existing",
   );
-  const selectedWorkflowAuthorityVisibility = authorityVisibilityFromValue(selectedWorkflow)
-    ?? authorityVisibilityFromValue((path as Record<string, unknown>).authority_visibility);
-  const selectedWorkflowAuthorityBlocked = authorityVisibilityRequiresInspection(selectedWorkflowAuthorityVisibility);
+  const selectedWorkflowAuthorityState = authorityConsumptionStateFromValue(selectedWorkflow);
+  const pathAuthorityState = authorityConsumptionStateFromValue(path);
+  const effectiveWorkflowAuthorityState =
+    selectedWorkflowAuthorityState.visibility || selectedWorkflowAuthorityState.requires_inspection
+      ? selectedWorkflowAuthorityState
+      : pathAuthorityState;
   const workflowSupportsForRetrieval = !!selectedTool
-    && !selectedWorkflowAuthorityBlocked
+    && !effectiveWorkflowAuthorityState.requires_inspection
     && (
       stringList(selectedWorkflow?.tool_set, 24).includes(selectedTool)
       || path.tool_set.includes(selectedTool)

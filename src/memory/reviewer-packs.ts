@@ -2,9 +2,7 @@ import { recoverHandoff } from "./handoff.js";
 import { buildEvolutionInspectStateLite } from "./evolution-inspect.js";
 import { parseExecutionContract } from "./execution-contract.js";
 import {
-  authorityVisibilityBlocksPromotionReadiness,
-  authorityVisibilityFromValue,
-  authorityVisibilityRequiresInspection,
+  authorityConsumptionStateFromValue,
 } from "./authority-consumption.js";
 import {
   ContinuityReviewPackResponseSchema,
@@ -37,11 +35,22 @@ function safeArray(value: unknown): unknown[] {
 }
 
 function authorityConsumptionAllowsActionReuse(entry: unknown): boolean {
-  return !authorityVisibilityRequiresInspection(authorityVisibilityFromValue(entry));
+  return !authorityConsumptionStateFromValue(entry).requires_inspection;
 }
 
 function authorityConsumptionAllowsPromotionReadiness(entry: unknown): boolean {
-  return !authorityVisibilityBlocksPromotionReadiness(authorityVisibilityFromValue(entry));
+  return !authorityConsumptionStateFromValue(entry).blocks_promotion_readiness;
+}
+
+function authorityConsumptionBlockerSurface(entry: unknown): Record<string, unknown> | null {
+  const state = authorityConsumptionStateFromValue(entry);
+  if (!state.requires_inspection) return null;
+  return state.visibility ?? {
+    state_version: state.state_version,
+    requires_inspection: state.requires_inspection,
+    blocks_promotion_readiness: state.blocks_promotion_readiness,
+    primary_blocker: state.primary_blocker,
+  };
 }
 
 function toContinuityFocusItem(handoff: Record<string, unknown> | null | undefined) {
@@ -176,8 +185,8 @@ export async function buildEvolutionReviewPackLite(args: {
   const contestedPattern = (contestedPatterns[0] as Record<string, unknown> | undefined) ?? null;
   const authorityVisibilitySummary = asRecord(introspection.authority_visibility_summary);
   const authorityBlockers = [...recommendedWorkflows, ...candidateWorkflows, ...safeArray(introspection.supporting_knowledge)]
-    .map((entry) => authorityVisibilityFromValue(entry))
-    .filter((entry) => authorityVisibilityRequiresInspection(entry))
+    .map((entry) => authorityConsumptionBlockerSurface(entry))
+    .filter((entry): entry is Record<string, unknown> => entry !== null)
     .slice(0, 8);
   const promotionReadyAnchorIds = [...recommendedWorkflows, ...candidateWorkflows]
     .filter((entry) => asRecord(entry).promotion_ready === true && authorityConsumptionAllowsPromotionReadiness(entry))
