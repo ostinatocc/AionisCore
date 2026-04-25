@@ -216,6 +216,8 @@ Boundary rule:
 
 The orchestrator composes canonical surfaces. It does not define persistence schema and does not directly parse legacy execution slots.
 
+Orchestrator routes and modules must not mutate persistence, call memory write paths, import learning-loop writers, or import Trust Gate producer internals. They may consume resolver-backed node execution surfaces, recall access, planner packets, authority consumption state, and app-assembled summaries.
+
 ### 4. Learning Loop
 
 Purpose:

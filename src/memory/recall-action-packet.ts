@@ -7,15 +7,18 @@ import {
 } from "./execution-contract.js";
 import {
   resolveNodeAnchorSummary,
+  resolveNodeArchiveRelocationSurface,
   resolveNodeAnchorKind,
   resolveNodeAnchorLevel,
   resolveNodeDistillationSurface,
   resolveNodeExecutionContract,
   resolveNodeExecutionContractTrust,
   resolveNodeExecutionKind,
+  resolveNodeLifecycleState,
   resolveNodeMaintenanceSurface,
   resolveNodePatternExecutionSurface,
   resolveNodeRehydrationSurface,
+  resolveNodeSemanticForgettingSurface,
   resolveNodeToolSet,
   resolveNodeWorkflowPromotionSurface,
   resolveNodeWorkflowSignature,
@@ -276,8 +279,8 @@ export function buildActionRecallPacket(args: {
     actionAnchorIds.add(node.id);
     if (anchorKind === "workflow") {
       const distillation = meta.distillation;
-      const semanticForgetting = asRecord(node.slots?.semantic_forgetting_v1);
-      const archiveRelocation = asRecord(node.slots?.archive_relocation_v1);
+      const semanticForgetting = resolveNodeSemanticForgettingSurface(meta.slots);
+      const archiveRelocation = resolveNodeArchiveRelocationSurface(meta.slots);
       const title = node.title ?? null;
       const summary = meta.anchorSummary ?? node.text_summary ?? node.title ?? null;
       const workflowEntry: ActionRecallWorkflow = {
@@ -306,11 +309,11 @@ export function buildActionRecallPacket(args: {
         offline_priority: firstString(meta.maintenance?.offline_priority) as any,
         last_maintenance_at: firstString(meta.maintenance?.last_maintenance_at),
         confidence: firstFinite(node.confidence),
-        lifecycle_state: firstString(node.slots?.lifecycle_state),
-        semantic_forgetting_action: firstString(semanticForgetting?.action) as any,
-        archive_relocation_state: firstString(archiveRelocation?.relocation_state) as any,
-        archive_relocation_target: firstString(archiveRelocation?.relocation_target) as any,
-        archive_payload_scope: firstString(archiveRelocation?.payload_scope) as any,
+        lifecycle_state: resolveNodeLifecycleState(meta.slots),
+        semantic_forgetting_action: semanticForgetting.action,
+        archive_relocation_state: archiveRelocation.relocation_state,
+        archive_relocation_target: archiveRelocation.relocation_target,
+        archive_payload_scope: archiveRelocation.payload_scope,
         authority_visibility: buildRuntimeAuthorityVisibilityFromSlots({
           nodeId: node.id,
           nodeKind: "workflow",
