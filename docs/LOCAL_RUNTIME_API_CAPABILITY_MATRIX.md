@@ -133,7 +133,7 @@ Recommended integrator read path:
 3. read `planning_summary` / `assembly_summary` and `execution_kernel` for compact aligned state
 4. use `POST /v1/memory/action/retrieval` when you need the explicit tool/file/next-action decision layer instead of only planner context
 
-`execution_summary_v1` exposes strict child contracts for packet assembly, strategy, collaboration, continuity snapshot, routing signals, maintenance, forgetting, collaboration routing, delegation records, and instrumentation. These are public response contracts, not open-ended diagnostic blobs.
+`execution_summary_v1` is a strict top-level public contract and exposes strict child contracts for packet assembly, strategy, collaboration, continuity snapshot, routing signals, maintenance, forgetting, collaboration routing, delegation records, and instrumentation. These are public response contracts, not open-ended diagnostic blobs.
 
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |

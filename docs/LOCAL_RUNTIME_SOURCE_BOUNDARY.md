@@ -28,6 +28,8 @@ Current source boundary:
 - `src/app/replay-repair-review-policy.ts` is narrowed to global plus endpoint defaults only.
 - `src/memory/node-execution-surface.ts` is the canonical resolver boundary for legacy execution slots.
 - `scripts/ci/lite-runtime-legacy-boundary.test.ts` enforces that direct legacy execution slot access stays inside schema, write/projection, contract resolver, archive, rehydrate, and store-adapter boundaries.
+- `src/memory/passthrough-schema-registry.ts` classifies every remaining open schema surface as compatibility, debug/operator payload, legacy storage, or strict-public-contract debt.
+- `scripts/ci/lite-runtime-passthrough-boundary.test.ts` enforces that new `.passthrough()` usage cannot enter `src/memory/schemas.ts` without an explicit boundary classification.
 - `src/jobs/` is reduced to kernel-linked helpers only:
   - `associative-linking-lib.ts`
   - `topicClusterLib.ts`

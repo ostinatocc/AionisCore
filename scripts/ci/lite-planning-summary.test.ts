@@ -28,6 +28,7 @@ import {
   ExecutionPacketAssemblySummarySchema,
   ExecutionRoutingSignalSummarySchema,
   ExecutionStrategySummarySchema,
+  ExecutionSummaryV1Schema,
 } from "../../src/memory/schemas.ts";
 
 const layeredContextFixture = {
@@ -1093,7 +1094,7 @@ test("execution forgetting summary contract rejects passthrough fields", () => {
   );
 });
 
-test("execution summary child contracts reject passthrough fields", () => {
+test("execution summary top-level and child contracts reject passthrough fields", () => {
   const summary = buildExecutionSummarySurface({
     planner_packet: null,
     surface: layeredContextFixture,
@@ -1110,6 +1111,14 @@ test("execution summary child contracts reject passthrough fields", () => {
     execution_evidence: null,
     delegation_records: null,
   });
+
+  assert.deepEqual(ExecutionSummaryV1Schema.parse(summary), summary);
+  assert.throws(() =>
+    ExecutionSummaryV1Schema.parse({
+      ...summary,
+      debug_passthrough: true,
+    }),
+  );
 
   const strictContracts = [
     [ExecutionPacketAssemblySummarySchema, summary.packet_assembly],

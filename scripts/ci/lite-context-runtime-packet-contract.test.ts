@@ -321,6 +321,35 @@ const EXECUTION_INSTRUMENTATION_SUMMARY_KEYS = [
   "unknown_family_rehydration_count",
 ].sort();
 
+const EXECUTION_SUMMARY_V1_KEYS = [
+  "action_packet_summary",
+  "authority_visibility_summary",
+  "collaboration_routing_summary",
+  "collaboration_summary",
+  "continuity_carrier_summary",
+  "continuity_snapshot_summary",
+  "delegation_records_summary",
+  "distillation_signal_summary",
+  "forgetting_summary",
+  "instrumentation_summary",
+  "maintenance_summary",
+  "packet_assembly",
+  "pattern_lifecycle_summary",
+  "pattern_maintenance_summary",
+  "pattern_signal_summary",
+  "pattern_signals",
+  "planner_packet",
+  "policy_lifecycle_summary",
+  "policy_maintenance_summary",
+  "routing_signal_summary",
+  "strategy_summary",
+  "summary_version",
+  "workflow_lifecycle_summary",
+  "workflow_maintenance_summary",
+  "workflow_signal_summary",
+  "workflow_signals",
+].sort();
+
 const EXECUTION_DELEGATION_RECORDS_SUMMARY_KEYS = [
   "artifact_routing_count",
   "artifact_routing_records",
@@ -416,8 +445,13 @@ function assertKernelMatchesRouteSurface(body: {
     workflow_signal_summary: unknown;
     workflow_lifecycle_summary: unknown;
     workflow_maintenance_summary: unknown;
+    authority_visibility_summary: unknown;
+    distillation_signal_summary: unknown;
     pattern_lifecycle_summary: unknown;
     pattern_maintenance_summary: unknown;
+    policy_lifecycle_summary: unknown;
+    policy_maintenance_summary: unknown;
+    continuity_carrier_summary: unknown;
   };
   execution_summary: {
     planner_packet: unknown;
@@ -641,6 +675,7 @@ function assertKernelMatchesRouteSurface(body: {
   const routeSummary = body.planning_summary ?? body.assembly_summary;
   assert.ok(routeSummary, "route summary should exist");
   const executionSummary = body.execution_summary as Record<string, unknown>;
+  assert.deepEqual(Object.keys(executionSummary).sort(), EXECUTION_SUMMARY_V1_KEYS);
   assert.deepEqual(body.execution_summary.planner_packet, body.planner_packet);
   assert.deepEqual(body.execution_summary.pattern_signals, body.pattern_signals);
   assert.deepEqual(body.execution_summary.workflow_signals, body.workflow_signals);

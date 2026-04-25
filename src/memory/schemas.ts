@@ -1994,7 +1994,7 @@ export const ExecutionSummaryV1Schema = z.object({
   policy_maintenance_summary: PolicyMaintenanceSummarySchema,
   continuity_carrier_summary: ContinuityCarrierSummarySchema,
   action_packet_summary: ActionPacketSummarySchema,
-}).passthrough();
+}).strict();
 
 export type ExecutionSummaryV1 = z.infer<typeof ExecutionSummaryV1Schema>;
 
