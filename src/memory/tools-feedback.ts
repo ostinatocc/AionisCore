@@ -35,8 +35,8 @@ import {
   projectExecutionContractToRecoveryContract,
 } from "./execution-contract.js";
 import type { FormPatternGovernanceReviewProvider } from "./governance-provider-types.js";
-import { buildExperienceIntelligenceResponse } from "./experience-intelligence.js";
 import { buildExecutionMemoryIntrospectionLite } from "./execution-introspection.js";
+import { buildPolicyMaterializationSurface } from "./policy-materialization-surface.js";
 import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
@@ -661,16 +661,16 @@ async function materializeLitePolicyMemoryFromFeedback(args: {
         : `selected tool: ${args.selectedTool}; feedback-confirmed materialization path`,
     },
   };
-  const experience = buildExperienceIntelligenceResponse({
+  const policyMaterialization = buildPolicyMaterializationSurface({
     parsed: experienceParsed,
     tools: tools as any,
     introspection,
   });
-  if (!experience.policy_contract || !experience.derived_policy) return null;
-  if (experience.policy_contract.selected_tool !== args.selectedTool) return null;
+  if (!policyMaterialization.policyContract || !policyMaterialization.derivedPolicy) return null;
+  if (policyMaterialization.policyContract.selected_tool !== args.selectedTool) return null;
   const enrichedPolicy = mergeWorkflowFeedbackIntoPolicySurfaces({
-    policyContract: experience.policy_contract as Record<string, unknown>,
-    derivedPolicy: experience.derived_policy as Record<string, unknown>,
+    policyContract: policyMaterialization.policyContract as Record<string, unknown>,
+    derivedPolicy: policyMaterialization.derivedPolicy as Record<string, unknown>,
     workflowFeedbackTarget: args.workflowFeedbackTarget,
     contractTrust,
   });

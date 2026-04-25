@@ -299,7 +299,7 @@ test("recall action packet reads lifecycle details through node execution surfac
   }
 });
 
-test("experience intelligence consumes execution evidence through node execution surface", () => {
+test("experience intelligence delegates policy materialization to the shared policy surface", () => {
   const text = read("src/memory/experience-intelligence.ts");
   assert.equal(
     text.includes("./execution-evidence.js"),
@@ -308,7 +308,69 @@ test("experience intelligence consumes execution evidence through node execution
   );
   assertContains(
     text,
+    "buildPolicyMaterializationSurface",
+    "experience-intelligence must delegate policy contract materialization to the shared policy surface",
+  );
+
+  const policyMaterialization = read("src/memory/policy-materialization-surface.ts");
+  assert.equal(
+    policyMaterialization.includes("./execution-evidence.js"),
+    false,
+    "policy materialization must not import execution evidence internals directly",
+  );
+  assertContains(
+    policyMaterialization,
     "resolveNodeExecutionEvidence",
-    "experience-intelligence must consume execution evidence through the canonical node execution surface",
+    "policy materialization must consume execution evidence through the canonical node execution surface",
+  );
+});
+
+test("learning loop modules do not import orchestrator response builders", () => {
+  const learningLoopFiles = [
+    "src/memory/replay-learning.ts",
+    "src/memory/replay-learning-artifacts.ts",
+    "src/memory/replay-stable-anchor-helpers.ts",
+    "src/memory/tools-feedback.ts",
+    "src/memory/tools-pattern-anchor.ts",
+    "src/memory/policy-memory.ts",
+    "src/memory/pattern-trust-shaping.ts",
+    "src/memory/semantic-forgetting.ts",
+    "src/memory/lifecycle-lite.ts",
+    "src/memory/workflow-write-projection.ts",
+  ];
+  const forbiddenImportFragments = [
+    "./experience-intelligence.js",
+    "./context-orchestrator.js",
+    "./recall-action-packet.js",
+    "../app/planning-summary",
+    "../memory/experience-intelligence.js",
+    "../memory/context-orchestrator.js",
+    "../memory/recall-action-packet.js",
+  ];
+  const offenders = learningLoopFiles
+    .flatMap((file) => {
+      const imports = read(file).split("\n").filter((line) => /^\s*import\b/.test(line));
+      return imports
+        .filter((line) => forbiddenImportFragments.some((fragment) => line.includes(fragment)))
+        .map((line) => `${file}: ${line.trim()}`);
+    })
+    .sort();
+
+  assert.deepEqual(
+    offenders,
+    [],
+    "Learning Loop modules may learn from canonical contracts, gates, and write surfaces, but must not call Orchestrator response builders directly.",
+  );
+
+  const toolsFeedback = read("src/memory/tools-feedback.ts");
+  assert.equal(
+    toolsFeedback.includes("buildExperienceIntelligenceResponse"),
+    false,
+    "tools-feedback must materialize policy memory through a shared policy surface instead of calling experience-intelligence.",
+  );
+  assertContains(
+    toolsFeedback,
+    "buildPolicyMaterializationSurface",
+    "tools-feedback must use the shared policy materialization surface for feedback-driven policy memory.",
   );
 });

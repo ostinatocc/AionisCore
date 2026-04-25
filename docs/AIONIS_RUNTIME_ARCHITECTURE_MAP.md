@@ -251,6 +251,8 @@ Boundary rule:
 
 Learning modules can create canonical write artifacts through write/projection boundaries. They must not become a second contract compiler by directly reading legacy slots for authority or orchestration decisions.
 
+Learning modules may consume shared contract, trust, and policy-materialization surfaces. They must not call Orchestrator response builders directly; feedback-driven learning should materialize reusable policy/workflow memory through canonical learning or write boundaries, not by re-entering planner assembly.
+
 ## Direct legacy access boundary
 
 The following legacy slot names are storage compatibility details:
