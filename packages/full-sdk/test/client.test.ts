@@ -1491,6 +1491,8 @@ test("runtime SDK storeExecutionOutcome records replay lifecycle through a singl
   assert.equal(response.summary_version, "store_execution_outcome_v1");
   assert.equal(response.run_id, "00000000-0000-4000-8000-000000000111");
   assert.equal(response.steps[0]?.step_id, "00000000-0000-4000-8000-000000000222");
+  assert.equal(response.playbook_compile, null);
+  assert.equal(response.playbook_simulation, null);
   assert.deepEqual(calls.map((entry) => entry.url), [
     "http://127.0.0.1:3001/v1/memory/replay/run/start",
     "http://127.0.0.1:3001/v1/memory/replay/step/before",
@@ -1500,6 +1502,82 @@ test("runtime SDK storeExecutionOutcome records replay lifecycle through a singl
   assert.equal(calls[1]?.body.run_id, response.run_id);
   assert.equal(calls[2]?.body.step_id, "00000000-0000-4000-8000-000000000222");
   assert.equal(calls[3]?.body.status, "success");
+});
+
+test("runtime SDK storeExecutionOutcome can compile and simulate a replay playbook when explicitly requested", async () => {
+  const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const client = createAionisRuntimeClient({
+    baseUrl: "http://127.0.0.1:3001/",
+    fetch: async (input, init) => {
+      const url = String(input);
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      calls.push({ url, body });
+      if (url.endsWith("/v1/memory/replay/run/start")) {
+        return new Response(JSON.stringify({
+          tenant_id: "default",
+          scope: "public-outcome-compile",
+          run_id: "00000000-0000-4000-8000-000000000333",
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.endsWith("/v1/memory/replay/playbooks/compile_from_run")) {
+        return new Response(JSON.stringify({
+          playbook_id: "playbook-public-sdk-facade",
+          run_id: body.run_id,
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.endsWith("/v1/memory/replay/playbooks/run")) {
+        return new Response(JSON.stringify({
+          playbook_id: body.playbook_id,
+          mode: body.mode,
+          summary: { replay_readiness: "ready" },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({
+        tenant_id: "default",
+        scope: "public-outcome-compile",
+        run_id: body.run_id,
+        status: body.status,
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    },
+  });
+
+  const response = await client.memory.storeExecutionOutcome({
+    tenant_id: "default",
+    scope: "public-outcome-compile",
+    actor: "sdk-test",
+    goal: "store and compile a validated SDK outcome",
+    status: "success",
+    summary: "SDK outcome stored and compiled",
+    success_criteria: { test_suite: "sdk facade" },
+    compile_playbook: true,
+    compile: {
+      name: "Public SDK facade recovery",
+      risk_profile: "low",
+    },
+    simulate_playbook: true,
+    simulate: {
+      max_steps: 4,
+    },
+  });
+
+  assert.equal(response.summary_version, "store_execution_outcome_v1");
+  assert.equal(response.run_id, "00000000-0000-4000-8000-000000000333");
+  assert.equal(response.playbook_compile?.playbook_id, "playbook-public-sdk-facade");
+  assert.equal(response.playbook_simulation?.summary && typeof response.playbook_simulation.summary === "object"
+    ? (response.playbook_simulation.summary as Record<string, unknown>).replay_readiness
+    : null, "ready");
+  assert.deepEqual(calls.map((entry) => entry.url), [
+    "http://127.0.0.1:3001/v1/memory/replay/run/start",
+    "http://127.0.0.1:3001/v1/memory/replay/run/end",
+    "http://127.0.0.1:3001/v1/memory/replay/playbooks/compile_from_run",
+    "http://127.0.0.1:3001/v1/memory/replay/playbooks/run",
+  ]);
+  assert.equal(calls[2]?.body.run_id, response.run_id);
+  assert.deepEqual(calls[2]?.body.success_criteria, { test_suite: "sdk facade" });
+  assert.equal(calls[2]?.body.name, "Public SDK facade recovery");
+  assert.equal(calls[3]?.body.playbook_id, "playbook-public-sdk-facade");
+  assert.equal(calls[3]?.body.mode, "simulate");
+  assert.equal(calls[3]?.body.max_steps, 4);
 });
 
 test("runtime SDK retrieveWorkflowContract selects a contract from execution introspection", async () => {
@@ -1517,10 +1595,39 @@ test("runtime SDK retrieveWorkflowContract selects a contract from execution int
         recommended_workflows: [{
           anchor_id: "workflow-anchor-1",
           workflow_signature: "workflow:public-sdk-facade",
+          contract_trust: "authoritative",
+          outcome_contract_gate: {
+            gate_version: "outcome_contract_gate_v1",
+            status: "sufficient",
+            allows_authoritative: true,
+            requested_trust: "authoritative",
+            effective_trust: "authoritative",
+            reasons: [],
+          },
+          authority_visibility: {
+            surface_version: "runtime_authority_visibility_v1",
+            node_id: "workflow-anchor-1",
+            node_kind: "workflow_anchor",
+            title: "Public SDK facade workflow",
+            requested_trust: "authoritative",
+            effective_trust: "authoritative",
+            status: "sufficient",
+            allows_authoritative: true,
+            allows_stable_promotion: true,
+            authority_blocked: false,
+            stable_promotion_blocked: false,
+            primary_blocker: null,
+            authority_reasons: [],
+            outcome_contract_reasons: [],
+            execution_evidence_reasons: [],
+            execution_evidence_status: "sufficient",
+            false_confidence_detected: false,
+          },
           execution_contract_v1: {
             schema_version: "execution_contract_v1",
             workflow_signature: "workflow:public-sdk-facade",
             file_path: "packages/full-sdk/src/client.ts",
+            contract_trust: "authoritative",
           },
         }],
         candidate_workflows: [],
@@ -1531,6 +1638,8 @@ test("runtime SDK retrieveWorkflowContract selects a contract from execution int
   const response = await client.memory.retrieveWorkflowContract({
     tenant_id: "default",
     scope: "public-workflow-contract",
+    run_id: "workflow-contract-run-1",
+    session_id: "workflow-contract-session-1",
     workflow_signature: "workflow:public-sdk-facade",
     include_introspection: false,
     limit: 4,
@@ -1540,9 +1649,30 @@ test("runtime SDK retrieveWorkflowContract selects a contract from execution int
   assert.equal(response.selected_source, "recommended_workflows");
   assert.equal(response.selected_workflow?.anchor_id, "workflow-anchor-1");
   assert.equal(response.execution_contract_v1?.workflow_signature, "workflow:public-sdk-facade");
+  assert.equal(response.contract_trust, "authoritative");
+  assert.equal(response.outcome_contract_gate?.status, "sufficient");
+  assert.equal(response.authority_visibility?.allows_authoritative, true);
+  assert.deepEqual(response.authority_summary, {
+    summary_version: "workflow_contract_authority_summary_v1",
+    contract_trust: "authoritative",
+    status: "sufficient",
+    allows_authoritative: true,
+    allows_stable_promotion: true,
+    authority_blocked: false,
+    stable_promotion_blocked: false,
+    primary_blocker: null,
+    outcome_contract_status: "sufficient",
+    outcome_contract_allows_authoritative: true,
+    outcome_contract_reasons: [],
+    execution_evidence_status: "sufficient",
+    execution_evidence_reasons: [],
+    false_confidence_detected: false,
+  });
   assert.equal(response.introspection, null);
   assert.deepEqual(calls.map((entry) => entry.url), [
     "http://127.0.0.1:3001/v1/memory/execution/introspect",
   ]);
   assert.equal(calls[0]?.body.limit, 4);
+  assert.equal(calls[0]?.body.run_id, "workflow-contract-run-1");
+  assert.equal(calls[0]?.body.session_id, "workflow-contract-session-1");
 });

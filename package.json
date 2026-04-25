@@ -107,6 +107,7 @@
     "example:sdk:continuity-provenance": "npx tsx examples/full-sdk/11-continuity-provenance-proof.ts",
     "example:sdk:session-continuity": "npx tsx examples/full-sdk/12-session-continuity-proof.ts",
     "example:sdk:semantic-forgetting": "npx tsx examples/full-sdk/13-semantic-forgetting-proof.ts",
+    "example:sdk:dogfood-loop": "npx tsx examples/full-sdk/15-public-sdk-dogfood-loop.ts",
     "example:internal-sdk:workflow": "npx tsx examples/sdk/01-workflow-guidance.ts",
     "example:internal-sdk:tools-feedback": "npx tsx examples/sdk/02-tools-feedback-pattern.ts",
     "example:internal-sdk:introspect": "npx tsx examples/sdk/03-execution-introspect-and-rehydrate.ts",

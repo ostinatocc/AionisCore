@@ -1,6 +1,8 @@
 import type {
   AionisExecutionIntrospectRequest,
   AionisExecutionIntrospectResponse,
+  AionisReplayPlaybookCompileFromRunRequest,
+  AionisReplayPlaybookRunRequest,
   AionisReplayRunEndRequest,
   AionisReplayRunStartRequest,
   AionisReplayStepAfterRequest,
@@ -10,6 +12,7 @@ import type {
   AionisRuntimeResponse,
   AionisStoreExecutionOutcomeRequest,
   AionisStoreExecutionOutcomeResponse,
+  AionisWorkflowContractAuthoritySummary,
 } from "./contracts.js";
 import { AIONIS_SHARED_ROUTE_PATHS } from "./routes.js";
 import type { AionisHttpClient } from "./types.js";
@@ -28,6 +31,10 @@ function stringList(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
     : [];
+}
+
+function booleanValue(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
 }
 
 function sharedReplayFields(payload: AionisStoreExecutionOutcomeRequest) {
@@ -130,6 +137,33 @@ export function createStoreExecutionOutcomeMethod(client: AionisHttpClient) {
       },
     });
 
+    let playbookCompile: AionisRuntimeResponse | null = null;
+    let playbookSimulation: AionisRuntimeResponse | null = null;
+    if (payload.compile_playbook === true) {
+      playbookCompile = await client.post<AionisReplayPlaybookCompileFromRunRequest, AionisRuntimeResponse>({
+        path: "/v1/memory/replay/playbooks/compile_from_run",
+        payload: {
+          ...sharedReplayFields(payload),
+          run_id: runId,
+          success_criteria: payload.success_criteria,
+          metadata: payload.metadata,
+          ...(payload.compile ?? {}),
+        },
+      });
+      const playbookId = stringValue(asRecord(playbookCompile)?.playbook_id);
+      if (playbookId && payload.simulate_playbook === true) {
+        playbookSimulation = await client.post<AionisReplayPlaybookRunRequest, AionisRuntimeResponse>({
+          path: "/v1/memory/replay/playbooks/run",
+          payload: {
+            ...sharedReplayFields(payload),
+            playbook_id: playbookId,
+            mode: "simulate",
+            ...(payload.simulate ?? {}),
+          },
+        });
+      }
+    }
+
     return {
       summary_version: "store_execution_outcome_v1",
       tenant_id: stringValue(asRecord(ended)?.tenant_id) ?? stringValue(asRecord(started)?.tenant_id) ?? payload.tenant_id ?? null,
@@ -139,12 +173,72 @@ export function createStoreExecutionOutcomeMethod(client: AionisHttpClient) {
       started,
       steps,
       ended,
+      playbook_compile: playbookCompile,
+      playbook_simulation: playbookSimulation,
     };
   };
 }
 
 function workflowContract(workflow: Record<string, unknown>): Record<string, unknown> | null {
   return asRecord(workflow.execution_contract_v1) ?? asRecord(workflow.execution_contract) ?? null;
+}
+
+function workflowContractTrust(
+  workflow: Record<string, unknown> | null,
+  contract: Record<string, unknown> | null,
+): string | null {
+  return stringValue(workflow?.contract_trust)
+    ?? stringValue(contract?.contract_trust)
+    ?? stringValue(asRecord(contract?.outcome)?.contract_trust);
+}
+
+function workflowAuthorityVisibility(workflow: Record<string, unknown> | null): Record<string, unknown> | null {
+  return asRecord(workflow?.authority_visibility) ?? null;
+}
+
+function workflowOutcomeContractGate(
+  workflow: Record<string, unknown> | null,
+  contract: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  return asRecord(workflow?.outcome_contract_gate)
+    ?? asRecord(contract?.outcome_contract_gate)
+    ?? asRecord(asRecord(contract?.outcome)?.outcome_contract_gate);
+}
+
+function buildAuthoritySummary(
+  workflow: Record<string, unknown> | null,
+  contract: Record<string, unknown> | null,
+): AionisWorkflowContractAuthoritySummary {
+  const authorityVisibility = workflowAuthorityVisibility(workflow);
+  const outcomeContractGate = workflowOutcomeContractGate(workflow, contract);
+  const visibilityStatus = stringValue(authorityVisibility?.status);
+  const gateStatus = stringValue(outcomeContractGate?.status);
+  const outcomeReasons =
+    stringList(authorityVisibility?.outcome_contract_reasons).length > 0
+      ? stringList(authorityVisibility?.outcome_contract_reasons)
+      : stringList(outcomeContractGate?.reasons);
+  return {
+    summary_version: "workflow_contract_authority_summary_v1",
+    contract_trust: workflowContractTrust(workflow, contract),
+    status:
+      visibilityStatus === "sufficient" || visibilityStatus === "insufficient"
+        ? visibilityStatus
+        : "unknown",
+    allows_authoritative: booleanValue(authorityVisibility?.allows_authoritative),
+    allows_stable_promotion: booleanValue(authorityVisibility?.allows_stable_promotion),
+    authority_blocked: booleanValue(authorityVisibility?.authority_blocked),
+    stable_promotion_blocked: booleanValue(authorityVisibility?.stable_promotion_blocked),
+    primary_blocker: stringValue(authorityVisibility?.primary_blocker),
+    outcome_contract_status:
+      gateStatus === "sufficient" || gateStatus === "insufficient"
+        ? gateStatus
+        : "unknown",
+    outcome_contract_allows_authoritative: booleanValue(outcomeContractGate?.allows_authoritative),
+    outcome_contract_reasons: outcomeReasons,
+    execution_evidence_status: stringValue(authorityVisibility?.execution_evidence_status),
+    execution_evidence_reasons: stringList(authorityVisibility?.execution_evidence_reasons),
+    false_confidence_detected: booleanValue(authorityVisibility?.false_confidence_detected),
+  };
 }
 
 function workflowMatches(workflow: Record<string, unknown>, request: AionisRetrieveWorkflowContractRequest): boolean {
@@ -176,6 +270,8 @@ export function createRetrieveWorkflowContractMethod(client: AionisHttpClient) {
         scope: payload.scope,
         consumer_agent_id: payload.consumer_agent_id,
         consumer_team_id: payload.consumer_team_id,
+        run_id: payload.run_id,
+        session_id: payload.session_id,
         limit: payload.limit,
       },
     });
@@ -190,6 +286,9 @@ export function createRetrieveWorkflowContractMethod(client: AionisHttpClient) {
       ? null
       : candidate.find((workflow) => workflowMatches(workflow, payload)) ?? null;
     const selectedWorkflow = selectedRecommended ?? selectedCandidate;
+    const executionContract = selectedWorkflow ? workflowContract(selectedWorkflow) : null;
+    const authorityVisibility = workflowAuthorityVisibility(selectedWorkflow);
+    const outcomeContractGate = workflowOutcomeContractGate(selectedWorkflow, executionContract);
 
     return {
       summary_version: "retrieve_workflow_contract_v1",
@@ -197,7 +296,11 @@ export function createRetrieveWorkflowContractMethod(client: AionisHttpClient) {
       scope: introspection.scope ?? payload.scope ?? null,
       selected_source: selectedRecommended ? "recommended_workflows" : selectedCandidate ? "candidate_workflows" : "none",
       selected_workflow: selectedWorkflow,
-      execution_contract_v1: selectedWorkflow ? workflowContract(selectedWorkflow) : null,
+      execution_contract_v1: executionContract,
+      contract_trust: workflowContractTrust(selectedWorkflow, executionContract),
+      outcome_contract_gate: outcomeContractGate,
+      authority_visibility: authorityVisibility,
+      authority_summary: buildAuthoritySummary(selectedWorkflow, executionContract),
       introspection: payload.include_introspection === false ? null : introspection,
     };
   };
