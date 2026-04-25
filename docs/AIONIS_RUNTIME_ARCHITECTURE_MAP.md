@@ -165,12 +165,13 @@ Primary modules:
 1. `src/memory/contract-trust.ts`
 2. `src/memory/execution-evidence.ts`
 3. `src/memory/authority-gate.ts`
-4. `src/memory/authority-visibility.ts`
-5. `src/memory/authority-consumption.ts`
-6. `src/memory/governance-*.ts`
-7. `src/memory/*-governance*.ts`
-8. `src/memory/replay-run-gates.ts`
-9. `src/memory/replay-run-gate-step-outcomes.ts`
+4. `src/memory/authority-producer-registry.ts`
+5. `src/memory/authority-visibility.ts`
+6. `src/memory/authority-consumption.ts`
+7. `src/memory/governance-*.ts`
+8. `src/memory/*-governance*.ts`
+9. `src/memory/replay-run-gates.ts`
+10. `src/memory/replay-run-gate-step-outcomes.ts`
 
 Stable decisions:
 
@@ -183,9 +184,11 @@ Boundary rule:
 
 Trust modules may consume canonical execution contracts and evidence surfaces. They must not recover authority by directly reading legacy storage slots.
 
-Authority-producing modules must be declared Trust Gate producers before they call `buildRuntimeAuthorityGate`. Outcome-contract and execution-evidence gates must stay in declared trust-evaluation or authority-consuming boundaries.
+Authority-producing modules must be declared in `src/memory/authority-producer-registry.ts` before they call `buildRuntimeAuthorityGate`, persist stable workflow memory, persist authoritative policy memory, or emit stable pattern guidance. Outcome-contract and execution-evidence gates must stay in declared trust-evaluation or authority-consuming boundaries.
 
 Workflow and policy producers that persist `stable`, `active`, or `authoritative` reusable memory must bind the write to `runtime_authority_gate_v1`, `outcome_contract_gate_v1`, and execution-evidence assessment for that produced surface. Pattern producers are separate: a stable trusted pattern is advisory guidance only, must remain non-authoritative, and must carry promotion/revalidation or governance provenance.
+
+The producer registry is the Runtime manifest for authority write boundaries. CI must consume that manifest instead of maintaining independent path allowlists, so a new producer cannot appear as an accidental code-search exception.
 
 ### 3. Orchestrator
 

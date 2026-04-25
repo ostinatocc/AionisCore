@@ -2,6 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import {
+  runtimeAuthorityGateBoundaryFiles,
+  runtimeAuthorityProducerDeclarations,
+  runtimeExecutionEvidenceAssessmentBoundaryFiles,
+  runtimeOutcomeContractGateBoundaryFiles,
+} from "../../src/memory/authority-producer-registry.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const SRC = path.join(ROOT, "src");
@@ -100,13 +106,7 @@ test("route layer does not construct authority or promotion policy surfaces", ()
 });
 
 test("runtime authority gate builders stay behind explicit trust-gate producer boundaries", () => {
-  const allowedRuntimeAuthorityGateUsers = new Set([
-    "src/memory/authority-gate.ts",
-    "src/memory/policy-memory.ts",
-    "src/memory/replay-learning-artifacts.ts",
-    "src/memory/replay-stable-anchor-helpers.ts",
-    "src/memory/workflow-write-projection.ts",
-  ]);
+  const allowedRuntimeAuthorityGateUsers = new Set(runtimeAuthorityGateBoundaryFiles());
   const offenders = sourceFilesUnder("src/memory")
     .filter(({ text }) => text.includes("buildRuntimeAuthorityGate"))
     .map(({ file }) => file)
@@ -121,15 +121,7 @@ test("runtime authority gate builders stay behind explicit trust-gate producer b
 });
 
 test("outcome and evidence gates stay behind declared trust evaluation boundaries", () => {
-  const allowedOutcomeGateUsers = new Set([
-    "src/memory/action-retrieval.ts",
-    "src/memory/authority-gate.ts",
-    "src/memory/contract-trust.ts",
-    "src/memory/execution-introspection.ts",
-    "src/memory/replay-learning-artifacts.ts",
-    "src/memory/workflow-promotion-governance.ts",
-    "src/memory/workflow-write-projection.ts",
-  ]);
+  const allowedOutcomeGateUsers = new Set(runtimeOutcomeContractGateBoundaryFiles());
   const outcomeGateOffenders = sourceFilesUnder("src/memory")
     .filter(({ text }) => text.includes("buildOutcomeContractGate"))
     .map(({ file }) => file)
@@ -142,10 +134,7 @@ test("outcome and evidence gates stay behind declared trust evaluation boundarie
     "Outcome-contract evaluation must stay in declared Trust Gate or authority-consuming boundaries.",
   );
 
-  const allowedExecutionEvidenceUsers = new Set([
-    "src/memory/authority-gate.ts",
-    "src/memory/execution-evidence.ts",
-  ]);
+  const allowedExecutionEvidenceUsers = new Set(runtimeExecutionEvidenceAssessmentBoundaryFiles());
   const executionEvidenceOffenders = sourceFilesUnder("src/memory")
     .filter(({ text }) => text.includes("assessExecutionEvidence"))
     .map(({ file }) => file)
@@ -159,44 +148,17 @@ test("outcome and evidence gates stay behind declared trust evaluation boundarie
   );
 });
 
-test("stable workflow producers require runtime authority gate checks", () => {
-  const requiredProducerGuards = new Map<string, string[]>([
-    [
-      "src/memory/workflow-write-projection.ts",
-      [
-        "buildRuntimeAuthorityGate",
-        "authorityGate.allows_authoritative",
-        "authorityGate.allows_stable_promotion",
-      ],
-    ],
-    [
-      "src/memory/replay-learning-artifacts.ts",
-      [
-        "buildRuntimeAuthorityGate",
-        "authorityGate.allows_authoritative",
-        "authorityGate.allows_stable_promotion",
-      ],
-    ],
-    [
-      "src/memory/replay-stable-anchor-helpers.ts",
-      [
-        "buildRuntimeAuthorityGate",
-        "authority.authorityGate.allows_stable_promotion",
-      ],
-    ],
-    [
-      "src/memory/policy-memory.ts",
-      [
-        "buildRuntimeAuthorityGate",
-        "authority.authorityGate.allows_authoritative",
-      ],
-    ],
-  ]);
+test("registered authority producers require declared gate markers", () => {
+  const producers = runtimeAuthorityProducerDeclarations();
+  assert.ok(producers.length > 0, "authority producer registry must declare producer boundaries");
 
-  for (const [file, tokens] of requiredProducerGuards) {
-    const text = read(file);
-    for (const token of tokens) {
-      assertContains(text, token, `${file} must keep stable/authoritative producer behavior gate-backed by ${token}`);
+  for (const producer of producers) {
+    const text = read(producer.file);
+    if (producer.mayUseRuntimeAuthorityGate) {
+      assertContains(text, "buildRuntimeAuthorityGate", `${producer.file} must use the unified Runtime authority gate`);
+    }
+    for (const token of producer.requiredSourceMarkers ?? []) {
+      assertContains(text, token, `${producer.file} must keep ${producer.id} backed by ${token}`);
     }
   }
 });
