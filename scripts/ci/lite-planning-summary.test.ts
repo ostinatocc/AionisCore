@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildExecutionMemorySummaryBundle,
   buildAssemblySummary,
+  buildExecutionSummarySurface,
   buildPlanningSummary,
   summarizeActionRecallPacket,
   summarizeDistillationSignalSurface,
@@ -16,7 +17,17 @@ import {
 } from "../../src/app/planning-summary.ts";
 import { resolveContractTrustForSteering } from "../../src/memory/contract-trust.ts";
 import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
-import { ExecutionForgettingSummarySchema } from "../../src/memory/schemas.ts";
+import {
+  ExecutionCollaborationRoutingSummarySchema,
+  ExecutionCollaborationSummarySchema,
+  ExecutionContinuitySnapshotSummarySchema,
+  ExecutionForgettingSummarySchema,
+  ExecutionInstrumentationSummarySchema,
+  ExecutionMaintenanceSummarySchema,
+  ExecutionPacketAssemblySummarySchema,
+  ExecutionRoutingSignalSummarySchema,
+  ExecutionStrategySummarySchema,
+} from "../../src/memory/schemas.ts";
 
 const layeredContextFixture = {
   action_recall_packet: {
@@ -1079,6 +1090,46 @@ test("execution forgetting summary contract rejects passthrough fields", () => {
       },
     }),
   );
+});
+
+test("execution summary child contracts reject passthrough fields", () => {
+  const summary = buildExecutionSummarySurface({
+    planner_packet: null,
+    surface: layeredContextFixture,
+    packet_assembly: {
+      packet_source_mode: "memory_only",
+      state_first_assembly: false,
+      execution_packet_v1_present: false,
+      execution_state_v1_present: false,
+    },
+    tools: { selection: { selected: "edit" } },
+    cost_signals: null,
+    execution_packet: null,
+    execution_artifacts: null,
+    execution_evidence: null,
+    delegation_records: null,
+  });
+
+  const strictContracts = [
+    [ExecutionPacketAssemblySummarySchema, summary.packet_assembly],
+    [ExecutionStrategySummarySchema, summary.strategy_summary],
+    [ExecutionCollaborationSummarySchema, summary.collaboration_summary],
+    [ExecutionContinuitySnapshotSummarySchema, summary.continuity_snapshot_summary],
+    [ExecutionCollaborationRoutingSummarySchema, summary.collaboration_routing_summary],
+    [ExecutionRoutingSignalSummarySchema, summary.routing_signal_summary],
+    [ExecutionMaintenanceSummarySchema, summary.maintenance_summary],
+    [ExecutionInstrumentationSummarySchema, summary.instrumentation_summary],
+  ] as const;
+
+  for (const [schema, contract] of strictContracts) {
+    assert.deepEqual(schema.parse(contract), contract);
+    assert.throws(() =>
+      schema.parse({
+        ...contract,
+        debug_passthrough: true,
+      }),
+    );
+  }
 });
 
 test("buildAssemblySummary carries pattern trust summary through from planning summary", () => {
