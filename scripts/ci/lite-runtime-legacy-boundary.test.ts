@@ -2,12 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { RUNTIME_LEGACY_EXECUTION_SLOT_NAMES } from "../../src/memory/legacy-access-registry.ts";
 import {
-  RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY,
-  RUNTIME_LEGACY_EXECUTION_SLOT_NAMES,
-  runtimeDirectLegacySlotBoundaryFiles,
-  runtimeLegacyAccessBoundaryFilesByKind,
-} from "../../src/memory/legacy-access-registry.ts";
+  runtimeBoundaryInventoryLegacyAccessEntries,
+  runtimeBoundaryInventoryLegacyFiles,
+  runtimeBoundaryInventoryLegacyFilesByKind,
+} from "../../src/memory/runtime-boundary-inventory.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const SRC = path.join(ROOT, "src");
@@ -32,26 +32,27 @@ function listTypeScriptFiles(dir: string): string[] {
   return out;
 }
 
-test("legacy access registry declares unique existing boundary files", () => {
-  assert.ok(RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY.length > 0, "legacy access registry must not be empty");
-  const ids = RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY.map((entry) => entry.id);
-  assert.equal(new Set(ids).size, ids.length, "legacy access registry ids must be unique");
+test("legacy access inventory declares unique existing boundary files", () => {
+  const legacyEntries = runtimeBoundaryInventoryLegacyAccessEntries();
+  assert.ok(legacyEntries.length > 0, "legacy access inventory must not be empty");
+  const ids = legacyEntries.map((entry) => entry.source_id);
+  assert.equal(new Set(ids).size, ids.length, "legacy access inventory ids must be unique");
 
-  const files = RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY.map((entry) => entry.file);
-  assert.equal(new Set(files).size, files.length, "legacy access registry files must be unique");
-  for (const entry of RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY) {
-    assert.ok(entry.file.startsWith("src/"), `${entry.id} must point at a Runtime source file`);
-    assert.ok(fs.existsSync(path.join(ROOT, entry.file)), `${entry.id} must point at an existing source file`);
-    assert.ok(entry.reason.trim().length > 0, `${entry.id} must explain why direct legacy access is allowed`);
+  const files = legacyEntries.map((entry) => entry.file);
+  assert.equal(new Set(files).size, files.length, "legacy access inventory files must be unique");
+  for (const entry of legacyEntries) {
+    assert.ok(entry.file.startsWith("src/"), `${entry.source_id} must point at a Runtime source file`);
+    assert.ok(fs.existsSync(path.join(ROOT, entry.file)), `${entry.source_id} must point at an existing source file`);
+    assert.ok(entry.reason.trim().length > 0, `${entry.source_id} must explain why direct legacy access is allowed`);
   }
 
   for (const kind of ["manifest", "schema", "contract_resolver", "write_projection", "archive_rehydrate", "store_adapter"] as const) {
-    assert.ok(runtimeLegacyAccessBoundaryFilesByKind(kind).length > 0, `legacy access registry must declare ${kind} boundaries`);
+    assert.ok(runtimeBoundaryInventoryLegacyFilesByKind(kind).length > 0, `legacy access inventory must declare ${kind} boundaries`);
   }
 });
 
 test("legacy execution slots stay constrained to boundary modules", () => {
-  const allowedDirectLegacySlotBoundaries = new Set(runtimeDirectLegacySlotBoundaryFiles());
+  const allowedDirectLegacySlotBoundaries = new Set(runtimeBoundaryInventoryLegacyFiles());
   const offenders = listTypeScriptFiles(SRC)
     .map((filePath) => ({
       file: toRepoRelative(filePath),
@@ -74,7 +75,7 @@ test("legacy execution slots stay constrained to boundary modules", () => {
 });
 
 test("legacy execution slot allowlist only contains files that still exist", () => {
-  const missing = runtimeDirectLegacySlotBoundaryFiles()
+  const missing = runtimeBoundaryInventoryLegacyFiles()
     .filter((file) => !fs.existsSync(path.join(ROOT, file)))
     .sort();
 

@@ -3,11 +3,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  runtimeAuthorityGateBoundaryFiles,
-  runtimeAuthorityProducerDeclarations,
-  runtimeExecutionEvidenceAssessmentBoundaryFiles,
-  runtimeOutcomeContractGateBoundaryFiles,
-} from "../../src/memory/authority-producer-registry.ts";
+  runtimeBoundaryInventoryAuthorityFilesByCapability,
+  runtimeBoundaryInventoryAuthorityProducerEntries,
+} from "../../src/memory/runtime-boundary-inventory.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const SRC = path.join(ROOT, "src");
@@ -106,7 +104,9 @@ test("route layer does not construct authority or promotion policy surfaces", ()
 });
 
 test("runtime authority gate builders stay behind explicit trust-gate producer boundaries", () => {
-  const allowedRuntimeAuthorityGateUsers = new Set(runtimeAuthorityGateBoundaryFiles());
+  const allowedRuntimeAuthorityGateUsers = new Set(
+    runtimeBoundaryInventoryAuthorityFilesByCapability("may_use_runtime_authority_gate"),
+  );
   const offenders = sourceFilesUnder("src/memory")
     .filter(({ text }) => text.includes("buildRuntimeAuthorityGate"))
     .map(({ file }) => file)
@@ -121,7 +121,9 @@ test("runtime authority gate builders stay behind explicit trust-gate producer b
 });
 
 test("outcome and evidence gates stay behind declared trust evaluation boundaries", () => {
-  const allowedOutcomeGateUsers = new Set(runtimeOutcomeContractGateBoundaryFiles());
+  const allowedOutcomeGateUsers = new Set(
+    runtimeBoundaryInventoryAuthorityFilesByCapability("may_use_outcome_contract_gate"),
+  );
   const outcomeGateOffenders = sourceFilesUnder("src/memory")
     .filter(({ text }) => text.includes("buildOutcomeContractGate"))
     .map(({ file }) => file)
@@ -134,7 +136,9 @@ test("outcome and evidence gates stay behind declared trust evaluation boundarie
     "Outcome-contract evaluation must stay in declared Trust Gate or authority-consuming boundaries.",
   );
 
-  const allowedExecutionEvidenceUsers = new Set(runtimeExecutionEvidenceAssessmentBoundaryFiles());
+  const allowedExecutionEvidenceUsers = new Set(
+    runtimeBoundaryInventoryAuthorityFilesByCapability("may_assess_execution_evidence"),
+  );
   const executionEvidenceOffenders = sourceFilesUnder("src/memory")
     .filter(({ text }) => text.includes("assessExecutionEvidence"))
     .map(({ file }) => file)
@@ -149,16 +153,16 @@ test("outcome and evidence gates stay behind declared trust evaluation boundarie
 });
 
 test("registered authority producers require declared gate markers", () => {
-  const producers = runtimeAuthorityProducerDeclarations();
-  assert.ok(producers.length > 0, "authority producer registry must declare producer boundaries");
+  const producers = runtimeBoundaryInventoryAuthorityProducerEntries();
+  assert.ok(producers.length > 0, "authority boundary inventory must declare producer boundaries");
 
   for (const producer of producers) {
     const text = read(producer.file);
-    if (producer.mayUseRuntimeAuthorityGate) {
+    if (producer.capabilities.may_use_runtime_authority_gate) {
       assertContains(text, "buildRuntimeAuthorityGate", `${producer.file} must use the unified Runtime authority gate`);
     }
-    for (const token of producer.requiredSourceMarkers ?? []) {
-      assertContains(text, token, `${producer.file} must keep ${producer.id} backed by ${token}`);
+    for (const token of producer.required_source_markers) {
+      assertContains(text, token, `${producer.file} must keep ${producer.source_id} backed by ${token}`);
     }
   }
 });

@@ -13,12 +13,11 @@ import {
   demoteExecutionContractForAuthorityVisibility,
 } from "../../src/memory/authority-consumption.ts";
 import {
-  RUNTIME_AUTHORITY_BOUNDARY_REGISTRY,
-  runtimeAuthorityProducerDeclarations,
-  runtimeRawAuthoritySurfaceBoundaryFiles,
-  runtimeStablePatternLiteralBoundaryFiles,
-  runtimeStableWorkflowLiteralBoundaryFiles,
-} from "../../src/memory/authority-producer-registry.ts";
+  runtimeBoundaryInventoryAuthorityEntries,
+  runtimeBoundaryInventoryAuthorityFilesByCapability,
+  runtimeBoundaryInventoryAuthorityFilesBySourceId,
+  runtimeBoundaryInventoryAuthorityProducerEntries,
+} from "../../src/memory/runtime-boundary-inventory.ts";
 import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
@@ -46,37 +45,38 @@ function listSourceTsFiles(dir: string): string[] {
   return out.sort();
 }
 
-test("authority producer registry declares unique Runtime boundary entries", () => {
-  assert.ok(RUNTIME_AUTHORITY_BOUNDARY_REGISTRY.length > 0, "authority boundary registry must not be empty");
-  const ids = RUNTIME_AUTHORITY_BOUNDARY_REGISTRY.map((entry) => entry.id);
-  assert.equal(new Set(ids).size, ids.length, "authority boundary registry ids must be unique");
+test("authority boundary inventory declares unique Runtime boundary entries", () => {
+  const authorityEntries = runtimeBoundaryInventoryAuthorityEntries();
+  assert.ok(authorityEntries.length > 0, "authority boundary inventory must not be empty");
+  const ids = authorityEntries.map((entry) => entry.source_id);
+  assert.equal(new Set(ids).size, ids.length, "authority boundary inventory ids must be unique");
 
-  for (const entry of RUNTIME_AUTHORITY_BOUNDARY_REGISTRY) {
-    assert.ok(entry.file.startsWith("src/"), `${entry.id} must point at a Runtime source file`);
-    assert.ok(fs.existsSync(path.join(ROOT, entry.file)), `${entry.id} must point at an existing source file`);
+  for (const entry of authorityEntries) {
+    assert.ok(entry.file.startsWith("src/"), `${entry.source_id} must point at a Runtime source file`);
+    assert.ok(fs.existsSync(path.join(ROOT, entry.file)), `${entry.source_id} must point at an existing source file`);
     if (entry.role === "authority_producer") {
-      assert.ok(entry.producerKind, `${entry.id} must declare producer kind`);
-      assert.equal(entry.mayUseRuntimeAuthorityGate, true, `${entry.id} must be gate-backed`);
-      assert.ok((entry.requiredSourceMarkers?.length ?? 0) > 0, `${entry.id} must declare source markers`);
+      assert.ok(entry.producer_kind, `${entry.source_id} must declare producer kind`);
+      assert.equal(entry.capabilities.may_use_runtime_authority_gate, true, `${entry.source_id} must be gate-backed`);
+      assert.ok(entry.required_source_markers.length > 0, `${entry.source_id} must declare source markers`);
     }
     if (entry.role === "advisory_pattern_producer") {
-      assert.equal(entry.producerKind, "advisory_pattern", `${entry.id} must stay advisory pattern scoped`);
-      assert.equal(entry.mayUseRuntimeAuthorityGate, undefined, `${entry.id} must not mint Runtime authority`);
+      assert.equal(entry.producer_kind, "advisory_pattern", `${entry.source_id} must stay advisory pattern scoped`);
+      assert.equal(entry.capabilities.may_use_runtime_authority_gate, false, `${entry.source_id} must not mint Runtime authority`);
     }
   }
 });
 
 test("authority-producing Runtime surfaces use the unified authority gate", () => {
-  const producers = runtimeAuthorityProducerDeclarations()
-    .filter((producer) => producer.mayUseRuntimeAuthorityGate);
-  assert.ok(producers.length > 0, "authority producer registry must declare gate-backed producers");
+  const producers = runtimeBoundaryInventoryAuthorityProducerEntries()
+    .filter((producer) => producer.capabilities.may_use_runtime_authority_gate);
+  assert.ok(producers.length > 0, "authority boundary inventory must declare gate-backed producers");
 
   for (const producer of producers) {
     const text = read(producer.file);
     assertContains(text, "buildRuntimeAuthorityGate", `${producer.file} must build runtime authority gates`);
     assertContains(text, "authority_gate_v1", `${producer.file} must persist authority gate state`);
-    for (const token of producer.requiredSourceMarkers ?? []) {
-      assertContains(text, token, `${producer.file} must keep ${producer.id} backed by ${token}`);
+    for (const token of producer.required_source_markers) {
+      assertContains(text, token, `${producer.file} must keep ${producer.source_id} backed by ${token}`);
     }
   }
 });
@@ -88,7 +88,7 @@ test("stable and authoritative producer literals stay in declared producer class
     .sort();
   assert.deepEqual(
     stableWorkflowLiteralFiles,
-    runtimeStableWorkflowLiteralBoundaryFiles(),
+    runtimeBoundaryInventoryAuthorityFilesByCapability("may_use_stable_workflow_literal"),
     "Stable workflow promotion literals must stay limited to declared producers and read-side orchestration summaries.",
   );
 
@@ -97,7 +97,7 @@ test("stable and authoritative producer literals stay in declared producer class
     .sort();
   assert.deepEqual(
     stablePatternLiteralFiles,
-    runtimeStablePatternLiteralBoundaryFiles(),
+    runtimeBoundaryInventoryAuthorityFilesByCapability("may_use_stable_pattern_literal"),
     "Stable pattern literals must stay limited to pattern anchoring and read-side orchestration summaries.",
   );
 });
@@ -179,9 +179,7 @@ test("authority raw field and visibility parser access stays behind declared bou
     "authorityVisibilityRequiresInspection",
     "authorityVisibilityPrimaryBlocker",
   ];
-  const parserAllowlist = new Set([
-    "src/memory/authority-consumption.ts",
-  ]);
+  const parserAllowlist = new Set(runtimeBoundaryInventoryAuthorityFilesBySourceId("authority_consumption"));
   for (const file of sourceFiles) {
     if (parserAllowlist.has(file)) continue;
     const text = read(file);
@@ -194,7 +192,9 @@ test("authority raw field and visibility parser access stays behind declared bou
     "execution_evidence_assessment",
     "stable_promotion_blocked",
   ];
-  const rawFieldBoundaryAllowlist = new Set(runtimeRawAuthoritySurfaceBoundaryFiles());
+  const rawFieldBoundaryAllowlist = new Set(
+    runtimeBoundaryInventoryAuthorityFilesByCapability("may_read_raw_authority_surface"),
+  );
   for (const file of sourceFiles) {
     if (rawFieldBoundaryAllowlist.has(file)) continue;
     const text = read(file);

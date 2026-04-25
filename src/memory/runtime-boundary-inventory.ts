@@ -37,6 +37,11 @@ export type RuntimeBoundaryInventoryEntry =
       reason: string;
     };
 
+export type RuntimeAuthorityBoundaryInventoryEntry = Extract<RuntimeBoundaryInventoryEntry, { source: "authority" }>;
+export type RuntimeLegacyAccessBoundaryInventoryEntry = Extract<RuntimeBoundaryInventoryEntry, { source: "legacy_access" }>;
+export type RuntimeAuthorityInventoryCapability = keyof RuntimeAuthorityBoundaryInventoryEntry["capabilities"];
+export type RuntimeLegacyAccessInventoryKind = RuntimeLegacyAccessBoundaryInventoryEntry["legacy_access_kind"];
+
 export type RuntimeBoundaryInventoryResponse = {
   surface_version: "runtime_boundary_inventory_response_v1";
   inventory_source: "source_boundary_manifests";
@@ -99,6 +104,10 @@ function cloneInventoryEntry(entry: RuntimeBoundaryInventoryEntry): RuntimeBound
   return { ...entry };
 }
 
+function uniqueSortedFiles(entries: readonly RuntimeBoundaryInventoryEntry[]): string[] {
+  return Array.from(new Set(entries.map((entry) => entry.file))).sort();
+}
+
 export const RUNTIME_BOUNDARY_INVENTORY: readonly RuntimeBoundaryInventoryEntry[] = [
   ...RUNTIME_AUTHORITY_BOUNDARY_REGISTRY.map(authorityInventoryEntry),
   ...RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY.map(legacyAccessInventoryEntry),
@@ -108,6 +117,8 @@ export function runtimeBoundaryInventoryEntries(): RuntimeBoundaryInventoryEntry
   return RUNTIME_BOUNDARY_INVENTORY.map(cloneInventoryEntry);
 }
 
+export function runtimeBoundaryInventoryEntriesBySource(source: "authority"): RuntimeAuthorityBoundaryInventoryEntry[];
+export function runtimeBoundaryInventoryEntriesBySource(source: "legacy_access"): RuntimeLegacyAccessBoundaryInventoryEntry[];
 export function runtimeBoundaryInventoryEntriesBySource(
   source: RuntimeBoundaryInventorySource,
 ): RuntimeBoundaryInventoryEntry[] {
@@ -117,13 +128,54 @@ export function runtimeBoundaryInventoryEntriesBySource(
 }
 
 export function runtimeBoundaryInventoryFiles(): string[] {
-  return Array.from(new Set(RUNTIME_BOUNDARY_INVENTORY.map((entry) => entry.file))).sort();
+  return uniqueSortedFiles(RUNTIME_BOUNDARY_INVENTORY);
 }
 
 export function runtimeBoundaryInventoryEntriesByFile(file: string): RuntimeBoundaryInventoryEntry[] {
   return RUNTIME_BOUNDARY_INVENTORY
     .filter((entry) => entry.file === file)
     .map(cloneInventoryEntry);
+}
+
+export function runtimeBoundaryInventoryAuthorityEntries(): RuntimeAuthorityBoundaryInventoryEntry[] {
+  return runtimeBoundaryInventoryEntriesBySource("authority");
+}
+
+export function runtimeBoundaryInventoryAuthorityProducerEntries(): RuntimeAuthorityBoundaryInventoryEntry[] {
+  return runtimeBoundaryInventoryAuthorityEntries()
+    .filter((entry) => entry.role === "authority_producer" || entry.role === "advisory_pattern_producer");
+}
+
+export function runtimeBoundaryInventoryAuthorityFilesByCapability(
+  capability: RuntimeAuthorityInventoryCapability,
+): string[] {
+  return uniqueSortedFiles(
+    runtimeBoundaryInventoryAuthorityEntries()
+      .filter((entry) => entry.capabilities[capability] === true),
+  );
+}
+
+export function runtimeBoundaryInventoryAuthorityFilesBySourceId(...sourceIds: string[]): string[] {
+  const allowedIds = new Set(sourceIds);
+  return uniqueSortedFiles(
+    runtimeBoundaryInventoryAuthorityEntries()
+      .filter((entry) => allowedIds.has(entry.source_id)),
+  );
+}
+
+export function runtimeBoundaryInventoryLegacyAccessEntries(): RuntimeLegacyAccessBoundaryInventoryEntry[] {
+  return runtimeBoundaryInventoryEntriesBySource("legacy_access");
+}
+
+export function runtimeBoundaryInventoryLegacyFiles(): string[] {
+  return uniqueSortedFiles(runtimeBoundaryInventoryLegacyAccessEntries());
+}
+
+export function runtimeBoundaryInventoryLegacyFilesByKind(kind: RuntimeLegacyAccessInventoryKind): string[] {
+  return uniqueSortedFiles(
+    runtimeBoundaryInventoryLegacyAccessEntries()
+      .filter((entry) => entry.legacy_access_kind === kind),
+  );
 }
 
 export function runtimeBoundaryInventorySummary(): {
