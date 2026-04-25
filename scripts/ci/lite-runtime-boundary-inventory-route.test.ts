@@ -4,6 +4,7 @@ import Fastify from "fastify";
 import { registerHostErrorHandler } from "../../src/host/http-host.ts";
 import { buildLiteRouteMatrix } from "../../src/host/lite-edition.ts";
 import {
+  RuntimeBoundaryInventoryResponseSchema,
   runtimeBoundaryInventoryFiles,
   runtimeBoundaryInventorySummary,
 } from "../../src/memory/runtime-boundary-inventory.ts";
@@ -30,9 +31,19 @@ test("runtime boundary inventory route exposes a read-only source-owned surface"
     });
 
     assert.equal(response.statusCode, 200);
-    const body = JSON.parse(response.body);
+    const body = RuntimeBoundaryInventoryResponseSchema.parse(JSON.parse(response.body));
     const summary = runtimeBoundaryInventorySummary();
 
+    assert.deepEqual(Object.keys(body), [
+      "surface_version",
+      "inventory_source",
+      "surface_semantics",
+      "summary",
+      "files",
+      "entries",
+      "sources",
+    ]);
+    assert.deepEqual(Object.keys(body.sources), ["authority", "legacy_access"]);
     assert.equal(body.surface_version, "runtime_boundary_inventory_response_v1");
     assert.equal(body.inventory_source, "source_boundary_manifests");
     assert.deepEqual(body.surface_semantics, {
@@ -47,6 +58,25 @@ test("runtime boundary inventory route exposes a read-only source-owned surface"
     assert.equal(body.entries.length, summary.total_entries);
     assert.equal(body.sources.authority.length, summary.authority_entries);
     assert.equal(body.sources.legacy_access.length, summary.legacy_access_entries);
+    assert.deepEqual(Object.keys(body.sources.authority[0] ?? {}), [
+      "source",
+      "inventory_id",
+      "source_id",
+      "file",
+      "layer",
+      "role",
+      "producer_kind",
+      "capabilities",
+      "required_source_markers",
+    ]);
+    assert.deepEqual(Object.keys(body.sources.legacy_access[0] ?? {}), [
+      "source",
+      "inventory_id",
+      "source_id",
+      "file",
+      "legacy_access_kind",
+      "reason",
+    ]);
     assert.ok(body.files.includes("src/memory/authority-producer-registry.ts"));
     assert.ok(body.files.includes("src/memory/legacy-access-registry.ts"));
   } finally {

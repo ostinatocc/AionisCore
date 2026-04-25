@@ -62,6 +62,17 @@ Endpoint status labels used below:
 
 These surfaces are local operator/debug views. They are read-only and do not grant authority, mutate memory, or change runtime decisions.
 
+`GET /v1/runtime/boundary-inventory` is a stable public contract, not an open-ended debug blob. Its response is validated by `RuntimeBoundaryInventoryResponseSchema` and may only expose:
+
+1. `surface_version`
+2. `inventory_source`
+3. `surface_semantics`
+4. `summary`
+5. `files`
+6. `entries`
+7. `sources.authority`
+8. `sources.legacy_access`
+
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |
 | `GET` | `/v1/runtime/boundary-inventory` | Supported | Source-owned boundary inventory for authority producers and allowed legacy direct-access boundaries. Returns summary counts, files, grouped entries, and read-only semantics. |

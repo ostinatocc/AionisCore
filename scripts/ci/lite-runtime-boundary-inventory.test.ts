@@ -6,6 +6,8 @@ import { RUNTIME_AUTHORITY_BOUNDARY_REGISTRY } from "../../src/memory/authority-
 import { RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY } from "../../src/memory/legacy-access-registry.ts";
 import {
   RUNTIME_BOUNDARY_INVENTORY,
+  RuntimeBoundaryInventoryResponseSchema,
+  buildRuntimeBoundaryInventoryResponse,
   runtimeBoundaryInventoryAuthorityFilesByCapability,
   runtimeBoundaryInventoryAuthorityProducerEntries,
   runtimeBoundaryInventoryEntriesByFile,
@@ -137,5 +139,44 @@ test("runtime boundary inventory exposes selector helpers for CI boundary consum
         .map((entry) => entry.file),
     ),
     "legacy kind helper must derive file allowlists from inventory entries",
+  );
+});
+
+test("runtime boundary inventory response contract rejects passthrough fields", () => {
+  const response = RuntimeBoundaryInventoryResponseSchema.parse(buildRuntimeBoundaryInventoryResponse());
+  const firstEntry = response.entries[0];
+  assert.ok(firstEntry, "inventory response must contain at least one entry");
+
+  assert.throws(
+    () =>
+      RuntimeBoundaryInventoryResponseSchema.parse({
+        ...response,
+        debug_blob: true,
+      }),
+    /Unrecognized key/,
+  );
+  assert.throws(
+    () =>
+      RuntimeBoundaryInventoryResponseSchema.parse({
+        ...response,
+        surface_semantics: {
+          ...response.surface_semantics,
+          debug_mode: "loose",
+        },
+      }),
+    /Unrecognized key/,
+  );
+  assert.throws(
+    () =>
+      RuntimeBoundaryInventoryResponseSchema.parse({
+        ...response,
+        entries: [
+          {
+            ...firstEntry,
+            unexpected_field: "not-public-contract",
+          },
+        ],
+      }),
+    /Unrecognized key/,
   );
 });
