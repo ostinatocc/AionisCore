@@ -4,20 +4,25 @@ import { pathToFileURL } from "node:url";
 import {
   formatRuntimeDogfoodMarkdown,
   runRuntimeDogfoodSuite,
+  runtimeDogfoodTasksFromSpecs,
+  type RuntimeDogfoodTaskSpec,
 } from "./lib/lite-runtime-dogfood.ts";
 
 type CliOptions = {
   json: boolean;
   outJson: string | null;
   outMarkdown: string | null;
+  tasksJson: string | null;
 };
 
 function usage(): string {
   return [
     "Usage:",
-    "  npx tsx scripts/lite-runtime-dogfood.ts [--json] [--out-json /path/result.json] [--out-md /path/result.md]",
+    "  npx tsx scripts/lite-runtime-dogfood.ts [--json] [--tasks-json /path/tasks.json] [--out-json /path/result.json] [--out-md /path/result.md]",
     "",
     "Runs a product dogfood slice over real Runtime task families.",
+    "",
+    "tasks.json may be an array of task specs or an object with a tasks array.",
   ].join("\n");
 }
 
@@ -25,6 +30,7 @@ function parseArgs(argv: string[]): CliOptions {
   let json = false;
   let outJson: string | null = null;
   let outMarkdown: string | null = null;
+  let tasksJson: string | null = null;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--json") {
@@ -41,22 +47,43 @@ function parseArgs(argv: string[]): CliOptions {
       i += 1;
       continue;
     }
+    if (arg === "--tasks-json") {
+      tasksJson = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
     if (arg === "-h" || arg === "--help") {
       console.log(usage());
       process.exit(0);
     }
     throw new Error(`unknown argument: ${arg}`);
   }
-  return { json, outJson, outMarkdown };
+  return { json, outJson, outMarkdown, tasksJson };
 }
 
 function ensureParent(filePath: string): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
+function readTaskSpecs(filePath: string): RuntimeDogfoodTaskSpec[] {
+  const raw = JSON.parse(fs.readFileSync(filePath, "utf8")) as unknown;
+  const tasks = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === "object" && Array.isArray((raw as Record<string, unknown>).tasks)
+      ? (raw as Record<string, unknown>).tasks
+      : null;
+  if (!tasks) {
+    throw new Error("tasks-json must contain an array or an object with a tasks array");
+  }
+  return tasks as RuntimeDogfoodTaskSpec[];
+}
+
 function main(): void {
   const options = parseArgs(process.argv.slice(2));
-  const result = runRuntimeDogfoodSuite();
+  const tasks = options.tasksJson
+    ? runtimeDogfoodTasksFromSpecs(readTaskSpecs(options.tasksJson))
+    : undefined;
+  const result = runRuntimeDogfoodSuite(tasks);
   if (options.outJson) {
     ensureParent(options.outJson);
     fs.writeFileSync(options.outJson, `${JSON.stringify(result, null, 2)}\n`);

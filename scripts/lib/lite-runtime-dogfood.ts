@@ -3,6 +3,7 @@ import { buildOutcomeContractGate, type OutcomeContractGate } from "../../src/me
 import {
   assessExecutionEvidence,
   buildExecutionEvidenceFromValidation,
+  ExecutionEvidenceV1Schema,
   type ExecutionEvidenceAssessmentV1,
   type ExecutionEvidenceV1,
 } from "../../src/memory/execution-evidence.ts";
@@ -28,14 +29,64 @@ type DogfoodExpectation = {
   evidence_reasons_include?: string[];
 };
 
+export type RuntimeDogfoodExpectationSpec = Omit<
+  DogfoodExpectation,
+  "acceptance_checks_match" | "dependency_requirements_match" | "external_visibility_requirements_match" | "next_action_match"
+> & {
+  acceptance_checks_match: string[];
+  dependency_requirements_match: string[];
+  external_visibility_requirements_match: string[];
+  next_action_match: string[];
+};
+
+export type RuntimeDogfoodEvidenceSourceKind = "declared_fixture" | "external_probe" | "none";
+
+export type RuntimeDogfoodProofClaimScope =
+  | "contract_only"
+  | "contract_with_declared_fixture_evidence"
+  | "contract_with_external_probe_evidence";
+
+export type RuntimeDogfoodScenarioProof = {
+  evidence_source: RuntimeDogfoodEvidenceSourceKind;
+  authority_claim_scope: RuntimeDogfoodProofClaimScope;
+  execution_evidence_supplied: boolean;
+  after_exit_evidence_supplied: boolean;
+  fresh_shell_probe_evidence_supplied: boolean;
+  live_external_validation: boolean;
+};
+
+export type RuntimeDogfoodProofBoundary = {
+  boundary_version: "runtime_dogfood_proof_boundary_v1";
+  suite_kind: "runtime_contract_dogfood";
+  claim_scope: string[];
+  live_execution_scenarios: number;
+  fixture_evidence_scenarios: number;
+  scenarios_without_execution_evidence: number;
+};
+
+export type RuntimeDogfoodCoverage = {
+  coverage_version: "runtime_dogfood_coverage_v1";
+  task_families: Record<string, number>;
+  after_exit_required_scenarios: number;
+  service_lifecycle_required_scenarios: number;
+  external_visibility_required_scenarios: number;
+  negative_control_scenarios: number;
+};
+
 export type RuntimeDogfoodTask = {
   id: string;
   title: string;
   query_text: string;
   trajectory: TrajectoryCompileSourceInput;
   hints?: TrajectoryCompileHintsInput;
+  evidence_source?: RuntimeDogfoodEvidenceSourceKind;
   execution_evidence?: ExecutionEvidenceV1;
   expectations: DogfoodExpectation;
+};
+
+export type RuntimeDogfoodTaskSpec = Omit<RuntimeDogfoodTask, "execution_evidence" | "expectations"> & {
+  execution_evidence?: unknown;
+  expectations: RuntimeDogfoodExpectationSpec;
 };
 
 export type RuntimeDogfoodAssertion = {
@@ -50,6 +101,7 @@ export type RuntimeDogfoodScenarioResult = {
   status: "pass" | "fail";
   task_family: string | null;
   workflow_signature: string | null;
+  proof: RuntimeDogfoodScenarioProof;
   assertions: RuntimeDogfoodAssertion[];
   metrics: {
     first_correct_action: boolean;
@@ -87,6 +139,8 @@ export type RuntimeDogfoodSuiteResult = {
   generated_at: string;
   suite_version: "runtime_dogfood_v1";
   overall_status: "pass" | "fail";
+  proof_boundary: RuntimeDogfoodProofBoundary;
+  coverage: RuntimeDogfoodCoverage;
   summary: {
     passed_scenarios: number;
     total_scenarios: number;
@@ -149,6 +203,79 @@ function noisyTargetFiles(targetFiles: string[]): string[] {
   );
 }
 
+function evidenceSourceKind(task: RuntimeDogfoodTask): RuntimeDogfoodEvidenceSourceKind {
+  if (task.evidence_source) return task.evidence_source;
+  return task.execution_evidence ? "declared_fixture" : "none";
+}
+
+function buildScenarioProof(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioProof {
+  const evidenceSource = evidenceSourceKind(task);
+  const evidence = task.execution_evidence ?? null;
+  const liveExternalValidation = evidenceSource === "external_probe";
+  const authorityClaimScope: RuntimeDogfoodProofClaimScope =
+    evidenceSource === "external_probe"
+      ? "contract_with_external_probe_evidence"
+      : evidenceSource === "declared_fixture"
+        ? "contract_with_declared_fixture_evidence"
+        : "contract_only";
+  return {
+    evidence_source: evidenceSource,
+    authority_claim_scope: authorityClaimScope,
+    execution_evidence_supplied: !!evidence,
+    after_exit_evidence_supplied: evidence?.after_exit_revalidated !== null && evidence?.after_exit_revalidated !== undefined,
+    fresh_shell_probe_evidence_supplied: evidence?.fresh_shell_probe_passed !== null && evidence?.fresh_shell_probe_passed !== undefined,
+    live_external_validation: liveExternalValidation,
+  };
+}
+
+function compileRegexList(patterns: string[], fieldName: string): RegExp[] {
+  return patterns.map((pattern, index) => {
+    try {
+      return new RegExp(pattern);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`invalid ${fieldName}[${index}] regex: ${message}`);
+    }
+  });
+}
+
+function normalizeExecutionEvidence(value: unknown): ExecutionEvidenceV1 | undefined {
+  if (value === undefined || value === null) return undefined;
+  const record = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return ExecutionEvidenceV1Schema.parse({
+    schema_version: "execution_evidence_v1",
+    ...record,
+  });
+}
+
+export function runtimeDogfoodTaskFromSpec(spec: RuntimeDogfoodTaskSpec): RuntimeDogfoodTask {
+  return {
+    id: spec.id,
+    title: spec.title,
+    query_text: spec.query_text,
+    trajectory: spec.trajectory,
+    hints: spec.hints,
+    evidence_source: spec.evidence_source,
+    execution_evidence: normalizeExecutionEvidence(spec.execution_evidence),
+    expectations: {
+      ...spec.expectations,
+      acceptance_checks_match: compileRegexList(spec.expectations.acceptance_checks_match, "acceptance_checks_match"),
+      dependency_requirements_match: compileRegexList(spec.expectations.dependency_requirements_match, "dependency_requirements_match"),
+      external_visibility_requirements_match: compileRegexList(
+        spec.expectations.external_visibility_requirements_match,
+        "external_visibility_requirements_match",
+      ),
+      next_action_match: compileRegexList(spec.expectations.next_action_match, "next_action_match"),
+    },
+  };
+}
+
+export function runtimeDogfoodTasksFromSpecs(specs: RuntimeDogfoodTaskSpec[]): RuntimeDogfoodTask[] {
+  return specs.map(runtimeDogfoodTaskFromSpec);
+}
+
 export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
   return [
     {
@@ -187,6 +314,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         evidence_allows_authoritative: true,
         stable_promotion_allowed: true,
       },
+      evidence_source: "declared_fixture",
       execution_evidence: buildExecutionEvidenceFromValidation({
         validationPassed: true,
         afterExitRevalidated: true,
@@ -227,6 +355,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         evidence_allows_authoritative: true,
         stable_promotion_allowed: true,
       },
+      evidence_source: "declared_fixture",
       execution_evidence: buildExecutionEvidenceFromValidation({
         validationPassed: true,
         afterExitRevalidated: true,
@@ -262,6 +391,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         evidence_allows_authoritative: true,
         stable_promotion_allowed: true,
       },
+      evidence_source: "declared_fixture",
       execution_evidence: buildExecutionEvidenceFromValidation({
         validationPassed: true,
         freshShellProbePassed: true,
@@ -295,6 +425,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         evidence_allows_authoritative: true,
         stable_promotion_allowed: true,
       },
+      evidence_source: "declared_fixture",
       execution_evidence: buildExecutionEvidenceFromValidation({
         validationPassed: true,
         evidenceRefs: ["dogfood:interrupted_resume:targeted_export_test"],
@@ -328,6 +459,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         evidence_allows_authoritative: true,
         stable_promotion_allowed: true,
       },
+      evidence_source: "declared_fixture",
       execution_evidence: buildExecutionEvidenceFromValidation({
         validationPassed: true,
         evidenceRefs: ["dogfood:cross_agent_db_handoff:integrity_check"],
@@ -369,6 +501,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         evidence_allows_authoritative: true,
         stable_promotion_allowed: false,
       },
+      evidence_source: "declared_fixture",
       execution_evidence: buildExecutionEvidenceFromValidation({
         validationPassed: true,
         afterExitRevalidated: true,
@@ -398,6 +531,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         falseConfidenceDetected: true,
         evidenceRefs: ["dogfood:service_after_exit_evidence_failed:fresh_shell_probe"],
       }),
+      evidence_source: "declared_fixture",
       expectations: {
         target_files_include: ["scripts/dev-server.mjs"],
         acceptance_checks_match: [/curl -fsS http:\/\/127\.0\.0\.1:4173\/healthz/],
@@ -455,6 +589,7 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
   });
   const assertions: RuntimeDogfoodAssertion[] = [];
   const expectation = task.expectations;
+  const proof = buildScenarioProof(task);
 
   assertions.push(
     includesAll(contract.target_files, expectation.target_files_include)
@@ -549,6 +684,34 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
           `expected reasons ${(expectation.evidence_reasons_include ?? []).join(", ")} in ${executionEvidenceAssessment.reasons.join(" | ")}`,
         ),
   );
+  assertions.push(
+    (proof.evidence_source === "none") !== proof.execution_evidence_supplied
+      ? pass("dogfood proof source matches supplied execution evidence")
+      : fail(
+          "dogfood proof source matches supplied execution evidence",
+          `evidence_source=${proof.evidence_source}; execution_evidence_supplied=${proof.execution_evidence_supplied}`,
+        ),
+  );
+  assertions.push(
+    !expectation.stable_promotion_allowed || proof.execution_evidence_supplied
+      ? pass("stable promotion scenarios declare execution evidence")
+      : fail("stable promotion scenarios declare execution evidence", "stable promotion would be evaluated without execution evidence"),
+  );
+  assertions.push(
+    !expectation.after_exit_required || proof.after_exit_evidence_supplied
+      ? pass("after-exit scenarios declare after-exit evidence status")
+      : fail("after-exit scenarios declare after-exit evidence status", "after_exit_revalidated was not supplied"),
+  );
+  assertions.push(
+    !expectation.after_exit_required || proof.fresh_shell_probe_evidence_supplied
+      ? pass("fresh-shell scenarios declare fresh-shell probe status")
+      : fail("fresh-shell scenarios declare fresh-shell probe status", "fresh_shell_probe_passed was not supplied"),
+  );
+  assertions.push(
+    proof.evidence_source !== "external_probe" || proof.execution_evidence_supplied
+      ? pass("external probe scenarios include execution evidence")
+      : fail("external probe scenarios include execution evidence", "external probe source declared without execution evidence"),
+  );
 
   const firstCorrectAction = assertions.find((assertion) => assertion.name === "next action is specific enough to start correctly")?.status === "pass";
   const afterExitCorrect = expectation.after_exit_required
@@ -588,6 +751,7 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
     status: assertions.every((assertion) => assertion.status === "pass") && !falseConfidenceRisk ? "pass" : "fail",
     task_family: contract.task_family,
     workflow_signature: contract.workflow_signature,
+    proof,
     assertions,
     metrics: {
       first_correct_action: firstCorrectAction,
@@ -628,6 +792,41 @@ function rate(count: number, total: number): number {
   return Math.round((count / total) * 1000) / 1000;
 }
 
+function buildRuntimeDogfoodProofBoundary(scenarios: RuntimeDogfoodScenarioResult[]): RuntimeDogfoodProofBoundary {
+  return {
+    boundary_version: "runtime_dogfood_proof_boundary_v1",
+    suite_kind: "runtime_contract_dogfood",
+    claim_scope: [
+      "Validates trajectory compilation, outcome contract gating, execution evidence assessment, and learning promotion decisions.",
+      "declared_fixture evidence is structured evidence supplied by the scenario, not a live external probe.",
+      "Only external_probe scenarios can claim live external execution validation.",
+    ],
+    live_execution_scenarios: scenarios.filter((scenario) => scenario.proof.evidence_source === "external_probe").length,
+    fixture_evidence_scenarios: scenarios.filter((scenario) => scenario.proof.evidence_source === "declared_fixture").length,
+    scenarios_without_execution_evidence: scenarios.filter((scenario) => scenario.proof.evidence_source === "none").length,
+  };
+}
+
+function buildRuntimeDogfoodCoverage(scenarios: RuntimeDogfoodScenarioResult[]): RuntimeDogfoodCoverage {
+  const taskFamilies: Record<string, number> = {};
+  for (const scenario of scenarios) {
+    const family = scenario.task_family ?? "unknown";
+    taskFamilies[family] = (taskFamilies[family] ?? 0) + 1;
+  }
+  return {
+    coverage_version: "runtime_dogfood_coverage_v1",
+    task_families: Object.fromEntries(Object.entries(taskFamilies).sort(([a], [b]) => a.localeCompare(b))),
+    after_exit_required_scenarios: scenarios.filter((scenario) => scenario.metrics.after_exit_correct !== null).length,
+    service_lifecycle_required_scenarios: scenarios.filter((scenario) => scenario.compiled.service_lifecycle_constraint_count > 0).length,
+    external_visibility_required_scenarios: scenarios.filter((scenario) =>
+      scenario.compiled.outcome.external_visibility_requirements.length > 0
+    ).length,
+    negative_control_scenarios: scenarios.filter((scenario) =>
+      !scenario.metrics.expected_authoritative_gate_allows || scenario.metrics.false_confidence_detected
+    ).length,
+  };
+}
+
 export function runRuntimeDogfoodSuite(tasks: RuntimeDogfoodTask[] = runtimeDogfoodTasks()): RuntimeDogfoodSuiteResult {
   const scenarios = tasks.map(evaluateTask);
   const afterExitScenarios = scenarios.filter(
@@ -639,6 +838,8 @@ export function runRuntimeDogfoodSuite(tasks: RuntimeDogfoodTask[] = runtimeDogf
     generated_at: new Date().toISOString(),
     suite_version: "runtime_dogfood_v1",
     overall_status: scenarios.every((scenario) => scenario.status === "pass") ? "pass" : "fail",
+    proof_boundary: buildRuntimeDogfoodProofBoundary(scenarios),
+    coverage: buildRuntimeDogfoodCoverage(scenarios),
     summary: {
       passed_scenarios: scenarios.filter((scenario) => scenario.status === "pass").length,
       total_scenarios: scenarios.length,
@@ -688,6 +889,24 @@ export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult):
     `Generated at: ${result.generated_at}`,
     `Status: ${result.overall_status}`,
     "",
+    "## Proof Boundary",
+    "",
+    `- boundary_version: ${result.proof_boundary.boundary_version}`,
+    `- suite_kind: ${result.proof_boundary.suite_kind}`,
+    `- live_execution_scenarios: ${result.proof_boundary.live_execution_scenarios}`,
+    `- fixture_evidence_scenarios: ${result.proof_boundary.fixture_evidence_scenarios}`,
+    `- scenarios_without_execution_evidence: ${result.proof_boundary.scenarios_without_execution_evidence}`,
+    "",
+    ...result.proof_boundary.claim_scope.map((scope) => `- claim_scope: ${scope}`),
+    "",
+    "## Coverage",
+    "",
+    `- task_families: ${Object.entries(result.coverage.task_families).map(([family, count]) => `${family}=${count}`).join(", ")}`,
+    `- after_exit_required_scenarios: ${result.coverage.after_exit_required_scenarios}`,
+    `- service_lifecycle_required_scenarios: ${result.coverage.service_lifecycle_required_scenarios}`,
+    `- external_visibility_required_scenarios: ${result.coverage.external_visibility_required_scenarios}`,
+    `- negative_control_scenarios: ${result.coverage.negative_control_scenarios}`,
+    "",
     "## Metrics",
     "",
     `- passed_scenarios: ${result.summary.passed_scenarios}/${result.summary.total_scenarios}`,
@@ -709,6 +928,12 @@ export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult):
     lines.push(`${scenario.title}`, "");
     lines.push(`- status: ${scenario.status}`);
     lines.push(`- task_family: ${scenario.task_family ?? "null"}`);
+    lines.push(`- evidence_source: ${scenario.proof.evidence_source}`);
+    lines.push(`- authority_claim_scope: ${scenario.proof.authority_claim_scope}`);
+    lines.push(`- live_external_validation: ${scenario.proof.live_external_validation}`);
+    lines.push(`- execution_evidence_supplied: ${scenario.proof.execution_evidence_supplied}`);
+    lines.push(`- after_exit_evidence_supplied: ${scenario.proof.after_exit_evidence_supplied}`);
+    lines.push(`- fresh_shell_probe_evidence_supplied: ${scenario.proof.fresh_shell_probe_evidence_supplied}`);
     lines.push(`- first_correct_action: ${scenario.metrics.first_correct_action}`);
     lines.push(`- false_confidence_risk: ${scenario.metrics.false_confidence_risk}`);
     lines.push(`- after_exit_correct: ${scenario.metrics.after_exit_correct ?? "n/a"}`);
