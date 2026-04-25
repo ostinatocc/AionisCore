@@ -2,51 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import {
+  RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY,
+  RUNTIME_LEGACY_EXECUTION_SLOT_NAMES,
+  runtimeDirectLegacySlotBoundaryFiles,
+  runtimeLegacyAccessBoundaryFilesByKind,
+} from "../../src/memory/legacy-access-registry.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const SRC = path.join(ROOT, "src");
 
 const LEGACY_EXECUTION_SLOT_PATTERN =
-  /\b(?:execution_native_v1|anchor_v1|parseNodeExecutionNative|parseNodeAnchor)\b/;
-
-const LEGACY_SCHEMA_BOUNDARIES = [
-  "src/memory/schemas.ts",
-];
-
-const LEGACY_CONTRACT_RESOLVER_BOUNDARIES = [
-  "src/memory/execution-contract.ts",
-  "src/memory/node-execution-surface.ts",
-];
-
-const LEGACY_WRITE_PROJECTION_BOUNDARIES = [
-  "src/memory/policy-memory.ts",
-  "src/memory/replay-learning-artifacts.ts",
-  "src/memory/replay-stable-anchor-helpers.ts",
-  "src/memory/tools-pattern-anchor.ts",
-  "src/memory/workflow-write-projection.ts",
-  "src/memory/write-distillation.ts",
-  "src/memory/write-execution-native.ts",
-];
-
-const LEGACY_ARCHIVE_REHYDRATE_BOUNDARIES = [
-  "src/memory/archive-relocation.ts",
-  "src/memory/rehydrate-anchor.ts",
-];
-
-const LEGACY_STORE_ADAPTER_BOUNDARIES = [
-  "src/store/embedded-memory-runtime.ts",
-  "src/store/lite-recall-store.ts",
-  "src/store/lite-write-store.ts",
-  "src/store/recall-access.ts",
-];
-
-const ALLOWED_DIRECT_LEGACY_SLOT_BOUNDARIES = new Set([
-  ...LEGACY_SCHEMA_BOUNDARIES,
-  ...LEGACY_CONTRACT_RESOLVER_BOUNDARIES,
-  ...LEGACY_WRITE_PROJECTION_BOUNDARIES,
-  ...LEGACY_ARCHIVE_REHYDRATE_BOUNDARIES,
-  ...LEGACY_STORE_ADAPTER_BOUNDARIES,
-]);
+  new RegExp(`\\b(?:${RUNTIME_LEGACY_EXECUTION_SLOT_NAMES.join("|")})\\b`);
 
 function toRepoRelative(filePath: string): string {
   return path.relative(ROOT, filePath).split(path.sep).join("/");
@@ -65,14 +32,33 @@ function listTypeScriptFiles(dir: string): string[] {
   return out;
 }
 
+test("legacy access registry declares unique existing boundary files", () => {
+  assert.ok(RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY.length > 0, "legacy access registry must not be empty");
+  const ids = RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY.map((entry) => entry.id);
+  assert.equal(new Set(ids).size, ids.length, "legacy access registry ids must be unique");
+
+  const files = RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY.map((entry) => entry.file);
+  assert.equal(new Set(files).size, files.length, "legacy access registry files must be unique");
+  for (const entry of RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY) {
+    assert.ok(entry.file.startsWith("src/"), `${entry.id} must point at a Runtime source file`);
+    assert.ok(fs.existsSync(path.join(ROOT, entry.file)), `${entry.id} must point at an existing source file`);
+    assert.ok(entry.reason.trim().length > 0, `${entry.id} must explain why direct legacy access is allowed`);
+  }
+
+  for (const kind of ["manifest", "schema", "contract_resolver", "write_projection", "archive_rehydrate", "store_adapter"] as const) {
+    assert.ok(runtimeLegacyAccessBoundaryFilesByKind(kind).length > 0, `legacy access registry must declare ${kind} boundaries`);
+  }
+});
+
 test("legacy execution slots stay constrained to boundary modules", () => {
+  const allowedDirectLegacySlotBoundaries = new Set(runtimeDirectLegacySlotBoundaryFiles());
   const offenders = listTypeScriptFiles(SRC)
     .map((filePath) => ({
       file: toRepoRelative(filePath),
       text: fs.readFileSync(filePath, "utf8"),
     }))
     .filter((entry) => LEGACY_EXECUTION_SLOT_PATTERN.test(entry.text))
-    .filter((entry) => !ALLOWED_DIRECT_LEGACY_SLOT_BOUNDARIES.has(entry.file))
+    .filter((entry) => !allowedDirectLegacySlotBoundaries.has(entry.file))
     .map((entry) => entry.file)
     .sort();
 
@@ -82,13 +68,13 @@ test("legacy execution slots stay constrained to boundary modules", () => {
     [
       "Runtime consumers must not directly read anchor_v1/execution_native_v1.",
       "Use node-execution-surface or execution-contract resolvers instead.",
-      `Allowed boundaries: ${[...ALLOWED_DIRECT_LEGACY_SLOT_BOUNDARIES].sort().join(", ")}`,
+      `Allowed boundaries: ${[...allowedDirectLegacySlotBoundaries].sort().join(", ")}`,
     ].join("\n"),
   );
 });
 
 test("legacy execution slot allowlist only contains files that still exist", () => {
-  const missing = [...ALLOWED_DIRECT_LEGACY_SLOT_BOUNDARIES]
+  const missing = runtimeDirectLegacySlotBoundaryFiles()
     .filter((file) => !fs.existsSync(path.join(ROOT, file)))
     .sort();
 
