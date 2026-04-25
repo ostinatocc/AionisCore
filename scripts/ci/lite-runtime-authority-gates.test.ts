@@ -50,6 +50,8 @@ test("authority-producing Runtime surfaces use the unified authority gate", () =
   assertContains(replayLearningArtifacts, "authority_gate_v1", "replay learning artifacts must persist authority gate state");
   assertContains(replayLearningArtifacts, "authorityGate.allows_authoritative", "replay stable promotion must require authoritative authority gate");
   assertContains(replayLearningArtifacts, "authorityGate.allows_stable_promotion", "replay stable promotion must require stable-promotion authority gate");
+  assertContains(replayLearningArtifacts, "authorityGate: stableAuthorityGate", "replay stable workflow nodes must build a stable-node authority gate");
+  assertContains(replayLearningArtifacts, "execution_evidence_assessment: stableExecutionEvidenceAssessment", "replay stable workflow nodes must persist stable-node evidence assessment");
 
   const replayStableAnchorHelpers = read("src/memory/replay-stable-anchor-helpers.ts");
   assertContains(replayStableAnchorHelpers, "buildRuntimeAuthorityGate", "replay stable anchors must build runtime authority gates");
@@ -60,6 +62,86 @@ test("authority-producing Runtime surfaces use the unified authority gate", () =
   assertContains(policyMemory, "buildRuntimeAuthorityGate", "policy memory must build runtime authority gates");
   assertContains(policyMemory, "buildPolicyAuthoritySurfaces", "policy memory must centralize policy authority surfaces");
   assertContains(policyMemory, "authority_gate_v1", "policy memory must persist authority gate state");
+  assertContains(policyMemory, "normalizePersistedPolicyLifecycleState", "policy memory must normalize active lifecycle through authority gates");
+  assertContains(policyMemory, "outcomeAllowsAuthoritative: authority.authorityGate.allows_authoritative", "policy memory active lifecycle must depend on authority outcome");
+});
+
+test("stable and authoritative producer literals stay in declared producer classes", () => {
+  const sourceFiles = [...listSourceTsFiles("src/app"), ...listSourceTsFiles("src/memory"), ...listSourceTsFiles("src/routes")];
+  const stableWorkflowLiteralFiles = sourceFiles
+    .filter((file) => read(file).includes("promotion_state: \"stable\""))
+    .sort();
+  assert.deepEqual(
+    stableWorkflowLiteralFiles,
+    [
+      "src/memory/context-orchestrator.ts",
+      "src/memory/replay-learning-artifacts.ts",
+      "src/memory/workflow-write-projection.ts",
+    ],
+    "Stable workflow promotion literals must stay limited to declared producers and read-side orchestration summaries.",
+  );
+
+  const stablePatternLiteralFiles = sourceFiles
+    .filter((file) => read(file).includes("pattern_state: \"stable\""))
+    .sort();
+  assert.deepEqual(
+    stablePatternLiteralFiles,
+    [
+      "src/memory/context-orchestrator.ts",
+      "src/memory/tools-pattern-anchor.ts",
+    ],
+    "Stable pattern literals must stay limited to pattern anchoring and read-side orchestration summaries.",
+  );
+});
+
+test("workflow stable producers bind stable writes to runtime authority gates", () => {
+  const workflowWriteProjection = read("src/memory/workflow-write-projection.ts");
+  for (const token of [
+    "governancePreview?.runtime_apply.promotion_state_override === \"stable\"",
+    "contractTrust === \"authoritative\"",
+    "authorityGate.allows_authoritative",
+    "authorityGate.allows_stable_promotion",
+    "authorityGate: stableAuthorityGate",
+    "outcomeContractGate: stableOutcomeContractGate",
+    "executionEvidenceAssessment: stableExecutionEvidenceAssessment",
+    "authority_gate_v1: stableAuthorityGate",
+  ]) {
+    assertContains(workflowWriteProjection, token, `workflow-write-projection stable writes must stay gate-backed by ${token}`);
+  }
+
+  const replayLearningArtifacts = read("src/memory/replay-learning-artifacts.ts");
+  for (const token of [
+    "args.shouldPromoteStableWorkflow",
+    "authorityGate.allows_authoritative",
+    "authorityGate.allows_stable_promotion",
+    "authorityGate: stableAuthorityGate",
+    "outcomeContractGate: stableOutcomeContractGate",
+    "executionEvidenceAssessment: stableExecutionEvidenceAssessment",
+    "authority_gate_v1: stableAuthorityGate",
+  ]) {
+    assertContains(replayLearningArtifacts, token, `replay-learning stable writes must stay gate-backed by ${token}`);
+  }
+
+  const replayStableAnchorHelpers = read("src/memory/replay-stable-anchor-helpers.ts");
+  for (const token of [
+    "authorityGatedReplayWorkflowContract",
+    "const promotionState = authority.authorityGate.allows_stable_promotion ? \"stable\" : \"candidate\"",
+    "execution_evidence_assessment: executionEvidenceAssessment",
+    "authority_gate_v1: authorityGate",
+  ]) {
+    assertContains(replayStableAnchorHelpers, token, `replay stable anchors must stay gate-backed by ${token}`);
+  }
+});
+
+test("stable tool pattern producers remain advisory and governance-scoped", () => {
+  const toolsPatternAnchor = read("src/memory/tools-pattern-anchor.ts");
+  assert.equal(toolsPatternAnchor.includes("\"authoritative\""), false, "tools pattern anchors must never mint authoritative trust");
+  assertContains(toolsPatternAnchor, "return \"advisory\";", "stable trusted tool patterns may only become advisory guidance");
+  assertContains(toolsPatternAnchor, "return \"observational\";", "non-stable tool patterns must stay observational");
+  assertContains(toolsPatternAnchor, "promotion_gate_satisfied: promotionGateSatisfied", "pattern stability must keep distinct-run promotion evidence");
+  assertContains(toolsPatternAnchor, "revalidation_floor_satisfied: revalidationFloorSatisfied", "pattern stability must keep post-contest revalidation evidence");
+  assertContains(toolsPatternAnchor, "args.governedPatternStateOverride !== \"stable\"", "form-pattern governance must be required for runtime-applied stable override");
+  assertContains(toolsPatternAnchor, "semantic_review_override_reason: \"high_confidence_form_pattern_review\"", "governed stable override must preserve semantic review provenance");
 });
 
 test("authority-consuming Runtime boundaries use the shared authority consumption helper", () => {
