@@ -1364,3 +1364,185 @@ test("host bridge openTaskSession binds session, planning, handoff, and resume f
     "http://127.0.0.1:3001/v1/memory/replay/run/end",
   ]);
 });
+
+test("runtime SDK taskStartPlan falls back to planning context as a public facade", async () => {
+  const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const client = createAionisRuntimeClient({
+    baseUrl: "http://127.0.0.1:3001/",
+    fetch: async (input, init) => {
+      const url = String(input);
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      calls.push({ url, body });
+      if (url.endsWith("/v1/memory/kickoff/recommendation")) {
+        return new Response(JSON.stringify({
+          summary_version: "kickoff_recommendation_v1",
+          tenant_id: "default",
+          scope: "public-task-start-plan",
+          query_text: "repair public sdk facade",
+          kickoff_recommendation: null,
+          rationale: { summary: "No kickoff action available." },
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({
+        planner_packet: {
+          packet_version: "planner_packet_v1",
+          sections: {
+            recommended_workflows: ["workflow: sdk facade"],
+          },
+          merged_text: "Plan the public SDK facade repair.",
+        },
+        planning_summary: {
+          planner_explanation: "Use planning context to start in packages/full-sdk/src/client.ts.",
+          first_step_recommendation: {
+            source_kind: "experience_intelligence",
+            history_applied: true,
+            selected_tool: "edit",
+            file_path: "packages/full-sdk/src/client.ts",
+            next_action: "Patch the public SDK facade and rerun SDK tests.",
+          },
+        },
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  const response = await client.memory.taskStartPlan({
+    tenant_id: "default",
+    scope: "public-task-start-plan",
+    query_text: "repair public sdk facade",
+    context: { goal: "repair public sdk facade" },
+    candidates: ["bash", "edit", "test"],
+    workflow_limit: 4,
+  });
+
+  assert.equal(response.summary_version, "task_start_plan_v1");
+  assert.equal(response.resolution_source, "planning_context");
+  assert.equal(response.first_action?.selected_tool, "edit");
+  assert.equal(response.first_action?.file_path, "packages/full-sdk/src/client.ts");
+  assert.equal(response.planner_explanation, "Use planning context to start in packages/full-sdk/src/client.ts.");
+  assert.deepEqual(calls.map((entry) => entry.url), [
+    "http://127.0.0.1:3001/v1/memory/kickoff/recommendation",
+    "http://127.0.0.1:3001/v1/memory/planning/context",
+  ]);
+  assert.equal(calls[1]?.body.workflow_limit, 4);
+  assert.deepEqual(calls[1]?.body.tool_candidates, ["bash", "edit", "test"]);
+});
+
+test("runtime SDK storeExecutionOutcome records replay lifecycle through a single public facade", async () => {
+  const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const client = createAionisRuntimeClient({
+    baseUrl: "http://127.0.0.1:3001/",
+    fetch: async (input, init) => {
+      const url = String(input);
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      calls.push({ url, body });
+      if (url.endsWith("/v1/memory/replay/run/start")) {
+        return new Response(JSON.stringify({
+          tenant_id: "default",
+          scope: "public-outcome",
+          run_id: "00000000-0000-4000-8000-000000000111",
+          status: "started",
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.endsWith("/v1/memory/replay/step/before")) {
+        return new Response(JSON.stringify({
+          run_id: body.run_id,
+          step_id: "00000000-0000-4000-8000-000000000222",
+          step_index: body.step_index,
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.endsWith("/v1/memory/replay/step/after")) {
+        return new Response(JSON.stringify({
+          run_id: body.run_id,
+          step_id: body.step_id,
+          status: body.status,
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({
+        tenant_id: "default",
+        scope: "public-outcome",
+        run_id: body.run_id,
+        status: body.status,
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    },
+  });
+
+  const response = await client.memory.storeExecutionOutcome({
+    tenant_id: "default",
+    scope: "public-outcome",
+    actor: "sdk-test",
+    goal: "store a validated SDK outcome",
+    status: "success",
+    summary: "SDK outcome stored successfully",
+    steps: [{
+      step_index: 1,
+      tool_name: "bash",
+      tool_input: { argv: ["npm", "run", "sdk:test"] },
+      status: "success",
+      output_signature: { summary: "SDK tests passed" },
+    }],
+  });
+
+  assert.equal(response.summary_version, "store_execution_outcome_v1");
+  assert.equal(response.run_id, "00000000-0000-4000-8000-000000000111");
+  assert.equal(response.steps[0]?.step_id, "00000000-0000-4000-8000-000000000222");
+  assert.deepEqual(calls.map((entry) => entry.url), [
+    "http://127.0.0.1:3001/v1/memory/replay/run/start",
+    "http://127.0.0.1:3001/v1/memory/replay/step/before",
+    "http://127.0.0.1:3001/v1/memory/replay/step/after",
+    "http://127.0.0.1:3001/v1/memory/replay/run/end",
+  ]);
+  assert.equal(calls[1]?.body.run_id, response.run_id);
+  assert.equal(calls[2]?.body.step_id, "00000000-0000-4000-8000-000000000222");
+  assert.equal(calls[3]?.body.status, "success");
+});
+
+test("runtime SDK retrieveWorkflowContract selects a contract from execution introspection", async () => {
+  const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const client = createAionisRuntimeClient({
+    baseUrl: "http://127.0.0.1:3001/",
+    fetch: async (input, init) => {
+      const url = String(input);
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      calls.push({ url, body });
+      return new Response(JSON.stringify({
+        summary_version: "execution_memory_introspection_v1",
+        tenant_id: "default",
+        scope: "public-workflow-contract",
+        recommended_workflows: [{
+          anchor_id: "workflow-anchor-1",
+          workflow_signature: "workflow:public-sdk-facade",
+          execution_contract_v1: {
+            schema_version: "execution_contract_v1",
+            workflow_signature: "workflow:public-sdk-facade",
+            file_path: "packages/full-sdk/src/client.ts",
+          },
+        }],
+        candidate_workflows: [],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    },
+  });
+
+  const response = await client.memory.retrieveWorkflowContract({
+    tenant_id: "default",
+    scope: "public-workflow-contract",
+    workflow_signature: "workflow:public-sdk-facade",
+    include_introspection: false,
+    limit: 4,
+  });
+
+  assert.equal(response.summary_version, "retrieve_workflow_contract_v1");
+  assert.equal(response.selected_source, "recommended_workflows");
+  assert.equal(response.selected_workflow?.anchor_id, "workflow-anchor-1");
+  assert.equal(response.execution_contract_v1?.workflow_signature, "workflow:public-sdk-facade");
+  assert.equal(response.introspection, null);
+  assert.deepEqual(calls.map((entry) => entry.url), [
+    "http://127.0.0.1:3001/v1/memory/execution/introspect",
+  ]);
+  assert.equal(calls[0]?.body.limit, 4);
+});

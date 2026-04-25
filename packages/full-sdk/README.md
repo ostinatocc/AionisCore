@@ -45,7 +45,7 @@ npm run example:sdk:core-path
 
 - memory write / recall / planning / context assembly
 - explicit action retrieval, uncertainty, and operator-facing gate surfaces
-- kickoff recommendation and task-start surfaces
+- kickoff recommendation, task-start, task-start-plan, execution outcome, and workflow-contract facades
 - archive rehydrate and node activation lifecycle surfaces
 - replay run lifecycle and playbook operations
 - handoff storage and recovery
@@ -75,6 +75,19 @@ const taskStart = await aionis.memory.taskStart({
 });
 
 console.log(taskStart.first_action);
+
+const taskStartPlan = await aionis.memory.taskStartPlan({
+  tenant_id: "default",
+  scope: "default",
+  query_text: "debug the failed replay run",
+  context: {
+    goal: "debug the failed replay run",
+  },
+  candidates: ["read", "bash", "edit", "test"],
+});
+
+console.log(taskStartPlan.first_action);
+console.log(taskStartPlan.gate_action);
 ```
 
 Explicit action-retrieval example:

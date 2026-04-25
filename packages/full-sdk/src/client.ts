@@ -72,6 +72,8 @@ import type {
   AionisReplayRunStartRequest,
   AionisReplayStepAfterRequest,
   AionisReplayStepBeforeRequest,
+  AionisRetrieveWorkflowContractRequest,
+  AionisRetrieveWorkflowContractResponse,
   AionisRuntimeBoundaryInventoryResponse,
   AionisRuleStateRequest,
   AionisRulesEvaluateRequest,
@@ -86,6 +88,10 @@ import type {
   AionisSessionEventsQuery,
   AionisSessionEventWriteRequest,
   AionisSessionListQuery,
+  AionisStoreExecutionOutcomeRequest,
+  AionisStoreExecutionOutcomeResponse,
+  AionisTaskStartPlanRequest,
+  AionisTaskStartPlanResponse,
   AionisToolsDecisionRequest,
   AionisToolsFeedbackRequest,
   AionisToolsFeedbackResponse,
@@ -94,6 +100,8 @@ import type {
   AionisToolsSelectRequest,
 } from "./contracts.js";
 import { AIONIS_SHARED_ROUTE_PATHS } from "./routes.js";
+import { createRetrieveWorkflowContractMethod, createStoreExecutionOutcomeMethod } from "./execution-facade.js";
+import { createTaskStartPlanMethod } from "./task-start-plan.js";
 import { toTaskStartResponse } from "./task-start.js";
 import { createAionisRuntimeHttpClient } from "./transport/http.js";
 import type { AionisClientOptions, AionisHttpClient, AionisQueryPayload, AionisRequestPayload } from "./types.js";
@@ -196,10 +204,19 @@ export function createAionisRuntimeClient(options: AionisClientOptions) {
         AIONIS_SHARED_ROUTE_PATHS.kickoffRecommendation,
       ),
       taskStart: createTaskStartMethod(http),
+      taskStartPlan: createTaskStartPlanMethod(http) as (
+        payload: AionisTaskStartPlanRequest,
+      ) => Promise<AionisTaskStartPlanResponse>,
       executionIntrospect: createPostMethod<AionisExecutionIntrospectRequest, AionisExecutionIntrospectResponse>(
         http,
         AIONIS_SHARED_ROUTE_PATHS.executionIntrospect,
       ),
+      storeExecutionOutcome: createStoreExecutionOutcomeMethod(http) as (
+        payload: AionisStoreExecutionOutcomeRequest,
+      ) => Promise<AionisStoreExecutionOutcomeResponse>,
+      retrieveWorkflowContract: createRetrieveWorkflowContractMethod(http) as (
+        payload: AionisRetrieveWorkflowContractRequest,
+      ) => Promise<AionisRetrieveWorkflowContractResponse>,
       delegationRecords: {
         aggregate: createPostMethod<AionisDelegationRecordsAggregateRequest, AionisDelegationRecordsAggregateResponse>(
           http,

@@ -34,6 +34,12 @@ async function main() {
     first_action: cold.first_action,
     rationale: cold.rationale,
   });
+  const coldPlan = await aionis.memory.taskStartPlan(payload);
+  printJson("Cold task start plan", {
+    resolution_source: coldPlan.resolution_source,
+    first_action: coldPlan.first_action,
+    gate_action: coldPlan.gate_action,
+  });
 
   printStep("2. Write two successful execution packets for the same task family.");
   await aionis.memory.write(
@@ -60,6 +66,16 @@ async function main() {
   printJson("Warm task start", {
     first_action: warm.first_action,
     rationale: warm.rationale,
+  });
+  const workflowContract = await aionis.memory.retrieveWorkflowContract({
+    tenant_id: "default",
+    scope,
+    file_path: filePath,
+    include_introspection: false,
+  });
+  printJson("Retrieved workflow contract", {
+    selected_source: workflowContract.selected_source,
+    execution_contract_v1: workflowContract.execution_contract_v1,
   });
 
   printJson("Proof summary", {

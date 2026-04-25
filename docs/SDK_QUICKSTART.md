@@ -165,6 +165,24 @@ const taskStart = await aionis.memory.taskStart({
 console.log(taskStart.first_action);
 ```
 
+Use the stronger startup facade when the host wants kickoff first, but a planning-context fallback when kickoff is gated or too thin:
+
+```ts
+const taskStartPlan = await aionis.memory.taskStartPlan({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  query_text: "repair billing retry timeout in service code",
+  context: {
+    goal: "repair billing retry timeout in service code",
+  },
+  candidates: ["bash", "edit", "test"],
+});
+
+console.log(taskStartPlan.first_action);
+console.log(taskStartPlan.gate_action);
+console.log(taskStartPlan.planner_explanation);
+```
+
 ## 10. Store a structured handoff
 
 ```ts
@@ -219,6 +237,37 @@ await aionis.memory.replay.step.after({
 
 From there, end the run and compile a playbook through the replay surface.
 
+For host integrations that only need to store a validated execution outcome, use the single facade over the replay lifecycle:
+
+```ts
+await aionis.memory.storeExecutionOutcome({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  actor: "sdk-demo",
+  goal: "repair billing retry timeout in service code",
+  status: "success",
+  summary: "Retry timeout repair passed validation",
+  steps: [{
+    tool_name: "bash",
+    tool_input: { argv: ["npm", "run", "-s", "test", "--", "billing-retry"] },
+    status: "success",
+    output_signature: { summary: "billing retry tests passed" },
+  }],
+});
+```
+
+To read the workflow contract Aionis would reuse for a family or workflow signature:
+
+```ts
+const workflow = await aionis.memory.retrieveWorkflowContract({
+  tenant_id: "default",
+  scope: "demo-sdk-quickstart",
+  workflow_signature: "workflow:billing-retry-repair",
+});
+
+console.log(workflow.execution_contract_v1);
+```
+
 ## 12. Inspect host bridge task context
 
 ```ts
@@ -251,7 +300,7 @@ Current complete SDK surface includes:
 1. memory write / recall / planning / introspection
 2. action retrieval, uncertainty, and planning gate surfaces
 3. archive rehydrate and node activation lifecycle surfaces
-4. experience-intelligence, kickoff, and task-start surfaces
+4. experience-intelligence, kickoff, task-start, task-start-plan, execution outcome, and workflow-contract facades
 5. handoff store and recover
 6. continuity and evolution review-pack surfaces
 7. standalone delegation-record write, query, and aggregate surfaces
