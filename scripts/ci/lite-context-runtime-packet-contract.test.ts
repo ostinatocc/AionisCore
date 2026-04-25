@@ -182,6 +182,145 @@ const EXECUTION_ARCHIVE_RELOCATION_TARGET_COUNT_KEYS = ["external_object_store",
 const EXECUTION_ARCHIVE_PAYLOAD_SCOPE_COUNT_KEYS = ["anchor_payload", "node", "none"].sort();
 const EXECUTION_REHYDRATION_MODE_COUNT_KEYS = ["differential", "full", "partial", "summary_only"].sort();
 
+const EXECUTION_PACKET_ASSEMBLY_KEYS = [
+  "execution_packet_v1_present",
+  "execution_state_v1_present",
+  "packet_source_mode",
+  "state_first_assembly",
+].sort();
+
+const EXECUTION_STRATEGY_SUMMARY_KEYS = [
+  "explanation",
+  "family_candidate_count",
+  "family_scope",
+  "preferred_artifact_refs",
+  "selected_pattern_summaries",
+  "selected_validation_paths",
+  "selected_working_set",
+  "strategy_profile",
+  "summary_version",
+  "task_family",
+  "trust_signal",
+  "validation_style",
+].sort();
+
+const EXECUTION_COLLABORATION_SUMMARY_KEYS = [
+  "acceptance_check_count",
+  "active_role",
+  "artifact_ref_count",
+  "artifact_refs",
+  "coordination_mode",
+  "current_stage",
+  "evidence_ref_count",
+  "evidence_refs",
+  "next_action",
+  "packet_present",
+  "pending_validation_count",
+  "resume_anchor_file_path",
+  "resume_anchor_present",
+  "resume_anchor_symbol",
+  "review_contract_present",
+  "review_standard",
+  "rollback_required",
+  "side_output_artifact_count",
+  "side_output_evidence_count",
+  "summary_version",
+  "target_file_count",
+  "unresolved_blocker_count",
+].sort();
+
+const EXECUTION_CONTINUITY_SNAPSHOT_KEYS = [
+  "active_role",
+  "coordination_mode",
+  "current_stage",
+  "family_scope",
+  "next_action",
+  "preferred_artifact_refs",
+  "preferred_evidence_refs",
+  "recommended_action",
+  "resume_anchor_file_path",
+  "reviewer_ready",
+  "selected_memory_layers",
+  "selected_pattern_summaries",
+  "selected_tool",
+  "snapshot_mode",
+  "strategy_profile",
+  "summary_version",
+  "task_family",
+  "trust_signal",
+  "validation_paths",
+  "validation_style",
+  "working_set",
+].sort();
+
+const EXECUTION_COLLABORATION_ROUTING_KEYS = [
+  "acceptance_checks",
+  "active_role",
+  "coordination_mode",
+  "current_stage",
+  "family_scope",
+  "hard_constraints",
+  "next_action",
+  "preferred_artifact_refs",
+  "preferred_evidence_refs",
+  "required_outputs",
+  "review_standard",
+  "route_intent",
+  "route_mode",
+  "routing_drivers",
+  "selected_tool",
+  "summary_version",
+  "target_files",
+  "task_brief",
+  "task_family",
+  "unresolved_blockers",
+  "validation_paths",
+].sort();
+
+const EXECUTION_ROUTING_SIGNAL_KEYS = [
+  "candidate_workflow_anchor_ids",
+  "family_scope",
+  "other_family_rehydration_anchor_ids",
+  "rehydration_anchor_ids",
+  "same_family_rehydration_anchor_ids",
+  "selected_tool",
+  "stable_workflow_anchor_ids",
+  "summary_version",
+  "task_family",
+  "unknown_family_rehydration_anchor_ids",
+  "workflow_source_kinds",
+].sort();
+
+const EXECUTION_MAINTENANCE_SUMMARY_KEYS = [
+  "forgotten_by_reason",
+  "forgotten_items",
+  "primary_savings_levers",
+  "promotion_ready_workflow_count",
+  "recommended_action",
+  "selected_memory_layers",
+  "stable_workflow_count",
+  "summary_version",
+  "suppressed_pattern_count",
+].sort();
+
+const EXECUTION_INSTRUMENTATION_SUMMARY_KEYS = [
+  "family_hit",
+  "family_reason",
+  "family_scope",
+  "known_family_rehydration_count",
+  "other_family_rehydration_anchor_ids",
+  "other_family_rehydration_count",
+  "rehydration_candidate_count",
+  "rehydration_family_hit_rate",
+  "same_family_rehydration_anchor_ids",
+  "same_family_rehydration_count",
+  "selected_pattern_hit_count",
+  "selected_pattern_miss_count",
+  "summary_version",
+  "task_family",
+  "unknown_family_rehydration_count",
+].sort();
+
 function assertKernelMatchesRouteSurface(body: {
   planner_packet: unknown;
   pattern_signals: unknown[];
@@ -420,6 +559,7 @@ function assertKernelMatchesRouteSurface(body: {
 }) {
   const routeSummary = body.planning_summary ?? body.assembly_summary;
   assert.ok(routeSummary, "route summary should exist");
+  const executionSummary = body.execution_summary as Record<string, unknown>;
   assert.deepEqual(body.execution_summary.planner_packet, body.planner_packet);
   assert.deepEqual(body.execution_summary.pattern_signals, body.pattern_signals);
   assert.deepEqual(body.execution_summary.workflow_signals, body.workflow_signals);
@@ -432,6 +572,10 @@ function assertKernelMatchesRouteSurface(body: {
   assert.equal(
     body.execution_summary.packet_assembly.execution_state_v1_present,
     body.execution_kernel.execution_state_v1_present,
+  );
+  assert.deepEqual(
+    Object.keys(executionSummary.packet_assembly as Record<string, unknown>).sort(),
+    EXECUTION_PACKET_ASSEMBLY_KEYS,
   );
   assert.deepEqual(
     body.execution_summary.routing_signal_summary.stable_workflow_anchor_ids,
@@ -475,6 +619,10 @@ function assertKernelMatchesRouteSurface(body: {
   assert.ok(body.execution_summary.strategy_summary.selected_validation_paths.length > 0);
   assert.ok(body.execution_summary.strategy_summary.preferred_artifact_refs.length > 0);
   assert.ok(body.execution_summary.strategy_summary.explanation.length > 0);
+  assert.deepEqual(
+    Object.keys(executionSummary.strategy_summary as Record<string, unknown>).sort(),
+    EXECUTION_STRATEGY_SUMMARY_KEYS,
+  );
   assert.equal(body.execution_summary.collaboration_summary.summary_version, "execution_collaboration_summary_v1");
   assert.equal(body.execution_summary.collaboration_summary.packet_present, false);
   assert.equal(body.execution_summary.collaboration_summary.coordination_mode, "memory_only");
@@ -486,6 +634,10 @@ function assertKernelMatchesRouteSurface(body: {
   assert.equal(body.execution_summary.collaboration_summary.evidence_ref_count, 0);
   assert.equal(body.execution_summary.collaboration_summary.side_output_artifact_count, 0);
   assert.equal(body.execution_summary.collaboration_summary.side_output_evidence_count, 0);
+  assert.deepEqual(
+    Object.keys(executionSummary.collaboration_summary as Record<string, unknown>).sort(),
+    EXECUTION_COLLABORATION_SUMMARY_KEYS,
+  );
   assert.equal(body.execution_summary.continuity_snapshot_summary.summary_version, "execution_continuity_snapshot_v1");
   assert.equal(body.execution_summary.continuity_snapshot_summary.snapshot_mode, "memory_only");
   assert.equal(
@@ -540,6 +692,10 @@ function assertKernelMatchesRouteSurface(body: {
     body.execution_summary.strategy_summary.selected_validation_paths,
   );
   assert.ok(body.execution_summary.continuity_snapshot_summary.preferred_artifact_refs.length > 0);
+  assert.deepEqual(
+    Object.keys(executionSummary.continuity_snapshot_summary as Record<string, unknown>).sort(),
+    EXECUTION_CONTINUITY_SNAPSHOT_KEYS,
+  );
   assert.equal(
     body.execution_summary.maintenance_summary.forgotten_items,
     body.cost_signals?.forgotten_items ?? 0,
@@ -547,6 +703,14 @@ function assertKernelMatchesRouteSurface(body: {
   assert.deepEqual(
     body.execution_summary.maintenance_summary.selected_memory_layers,
     body.cost_signals?.selected_memory_layers ?? [],
+  );
+  assert.deepEqual(
+    Object.keys(executionSummary.routing_signal_summary as Record<string, unknown>).sort(),
+    EXECUTION_ROUTING_SIGNAL_KEYS,
+  );
+  assert.deepEqual(
+    Object.keys(executionSummary.maintenance_summary as Record<string, unknown>).sort(),
+    EXECUTION_MAINTENANCE_SUMMARY_KEYS,
   );
   assert.equal(body.execution_summary.forgetting_summary.summary_version, "execution_forgetting_summary_v1");
   assert.equal(
@@ -617,6 +781,10 @@ function assertKernelMatchesRouteSurface(body: {
   assert.equal(
     body.execution_summary.collaboration_routing_summary.summary_version,
     "execution_collaboration_routing_v1",
+  );
+  assert.deepEqual(
+    Object.keys(executionSummary.collaboration_routing_summary as Record<string, unknown>).sort(),
+    EXECUTION_COLLABORATION_ROUTING_KEYS,
   );
   assert.equal(
     body.execution_summary.collaboration_routing_summary.route_mode,
@@ -725,6 +893,10 @@ function assertKernelMatchesRouteSurface(body: {
   assert.equal(
     body.execution_summary.instrumentation_summary.rehydration_candidate_count,
     (body.execution_kernel.action_packet_summary as any).rehydration_candidate_count,
+  );
+  assert.deepEqual(
+    Object.keys(executionSummary.instrumentation_summary as Record<string, unknown>).sort(),
+    EXECUTION_INSTRUMENTATION_SUMMARY_KEYS,
   );
   assert.deepEqual(body.execution_summary.action_packet_summary, body.execution_kernel.action_packet_summary);
   assert.deepEqual(body.execution_summary.workflow_signal_summary, body.execution_kernel.workflow_signal_summary);

@@ -617,7 +617,7 @@ export type AionisExecutionPacketAssemblySummary = {
   state_first_assembly: boolean | null;
   execution_packet_v1_present: boolean | null;
   execution_state_v1_present: boolean | null;
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionStrategySummary = {
   summary_version: "execution_strategy_summary_v1";
@@ -632,7 +632,7 @@ export type AionisExecutionStrategySummary = {
   selected_pattern_summaries: string[];
   preferred_artifact_refs: string[];
   explanation: string;
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionCollaborationSummary = {
   summary_version: "execution_collaboration_summary_v1";
@@ -657,7 +657,7 @@ export type AionisExecutionCollaborationSummary = {
   side_output_evidence_count: number;
   artifact_refs: string[];
   evidence_refs: string[];
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionContinuitySnapshotSummary = {
   summary_version: "execution_continuity_snapshot_v1";
@@ -681,7 +681,7 @@ export type AionisExecutionContinuitySnapshotSummary = {
   resume_anchor_file_path: string | null;
   selected_memory_layers: string[];
   recommended_action: string;
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionForgettingSummary = {
   summary_version: "execution_forgetting_summary_v1";
@@ -754,7 +754,7 @@ export type AionisExecutionCollaborationRoutingSummary = {
   preferred_artifact_refs: string[];
   preferred_evidence_refs: string[];
   routing_drivers: string[];
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionDelegationPacketRecord = {
   version: 1;
@@ -820,7 +820,7 @@ export type AionisExecutionRoutingSignalSummary = {
   same_family_rehydration_anchor_ids: string[];
   other_family_rehydration_anchor_ids: string[];
   unknown_family_rehydration_anchor_ids: string[];
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionMaintenanceSummary = {
   summary_version: "execution_maintenance_summary_v1";
@@ -832,7 +832,7 @@ export type AionisExecutionMaintenanceSummary = {
   selected_memory_layers: string[];
   primary_savings_levers: string[];
   recommended_action: string;
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionInstrumentationSummary = {
   summary_version: "execution_instrumentation_summary_v1";
@@ -850,7 +850,7 @@ export type AionisExecutionInstrumentationSummary = {
   rehydration_family_hit_rate: number;
   same_family_rehydration_anchor_ids: string[];
   other_family_rehydration_anchor_ids: string[];
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionSummary = {
   summary_version: "execution_summary_v1";

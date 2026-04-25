@@ -1739,7 +1739,7 @@ export const ExecutionPacketAssemblySummarySchema = z.object({
   state_first_assembly: z.boolean().nullable(),
   execution_packet_v1_present: z.boolean().nullable(),
   execution_state_v1_present: z.boolean().nullable(),
-});
+}).strict();
 
 export type ExecutionPacketAssemblySummary = z.infer<typeof ExecutionPacketAssemblySummarySchema>;
 
@@ -1756,7 +1756,7 @@ export const ExecutionStrategySummarySchema = z.object({
   selected_pattern_summaries: z.array(z.string()),
   preferred_artifact_refs: z.array(z.string()),
   explanation: z.string(),
-}).passthrough();
+}).strict();
 
 export type ExecutionStrategySummary = z.infer<typeof ExecutionStrategySummarySchema>;
 
@@ -1783,7 +1783,7 @@ export const ExecutionCollaborationSummarySchema = z.object({
   side_output_evidence_count: z.number().int().min(0),
   artifact_refs: z.array(z.string()),
   evidence_refs: z.array(z.string()),
-}).passthrough();
+}).strict();
 
 export type ExecutionCollaborationSummary = z.infer<typeof ExecutionCollaborationSummarySchema>;
 
@@ -1809,7 +1809,7 @@ export const ExecutionContinuitySnapshotSummarySchema = z.object({
   resume_anchor_file_path: z.string().nullable(),
   selected_memory_layers: z.array(z.string()),
   recommended_action: z.string(),
-}).passthrough();
+}).strict();
 
 export type ExecutionContinuitySnapshotSummary = z.infer<typeof ExecutionContinuitySnapshotSummarySchema>;
 
@@ -1898,7 +1898,7 @@ export const ExecutionCollaborationRoutingSummarySchema = z.object({
   preferred_artifact_refs: z.array(z.string()),
   preferred_evidence_refs: z.array(z.string()),
   routing_drivers: z.array(z.string()),
-}).passthrough();
+}).strict();
 
 export type ExecutionCollaborationRoutingSummary = z.infer<typeof ExecutionCollaborationRoutingSummarySchema>;
 
@@ -1929,7 +1929,7 @@ export const ExecutionRoutingSignalSummarySchema = z.object({
   same_family_rehydration_anchor_ids: z.array(z.string()),
   other_family_rehydration_anchor_ids: z.array(z.string()),
   unknown_family_rehydration_anchor_ids: z.array(z.string()),
-}).passthrough();
+}).strict();
 
 export type ExecutionRoutingSignalSummary = z.infer<typeof ExecutionRoutingSignalSummarySchema>;
 
@@ -1943,7 +1943,7 @@ export const ExecutionMaintenanceSummarySchema = z.object({
   selected_memory_layers: z.array(z.string()),
   primary_savings_levers: z.array(z.string()),
   recommended_action: z.string(),
-}).passthrough();
+}).strict();
 
 export type ExecutionMaintenanceSummary = z.infer<typeof ExecutionMaintenanceSummarySchema>;
 
@@ -1963,7 +1963,7 @@ export const ExecutionInstrumentationSummarySchema = z.object({
   rehydration_family_hit_rate: z.number().min(0).max(1),
   same_family_rehydration_anchor_ids: z.array(z.string()),
   other_family_rehydration_anchor_ids: z.array(z.string()),
-}).passthrough();
+}).strict();
 
 export type ExecutionInstrumentationSummary = z.infer<typeof ExecutionInstrumentationSummarySchema>;
 
