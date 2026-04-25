@@ -269,6 +269,21 @@ export function resolveNodeNextAction(args: {
   );
 }
 
+export function resolveNodeAcceptanceChecks(args: {
+  slots: Record<string, unknown> | null | undefined;
+  executionResultSummary?: Record<string, unknown> | null;
+}): string[] {
+  const contract = resolveNodeExecutionContract(args);
+  const execution = parseNodeExecutionNative(args.slots);
+  const anchor = parseNodeAnchor(args.slots);
+  return firstNonEmptyStringList(
+    contract?.outcome.acceptance_checks,
+    args.slots?.acceptance_checks,
+    asRecord(execution?.outcome)?.acceptance_checks,
+    asRecord(anchor?.outcome)?.acceptance_checks,
+  );
+}
+
 export function resolveNodeWorkflowSteps(args: {
   slots: Record<string, unknown> | null | undefined;
   executionResultSummary?: Record<string, unknown> | null;

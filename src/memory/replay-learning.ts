@@ -319,11 +319,7 @@ async function countReplayLearningWorkflowObservations(
       AND n.type = 'event'::memory_node_type
       AND coalesce(n.slots->>'replay_learning_episode', '') = 'true'
       AND coalesce(n.slots->'replay_learning'->>'source_playbook_id', '') = $2
-      AND coalesce(
-        n.slots->'execution_contract_v1'->>'workflow_signature',
-        n.slots->'execution_native_v1'->>'workflow_signature',
-        ''
-      ) = $3
+      AND coalesce(n.slots->'execution_contract_v1'->>'workflow_signature', '') = $3
     `,
     [scope, playbookId, workflowSignature],
   );
