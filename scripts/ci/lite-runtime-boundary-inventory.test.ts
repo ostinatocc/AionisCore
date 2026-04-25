@@ -6,9 +6,13 @@ import { RUNTIME_AUTHORITY_BOUNDARY_REGISTRY } from "../../src/memory/authority-
 import { RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY } from "../../src/memory/legacy-access-registry.ts";
 import {
   RUNTIME_BOUNDARY_INVENTORY,
+  runtimeBoundaryInventoryAuthorityFilesByCapability,
+  runtimeBoundaryInventoryAuthorityProducerEntries,
   runtimeBoundaryInventoryEntriesByFile,
   runtimeBoundaryInventoryEntriesBySource,
   runtimeBoundaryInventoryFiles,
+  runtimeBoundaryInventoryLegacyFiles,
+  runtimeBoundaryInventoryLegacyFilesByKind,
   runtimeBoundaryInventorySummary,
 } from "../../src/memory/runtime-boundary-inventory.ts";
 
@@ -18,6 +22,10 @@ function sourceIds(source: "authority" | "legacy_access"): string[] {
   return runtimeBoundaryInventoryEntriesBySource(source)
     .map((entry) => entry.source_id)
     .sort();
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return Array.from(new Set(values)).sort();
 }
 
 test("runtime boundary inventory aggregates the declared boundary registries without drift", () => {
@@ -93,4 +101,41 @@ test("runtime boundary inventory keeps authority capabilities and legacy reasons
     assert.equal(legacyResolver.legacy_access_kind, "contract_resolver");
     assert.ok(legacyResolver.reason.includes("resolver"));
   }
+});
+
+test("runtime boundary inventory exposes selector helpers for CI boundary consumers", () => {
+  const authorityEntries = runtimeBoundaryInventoryEntriesBySource("authority");
+  const legacyEntries = runtimeBoundaryInventoryEntriesBySource("legacy_access");
+
+  assert.deepEqual(
+    runtimeBoundaryInventoryAuthorityProducerEntries().map((entry) => entry.source_id).sort(),
+    authorityEntries
+      .filter((entry) => entry.role === "authority_producer" || entry.role === "advisory_pattern_producer")
+      .map((entry) => entry.source_id)
+      .sort(),
+    "authority producer helper must derive from inventory entries",
+  );
+  assert.deepEqual(
+    runtimeBoundaryInventoryAuthorityFilesByCapability("may_use_runtime_authority_gate"),
+    uniqueSorted(
+      authorityEntries
+        .filter((entry) => entry.capabilities.may_use_runtime_authority_gate)
+        .map((entry) => entry.file),
+    ),
+    "authority capability helper must derive file allowlists from inventory entries",
+  );
+  assert.deepEqual(
+    runtimeBoundaryInventoryLegacyFiles(),
+    uniqueSorted(legacyEntries.map((entry) => entry.file)),
+    "legacy boundary file helper must derive from inventory entries",
+  );
+  assert.deepEqual(
+    runtimeBoundaryInventoryLegacyFilesByKind("contract_resolver"),
+    uniqueSorted(
+      legacyEntries
+        .filter((entry) => entry.legacy_access_kind === "contract_resolver")
+        .map((entry) => entry.file),
+    ),
+    "legacy kind helper must derive file allowlists from inventory entries",
+  );
 });

@@ -124,20 +124,3 @@ export const RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY = [
     reason: "translates persisted rows into recall access records",
   },
 ] as const satisfies readonly RuntimeLegacyAccessBoundaryDeclaration[];
-
-export function runtimeLegacyAccessBoundaryDeclarations(): RuntimeLegacyAccessBoundaryDeclaration[] {
-  return RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY.map((entry) => ({ ...entry }));
-}
-
-export function runtimeDirectLegacySlotBoundaryFiles(): string[] {
-  return RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY
-    .map((entry) => entry.file)
-    .sort();
-}
-
-export function runtimeLegacyAccessBoundaryFilesByKind(kind: RuntimeLegacyAccessBoundaryKind): string[] {
-  return RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY
-    .filter((entry) => entry.kind === kind)
-    .map((entry) => entry.file)
-    .sort();
-}

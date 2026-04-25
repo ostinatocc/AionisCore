@@ -188,7 +188,7 @@ Authority-producing modules must be declared in `src/memory/authority-producer-r
 
 Workflow and policy producers that persist `stable`, `active`, or `authoritative` reusable memory must bind the write to `runtime_authority_gate_v1`, `outcome_contract_gate_v1`, and execution-evidence assessment for that produced surface. Pattern producers are separate: a stable trusted pattern is advisory guidance only, must remain non-authoritative, and must carry promotion/revalidation or governance provenance.
 
-The producer registry is the Runtime manifest for authority write boundaries. CI must consume that manifest instead of maintaining independent path allowlists, so a new producer cannot appear as an accidental code-search exception.
+The producer registry is the source manifest for authority write boundaries. CI boundary consumers must read the unified runtime boundary inventory instead of maintaining independent path allowlists, so a new producer cannot appear as an accidental code-search exception.
 
 ### 3. Orchestrator
 
@@ -276,7 +276,7 @@ Responsibilities:
 1. expose all declared authority and legacy direct-access boundaries through one read-only inventory
 2. preserve each entry's source registry, source id, file, role or boundary kind, and guard metadata
 3. make cross-cutting boundary ownership visible without adding new producer or consumer authority
-4. let CI verify inventory consistency against source manifests instead of duplicating path allowlists
+4. let CI verify inventory consistency against source manifests and consume inventory selectors instead of duplicating path allowlists
 5. expose the same source-owned inventory through a read-only local API surface for operator audit and SDK debugging
 
 Boundary rule:
@@ -310,7 +310,7 @@ Runtime consumers outside those categories must use:
 6. `resolveNodeServiceLifecycleConstraints`
 7. other resolver helpers from `src/memory/node-execution-surface.ts`
 
-This rule is enforced by `scripts/ci/lite-runtime-legacy-boundary.test.ts`, which must consume `src/memory/legacy-access-registry.ts` instead of carrying an independent path allowlist.
+This rule is enforced by `scripts/ci/lite-runtime-legacy-boundary.test.ts`, which must consume `src/memory/runtime-boundary-inventory.ts` instead of carrying an independent path allowlist.
 
 ## Product completeness assessment
 
