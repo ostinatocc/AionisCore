@@ -388,7 +388,7 @@ The decision model is intentionally semantic rather than age-only:
 4. advisory or observational policy memory is treated as contested unless stronger contract trust exists
 5. low-retention or negative-feedback memory moves colder before it can pollute recall
 
-The public summary contract is `execution_forgetting_summary_v1`. It reports:
+The public summary contract is `execution_forgetting_summary_v1`. It is strict and reports:
 
 1. whether the substrate is stable, suppression-present, or actively forgetting
 2. forgotten item counts and reasons
