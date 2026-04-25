@@ -769,7 +769,7 @@ export type AionisExecutionDelegationPacketRecord = {
   task_family: string | null;
   family_scope: string;
   source_mode: "memory_only" | "packet_backed";
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionDelegationReturnRecord = {
   version: 1;
@@ -780,7 +780,7 @@ export type AionisExecutionDelegationReturnRecord = {
   working_set: string[];
   acceptance_checks: string[];
   source_mode: "memory_only" | "packet_backed";
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionArtifactRoutingRecord = {
   version: 1;
@@ -793,7 +793,7 @@ export type AionisExecutionArtifactRoutingRecord = {
   family_scope: string;
   routing_reason: string;
   source: "strategy_summary" | "execution_packet" | "collaboration_summary";
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionDelegationRecordsSummary = {
   summary_version: "execution_delegation_records_v1";
@@ -806,7 +806,7 @@ export type AionisExecutionDelegationRecordsSummary = {
   delegation_packets: AionisExecutionDelegationPacketRecord[];
   delegation_returns: AionisExecutionDelegationReturnRecord[];
   artifact_routing_records: AionisExecutionArtifactRoutingRecord[];
-} & AionisPassthroughObject;
+};
 
 export type AionisExecutionRoutingSignalSummary = {
   summary_version: "execution_routing_summary_v1";

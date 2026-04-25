@@ -216,7 +216,7 @@ Stable outputs:
 4. pattern signals
 5. runtime tool hints
 6. rehydration candidates
-7. `execution_summary_v1` child summaries for strategy, collaboration, continuity, routing, maintenance, forgetting, and instrumentation
+7. `execution_summary_v1` child summaries for strategy, collaboration, continuity, routing, maintenance, forgetting, delegation records, and instrumentation
 
 Boundary rule:
 

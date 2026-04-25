@@ -321,6 +321,87 @@ const EXECUTION_INSTRUMENTATION_SUMMARY_KEYS = [
   "unknown_family_rehydration_count",
 ].sort();
 
+const EXECUTION_DELEGATION_RECORDS_SUMMARY_KEYS = [
+  "artifact_routing_count",
+  "artifact_routing_records",
+  "delegation_packets",
+  "delegation_returns",
+  "missing_record_types",
+  "packet_count",
+  "record_mode",
+  "return_count",
+  "route_role",
+  "summary_version",
+].sort();
+
+const EXECUTION_DELEGATION_PACKET_RECORD_KEYS = [
+  "acceptance_checks",
+  "family_scope",
+  "inherited_evidence",
+  "mission",
+  "output_contract",
+  "preferred_artifact_refs",
+  "role",
+  "routing_reason",
+  "source_mode",
+  "task_family",
+  "version",
+  "working_set",
+].sort();
+
+const EXECUTION_DELEGATION_RETURN_RECORD_KEYS = [
+  "acceptance_checks",
+  "evidence",
+  "role",
+  "source_mode",
+  "status",
+  "summary",
+  "version",
+  "working_set",
+].sort();
+
+const EXECUTION_ARTIFACT_ROUTING_RECORD_KEYS = [
+  "family_scope",
+  "ref",
+  "ref_kind",
+  "route_intent",
+  "route_mode",
+  "route_role",
+  "routing_reason",
+  "source",
+  "task_family",
+  "version",
+].sort();
+
+function assertDelegationRecordsExactKeySurface(summary: {
+  delegation_packets: unknown[];
+  delegation_returns: unknown[];
+  artifact_routing_records: unknown[];
+}) {
+  assert.deepEqual(
+    Object.keys(summary as Record<string, unknown>).sort(),
+    EXECUTION_DELEGATION_RECORDS_SUMMARY_KEYS,
+  );
+  for (const packet of summary.delegation_packets) {
+    assert.deepEqual(
+      Object.keys(packet as Record<string, unknown>).sort(),
+      EXECUTION_DELEGATION_PACKET_RECORD_KEYS,
+    );
+  }
+  for (const returnRecord of summary.delegation_returns) {
+    assert.deepEqual(
+      Object.keys(returnRecord as Record<string, unknown>).sort(),
+      EXECUTION_DELEGATION_RETURN_RECORD_KEYS,
+    );
+  }
+  for (const artifactRecord of summary.artifact_routing_records) {
+    assert.deepEqual(
+      Object.keys(artifactRecord as Record<string, unknown>).sort(),
+      EXECUTION_ARTIFACT_ROUTING_RECORD_KEYS,
+    );
+  }
+}
+
 function assertKernelMatchesRouteSurface(body: {
   planner_packet: unknown;
   pattern_signals: unknown[];
@@ -842,6 +923,7 @@ function assertKernelMatchesRouteSurface(body: {
     body.execution_summary.delegation_records_summary.summary_version,
     "execution_delegation_records_v1",
   );
+  assertDelegationRecordsExactKeySurface(body.execution_summary.delegation_records_summary);
   assert.equal(
     body.execution_summary.delegation_records_summary.record_mode,
     body.execution_summary.collaboration_routing_summary.route_mode,
@@ -1920,6 +2002,7 @@ test("planning_context prefers persisted delegation records matched by run_id", 
     });
     assert.equal(response.statusCode, 200);
     const body = PlanningContextRouteContractSchema.parse(response.json());
+    assertDelegationRecordsExactKeySurface(body.execution_summary.delegation_records_summary);
     assert.equal(body.execution_summary.delegation_records_summary.record_mode, "packet_backed");
     assert.equal(body.execution_summary.delegation_records_summary.route_role, "review");
     assert.equal(body.execution_summary.delegation_records_summary.packet_count, 1);
@@ -2326,6 +2409,7 @@ test("planning_context surfaces collaboration summary from execution packet and 
       body.execution_summary.delegation_records_summary.summary_version,
       "execution_delegation_records_v1",
     );
+    assertDelegationRecordsExactKeySurface(body.execution_summary.delegation_records_summary);
     assert.equal(body.execution_summary.delegation_records_summary.record_mode, "packet_backed");
     assert.equal(body.execution_summary.delegation_records_summary.route_role, "review");
     assert.equal(body.execution_summary.delegation_records_summary.packet_count, 1);

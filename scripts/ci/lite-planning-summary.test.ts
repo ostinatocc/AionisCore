@@ -21,6 +21,7 @@ import {
   ExecutionCollaborationRoutingSummarySchema,
   ExecutionCollaborationSummarySchema,
   ExecutionContinuitySnapshotSummarySchema,
+  ExecutionDelegationRecordsSummarySchema,
   ExecutionForgettingSummarySchema,
   ExecutionInstrumentationSummarySchema,
   ExecutionMaintenanceSummarySchema,
@@ -1116,6 +1117,7 @@ test("execution summary child contracts reject passthrough fields", () => {
     [ExecutionCollaborationSummarySchema, summary.collaboration_summary],
     [ExecutionContinuitySnapshotSummarySchema, summary.continuity_snapshot_summary],
     [ExecutionCollaborationRoutingSummarySchema, summary.collaboration_routing_summary],
+    [ExecutionDelegationRecordsSummarySchema, summary.delegation_records_summary],
     [ExecutionRoutingSignalSummarySchema, summary.routing_signal_summary],
     [ExecutionMaintenanceSummarySchema, summary.maintenance_summary],
     [ExecutionInstrumentationSummarySchema, summary.instrumentation_summary],
@@ -1130,6 +1132,71 @@ test("execution summary child contracts reject passthrough fields", () => {
       }),
     );
   }
+
+  const delegationSummary = summary.delegation_records_summary;
+  const packetRecord = delegationSummary.delegation_packets[0];
+  assert.ok(packetRecord);
+  assert.throws(() =>
+    ExecutionDelegationRecordsSummarySchema.parse({
+      ...delegationSummary,
+      delegation_packets: [{
+        ...packetRecord,
+        debug_passthrough: true,
+      }],
+    }),
+  );
+
+  const returnRecord = {
+    version: 1 as const,
+    role: "patch",
+    status: "completed",
+    summary: "Patch completed",
+    evidence: ["test output"],
+    working_set: ["src/routes/example.ts"],
+    acceptance_checks: ["npm test"],
+    source_mode: delegationSummary.record_mode,
+  };
+  assert.deepEqual(
+    ExecutionDelegationRecordsSummarySchema.parse({
+      ...delegationSummary,
+      return_count: 1,
+      delegation_returns: [returnRecord],
+    }).delegation_returns[0],
+    returnRecord,
+  );
+  assert.throws(() =>
+    ExecutionDelegationRecordsSummarySchema.parse({
+      ...delegationSummary,
+      return_count: 1,
+      delegation_returns: [{
+        ...returnRecord,
+        debug_passthrough: true,
+      }],
+    }),
+  );
+
+  const artifactRecord = delegationSummary.artifact_routing_records[0] ?? {
+    version: 1 as const,
+    ref: "artifact://example",
+    ref_kind: "artifact" as const,
+    route_role: delegationSummary.route_role,
+    route_intent: "handoff",
+    route_mode: delegationSummary.record_mode,
+    task_family: null,
+    family_scope: "unknown",
+    routing_reason: "strategy_summary",
+    source: "strategy_summary" as const,
+  };
+  assert.throws(() =>
+    ExecutionDelegationRecordsSummarySchema.parse({
+      ...delegationSummary,
+      artifact_routing_count: 1,
+      artifact_routing_records: [{
+        ...artifactRecord,
+        debug_passthrough: true,
+      }],
+    }),
+  );
 });
 
 test("buildAssemblySummary carries pattern trust summary through from planning summary", () => {

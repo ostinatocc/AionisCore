@@ -102,7 +102,7 @@ export const ExecutionDelegationPacketRecordV1Schema = z.object({
   task_family: z.string().trim().min(1).nullable().default(null),
   family_scope: z.string().trim().min(1),
   source_mode: DerivedSourceMode,
-});
+}).strict();
 export type ExecutionDelegationPacketRecordV1 = z.infer<typeof ExecutionDelegationPacketRecordV1Schema>;
 
 export const ExecutionDelegationReturnRecordV1Schema = z.object({
@@ -114,7 +114,7 @@ export const ExecutionDelegationReturnRecordV1Schema = z.object({
   working_set: StringList,
   acceptance_checks: StringList,
   source_mode: DerivedSourceMode,
-});
+}).strict();
 export type ExecutionDelegationReturnRecordV1 = z.infer<typeof ExecutionDelegationReturnRecordV1Schema>;
 
 export const ExecutionArtifactRoutingRecordV1Schema = z.object({
@@ -128,7 +128,7 @@ export const ExecutionArtifactRoutingRecordV1Schema = z.object({
   family_scope: z.string().trim().min(1),
   routing_reason: z.string().trim().min(1),
   source: RecordSource,
-});
+}).strict();
 export type ExecutionArtifactRoutingRecordV1 = z.infer<typeof ExecutionArtifactRoutingRecordV1Schema>;
 
 export const ControlProfileName = z.enum(["triage", "patch", "review", "resume"]);
