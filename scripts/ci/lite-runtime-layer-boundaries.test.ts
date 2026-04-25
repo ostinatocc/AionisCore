@@ -200,3 +200,115 @@ test("stable workflow producers require runtime authority gate checks", () => {
     }
   }
 });
+
+test("orchestrator routes do not mutate persistence or write memory directly", () => {
+  const orchestratorRouteFiles = [
+    "src/routes/memory-context-runtime.ts",
+    "src/routes/memory-recall.ts",
+  ];
+  const forbiddenTokens = [
+    ".withTx(",
+    ".withClient(",
+    "applyMemoryWrite",
+    "prepareMemoryWrite",
+    "commitLitePreparedWrite",
+    "writeAccessForClient",
+    ".insert",
+    ".update",
+    ".delete",
+  ];
+  const offenders = orchestratorRouteFiles
+    .flatMap((file) => {
+      const text = read(file);
+      return forbiddenTokens
+        .filter((token) => text.includes(token))
+        .map((token) => `${file}: ${token}`);
+    })
+    .sort();
+
+  assert.deepEqual(
+    offenders,
+    [],
+    "Recall/context routes must orchestrate read/context services, not mutate persistence or run write paths directly.",
+  );
+});
+
+test("orchestrator modules avoid trust producer and learning-loop imports", () => {
+  const orchestratorFiles = [
+    "src/memory/context-orchestrator.ts",
+    "src/memory/action-retrieval.ts",
+    "src/memory/experience-intelligence.ts",
+    "src/memory/recall-action-packet.ts",
+    "src/app/planning-summary.ts",
+    "src/app/planning-summary-assembly.ts",
+    "src/app/planning-summary-execution.ts",
+    "src/app/planning-summary-forgetting.ts",
+    "src/app/planning-summary-planner.ts",
+    "src/app/planning-summary-routing.ts",
+    "src/app/planning-summary-surfaces.ts",
+  ];
+  const forbiddenImportFragments = [
+    "./authority-gate.js",
+    "./execution-evidence.js",
+    "./form-pattern-governance",
+    "./policy-memory.js",
+    "./replay-learning",
+    "./replay-write.js",
+    "./tools-feedback.js",
+    "./workflow-write-projection.js",
+    "../memory/authority-gate.js",
+    "../memory/execution-evidence.js",
+    "../memory/form-pattern-governance",
+    "../memory/policy-memory.js",
+    "../memory/replay-learning",
+    "../memory/replay-write.js",
+    "../memory/tools-feedback.js",
+    "../memory/workflow-write-projection.js",
+  ];
+  const offenders = orchestratorFiles
+    .flatMap((file) => {
+      const imports = read(file).split("\n").filter((line) => /^\s*import\b/.test(line));
+      return imports
+        .filter((line) => forbiddenImportFragments.some((fragment) => line.includes(fragment)))
+        .map((line) => `${file}: ${line.trim()}`);
+    })
+    .sort();
+
+  assert.deepEqual(
+    offenders,
+    [],
+    "Orchestrator modules may consume canonical packets/contracts, but must not import trust producers or learning writers.",
+  );
+});
+
+test("recall action packet reads lifecycle details through node execution surface", () => {
+  const text = read("src/memory/recall-action-packet.ts");
+  for (const token of [
+    "node.slots?.semantic_forgetting_v1",
+    "node.slots?.archive_relocation_v1",
+    "node.slots?.lifecycle_state",
+  ]) {
+    assert.equal(text.includes(token), false, `recall-action-packet must not read ${token} directly`);
+  }
+  for (const token of [
+    "resolveNodeSemanticForgettingSurface",
+    "resolveNodeArchiveRelocationSurface",
+    "resolveNodeLifecycleState",
+  ]) {
+    assertContains(text, token, `recall-action-packet must use ${token}`);
+  }
+});
+
+test("experience intelligence consumes execution evidence through node execution surface", () => {
+  const text = read("src/memory/experience-intelligence.ts");
+  assert.equal(
+    text.includes("./execution-evidence.js"),
+    false,
+    "experience-intelligence must not import execution evidence internals directly",
+  );
+  assertContains(
+    text,
+    "resolveNodeExecutionEvidence",
+    "experience-intelligence must consume execution evidence through the canonical node execution surface",
+  );
+});

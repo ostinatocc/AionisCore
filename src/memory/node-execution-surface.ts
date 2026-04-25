@@ -4,6 +4,10 @@ import {
   deriveExecutionContractFromSlots,
   type ExecutionContractV1,
 } from "./execution-contract.js";
+import {
+  extractExecutionEvidenceFromSlots,
+  type ExecutionEvidenceV1,
+} from "./execution-evidence.js";
 import type { ContractTrust } from "./schemas.js";
 import { ServiceLifecycleConstraintV1Schema } from "../execution/types.js";
 
@@ -133,6 +137,16 @@ export function resolveNodeExecutionContractTrust(args: {
 }): ContractTrust | null {
   const trust = resolveNodeExecutionContract(args)?.contract_trust;
   return trust === "authoritative" || trust === "advisory" || trust === "observational" ? trust : null;
+}
+
+export function resolveNodeExecutionEvidence(args: {
+  slots: Record<string, unknown> | null | undefined;
+  metrics?: unknown;
+}): ExecutionEvidenceV1 | null {
+  return extractExecutionEvidenceFromSlots({
+    slots: args.slots ?? null,
+    metrics: args.metrics,
+  });
 }
 
 export function resolveNodeExecutionKind(slots: Record<string, unknown> | null | undefined): string | null {
@@ -399,6 +413,59 @@ export function resolveNodeRehydrationSurface(
   if (explicit) return explicit;
   const defaultMode = resolveNodeRehydrationDefaultMode(slots);
   return defaultMode ? { default_mode: defaultMode } : null;
+}
+
+export function resolveNodeLifecycleState(
+  slots: Record<string, unknown> | null | undefined,
+): string | null {
+  return firstString(slots?.lifecycle_state);
+}
+
+export type NodeSemanticForgettingSurface = {
+  action: "retain" | "demote" | "archive" | "review" | null;
+};
+
+export function resolveNodeSemanticForgettingSurface(
+  slots: Record<string, unknown> | null | undefined,
+): NodeSemanticForgettingSurface {
+  const semanticForgetting = asRecord(slots?.semantic_forgetting_v1);
+  const action = firstString(semanticForgetting?.action);
+  return {
+    action: action === "retain" || action === "demote" || action === "archive" || action === "review"
+      ? action
+      : null,
+  };
+}
+
+export type NodeArchiveRelocationSurface = {
+  relocation_state: "none" | "candidate" | "cold_archive" | null;
+  relocation_target: "none" | "local_cold_store" | "external_object_store" | null;
+  payload_scope: "none" | "anchor_payload" | "node" | null;
+};
+
+export function resolveNodeArchiveRelocationSurface(
+  slots: Record<string, unknown> | null | undefined,
+): NodeArchiveRelocationSurface {
+  const archiveRelocation = asRecord(slots?.archive_relocation_v1);
+  const relocationState = firstString(archiveRelocation?.relocation_state);
+  const relocationTarget = firstString(archiveRelocation?.relocation_target);
+  const payloadScope = firstString(archiveRelocation?.payload_scope);
+  return {
+    relocation_state:
+      relocationState === "none" || relocationState === "candidate" || relocationState === "cold_archive"
+        ? relocationState
+        : null,
+    relocation_target:
+      relocationTarget === "none"
+      || relocationTarget === "local_cold_store"
+      || relocationTarget === "external_object_store"
+        ? relocationTarget
+        : null,
+    payload_scope:
+      payloadScope === "none" || payloadScope === "anchor_payload" || payloadScope === "node"
+        ? payloadScope
+        : null,
+  };
 }
 
 export function resolveNodeWorkflowSourceKind(

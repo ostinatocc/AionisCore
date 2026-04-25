@@ -36,7 +36,7 @@ import {
 } from "./schemas.js";
 import { parseExecutionContract, type ExecutionContractV1 } from "./execution-contract.js";
 import { resolveContractTrustForSteering } from "./contract-trust.js";
-import { extractExecutionEvidenceFromSlots } from "./execution-evidence.js";
+import { resolveNodeExecutionEvidence } from "./node-execution-surface.js";
 import { selectTools } from "./tools-select.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
@@ -586,7 +586,7 @@ export function buildExperienceIntelligenceResponse(args: {
         nextAction: combinedNextAction,
         executionContract,
       });
-  const liveExecutionEvidence = extractExecutionEvidenceFromSlots({
+  const liveExecutionEvidence = resolveNodeExecutionEvidence({
     slots: {
       ...(asRecord(args.parsed.context) ?? {}),
       ...(args.parsed.execution_result_summary ? { execution_result_summary: args.parsed.execution_result_summary } : {}),
