@@ -19,6 +19,7 @@ import {
 import { toolSelectionFeedback } from "../../src/memory/tools-feedback.ts";
 import { applyMemoryWrite, prepareMemoryWrite } from "../../src/memory/write.ts";
 import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
+import { buildPolicyMaterializationSurface } from "../../src/memory/policy-materialization-surface.ts";
 import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
 import { createLiteWriteStore } from "../../src/store/lite-write-store.ts";
 import { InflightGate } from "../../src/util/inflight_gate.ts";
@@ -490,10 +491,28 @@ async function seedWorkflowOnlyFixture(
   dbPath: string,
   contractTrust: "authoritative" | "advisory" | "observational",
   authorityVisibility?: Record<string, unknown>,
+  options: {
+    executionKind?: "workflow_anchor" | "workflow_candidate";
+    anchorLevel?: "L1" | "L2";
+    promotionState?: "stable" | "candidate";
+    observedCount?: number;
+    requiredObservations?: number;
+    maintenanceState?: string;
+    offlinePriority?: string;
+  } = {},
 ) {
   const liteWriteStore = createLiteWriteStore(dbPath);
   const liteRecallStore = createLiteRecallStore(dbPath);
   const [sharedEmbedding] = await FakeEmbeddingProvider.embed(["repair export failure in node tests"]);
+  const executionKind = options.executionKind ?? "workflow_anchor";
+  const summaryKind = executionKind === "workflow_candidate" ? "workflow_candidate" : "workflow_anchor";
+  const anchorLevel = options.anchorLevel ?? "L2";
+  const promotionState = options.promotionState ?? "stable";
+  const observedCount = options.observedCount ?? (promotionState === "stable" ? 2 : 1);
+  const requiredObservations = options.requiredObservations ?? 2;
+  const maintenanceState = options.maintenanceState ?? (promotionState === "stable" ? "retain" : "observe");
+  const offlinePriority = options.offlinePriority ?? (promotionState === "stable" ? "retain_workflow" : "promote_candidate");
+  const lastTransition = promotionState === "stable" ? "promoted_to_stable" : "candidate_observed";
   const prepared = await prepareMemoryWrite(
     {
       tenant_id: "default",
@@ -509,12 +528,12 @@ async function seedWorkflowOnlyFixture(
           title: "Fix export failure",
           text_summary: "Reusable workflow for export repair in node tests",
           slots: {
-            summary_kind: "workflow_anchor",
-            compression_layer: "L2",
+            summary_kind: summaryKind,
+            compression_layer: anchorLevel,
             ...(authorityVisibility ? { authority_visibility: authorityVisibility } : {}),
             anchor_v1: {
               anchor_kind: "workflow",
-              anchor_level: "L2",
+              anchor_level: anchorLevel,
               contract_trust: contractTrust,
               task_signature: "execution_task:repair-export",
               task_class: "execution_write_projection",
@@ -543,17 +562,17 @@ async function seedWorkflowOnlyFixture(
               metrics: { usage_count: 0, reuse_success_count: 0, reuse_failure_count: 0, distinct_run_count: 0, last_used_at: null },
               maintenance: {
                 model: "lazy_online_v1",
-                maintenance_state: "retain",
-                offline_priority: "retain_workflow",
+                maintenance_state: maintenanceState,
+                offline_priority: offlinePriority,
                 lazy_update_fields: ["usage_count", "last_used_at"],
                 last_maintenance_at: "2026-03-20T00:00:00Z",
               },
               workflow_promotion: {
-                promotion_state: "stable",
+                promotion_state: promotionState,
                 promotion_origin: "execution_write_auto_promotion",
-                required_observations: 2,
-                observed_count: 2,
-                last_transition: "promoted_to_stable",
+                required_observations: requiredObservations,
+                observed_count: observedCount,
+                last_transition: lastTransition,
                 last_transition_at: "2026-03-20T00:00:00Z",
                 source_status: null,
               },
@@ -561,15 +580,15 @@ async function seedWorkflowOnlyFixture(
             },
             execution_native_v1: {
               schema_version: "execution_native_v1",
-              execution_kind: "workflow_anchor",
-              summary_kind: "workflow_anchor",
-              compression_layer: "L2",
+              execution_kind: executionKind,
+              summary_kind: summaryKind,
+              compression_layer: anchorLevel,
               contract_trust: contractTrust,
               task_signature: "execution_task:repair-export",
               task_family: "task:repair_export",
               workflow_signature: "execution_workflow:repair-export",
               anchor_kind: "workflow",
-              anchor_level: "L2",
+              anchor_level: anchorLevel,
               tool_set: ["edit", "test"],
               file_path: "src/routes/export.ts",
               target_files: ["src/routes/export.ts"],
@@ -582,18 +601,18 @@ async function seedWorkflowOnlyFixture(
                 "Prefer edit for route-level export repairs.",
               ],
               workflow_promotion: {
-                promotion_state: "stable",
+                promotion_state: promotionState,
                 promotion_origin: "execution_write_auto_promotion",
-                required_observations: 2,
-                observed_count: 2,
-                last_transition: "promoted_to_stable",
+                required_observations: requiredObservations,
+                observed_count: observedCount,
+                last_transition: lastTransition,
                 last_transition_at: "2026-03-20T00:00:00Z",
                 source_status: null,
               },
               maintenance: {
                 model: "lazy_online_v1",
-                maintenance_state: "retain",
-                offline_priority: "retain_workflow",
+                maintenance_state: maintenanceState,
+                offline_priority: offlinePriority,
                 lazy_update_fields: ["usage_count", "last_used_at"],
                 last_maintenance_at: "2026-03-20T00:00:00Z",
               },
@@ -828,6 +847,166 @@ test("experience intelligence keeps advisory workflow reuse as candidate hint po
     await liteRecallStore.close();
     await liteWriteStore.close();
   }
+});
+
+test("experience intelligence keeps candidate workflow guidance inspect-only", async () => {
+  const app = Fastify();
+  const { liteWriteStore, liteRecallStore } = await seedWorkflowOnlyFixture(
+    tmpDbPath("candidate-workflow-inspect-only"),
+    "authoritative",
+    undefined,
+    {
+      executionKind: "workflow_candidate",
+      anchorLevel: "L1",
+      promotionState: "candidate",
+      observedCount: 1,
+      requiredObservations: 2,
+    },
+  );
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryAccessRoutes({
+      app,
+      env: {
+        AIONIS_EDITION: "lite",
+        APP_ENV: "test",
+        MEMORY_SCOPE: "default",
+        MEMORY_TENANT_ID: "default",
+        LITE_LOCAL_ACTOR_ID: "local-user",
+        MAX_TEXT_LEN: 10_000,
+        PII_REDACTION: false,
+        ALLOW_CROSS_SCOPE_EDGES: false,
+        MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+        MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+      } as any,
+      embedder: FakeEmbeddingProvider,
+      liteWriteStore,
+      liteRecallAccess: liteRecallStore.createRecallAccess(),
+      writeAccessShadowMirrorV2: false,
+      requireStoreFeatureCapability: () => {},
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/experience/intelligence",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "repair export failure in node tests",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        candidates: ["edit", "test"],
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = ExperienceIntelligenceResponseSchema.parse(response.json());
+    assert.equal(body.recommendation.history_applied, true);
+    assert.equal(body.action_retrieval.tool_source_kind, "tools_select");
+    assert.equal(body.recommendation.path.source_kind, "candidate_workflow");
+    assert.equal((body.recommendation.path as any).contract_trust, "advisory");
+    assert.deepEqual(body.recommendation.path.target_files, ["src/routes/export.ts"]);
+    assert.match(body.recommendation.path.next_action ?? "", /Inspect or rehydrate the candidate workflow/);
+    assert.deepEqual(body.recommendation.path.workflow_steps, []);
+    assert.deepEqual(body.recommendation.path.pattern_hints, []);
+    assert.deepEqual(body.recommendation.path.service_lifecycle_constraints, []);
+    assert.equal(body.action_retrieval.execution_contract_v1?.contract_trust, "advisory");
+    assert.match(body.action_retrieval.execution_contract_v1?.next_action ?? "", /Inspect or rehydrate the candidate workflow/);
+    assert.deepEqual(body.action_retrieval.execution_contract_v1?.workflow_steps, []);
+    assert.deepEqual(body.action_retrieval.execution_contract_v1?.pattern_hints, []);
+    assert.deepEqual(body.action_retrieval.execution_contract_v1?.service_lifecycle_constraints, []);
+    assert.equal(body.policy_hints.workflow_reuse_count, 0);
+    assert.equal(body.policy_hints.hints.some((entry) => entry.hint_kind === "workflow_reuse"), false);
+    assert.equal(body.derived_policy, null);
+    assert.equal(body.policy_contract, null);
+    assert.equal(body.action_retrieval.uncertainty.recommended_actions.includes("inspect_context"), true);
+    const candidateEvidenceEntry = body.action_retrieval.evidence.entries.find((entry) => entry.source_kind === "candidate_workflow");
+    assert.ok(candidateEvidenceEntry);
+    assert.deepEqual(candidateEvidenceEntry.workflow_steps, []);
+    assert.deepEqual(candidateEvidenceEntry.pattern_hints, []);
+    assert.deepEqual(candidateEvidenceEntry.service_lifecycle_constraints, []);
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("policy materialization keeps trusted-pattern-only guidance advisory", () => {
+  const surface = buildPolicyMaterializationSurface({
+    parsed: {
+      tenant_id: "default",
+      scope: "default",
+      query_text: "repair export failure in node tests",
+      context: {
+        task_family: "task:repair_export",
+        goal: "repair export failure in node tests",
+      },
+      candidates: ["edit", "test"],
+    } as any,
+    tools: {
+      tenant_id: "default",
+      scope: "default",
+      selection: {
+        selected: "edit",
+        ordered: ["edit", "test"],
+        preferred: ["edit"],
+        allowed: ["edit", "test"],
+      },
+      decision: {
+        pattern_summary: {
+          used_trusted_pattern_anchor_ids: ["pattern:repair-export-edit"],
+          skipped_contested_pattern_anchor_ids: [],
+          skipped_suppressed_pattern_anchor_ids: [],
+        },
+      },
+      selection_summary: {
+        provenance_explanation: "selected tool: edit; trusted pattern support: edit",
+      },
+    } as any,
+    introspection: {
+      recommended_workflows: [],
+      candidate_workflows: [],
+      trusted_patterns: [{
+        anchor_id: "pattern:repair-export-edit",
+        anchor_level: "L3",
+        contract_trust: "authoritative",
+        selected_tool: "edit",
+        task_family: "task:repair_export",
+        summary: "Trusted pattern: prefer edit for export repair.",
+        file_path: "src/routes/export.ts",
+        target_files: ["src/routes/export.ts"],
+        confidence: 0.9,
+      }],
+      contested_patterns: [],
+      rehydration_candidates: [],
+      supporting_knowledge: [],
+    } as any,
+    includePersistedPolicy: false,
+  });
+
+  assert.equal(surface.actionRetrieval.tool_source_kind, "trusted_pattern");
+  assert.equal(surface.path.source_kind, "none");
+  assert.equal(surface.policyHints.tool_preference_count, 1);
+  assert.equal(surface.policyHints.workflow_reuse_count, 0);
+  assert.equal(surface.derivedPolicy?.source_kind, "trusted_pattern");
+  assert.equal(surface.derivedPolicy?.contract_trust, "advisory");
+  assert.equal(surface.derivedPolicy?.policy_state, "candidate");
+  assert.equal(surface.policyContract?.contract_trust, "advisory");
+  assert.equal(surface.policyContract?.policy_state, "candidate");
+  assert.equal(surface.policyContract?.activation_mode, "hint");
 });
 
 test("action retrieval route exposes explicit retrieval evidence and low uncertainty for a stable learned path", async () => {

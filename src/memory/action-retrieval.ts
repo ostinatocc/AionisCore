@@ -166,6 +166,29 @@ export function workflowEvidenceParts(workflow: WorkflowEntry): string[] {
   ].filter((value): value is string => !!value);
 }
 
+export function isStableWorkflowEntry(workflow: WorkflowEntry | null | undefined): boolean {
+  if (!workflow) return false;
+  const promotionState = firstString(workflow.promotion_state);
+  if (promotionState === "candidate") return false;
+  if (promotionState === "stable") return true;
+  return firstString(workflow.anchor_level) === "L2";
+}
+
+function demoteCandidateWorkflowTrust(trust: ContractTrust | null): ContractTrust {
+  return trust === "observational" ? "observational" : "advisory";
+}
+
+function buildCandidateWorkflowInspectionNextAction(args: {
+  selectedTool: string | null;
+  filePath: string | null;
+  nextAction: string | null;
+}): string {
+  const target = args.filePath ? ` around ${args.filePath}` : "";
+  const tool = args.selectedTool ? ` with ${args.selectedTool}` : "";
+  const prior = args.nextAction ? ` Candidate prior next action: ${args.nextAction}` : "";
+  return `Inspect or rehydrate the candidate workflow${target}${tool} before reuse; do not treat it as a stable workflow yet.${prior}`;
+}
+
 function firstContractTrust(...values: unknown[]): ContractTrust | null {
   for (const value of values) {
     if (value === "authoritative" || value === "advisory" || value === "observational") return value;
@@ -307,39 +330,53 @@ function buildExecutionContractFromWorkflowEntry(args: {
   selectedTool: string | null;
   sourceKind: "workflow_projection" | "action_retrieval";
   summaryVersion: string;
+  reuseBoundary?: "stable" | "candidate";
 }): ExecutionContractV1 {
   const authorityState = authorityConsumptionStateFromValue(args.workflow);
   const workflowFilePath = firstString(args.workflow.file_path, args.workflow.target_files?.[0] ?? null);
+  const candidateBoundary = args.reuseBoundary === "candidate" || !isStableWorkflowEntry(args.workflow);
+  const rawContractTrust = demoteContractTrustForAuthorityVisibility(
+    args.workflow.contract_trust ?? null,
+    authorityState.visibility,
+  );
   const projected = buildExecutionContractFromProjection({
-    contract_trust: demoteContractTrustForAuthorityVisibility(
-      args.workflow.contract_trust ?? null,
-      authorityState.visibility,
-    ),
+    contract_trust: candidateBoundary ? demoteCandidateWorkflowTrust(rawContractTrust) : rawContractTrust,
     task_family: args.workflow.task_family ?? null,
     workflow_signature: args.workflow.workflow_signature ?? null,
     selected_tool: args.selectedTool ?? null,
     file_path: args.workflow.file_path ?? null,
     target_files: args.workflow.target_files ?? [],
-    next_action: authorityState.requires_inspection
-      ? buildAuthorityInspectionNextAction({
+    next_action: candidateBoundary
+      ? buildCandidateWorkflowInspectionNextAction({
           selectedTool: args.selectedTool,
           filePath: workflowFilePath,
           nextAction: args.workflow.next_action ?? null,
-          blocker: authorityState.primary_blocker,
-          reuseTarget: "the learned workflow",
         })
-      : args.workflow.next_action ?? null,
-    workflow_steps: args.workflow.workflow_steps ?? [],
-    pattern_hints: args.workflow.pattern_hints ?? [],
-    service_lifecycle_constraints: args.workflow.service_lifecycle_constraints ?? [],
+      : authorityState.requires_inspection
+        ? buildAuthorityInspectionNextAction({
+            selectedTool: args.selectedTool,
+            filePath: workflowFilePath,
+            nextAction: args.workflow.next_action ?? null,
+            blocker: authorityState.primary_blocker,
+            reuseTarget: "the learned workflow",
+          })
+        : args.workflow.next_action ?? null,
+    workflow_steps: candidateBoundary ? [] : args.workflow.workflow_steps ?? [],
+    pattern_hints: candidateBoundary ? [] : args.workflow.pattern_hints ?? [],
+    service_lifecycle_constraints: candidateBoundary ? [] : args.workflow.service_lifecycle_constraints ?? [],
     provenance: {
       source_kind: args.sourceKind,
       source_summary_version: args.summaryVersion,
       source_anchor: args.workflow.anchor_id,
       evidence_refs: [args.workflow.anchor_id],
-      notes: [args.workflow.summary ?? args.workflow.title ?? "workflow memory projection"],
+      notes: [
+        candidateBoundary
+          ? "candidate workflow boundary: inspect or rehydrate before reuse"
+          : args.workflow.summary ?? args.workflow.title ?? "workflow memory projection",
+      ],
     },
   });
+  if (candidateBoundary) return projected;
   const existing = parseExecutionContract(args.workflow.execution_contract_v1);
   const merged = existing
     ? mergeExecutionContractsWithActionSurface({ existing, incoming: projected, preference: "existing" })
@@ -706,21 +743,29 @@ export function choosePathRecommendation(args: {
   const title = firstString(top.workflow.title);
   const authorityState = authorityConsumptionStateFromValue(top.workflow);
   const rawContractTrust = firstContractTrust(top.workflow.contract_trust);
-  const contractTrust = demoteContractTrustForAuthorityVisibility(rawContractTrust, authorityState.visibility);
+  const demotedTrust = demoteContractTrustForAuthorityVisibility(rawContractTrust, authorityState.visibility);
+  const candidateBoundary = top.kind === "candidate_workflow";
+  const contractTrust = candidateBoundary ? demoteCandidateWorkflowTrust(demotedTrust) : demotedTrust;
   const rawNextAction = firstString(
     top.workflow.next_action,
     filePath && args.selectedTool ? `Use ${args.selectedTool} on ${filePath} and continue along the learned workflow.` : null,
     filePath ? `Continue with ${filePath} as the next working target.` : null,
   );
-  const nextAction = authorityState.requires_inspection
-    ? buildAuthorityInspectionNextAction({
+  const nextAction = candidateBoundary
+    ? buildCandidateWorkflowInspectionNextAction({
         selectedTool: args.selectedTool,
         filePath,
         nextAction: rawNextAction,
-        blocker: authorityState.primary_blocker,
-        reuseTarget: "the learned workflow",
       })
-    : rawNextAction;
+    : authorityState.requires_inspection
+      ? buildAuthorityInspectionNextAction({
+          selectedTool: args.selectedTool,
+          filePath,
+          nextAction: rawNextAction,
+          blocker: authorityState.primary_blocker,
+          reuseTarget: "the learned workflow",
+        })
+      : rawNextAction;
 
   return {
     source_kind: top.kind,
@@ -733,9 +778,9 @@ export function choosePathRecommendation(args: {
     file_path: filePath,
     target_files: targetFiles,
     next_action: nextAction,
-    workflow_steps: stringList(top.workflow.workflow_steps, 24),
-    pattern_hints: stringList(top.workflow.pattern_hints, 24),
-    service_lifecycle_constraints: Array.isArray(top.workflow.service_lifecycle_constraints)
+    workflow_steps: candidateBoundary ? [] : stringList(top.workflow.workflow_steps, 24),
+    pattern_hints: candidateBoundary ? [] : stringList(top.workflow.pattern_hints, 24),
+    service_lifecycle_constraints: !candidateBoundary && Array.isArray(top.workflow.service_lifecycle_constraints)
       ? top.workflow.service_lifecycle_constraints.slice(0, 16)
       : [],
     confidence: Number.isFinite(top.workflow.confidence) ? (top.workflow.confidence ?? null) : null,
@@ -744,7 +789,9 @@ export function choosePathRecommendation(args: {
     authority_blocked: authorityState.requires_inspection,
     authority_primary_blocker: authorityState.primary_blocker,
     reason: [
-      top.kind === "recommended_workflow" ? "stable workflow memory matched this request" : "candidate workflow memory matched this request",
+      top.kind === "recommended_workflow"
+        ? "stable workflow memory matched this request"
+        : "candidate workflow memory matched this request; inspect or rehydrate before reuse",
       top.tool_aligned && args.selectedTool ? `tool alignment=${args.selectedTool}` : null,
       top.family_match && currentTaskFamily ? `task_family=${currentTaskFamily}` : null,
       top.overlap > 0 ? `token_overlap=${top.overlap}` : null,
@@ -880,9 +927,7 @@ export function workflowToolPreferenceState(args: {
   if (!toolSet.includes(selectedTool)) return "none";
   const contractTrust = firstContractTrust(args.workflow.contract_trust);
   if (contractTrust === "observational" || contractTrust === null) return "none";
-  const anchorLevel = firstString(args.workflow.anchor_level);
-  const promotionState = firstString(args.workflow.promotion_state);
-  if (anchorLevel === "L2" || promotionState === "stable") {
+  if (isStableWorkflowEntry(args.workflow)) {
     return contractTrust === "advisory" ? "candidate" : "stable";
   }
   const usageCount = Math.max(0, Number(args.workflow.usage_count ?? 0));
@@ -895,7 +940,7 @@ export function workflowToolPreferenceState(args: {
     || (reuseSuccessCount >= 1 && feedbackQuality >= 0.35)
     || (usageCount >= 3 && feedbackQuality >= 0)
   ) {
-    return "stable";
+    return "candidate";
   }
   if (reuseSuccessCount >= 1 || usageCount >= 2 || feedbackQuality > 0) {
     return "candidate";
@@ -1054,6 +1099,7 @@ export function buildActionRetrievalResponse(args: {
         selectedTool,
         sourceKind: "workflow_projection",
         summaryVersion: "action_retrieval_workflow_projection_v1",
+        reuseBoundary: path.source_kind === "candidate_workflow" ? "candidate" : "stable",
       })
     : null;
   const pathExecutionContract = buildExecutionContractFromPathRecommendation({
@@ -1085,7 +1131,13 @@ export function buildActionRetrievalResponse(args: {
     selectedWorkflowAuthorityState.visibility || selectedWorkflowAuthorityState.requires_inspection
       ? selectedWorkflowAuthorityState
       : pathAuthorityState;
-  const workflowSupportsForRetrieval = !!selectedTool
+  const stableWorkflowSupportsForRetrieval = workflowToolPreferenceState({
+    workflow: selectedWorkflow,
+    selectedTool,
+  }) === "stable";
+  const workflowSupportsForRetrieval = path.source_kind === "recommended_workflow"
+    && stableWorkflowSupportsForRetrieval
+    && !!selectedTool
     && !effectiveWorkflowAuthorityState.requires_inspection
     && (
       stringList(selectedWorkflow?.tool_set, 24).includes(selectedTool)
