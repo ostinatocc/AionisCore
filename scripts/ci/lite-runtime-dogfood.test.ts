@@ -163,15 +163,15 @@ test("runtime dogfood task specs can carry external probe evidence without code 
   assert.equal(scenario?.metrics.stable_promotion_allowed, true);
 });
 
-test("runtime dogfood external probe runs a detached service and produces live evidence", async () => {
+test("runtime dogfood external probe runs live proof slices and produces live evidence", async () => {
   const run = await runRuntimeDogfoodExternalProbe();
   assert.equal(run.run_version, "runtime_dogfood_external_probe_run_v1");
   assert.equal(run.launcher_exit_code, 0);
   assert.ok(run.service_pid);
-  assert.equal(run.probes.length, 3);
+  assert.equal(run.probes.length, 6);
   assert.equal(run.fresh_shell_probe_passed, true);
   assert.equal(run.dogfood_result.overall_status, "pass");
-  assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 3);
+  assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 6);
   assert.equal(run.dogfood_result.proof_boundary.fixture_evidence_scenarios, 0);
   assert.equal(run.dogfood_result.summary.after_exit_correct_rate, 1);
   assert.equal(run.dogfood_result.report.product_status, "pass_live_evidence");
@@ -179,14 +179,36 @@ test("runtime dogfood external probe runs a detached service and produces live e
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.service_publish_validate?.rate, 1);
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.package_publish_validate?.rate, 1);
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.git_deploy_webserver?.rate, 1);
+  assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.task_resume_interrupted_export_pipeline?.rate, 1);
+  assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.handoff_resume?.rate, 1);
+  assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.agent_takeover?.rate, 1);
   assert.equal(run.dogfood_result.coverage.task_families.service_publish_validate, 1);
   assert.equal(run.dogfood_result.coverage.task_families.package_publish_validate, 1);
   assert.equal(run.dogfood_result.coverage.task_families.git_deploy_webserver, 1);
+  assert.equal(run.dogfood_result.coverage.task_families.task_resume_interrupted_export_pipeline, 1);
+  assert.equal(run.dogfood_result.coverage.task_families.handoff_resume, 1);
+  assert.equal(run.dogfood_result.coverage.task_families.agent_takeover, 1);
 
   const scenarioIds = new Set(run.dogfood_result.scenarios.map((scenario) => scenario.id));
   assert.ok(scenarioIds.has("external_probe_service_after_exit"));
   assert.ok(scenarioIds.has("external_probe_publish_install"));
   assert.ok(scenarioIds.has("external_probe_deploy_hook_web"));
+  assert.ok(scenarioIds.has("external_probe_interrupted_resume"));
+  assert.ok(scenarioIds.has("external_probe_handoff_next_day"));
+  assert.ok(scenarioIds.has("external_probe_agent_takeover"));
+  const liveCommandProbes = [
+    ["external_probe_interrupted_resume", "npm test -- tests/exporter.test.mjs"],
+    ["external_probe_handoff_next_day", "npm test -- tests/payments/webhook.test.mjs"],
+    ["external_probe_agent_takeover", "npm test -- tests/search/indexer.test.mjs"],
+  ] as const;
+  for (const [id, command] of liveCommandProbes) {
+    const probe = run.probes.find((candidate) => candidate.id === id);
+    assert.equal(probe?.fresh_shell_probe_passed, true);
+    assert.ok(probe?.task_spec.execution_evidence);
+    const evidence = probe.task_spec.execution_evidence as { evidence_refs?: unknown };
+    assert.ok(Array.isArray(evidence.evidence_refs));
+    assert.ok(evidence.evidence_refs.includes(`external_probe:fresh_shell:${command}`));
+  }
   for (const scenario of run.dogfood_result.scenarios) {
     assert.equal(scenario.proof.evidence_source, "external_probe");
     assert.equal(scenario.proof.live_external_validation, true);

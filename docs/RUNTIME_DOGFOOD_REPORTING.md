@@ -49,15 +49,18 @@ The report intentionally focuses on product behavior, not test implementation de
 8. `live_execution_coverage_rate`
    Measures how much of the report is backed by live `external_probe` execution.
 9. `live_execution_coverage_by_family`
-   Measures live `external_probe` coverage per Runtime task family, for example `service_publish_validate`, `package_publish_validate`, and `git_deploy_webserver`.
+   Measures live `external_probe` coverage per Runtime task family, for example `service_publish_validate`, `package_publish_validate`, `git_deploy_webserver`, `task_resume_interrupted_export_pipeline`, `handoff_resume`, and `agent_takeover`.
 
 ## Live External Probe Slices
 
-`npm run dogfood:lite:runtime:external-probe` runs live probes for three real task families:
+`npm run dogfood:lite:runtime:external-probe` runs live probes for six real task families:
 
 1. service after-exit fresh-shell validation
 2. publish/install clean-client validation
 3. deploy/hook/web visible outcome validation
+4. interrupted resume narrow-slice validation
+5. next-day handoff resume validation
+6. second-agent takeover validation
 
 Each slice creates a temporary local fixture, launches or validates through a fresh shell, records execution evidence, and feeds the resulting task spec back through the same dogfood contract path. The live runner must not add task-specific Runtime routes or bypass the Contract Compiler and Trust Gate.
 
