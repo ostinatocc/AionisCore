@@ -121,6 +121,20 @@ Host rule:
 3. `authority_blocked=true` means the host may still show the workflow, but must label it advisory.
 4. `false_confidence_detected=true` means the host must not present the workflow as successful recovery.
 
+For runtime-wide inspection, `/v1/memory/execution/introspect` also exposes `authority_decision_report`.
+This is a read-only explanation surface for host UI/debugging. It explains why visible workflow and trusted-pattern
+surfaces were allowed, blocked, kept advisory, or limited to inspect/rehydrate. It must not be used to grant authority
+by itself; authority still comes from the underlying outcome contract gate and execution evidence gate.
+
+Read these fields when debugging an introspection response:
+
+1. `authority_decision_report.summary.decisions_by_surface`
+2. `authority_decision_report.summary.blocked_by_reason`
+3. `authority_decision_report.read_side_rules`
+4. `recommended_workflows[].authority_decision_report`
+5. `candidate_workflows[].authority_decision_report`
+6. `trusted_patterns[].authority_decision_report`
+
 ## 5. Reuse Policy
 
 The host should not flatten all Runtime output into one confidence score.

@@ -88,6 +88,15 @@ export const RUNTIME_AUTHORITY_BOUNDARY_REGISTRY = [
     role: "authority_consumer",
     mayUseOutcomeContractGate: true,
     mayReadRawAuthoritySurface: true,
+    authorityRules: [
+      "execution_introspection_reports_authority_decisions_read_only",
+      "execution_introspection_must_not_promote_or_materialize_authority",
+    ],
+    requiredSourceMarkers: [
+      "authority_decision_report",
+      "buildRuntimeAuthorityDecisionReportFromGates",
+      "combineAuthorityDecisionReports",
+    ],
   },
   {
     id: "planning_summary_surfaces",

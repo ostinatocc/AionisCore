@@ -1113,6 +1113,82 @@ export const RuntimeAuthorityVisibilityContractSchema = z.object({
   false_confidence_detected: z.boolean(),
 }).strict();
 
+export const RuntimeAuthorityDecisionSurfaceSchema = z.enum([
+  "outcome_contract_gate",
+  "execution_evidence_gate",
+  "stable_promotion_gate",
+  "false_confidence_gate",
+  "candidate_workflow_reuse",
+  "trusted_pattern_policy_materialization",
+  "policy_default_materialization",
+]);
+
+export const RuntimeAuthorityDecisionDispositionSchema = z.enum([
+  "allowed",
+  "blocked",
+  "advisory_only",
+  "inspect_or_rehydrate_only",
+  "unblocked_false_confidence",
+]);
+
+export const RuntimeAuthorityDecisionEffectSchema = z.enum([
+  "authoritative_allowed",
+  "stable_promotion_allowed",
+  "advisory_only",
+  "inspection_required",
+  "blocked",
+  "none",
+]);
+
+export const RuntimeAuthorityDecisionV1Schema = z.object({
+  decision_version: z.literal("runtime_authority_decision_v1"),
+  decision_id: z.string().min(1),
+  surface: RuntimeAuthorityDecisionSurfaceSchema,
+  subject: z.string().min(1),
+  disposition: RuntimeAuthorityDecisionDispositionSchema,
+  authority_effect: RuntimeAuthorityDecisionEffectSchema,
+  reasons: z.array(z.string().min(1)).max(32),
+  rule_refs: z.array(z.string().min(1)).max(64),
+  source_ids: z.array(z.string().min(1)).max(32),
+  recommended_action: z.string().min(1),
+}).strict();
+
+export const RuntimeAuthorityDecisionSummaryV1Schema = z.object({
+  summary_version: z.literal("runtime_authority_decision_summary_v1"),
+  total_decisions: z.number().int().min(0),
+  allowed_count: z.number().int().min(0),
+  blocked_count: z.number().int().min(0),
+  advisory_only_count: z.number().int().min(0),
+  inspect_or_rehydrate_count: z.number().int().min(0),
+  unblocked_false_confidence_count: z.number().int().min(0),
+  decisions_by_surface: z.record(z.object({
+    total: z.number().int().min(0),
+    allowed: z.number().int().min(0),
+    blocked: z.number().int().min(0),
+    advisory_only: z.number().int().min(0),
+    inspect_or_rehydrate_only: z.number().int().min(0),
+    unblocked_false_confidence: z.number().int().min(0),
+  }).strict()),
+  blocked_by_reason: z.record(z.number().int().min(0)),
+}).strict();
+
+export const RuntimeAuthorityReadSideRuleReportV1Schema = z.object({
+  source_id: z.string().min(1),
+  file: z.string().min(1),
+  layer: z.string().min(1),
+  role: z.string().min(1),
+  authority_rules: z.array(z.string().min(1)),
+}).strict();
+
+export const RuntimeAuthorityDecisionReportV1Schema = z.object({
+  report_version: z.literal("runtime_authority_decision_report_v1"),
+  summary: RuntimeAuthorityDecisionSummaryV1Schema,
+  read_side_rules: z.array(RuntimeAuthorityReadSideRuleReportV1Schema),
+  decisions: z.array(RuntimeAuthorityDecisionV1Schema),
+}).strict();
+
+export type RuntimeAuthorityDecisionReportV1 = z.infer<typeof RuntimeAuthorityDecisionReportV1Schema>;
+
 export const ExperienceIntelligencePathRecommendationSchema = z.object({
   source_kind: z.enum(["recommended_workflow", "candidate_workflow", "none"]),
   anchor_id: z.string().nullable(),
@@ -2072,6 +2148,7 @@ export const ExecutionMemoryIntrospectionResponseSchema = z.object({
   supporting_knowledge: z.array(PlannerPacketEntrySchema),
   pattern_signals: z.array(PlannerPacketEntrySchema),
   workflow_signals: z.array(PlannerPacketEntrySchema),
+  authority_decision_report: RuntimeAuthorityDecisionReportV1Schema,
   action_packet_summary: ActionPacketSummarySchema,
   pattern_signal_summary: PatternSignalSummarySchema,
   workflow_signal_summary: WorkflowSignalSummarySchema,

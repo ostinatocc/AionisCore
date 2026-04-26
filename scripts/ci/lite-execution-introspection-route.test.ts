@@ -844,6 +844,19 @@ test("execution introspection route exposes demo-friendly workflow and pattern s
     assert.equal(body.rehydration_candidates.length, 1);
     assert.equal(body.trusted_patterns.length, 1);
     assert.equal(body.contested_patterns.length, 1);
+    assert.equal(body.authority_decision_report.report_version, "runtime_authority_decision_report_v1");
+    assert.equal(body.authority_decision_report.summary.summary_version, "runtime_authority_decision_summary_v1");
+    assert.equal(body.authority_decision_report.summary.decisions_by_surface.candidate_workflow_reuse.inspect_or_rehydrate_only, 1);
+    assert.equal(body.authority_decision_report.summary.decisions_by_surface.trusted_pattern_policy_materialization.advisory_only, 1);
+    assert.equal(body.authority_decision_report.summary.decisions_by_surface.policy_default_materialization.blocked, 2);
+    assert.equal(body.authority_decision_report.summary.unblocked_false_confidence_count, 0);
+    assert.ok(body.authority_decision_report.read_side_rules.some((entry) =>
+      entry.source_id === "execution_introspection"
+      && entry.authority_rules.includes("execution_introspection_reports_authority_decisions_read_only")
+    ));
+    assert.equal(body.recommended_workflows[0]?.authority_decision_report?.report_version, "runtime_authority_decision_report_v1");
+    assert.equal(body.candidate_workflows[0]?.authority_decision_report?.summary.decisions_by_surface.candidate_workflow_reuse.inspect_or_rehydrate_only, 1);
+    assert.equal(body.trusted_patterns[0]?.authority_decision_report?.summary.decisions_by_surface.trusted_pattern_policy_materialization.advisory_only, 1);
     assert.equal(body.pattern_signals.length, 2);
     assert.equal(body.workflow_signals.length, 2);
     assert.equal(body.inventory.raw_workflow_anchor_count, 1);
