@@ -25,6 +25,7 @@ export type RuntimeAuthorityBoundaryDeclaration = {
   layer: RuntimeAuthorityLayer;
   role: RuntimeAuthorityBoundaryRole;
   producerKind?: RuntimeAuthorityProducerKind;
+  authorityRules?: readonly string[];
   mayUseRuntimeAuthorityGate?: boolean;
   mayUseOutcomeContractGate?: boolean;
   mayAssessExecutionEvidence?: boolean;
@@ -108,6 +109,32 @@ export const RUNTIME_AUTHORITY_BOUNDARY_REGISTRY = [
     layer: "Orchestrator",
     role: "authority_consumer",
     mayUseOutcomeContractGate: true,
+    authorityRules: [
+      "candidate_workflow_reuse_is_inspect_or_rehydrate_only",
+      "candidate_workflow_must_not_emit_stable_workflow_tool_source",
+      "candidate_workflow_must_not_contribute_stable_workflow_steps",
+    ],
+    requiredSourceMarkers: [
+      "buildCandidateWorkflowInspectionNextAction",
+      "workflowSupportsForRetrieval = path.source_kind === \"recommended_workflow\"",
+      "return \"candidate\";",
+    ],
+  },
+  {
+    id: "policy_materialization_surface",
+    file: "src/memory/policy-materialization-surface.ts",
+    layer: "Trust Gate",
+    role: "authority_consumer",
+    authorityRules: [
+      "trusted_pattern_only_guidance_is_advisory_candidate",
+      "policy_default_requires_stable_workflow_or_live_authoritative_execution_contract",
+      "candidate_workflow_must_not_emit_workflow_reuse_hint",
+    ],
+    requiredSourceMarkers: [
+      "authoritativeExecutionContractSupports",
+      "args.path.source_kind === \"recommended_workflow\"",
+      "args.path.anchor_id && args.path.source_kind === \"recommended_workflow\"",
+    ],
   },
   {
     id: "workflow_promotion_governance",
@@ -189,6 +216,10 @@ export const RUNTIME_AUTHORITY_BOUNDARY_REGISTRY = [
     role: "advisory_pattern_producer",
     producerKind: "advisory_pattern",
     mayUseStablePatternLiteral: true,
+    authorityRules: [
+      "trusted_pattern_guidance_is_advisory_not_authoritative_policy",
+      "stable_pattern_must_not_bypass_policy_memory_authority_gate",
+    ],
     requiredSourceMarkers: [
       "return \"advisory\";",
       "return \"observational\";",

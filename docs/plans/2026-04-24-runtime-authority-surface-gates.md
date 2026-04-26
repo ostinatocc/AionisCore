@@ -27,6 +27,8 @@ The current change belongs to the Trust Gate. Its rule is:
 | Policy memory materialization | `src/memory/policy-memory.ts` | `buildPolicyAuthoritySurfaces` | Policy outcome contract plus execution evidence carried in the policy contract | Active authoritative policy only when authority gate allows it, otherwise advisory/candidate/contested/hint |
 | Tools feedback policy memory | `src/memory/tools-feedback.ts` -> `src/memory/policy-memory.ts` | `buildPolicyAuthoritySurfaces` | Feedback materialization context must carry execution evidence | Persisted policy only with gated authority; otherwise computed policy remains non-authoritative |
 | Tools pattern anchors | `src/memory/tools-pattern-anchor.ts` | Pattern credibility and governance, not Runtime authority | Repeated or governed tool-selection feedback | Advisory or observational pattern guidance, never authoritative policy memory |
+| Action retrieval candidate workflow reuse | `src/memory/action-retrieval.ts` | Source-kind and authority-consumption boundary | Recommended stable workflow path or inspect/rehydrate candidate evidence | Stable workflow tool-source only for recommended stable workflows; candidate workflows stay inspect/rehydrate/advisory |
+| Policy materialization surface | `src/memory/policy-materialization-surface.ts` | `resolveContractTrustForSteering` plus workflow source-kind boundary | Stable workflow support or live authoritative execution contract | Default policy only when authority is supplied; trusted-pattern-only guidance stays advisory/candidate |
 | Form pattern governance | `src/memory/form-pattern-governance.ts` | Semantic L3 pattern governance | Multiple examples plus semantic review | L3 pattern stabilization only, not authoritative contract promotion |
 | Handoff, session, archive, rehydrate, store boundaries | Boundary modules | No direct authority production | Carry or normalize existing execution surfaces | Evidence carrier or schema boundary only |
 
@@ -64,6 +66,7 @@ Forbidden direct raw authority access:
 - Do not add task-specific or benchmark-specific routes.
 - Do not promote recall strength into authority by itself.
 - Do not let replay success, policy feedback, or pattern trust bypass outcome and evidence gates.
+- Do not let candidate workflow recall or trusted-pattern-only guidance materialize default policy, stable workflow steps, or stable workflow tool-source authority.
 
 ## Dogfood Metrics
 

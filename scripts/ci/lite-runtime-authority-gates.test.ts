@@ -81,6 +81,40 @@ test("authority-producing Runtime surfaces use the unified authority gate", () =
   }
 });
 
+test("read-side authority consumers publish non-authoritative reuse boundaries", () => {
+  const actionRetrieval = runtimeBoundaryInventoryAuthorityEntries().find(
+    (entry) => entry.source_id === "action_retrieval_outcome_gate",
+  );
+  assert.ok(actionRetrieval, "action retrieval authority consumer must be declared");
+  assert.equal(actionRetrieval.role, "authority_consumer");
+  assert.equal(actionRetrieval.producer_kind, null);
+  assertContains(read(actionRetrieval.file), "buildCandidateWorkflowInspectionNextAction", "candidate workflows must stay inspect-first");
+  assertContains(
+    read(actionRetrieval.file),
+    "workflowSupportsForRetrieval = path.source_kind === \"recommended_workflow\"",
+    "candidate workflow paths must not emit stable workflow tool source",
+  );
+  assert.ok(actionRetrieval.authority_rules.includes("candidate_workflow_reuse_is_inspect_or_rehydrate_only"));
+
+  const policyMaterialization = runtimeBoundaryInventoryAuthorityEntries().find(
+    (entry) => entry.source_id === "policy_materialization_surface",
+  );
+  assert.ok(policyMaterialization, "policy materialization authority consumer must be declared");
+  assert.equal(policyMaterialization.role, "authority_consumer");
+  assert.equal(policyMaterialization.producer_kind, null);
+  assertContains(
+    read(policyMaterialization.file),
+    "authoritativeExecutionContractSupports",
+    "live authoritative execution contracts must be the non-workflow authority path",
+  );
+  assertContains(
+    read(policyMaterialization.file),
+    "args.path.anchor_id && args.path.source_kind === \"recommended_workflow\"",
+    "candidate workflow paths must not emit workflow reuse hints",
+  );
+  assert.ok(policyMaterialization.authority_rules.includes("trusted_pattern_only_guidance_is_advisory_candidate"));
+});
+
 test("stable and authoritative producer literals stay in declared producer classes", () => {
   const sourceFiles = [...listSourceTsFiles("src/app"), ...listSourceTsFiles("src/memory"), ...listSourceTsFiles("src/routes")];
   const stableWorkflowLiteralFiles = sourceFiles
