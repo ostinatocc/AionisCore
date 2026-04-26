@@ -2,11 +2,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { formatRuntimeDogfoodMarkdown } from "./lib/lite-runtime-dogfood.ts";
-import { runRuntimeDogfoodExternalProbe } from "./lib/lite-runtime-dogfood-external-probe.ts";
+import {
+  runRuntimeDogfoodExternalProbe,
+  runtimeDogfoodExternalProbeSlices,
+  type RuntimeDogfoodExternalProbeSlice,
+} from "./lib/lite-runtime-dogfood-external-probe.ts";
 
 type CliOptions = {
   json: boolean;
   reportJson: boolean;
+  listSlices: boolean;
+  slices: RuntimeDogfoodExternalProbeSlice[];
   outJson: string | null;
   outReportJson: string | null;
   outMarkdown: string | null;
@@ -17,15 +23,27 @@ type CliOptions = {
 function usage(): string {
   return [
     "Usage:",
-    "  npx tsx scripts/lite-runtime-dogfood-external-probe.ts [--json|--report-json] [--port 43000] [--out-json /path/result.json] [--out-report-json /path/report.json] [--out-md /path/result.md] [--out-tasks-json /path/tasks.json]",
+    "  npx tsx scripts/lite-runtime-dogfood-external-probe.ts [--json|--report-json] [--list-slices] [--slice service_after_exit] [--port 43000] [--out-json /path/result.json] [--out-report-json /path/report.json] [--out-md /path/result.md] [--out-tasks-json /path/tasks.json]",
     "",
     "Runs Runtime dogfood slices backed by live fresh-shell external probe evidence for service, publish/install, deploy/web, interrupted resume, handoff, and agent takeover task families.",
   ].join("\n");
 }
 
+function parseSliceValue(value: string): RuntimeDogfoodExternalProbeSlice[] {
+  const available = new Set<string>(runtimeDogfoodExternalProbeSlices);
+  return value.split(",").map((entry) => entry.trim()).filter(Boolean).map((entry) => {
+    if (!available.has(entry)) {
+      throw new Error(`invalid --slice: ${entry}. Available slices: ${runtimeDogfoodExternalProbeSlices.join(", ")}`);
+    }
+    return entry as RuntimeDogfoodExternalProbeSlice;
+  });
+}
+
 function parseArgs(argv: string[]): CliOptions {
   let json = false;
   let reportJson = false;
+  let listSlices = false;
+  const slices: RuntimeDogfoodExternalProbeSlice[] = [];
   let outJson: string | null = null;
   let outReportJson: string | null = null;
   let outMarkdown: string | null = null;
@@ -39,6 +57,17 @@ function parseArgs(argv: string[]): CliOptions {
     }
     if (arg === "--report-json") {
       reportJson = true;
+      continue;
+    }
+    if (arg === "--list-slices") {
+      listSlices = true;
+      continue;
+    }
+    if (arg === "--slice") {
+      const raw = argv[i + 1] ?? "";
+      if (!raw) throw new Error("missing value for --slice");
+      slices.push(...parseSliceValue(raw));
+      i += 1;
       continue;
     }
     if (arg === "--out-json") {
@@ -74,7 +103,7 @@ function parseArgs(argv: string[]): CliOptions {
     }
     throw new Error(`unknown argument: ${arg}`);
   }
-  return { json, reportJson, outJson, outReportJson, outMarkdown, outTasksJson, port };
+  return { json, reportJson, listSlices, slices, outJson, outReportJson, outMarkdown, outTasksJson, port };
 }
 
 function ensureParent(filePath: string): void {
@@ -83,8 +112,13 @@ function ensureParent(filePath: string): void {
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
+  if (options.listSlices) {
+    console.log(runtimeDogfoodExternalProbeSlices.join("\n"));
+    return;
+  }
   const run = await runRuntimeDogfoodExternalProbe({
     port: options.port ?? undefined,
+    slices: options.slices.length > 0 ? options.slices : undefined,
   });
   if (options.outJson) {
     ensureParent(options.outJson);

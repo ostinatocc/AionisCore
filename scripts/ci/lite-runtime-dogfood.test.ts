@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runRuntimeDogfoodSuite, runtimeDogfoodTasksFromSpecs } from "../lib/lite-runtime-dogfood.ts";
-import { runRuntimeDogfoodExternalProbe } from "../lib/lite-runtime-dogfood-external-probe.ts";
+import {
+  runRuntimeDogfoodExternalProbe,
+  runtimeDogfoodExternalProbeSlices,
+} from "../lib/lite-runtime-dogfood-external-probe.ts";
 
 test("runtime dogfood slice compiles real task families into outcome-backed contracts", () => {
   const result = runRuntimeDogfoodSuite();
@@ -169,6 +172,7 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.equal(run.launcher_exit_code, 0);
   assert.ok(run.service_pid);
   assert.equal(run.probes.length, 6);
+  assert.equal(run.diagnostics.length, runtimeDogfoodExternalProbeSlices.length);
   assert.equal(run.fresh_shell_probe_passed, true);
   assert.equal(run.dogfood_result.overall_status, "pass");
   assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 6);
@@ -190,6 +194,8 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.equal(run.dogfood_result.coverage.task_families.agent_takeover, 1);
 
   const scenarioIds = new Set(run.dogfood_result.scenarios.map((scenario) => scenario.id));
+  const diagnosticSlices = new Set(run.diagnostics.map((diagnostic) => diagnostic.slice));
+  assert.deepEqual(diagnosticSlices, new Set(runtimeDogfoodExternalProbeSlices));
   assert.ok(scenarioIds.has("external_probe_service_after_exit"));
   assert.ok(scenarioIds.has("external_probe_publish_install"));
   assert.ok(scenarioIds.has("external_probe_deploy_hook_web"));
@@ -204,6 +210,10 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   for (const [id, command] of liveCommandProbes) {
     const probe = run.probes.find((candidate) => candidate.id === id);
     assert.equal(probe?.fresh_shell_probe_passed, true);
+    assert.equal(probe?.diagnostics.command, command);
+    assert.equal(probe?.diagnostics.exit_code, 0);
+    assert.equal(probe?.diagnostics.failure_class, "none");
+    assert.equal(probe?.diagnostics.command_count, 1);
     assert.ok(probe?.task_spec.execution_evidence);
     const evidence = probe.task_spec.execution_evidence as { evidence_refs?: unknown };
     assert.ok(Array.isArray(evidence.evidence_refs));
@@ -218,4 +228,22 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.match(run.fresh_shell_probe_output, /"ok":true/);
   assert.match(run.fresh_shell_probe_output, /Successfully installed vectorops-0\.1\.0/);
   assert.match(run.fresh_shell_probe_output, /deployed revision visible through live dogfood/);
+});
+
+test("runtime dogfood external probe can run one selected slice with diagnostics", async () => {
+  const run = await runRuntimeDogfoodExternalProbe({ slices: ["interrupted_resume"] });
+  assert.equal(run.probes.length, 1);
+  assert.equal(run.diagnostics.length, 1);
+  assert.equal(run.fresh_shell_probe_passed, true);
+  assert.equal(run.dogfood_result.overall_status, "pass");
+  assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 1);
+  assert.equal(run.probes[0]?.id, "external_probe_interrupted_resume");
+  assert.equal(run.diagnostics[0]?.slice, "interrupted_resume");
+  assert.equal(run.diagnostics[0]?.scenario_id, "external_probe_interrupted_resume");
+  assert.equal(run.diagnostics[0]?.command, "npm test -- tests/exporter.test.mjs");
+  assert.match(run.diagnostics[0]?.cwd ?? "", /aionis-runtime-dogfood-interrupted-/);
+  assert.equal(run.diagnostics[0]?.exit_code, 0);
+  assert.equal(run.diagnostics[0]?.failure_class, "none");
+  assert.equal(run.diagnostics[0]?.command_count, 1);
+  assert.equal(run.diagnostics[0]?.commands.length, 1);
 });

@@ -139,9 +139,14 @@ Use the dogfood report to check host integration quality:
 ```bash
 npm run dogfood:lite:runtime -- --out-report-json artifacts/runtime-dogfood/report.json
 npm run dogfood:lite:runtime:external-probe -- --out-report-json artifacts/runtime-dogfood/external-report.json
+npm run dogfood:lite:runtime:external-probe -- --slice interrupted_resume --out-json artifacts/runtime-dogfood/interrupted-run.json
 ```
 
 The external-probe runner should cover service durability, publish/install visibility, deploy/web visibility, interrupted resume, next-day handoff, and agent takeover paths before a host claims broad Runtime readiness.
+
+When a live family fails, inspect `external-run.json.diagnostics[]` before changing Runtime behavior. The stable triage fields are `slice`, `scenario_id`, `command`, `cwd`, `duration_ms`, `exit_code`, `stdout_tail`, `stderr_tail`, `failure_class`, and ordered `commands[]`.
+
+Lite CI uploads `artifacts/runtime-dogfood/` as a workflow artifact so product-level regressions can be debugged from the run payload instead of from truncated job logs.
 
 Before claiming product-level improvement, require:
 

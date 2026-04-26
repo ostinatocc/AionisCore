@@ -59,6 +59,9 @@ test("release baseline workflows use pinned Aionis CI assumptions", () => {
   assert.match(ci, /node-version:\s*22/);
   assert.match(ci, /cache:\s*npm/);
   assert.match(ci, /npm ci/);
+  assert.match(ci, /Runtime dogfood external probe artifacts/);
+  assert.match(ci, /artifacts\/runtime-dogfood\/external-report\.json/);
+  assert.match(ci, /actions\/upload-artifact@v7/);
   assert.match(ci, /npm run -s smoke:lite/);
 
   assert.match(release, /node-version:\s*22/);

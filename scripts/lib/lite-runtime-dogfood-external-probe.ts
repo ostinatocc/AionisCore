@@ -19,6 +19,32 @@ export type RuntimeDogfoodExternalProbeSlice =
   | "handoff_next_day"
   | "agent_takeover";
 
+export type RuntimeDogfoodExternalProbeFailureClass =
+  | "none"
+  | "service_launch_failed"
+  | "fresh_shell_probe_failed"
+  | "clean_client_install_failed"
+  | "served_web_content_probe_failed"
+  | "served_web_content_mismatch"
+  | "live_command_probe_failed";
+
+export type RuntimeDogfoodExternalProbeCommandDiagnostic = {
+  command: string;
+  cwd: string;
+  duration_ms: number;
+  exit_code: number | null;
+  stdout_tail: string;
+  stderr_tail: string;
+  failure_class: RuntimeDogfoodExternalProbeFailureClass;
+};
+
+export type RuntimeDogfoodExternalProbeSliceDiagnostic = RuntimeDogfoodExternalProbeCommandDiagnostic & {
+  slice: RuntimeDogfoodExternalProbeSlice;
+  scenario_id: string;
+  command_count: number;
+  commands: RuntimeDogfoodExternalProbeCommandDiagnostic[];
+};
+
 export type RuntimeDogfoodExternalProbeScenarioRun = {
   id: string;
   task_family_hint: string;
@@ -27,6 +53,7 @@ export type RuntimeDogfoodExternalProbeScenarioRun = {
   launcher_exit_code: number | null;
   fresh_shell_probe_passed: boolean;
   fresh_shell_probe_output: string;
+  diagnostics: RuntimeDogfoodExternalProbeSliceDiagnostic;
   task_spec: RuntimeDogfoodTaskSpec;
 };
 
@@ -38,6 +65,7 @@ export type RuntimeDogfoodExternalProbeRun = {
   fresh_shell_probe_passed: boolean;
   fresh_shell_probe_output: string;
   probes: RuntimeDogfoodExternalProbeScenarioRun[];
+  diagnostics: RuntimeDogfoodExternalProbeSliceDiagnostic[];
   task_specs: RuntimeDogfoodTaskSpec[];
   dogfood_result: RuntimeDogfoodSuiteResult;
 };
@@ -51,6 +79,7 @@ type CommandResult = {
   code: number | null;
   stdout: string;
   stderr: string;
+  durationMs: number;
 };
 
 type ExecFileOptions = {
@@ -58,11 +87,17 @@ type ExecFileOptions = {
   cwd?: string;
 };
 
+type LiveWorkspaceProbeResult = {
+  probe: CommandResult;
+  cwd: string;
+  command: string;
+};
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
 const serviceRelativePath = "scripts/fixtures/runtime-dogfood/service-after-exit-server.mjs";
 const servicePath = path.join(repoRoot, serviceRelativePath);
-const defaultSlices: RuntimeDogfoodExternalProbeSlice[] = [
+export const runtimeDogfoodExternalProbeSlices: readonly RuntimeDogfoodExternalProbeSlice[] = [
   "service_after_exit",
   "publish_install",
   "deploy_hook_web",
@@ -70,15 +105,18 @@ const defaultSlices: RuntimeDogfoodExternalProbeSlice[] = [
   "handoff_next_day",
   "agent_takeover",
 ];
+const defaultSlices: RuntimeDogfoodExternalProbeSlice[] = [...runtimeDogfoodExternalProbeSlices];
 
 let cachedPython: string | null = null;
 
 function execFileResult(command: string, args: string[], options: ExecFileOptions = {}): Promise<CommandResult> {
   return new Promise((resolve) => {
+    const startedAt = Date.now();
     execFile(command, args, {
       cwd: options.cwd,
       timeout: options.timeoutMs ?? 5000,
     }, (error, stdout, stderr) => {
+      const durationMs = Date.now() - startedAt;
       const errorCode = (error as NodeJS.ErrnoException | null)?.code;
       const code = typeof errorCode === "number"
         ? errorCode
@@ -89,6 +127,7 @@ function execFileResult(command: string, args: string[], options: ExecFileOption
         code,
         stdout: stdout.toString(),
         stderr: stderr.toString(),
+        durationMs,
       });
     });
   });
@@ -158,7 +197,7 @@ async function launchDetachedProcess(args: {
   tempDir: string;
   command: string;
   commandArgs: string[];
-}): Promise<{ pid: number | null; launcherExitCode: number | null }> {
+}): Promise<{ pid: number | null; launcherExitCode: number | null; launcherResult: CommandResult; launcherCommand: string }> {
   const pidFile = path.join(args.tempDir, "service-pid.json");
   const launcherPath = writeDetachedLauncher({
     tempDir: args.tempDir,
@@ -166,23 +205,23 @@ async function launchDetachedProcess(args: {
     command: args.command,
     commandArgs: args.commandArgs,
   });
-  const launcher = await execFileResult(process.execPath, [launcherPath]);
+  const launcher = await execFileResult(process.execPath, [launcherPath], { cwd: repoRoot });
   let pid: number | null = null;
   if (fs.existsSync(pidFile)) {
     const metadata = JSON.parse(fs.readFileSync(pidFile, "utf8")) as { pid?: unknown };
     pid = typeof metadata.pid === "number" ? metadata.pid : null;
   }
-  return { pid, launcherExitCode: launcher.code };
+  return { pid, launcherExitCode: launcher.code, launcherResult: launcher, launcherCommand: `${process.execPath} ${shellQuote(launcherPath)}` };
 }
 
-async function probeFreshShellCommand(command: string, timeoutMs = 5000): Promise<CommandResult> {
+async function probeFreshShellCommand(command: string, timeoutMs = 5000, cwd = repoRoot): Promise<CommandResult> {
   const shell = process.platform === "win32" ? "cmd.exe" : "sh";
   const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command];
-  return await execFileResult(shell, args, { timeoutMs });
+  return await execFileResult(shell, args, { timeoutMs, cwd });
 }
 
 async function waitForFreshShellCommand(command: string, timeoutMs = 8000): Promise<CommandResult> {
-  let last: CommandResult = { code: 1, stdout: "", stderr: "probe_not_started" };
+  let last: CommandResult = { code: 1, stdout: "", stderr: "probe_not_started", durationMs: 0 };
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     last = await probeFreshShellCommand(command);
@@ -204,6 +243,48 @@ function killService(pid: number | null): void {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function outputTail(value: string, maxLength = 2000): string {
+  const trimmed = value.trim();
+  return trimmed.length <= maxLength ? trimmed : trimmed.slice(-maxLength);
+}
+
+function buildCommandDiagnostic(args: {
+  command: string;
+  cwd?: string;
+  result: CommandResult;
+  failureClass: RuntimeDogfoodExternalProbeFailureClass;
+}): RuntimeDogfoodExternalProbeCommandDiagnostic {
+  return {
+    command: args.command,
+    cwd: args.cwd ?? repoRoot,
+    duration_ms: args.result.durationMs,
+    exit_code: args.result.code,
+    stdout_tail: outputTail(args.result.stdout),
+    stderr_tail: outputTail(args.result.stderr),
+    failure_class: args.result.code === 0 ? "none" : args.failureClass,
+  };
+}
+
+function buildSliceDiagnostics(args: {
+  slice: RuntimeDogfoodExternalProbeSlice;
+  scenarioId: string;
+  primary: RuntimeDogfoodExternalProbeCommandDiagnostic;
+  commands: RuntimeDogfoodExternalProbeCommandDiagnostic[];
+  failureClass?: RuntimeDogfoodExternalProbeFailureClass;
+}): RuntimeDogfoodExternalProbeSliceDiagnostic {
+  const commands = args.commands.length > 0 ? args.commands : [args.primary];
+  const failed = commands.find((command) => command.failure_class !== "none");
+  const failureClass = args.failureClass ?? failed?.failure_class ?? args.primary.failure_class;
+  return {
+    ...args.primary,
+    failure_class: failureClass,
+    slice: args.slice,
+    scenario_id: args.scenarioId,
+    command_count: commands.length,
+    commands,
+  };
 }
 
 function validationFailureReason(kind: string, probe: CommandResult): string | null {
@@ -522,7 +603,7 @@ async function runLiveWorkspaceProbe(args: {
   tempPrefix: string;
   files: Record<string, string>;
   validationCommand: string;
-}): Promise<CommandResult> {
+}): Promise<LiveWorkspaceProbeResult> {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), args.tempPrefix));
   try {
     for (const [relativePath, content] of Object.entries(args.files)) {
@@ -530,7 +611,8 @@ async function runLiveWorkspaceProbe(args: {
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
       fs.writeFileSync(filePath, content);
     }
-    return await probeFreshShellCommand(`cd ${shellQuote(tempDir)} && ${args.validationCommand}`, 15000);
+    const probe = await probeFreshShellCommand(args.validationCommand, 15000, tempDir);
+    return { probe, cwd: tempDir, command: args.validationCommand };
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -542,7 +624,9 @@ async function runServiceAfterExitProbe(port?: number): Promise<RuntimeDogfoodEx
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-runtime-dogfood-service-"));
   let servicePid: number | null = null;
   let launcherExitCode: number | null = null;
-  let probe: CommandResult = { code: 1, stdout: "", stderr: "probe_not_run" };
+  let probe: CommandResult = { code: 1, stdout: "", stderr: "probe_not_run", durationMs: 0 };
+  let launcherDiagnostic: RuntimeDogfoodExternalProbeCommandDiagnostic | null = null;
+  const healthCommand = `curl -fsS ${shellQuote(`${endpoint}/healthz`)}`;
 
   try {
     const launched = await launchDetachedProcess({
@@ -552,13 +636,34 @@ async function runServiceAfterExitProbe(port?: number): Promise<RuntimeDogfoodEx
     });
     servicePid = launched.pid;
     launcherExitCode = launched.launcherExitCode;
-    probe = await waitForFreshShellCommand(`curl -fsS ${shellQuote(`${endpoint}/healthz`)}`);
+    launcherDiagnostic = buildCommandDiagnostic({
+      command: launched.launcherCommand,
+      result: launched.launcherResult,
+      failureClass: "service_launch_failed",
+    });
+    probe = await waitForFreshShellCommand(healthCommand);
   } finally {
     killService(servicePid);
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 
   const taskSpec = buildServiceTaskSpec({ endpoint, probe, servicePid, launcherExitCode });
+  const probeDiagnostic = buildCommandDiagnostic({
+    command: healthCommand,
+    result: probe,
+    failureClass: "fresh_shell_probe_failed",
+  });
+  const diagnostics = buildSliceDiagnostics({
+    slice: "service_after_exit",
+    scenarioId: taskSpec.id,
+    primary: probeDiagnostic,
+    commands: launcherDiagnostic ? [launcherDiagnostic, probeDiagnostic] : [probeDiagnostic],
+    failureClass: launcherExitCode !== 0 || !servicePid
+      ? "service_launch_failed"
+      : probe.code === 0
+        ? "none"
+        : "fresh_shell_probe_failed",
+  });
   return {
     id: taskSpec.id,
     task_family_hint: "service_publish_validate",
@@ -567,6 +672,7 @@ async function runServiceAfterExitProbe(port?: number): Promise<RuntimeDogfoodEx
     launcher_exit_code: launcherExitCode,
     fresh_shell_probe_passed: probe.code === 0,
     fresh_shell_probe_output: probe.stdout.trim(),
+    diagnostics,
     task_spec: taskSpec,
   };
 }
@@ -578,7 +684,8 @@ async function runPublishInstallProbe(port?: number): Promise<RuntimeDogfoodExte
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-runtime-dogfood-publish-"));
   let servicePid: number | null = null;
   let launcherExitCode: number | null = null;
-  let probe: CommandResult = { code: 1, stdout: "", stderr: "probe_not_run" };
+  let probe: CommandResult = { code: 1, stdout: "", stderr: "probe_not_run", durationMs: 0 };
+  const commandDiagnostics: RuntimeDogfoodExternalProbeCommandDiagnostic[] = [];
 
   try {
     const distDir = await prepareVectoropsIndex({ tempDir, python });
@@ -589,8 +696,18 @@ async function runPublishInstallProbe(port?: number): Promise<RuntimeDogfoodExte
     });
     servicePid = launched.pid;
     launcherExitCode = launched.launcherExitCode;
+    commandDiagnostics.push(buildCommandDiagnostic({
+      command: launched.launcherCommand,
+      result: launched.launcherResult,
+      failureClass: "service_launch_failed",
+    }));
     const indexCheck = `curl -fsS ${shellQuote(`${endpoint}/simple/vectorops/`)}`;
     const ready = await waitForFreshShellCommand(indexCheck, 15000);
+    commandDiagnostics.push(buildCommandDiagnostic({
+      command: indexCheck,
+      result: ready,
+      failureClass: "fresh_shell_probe_failed",
+    }));
     if (ready.code !== 0) {
       probe = ready;
     } else {
@@ -604,6 +721,11 @@ async function runPublishInstallProbe(port?: number): Promise<RuntimeDogfoodExte
         `${shellQuote(clientPython)} -c ${shellQuote("import vectorops; print(vectorops.__version__)")}`,
       ].join(" && ");
       probe = await probeFreshShellCommand(installCommand, 60000);
+      commandDiagnostics.push(buildCommandDiagnostic({
+        command: installCommand,
+        result: probe,
+        failureClass: "clean_client_install_failed",
+      }));
     }
   } finally {
     killService(servicePid);
@@ -611,6 +733,22 @@ async function runPublishInstallProbe(port?: number): Promise<RuntimeDogfoodExte
   }
 
   const taskSpec = buildPublishInstallTaskSpec({ endpoint, probe, servicePid, launcherExitCode });
+  const primaryDiagnostic = commandDiagnostics[commandDiagnostics.length - 1] ?? buildCommandDiagnostic({
+    command: "publish/install external probe",
+    result: probe,
+    failureClass: "clean_client_install_failed",
+  });
+  const diagnostics = buildSliceDiagnostics({
+    slice: "publish_install",
+    scenarioId: taskSpec.id,
+    primary: primaryDiagnostic,
+    commands: commandDiagnostics,
+    failureClass: launcherExitCode !== 0 || !servicePid
+      ? "service_launch_failed"
+      : probe.code === 0
+        ? "none"
+        : primaryDiagnostic.failure_class,
+  });
   return {
     id: taskSpec.id,
     task_family_hint: "package_publish_validate",
@@ -619,6 +757,7 @@ async function runPublishInstallProbe(port?: number): Promise<RuntimeDogfoodExte
     launcher_exit_code: launcherExitCode,
     fresh_shell_probe_passed: probe.code === 0,
     fresh_shell_probe_output: probe.stdout.trim(),
+    diagnostics,
     task_spec: taskSpec,
   };
 }
@@ -632,7 +771,9 @@ async function runDeployHookWebProbe(port?: number): Promise<RuntimeDogfoodExter
   const expectedContent = "deployed revision visible through live dogfood";
   let servicePid: number | null = null;
   let launcherExitCode: number | null = null;
-  let probe: CommandResult = { code: 1, stdout: "", stderr: "probe_not_run" };
+  let probe: CommandResult = { code: 1, stdout: "", stderr: "probe_not_run", durationMs: 0 };
+  const commandDiagnostics: RuntimeDogfoodExternalProbeCommandDiagnostic[] = [];
+  const webCommand = `curl -fsS ${shellQuote(`${endpoint}/index.html`)}`;
 
   try {
     fs.mkdirSync(webRoot, { recursive: true });
@@ -644,7 +785,12 @@ async function runDeployHookWebProbe(port?: number): Promise<RuntimeDogfoodExter
     });
     servicePid = launched.pid;
     launcherExitCode = launched.launcherExitCode;
-    probe = await waitForFreshShellCommand(`curl -fsS ${shellQuote(`${endpoint}/index.html`)}`, 10000);
+    commandDiagnostics.push(buildCommandDiagnostic({
+      command: launched.launcherCommand,
+      result: launched.launcherResult,
+      failureClass: "service_launch_failed",
+    }));
+    probe = await waitForFreshShellCommand(webCommand, 10000);
   } finally {
     killService(servicePid);
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -652,6 +798,25 @@ async function runDeployHookWebProbe(port?: number): Promise<RuntimeDogfoodExter
 
   const contentMatched = probe.stdout.includes(expectedContent);
   const taskSpec = buildDeployHookWebTaskSpec({ endpoint, probe, contentMatched });
+  const probeDiagnostic = buildCommandDiagnostic({
+    command: webCommand,
+    result: probe,
+    failureClass: "served_web_content_probe_failed",
+  });
+  commandDiagnostics.push(probeDiagnostic);
+  const diagnostics = buildSliceDiagnostics({
+    slice: "deploy_hook_web",
+    scenarioId: taskSpec.id,
+    primary: probeDiagnostic,
+    commands: commandDiagnostics,
+    failureClass: launcherExitCode !== 0 || !servicePid
+      ? "service_launch_failed"
+      : probe.code !== 0
+        ? "served_web_content_probe_failed"
+        : contentMatched
+          ? "none"
+          : "served_web_content_mismatch",
+  });
   return {
     id: taskSpec.id,
     task_family_hint: "git_deploy_webserver",
@@ -660,13 +825,14 @@ async function runDeployHookWebProbe(port?: number): Promise<RuntimeDogfoodExter
     launcher_exit_code: launcherExitCode,
     fresh_shell_probe_passed: probe.code === 0 && contentMatched,
     fresh_shell_probe_output: probe.stdout.trim(),
+    diagnostics,
     task_spec: taskSpec,
   };
 }
 
 async function runInterruptedResumeProbe(): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
   const validationCommand = "npm test -- tests/exporter.test.mjs";
-  const probe = await runLiveWorkspaceProbe({
+  const liveProbe = await runLiveWorkspaceProbe({
     tempPrefix: "aionis-runtime-dogfood-interrupted-",
     validationCommand,
     files: {
@@ -689,6 +855,7 @@ async function runInterruptedResumeProbe(): Promise<RuntimeDogfoodExternalProbeS
       ].join("\n"),
     },
   });
+  const probe = liveProbe.probe;
   const taskSpec = buildLiveCommandTaskSpec({
     id: "external_probe_interrupted_resume",
     title: "External probe interrupted resume validation",
@@ -701,6 +868,18 @@ async function runInterruptedResumeProbe(): Promise<RuntimeDogfoodExternalProbeS
     evidenceRef: "external_probe:interrupted_resume:targeted_export_test",
     probe,
   });
+  const commandDiagnostic = buildCommandDiagnostic({
+    command: liveProbe.command,
+    cwd: liveProbe.cwd,
+    result: probe,
+    failureClass: "live_command_probe_failed",
+  });
+  const diagnostics = buildSliceDiagnostics({
+    slice: "interrupted_resume",
+    scenarioId: taskSpec.id,
+    primary: commandDiagnostic,
+    commands: [commandDiagnostic],
+  });
   return {
     id: taskSpec.id,
     task_family_hint: "task_resume_interrupted_export_pipeline",
@@ -709,13 +888,14 @@ async function runInterruptedResumeProbe(): Promise<RuntimeDogfoodExternalProbeS
     launcher_exit_code: null,
     fresh_shell_probe_passed: probe.code === 0,
     fresh_shell_probe_output: probe.stdout.trim(),
+    diagnostics,
     task_spec: taskSpec,
   };
 }
 
 async function runHandoffNextDayProbe(): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
   const validationCommand = "npm test -- tests/payments/webhook.test.mjs";
-  const probe = await runLiveWorkspaceProbe({
+  const liveProbe = await runLiveWorkspaceProbe({
     tempPrefix: "aionis-runtime-dogfood-handoff-",
     validationCommand,
     files: {
@@ -739,6 +919,7 @@ async function runHandoffNextDayProbe(): Promise<RuntimeDogfoodExternalProbeScen
       ].join("\n"),
     },
   });
+  const probe = liveProbe.probe;
   const taskSpec = buildLiveCommandTaskSpec({
     id: "external_probe_handoff_next_day",
     title: "External probe next-day handoff resume validation",
@@ -752,6 +933,18 @@ async function runHandoffNextDayProbe(): Promise<RuntimeDogfoodExternalProbeScen
     evidenceRef: "external_probe:handoff_next_day:targeted_payment_webhook_test",
     probe,
   });
+  const commandDiagnostic = buildCommandDiagnostic({
+    command: liveProbe.command,
+    cwd: liveProbe.cwd,
+    result: probe,
+    failureClass: "live_command_probe_failed",
+  });
+  const diagnostics = buildSliceDiagnostics({
+    slice: "handoff_next_day",
+    scenarioId: taskSpec.id,
+    primary: commandDiagnostic,
+    commands: [commandDiagnostic],
+  });
   return {
     id: taskSpec.id,
     task_family_hint: "handoff_resume",
@@ -760,13 +953,14 @@ async function runHandoffNextDayProbe(): Promise<RuntimeDogfoodExternalProbeScen
     launcher_exit_code: null,
     fresh_shell_probe_passed: probe.code === 0,
     fresh_shell_probe_output: probe.stdout.trim(),
+    diagnostics,
     task_spec: taskSpec,
   };
 }
 
 async function runAgentTakeoverProbe(): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
   const validationCommand = "npm test -- tests/search/indexer.test.mjs";
-  const probe = await runLiveWorkspaceProbe({
+  const liveProbe = await runLiveWorkspaceProbe({
     tempPrefix: "aionis-runtime-dogfood-agent-takeover-",
     validationCommand,
     files: {
@@ -789,6 +983,7 @@ async function runAgentTakeoverProbe(): Promise<RuntimeDogfoodExternalProbeScena
       ].join("\n"),
     },
   });
+  const probe = liveProbe.probe;
   const taskSpec = buildLiveCommandTaskSpec({
     id: "external_probe_agent_takeover",
     title: "External probe second agent takeover validation",
@@ -802,6 +997,18 @@ async function runAgentTakeoverProbe(): Promise<RuntimeDogfoodExternalProbeScena
     evidenceRef: "external_probe:agent_takeover:targeted_search_indexer_test",
     probe,
   });
+  const commandDiagnostic = buildCommandDiagnostic({
+    command: liveProbe.command,
+    cwd: liveProbe.cwd,
+    result: probe,
+    failureClass: "live_command_probe_failed",
+  });
+  const diagnostics = buildSliceDiagnostics({
+    slice: "agent_takeover",
+    scenarioId: taskSpec.id,
+    primary: commandDiagnostic,
+    commands: [commandDiagnostic],
+  });
   return {
     id: taskSpec.id,
     task_family_hint: "agent_takeover",
@@ -810,6 +1017,7 @@ async function runAgentTakeoverProbe(): Promise<RuntimeDogfoodExternalProbeScena
     launcher_exit_code: null,
     fresh_shell_probe_passed: probe.code === 0,
     fresh_shell_probe_output: probe.stdout.trim(),
+    diagnostics,
     task_spec: taskSpec,
   };
 }
@@ -840,6 +1048,7 @@ export async function runRuntimeDogfoodExternalProbe(options: ExternalProbeOptio
   const taskSpecs = probes.map((probe) => probe.task_spec);
   const dogfoodResult = runRuntimeDogfoodSuite(runtimeDogfoodTasksFromSpecs(taskSpecs));
   const primary = probes[0] ?? null;
+  const diagnostics = probes.map((probe) => probe.diagnostics);
   return {
     run_version: "runtime_dogfood_external_probe_run_v1",
     endpoint: primary?.endpoint ?? "",
@@ -848,6 +1057,7 @@ export async function runRuntimeDogfoodExternalProbe(options: ExternalProbeOptio
     fresh_shell_probe_passed: probes.every((probe) => probe.fresh_shell_probe_passed),
     fresh_shell_probe_output: probes.map((probe) => `${probe.id}: ${probe.fresh_shell_probe_output}`).join("\n"),
     probes,
+    diagnostics,
     task_specs: taskSpecs,
     dogfood_result: dogfoodResult,
   };
