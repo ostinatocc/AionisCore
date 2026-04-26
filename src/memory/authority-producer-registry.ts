@@ -104,6 +104,21 @@ export const RUNTIME_AUTHORITY_BOUNDARY_REGISTRY = [
     mayReadRawAuthoritySurface: true,
   },
   {
+    id: "authority_decision_reporting",
+    file: "src/memory/authority-decision-report.ts",
+    layer: "Trust Gate",
+    role: "read_side_summary",
+    authorityRules: [
+      "authority_decision_reporting_is_read_only",
+      "authority_decision_reporting_must_not_grant_runtime_authority",
+    ],
+    requiredSourceMarkers: [
+      "runtime_authority_decision_report_v1",
+      "buildRuntimeAuthorityDecisionReportFromGates",
+      "runtimeAuthorityReadSideRules",
+    ],
+  },
+  {
     id: "action_retrieval_outcome_gate",
     file: "src/memory/action-retrieval.ts",
     layer: "Orchestrator",

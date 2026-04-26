@@ -10,6 +10,13 @@ import {
 import { buildTrajectoryCompileLite } from "../../src/memory/trajectory-compile.ts";
 import { applyTrajectoryCompileExecutionKernel } from "../../src/memory/trajectory-compile-runtime.ts";
 import type { TrajectoryCompileHintsInput, TrajectoryCompileResponse, TrajectoryCompileSourceInput } from "../../src/memory/schemas.ts";
+import {
+  buildRuntimeAuthorityDecisionReport,
+  buildRuntimeAuthorityDecisionReportFromGates,
+  type RuntimeAuthorityDecisionReportV1,
+  type RuntimeAuthorityDecisionSummaryV1,
+  type RuntimeAuthorityDecisionV1,
+} from "../../src/memory/authority-decision-report.ts";
 
 type DogfoodExpectation = {
   target_files_include: string[];
@@ -133,6 +140,7 @@ export type RuntimeDogfoodScenarioResult = {
     execution_evidence_assessment: ExecutionEvidenceAssessmentV1;
     service_lifecycle_constraint_count: number;
   };
+  authority_decision_report: RuntimeAuthorityDecisionReportV1;
 };
 
 export type RuntimeDogfoodAuthorityGateResult =
@@ -157,6 +165,8 @@ export type RuntimeDogfoodScenarioReport = {
   live_external_validation: boolean;
   authority_gate_result: RuntimeDogfoodAuthorityGateResult;
   authority_blockers: string[];
+  authority_decision_summary: RuntimeAuthorityDecisionSummaryV1;
+  authority_decisions: RuntimeAuthorityDecisionV1[];
   product_metrics: {
     first_correct_action: boolean;
     wasted_steps: number;
@@ -219,6 +229,7 @@ export type RuntimeDogfoodReportV1 = {
       rate: number;
     }>;
   };
+  authority_decision_report: RuntimeAuthorityDecisionReportV1;
   blocking_risks: string[];
   next_actions: string[];
   scenarios: RuntimeDogfoodScenarioReport[];
@@ -897,6 +908,16 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
     || unblockedFalseConfidence
     || (expectation.authoritative_gate_allows && expectation.after_exit_required && afterExitCorrect !== true)
     || (expectation.success_invariants_include.length > 0 && contract.outcome.success_invariants.length === 0);
+  const authorityDecisionReport = buildRuntimeAuthorityDecisionReportFromGates({
+    subject: task.id,
+    outcomeContractGate,
+    executionEvidenceAssessment,
+    stablePromotionAllowed,
+    falseConfidenceDetected,
+    candidateWorkflowVisible: !stablePromotionAllowed,
+    trustedPatternOnlyVisible: false,
+    policyDefaultAttempted: true,
+  });
   assertions.push(
     stablePromotionAllowed === expectation.stable_promotion_allowed
       ? pass("learning promotion respects execution evidence")
@@ -945,6 +966,7 @@ function evaluateTask(task: RuntimeDogfoodTask): RuntimeDogfoodScenarioResult {
       execution_evidence_assessment: executionEvidenceAssessment,
       service_lifecycle_constraint_count: contract.service_lifecycle_constraints.length,
     },
+    authority_decision_report: authorityDecisionReport,
   };
 }
 
@@ -1051,6 +1073,8 @@ function buildScenarioReport(scenario: RuntimeDogfoodScenarioResult): RuntimeDog
     live_external_validation: scenario.proof.live_external_validation,
     authority_gate_result: authorityGateResult(scenario),
     authority_blockers: scenarioAuthorityBlockers(scenario),
+    authority_decision_summary: scenario.authority_decision_report.summary,
+    authority_decisions: scenario.authority_decision_report.decisions,
     product_metrics: {
       first_correct_action: scenario.metrics.first_correct_action,
       wasted_steps: scenario.metrics.wasted_step_count,
@@ -1184,6 +1208,9 @@ function reportNextActions(args: {
 function buildRuntimeDogfoodReport(base: RuntimeDogfoodSuiteWithoutReport): RuntimeDogfoodReportV1 {
   const afterExitEvidenceScenarios = base.scenarios.filter((scenario) => scenario.metrics.after_exit_revalidated !== null);
   const freshShellScenarios = base.scenarios.filter((scenario) => scenario.metrics.fresh_shell_probe_passed !== null);
+  const authorityDecisionReport = buildRuntimeAuthorityDecisionReport(
+    base.scenarios.flatMap((scenario) => scenario.authority_decision_report.decisions),
+  );
   const productStatus = reportProductStatus({
     overallStatus: base.overall_status,
     proofBoundary: base.proof_boundary,
@@ -1216,6 +1243,7 @@ function buildRuntimeDogfoodReport(base: RuntimeDogfoodSuiteWithoutReport): Runt
       live_execution_coverage_rate: rate(base.proof_boundary.live_execution_scenarios, base.summary.total_scenarios),
       live_execution_coverage_by_family: liveCoverageByFamily(base.scenarios),
     },
+    authority_decision_report: authorityDecisionReport,
     blocking_risks: reportBlockingRisks({
       proofBoundary: base.proof_boundary,
       summary: base.summary,
@@ -1315,6 +1343,8 @@ export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult):
     `- cross_shell_revalidation_success_rate: ${result.report.product_metrics.cross_shell_revalidation_success_rate ?? "n/a"}`,
     `- live_execution_coverage_rate: ${result.report.product_metrics.live_execution_coverage_rate}`,
     `- live_execution_coverage_by_family: ${Object.entries(result.report.product_metrics.live_execution_coverage_by_family).map(([family, coverage]) => `${family}=${coverage.live_execution_scenarios}/${coverage.total_scenarios}:${coverage.rate}`).join(", ")}`,
+    `- authority_decisions: total=${result.report.authority_decision_report.summary.total_decisions}, blocked=${result.report.authority_decision_report.summary.blocked_count}, advisory_only=${result.report.authority_decision_report.summary.advisory_only_count}, inspect_or_rehydrate=${result.report.authority_decision_report.summary.inspect_or_rehydrate_count}`,
+    `- authority_decision_blockers: ${Object.entries(result.report.authority_decision_report.summary.blocked_by_reason).map(([reason, count]) => `${reason}=${count}`).join(", ") || "none"}`,
     "",
     "## Blocking Risks",
     "",
@@ -1372,6 +1402,7 @@ export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult):
     lines.push(`- product_status: ${scenarioReport?.product_status ?? "unknown"}`);
     lines.push(`- authority_gate_result: ${scenarioReport?.authority_gate_result ?? "unknown"}`);
     lines.push(`- authority_blockers: ${scenarioReport?.authority_blockers.join(" | ") || "none"}`);
+    lines.push(`- authority_decisions: total=${scenarioReport?.authority_decision_summary.total_decisions ?? 0}, blocked=${scenarioReport?.authority_decision_summary.blocked_count ?? 0}, advisory_only=${scenarioReport?.authority_decision_summary.advisory_only_count ?? 0}, inspect_or_rehydrate=${scenarioReport?.authority_decision_summary.inspect_or_rehydrate_count ?? 0}`);
     lines.push(`- recommended_next_action: ${scenarioReport?.recommended_next_action ?? "unknown"}`);
     lines.push(`- execution_evidence_supplied: ${scenario.proof.execution_evidence_supplied}`);
     lines.push(`- after_exit_evidence_supplied: ${scenario.proof.after_exit_evidence_supplied}`);

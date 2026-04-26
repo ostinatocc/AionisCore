@@ -127,6 +127,22 @@ test("runtime boundary inventory keeps authority capabilities and legacy reasons
     );
   }
 
+  const authorityDecisionReporting = RUNTIME_BOUNDARY_INVENTORY.find(
+    (entry) => entry.source === "authority" && entry.source_id === "authority_decision_reporting",
+  );
+  assert.equal(authorityDecisionReporting?.source, "authority");
+  if (authorityDecisionReporting?.source === "authority") {
+    assert.equal(authorityDecisionReporting.role, "read_side_summary");
+    assert.ok(
+      authorityDecisionReporting.authority_rules.includes("authority_decision_reporting_must_not_grant_runtime_authority"),
+      "authority decision reporting must publish its read-only authority boundary",
+    );
+    assert.ok(
+      authorityDecisionReporting.required_source_markers.includes("runtime_authority_decision_report_v1"),
+      "authority decision reporting must publish its report contract marker",
+    );
+  }
+
   const legacyResolver = RUNTIME_BOUNDARY_INVENTORY.find(
     (entry) => entry.source === "legacy_access" && entry.source_id === "node_execution_surface",
   );
