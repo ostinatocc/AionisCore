@@ -143,6 +143,22 @@ test("runtime boundary inventory keeps authority capabilities and legacy reasons
     );
   }
 
+  const executionIntrospection = RUNTIME_BOUNDARY_INVENTORY.find(
+    (entry) => entry.source === "authority" && entry.source_id === "execution_introspection",
+  );
+  assert.equal(executionIntrospection?.source, "authority");
+  if (executionIntrospection?.source === "authority") {
+    assert.equal(executionIntrospection.role, "authority_consumer");
+    assert.ok(
+      executionIntrospection.authority_rules.includes("execution_introspection_reports_authority_decisions_read_only"),
+      "execution introspection must expose authority decisions as read-only host diagnostics",
+    );
+    assert.ok(
+      executionIntrospection.required_source_markers.includes("authority_decision_report"),
+      "execution introspection must publish the host-facing authority decision report marker",
+    );
+  }
+
   const legacyResolver = RUNTIME_BOUNDARY_INVENTORY.find(
     (entry) => entry.source === "legacy_access" && entry.source_id === "node_execution_surface",
   );

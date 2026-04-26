@@ -19,6 +19,12 @@ import { buildOutcomeContractGate, type OutcomeContractGate } from "./contract-t
 import { buildRuntimeAuthorityVisibilityFromSlots } from "./authority-visibility.js";
 import { authorityConsumptionStateFromValue } from "./authority-consumption.js";
 import {
+  buildRuntimeAuthorityDecisionReport,
+  buildRuntimeAuthorityDecisionReportFromGates,
+  type RuntimeAuthorityDecisionReportV1,
+} from "./authority-decision-report.js";
+import type { ExecutionEvidenceAssessmentV1 } from "./execution-evidence.js";
+import {
   resolveNodeAnchorSummary,
   resolveNodeAnchorLevel,
   resolveNodeCompressionLayer,
@@ -100,6 +106,131 @@ function stringList(value: unknown, limit = 16): string[] {
   return out;
 }
 
+type ContractTrustForReport = OutcomeContractGate["requested_trust"];
+type AuthorityVisibilityForReport = ReturnType<typeof buildRuntimeAuthorityVisibilityFromSlots>;
+
+function normalizeContractTrustForReport(value: unknown): ContractTrustForReport {
+  return value === "authoritative" || value === "advisory" || value === "observational" ? value : null;
+}
+
+function normalizeEvidenceStatusForReport(value: unknown): ExecutionEvidenceAssessmentV1["status"] {
+  return value === "succeeded" || value === "failed" || value === "incomplete" || value === "unknown"
+    ? value
+    : "unknown";
+}
+
+function nullableBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function requiresAfterExitFromGate(gate: OutcomeContractGate): boolean {
+  return gate.decisive_fields.must_hold_after_exit_count > 0
+    || gate.decisive_fields.service_must_survive_agent_exit_count > 0;
+}
+
+function requiresFreshShellFromGate(gate: OutcomeContractGate): boolean {
+  return gate.decisive_fields.external_visibility_requirement_count > 0
+    || gate.decisive_fields.service_revalidate_from_fresh_shell_count > 0;
+}
+
+function normalizeExecutionEvidenceAssessmentForReport(args: {
+  value: unknown;
+  requestedTrust: ContractTrustForReport;
+  outcomeContractGate: OutcomeContractGate;
+  authorityVisibility: AuthorityVisibilityForReport;
+}): ExecutionEvidenceAssessmentV1 {
+  const record = optionalRecord(args.value);
+  if (record?.schema_version === "execution_evidence_assessment_v1") {
+    const decisiveFields = asRecord(record.decisive_fields);
+    const requestedTrust = normalizeContractTrustForReport(record.requested_trust) ?? args.requestedTrust;
+    const allowsAuthoritative = record.allows_authoritative === true;
+    return {
+      schema_version: "execution_evidence_assessment_v1",
+      status: normalizeEvidenceStatusForReport(record.status),
+      allows_authoritative: allowsAuthoritative,
+      allows_stable_promotion: record.allows_stable_promotion === true,
+      requested_trust: requestedTrust,
+      effective_trust: normalizeContractTrustForReport(record.effective_trust)
+        ?? (requestedTrust === "authoritative" && !allowsAuthoritative ? "advisory" : requestedTrust),
+      reasons: stringList(record.reasons, 16),
+      decisive_fields: {
+        validation_passed: nullableBoolean(decisiveFields.validation_passed),
+        after_exit_revalidated: nullableBoolean(decisiveFields.after_exit_revalidated),
+        fresh_shell_probe_passed: nullableBoolean(decisiveFields.fresh_shell_probe_passed),
+        false_confidence_detected: decisiveFields.false_confidence_detected === true,
+        failure_reason_present: decisiveFields.failure_reason_present === true,
+        requires_after_exit_revalidation: decisiveFields.requires_after_exit_revalidation === true
+          || requiresAfterExitFromGate(args.outcomeContractGate),
+        requires_fresh_shell_probe: decisiveFields.requires_fresh_shell_probe === true
+          || requiresFreshShellFromGate(args.outcomeContractGate),
+      },
+    };
+  }
+
+  const reasons = args.authorityVisibility?.execution_evidence_reasons.length
+    ? args.authorityVisibility.execution_evidence_reasons
+    : ["missing_execution_evidence_assessment"];
+  return {
+    schema_version: "execution_evidence_assessment_v1",
+    status: "unknown",
+    allows_authoritative: false,
+    allows_stable_promotion: false,
+    requested_trust: args.requestedTrust,
+    effective_trust: args.requestedTrust === "authoritative" ? "advisory" : args.requestedTrust,
+    reasons: reasons.slice(0, 16),
+    decisive_fields: {
+      validation_passed: null,
+      after_exit_revalidated: null,
+      fresh_shell_probe_passed: null,
+      false_confidence_detected: args.authorityVisibility?.false_confidence_detected === true,
+      failure_reason_present: false,
+      requires_after_exit_revalidation: requiresAfterExitFromGate(args.outcomeContractGate),
+      requires_fresh_shell_probe: requiresFreshShellFromGate(args.outcomeContractGate),
+    },
+  };
+}
+
+function buildEntryAuthorityDecisionReport(args: {
+  subject: string;
+  outcomeContractGate: OutcomeContractGate;
+  executionEvidenceAssessment?: unknown;
+  authorityVisibility: AuthorityVisibilityForReport;
+  candidateWorkflowVisible?: boolean;
+  trustedPatternOnlyVisible?: boolean;
+  policyDefaultAttempted?: boolean;
+  stablePromotionAllowedOverride?: boolean;
+}): RuntimeAuthorityDecisionReportV1 {
+  const executionEvidenceAssessment = normalizeExecutionEvidenceAssessmentForReport({
+    value: args.executionEvidenceAssessment,
+    requestedTrust: args.outcomeContractGate.requested_trust,
+    outcomeContractGate: args.outcomeContractGate,
+    authorityVisibility: args.authorityVisibility,
+  });
+  const falseConfidenceDetected =
+    args.authorityVisibility?.false_confidence_detected === true
+    || executionEvidenceAssessment.decisive_fields.false_confidence_detected;
+  const stablePromotionAllowed = args.stablePromotionAllowedOverride ?? (
+    args.outcomeContractGate.allows_authoritative
+    && executionEvidenceAssessment.allows_stable_promotion
+    && args.authorityVisibility?.allows_stable_promotion !== false
+    && !falseConfidenceDetected
+  );
+  return buildRuntimeAuthorityDecisionReportFromGates({
+    subject: args.subject,
+    outcomeContractGate: args.outcomeContractGate,
+    executionEvidenceAssessment,
+    stablePromotionAllowed,
+    falseConfidenceDetected,
+    candidateWorkflowVisible: args.candidateWorkflowVisible,
+    trustedPatternOnlyVisible: args.trustedPatternOnlyVisible,
+    policyDefaultAttempted: args.policyDefaultAttempted,
+  });
+}
+
+function combineAuthorityDecisionReports(reports: RuntimeAuthorityDecisionReportV1[]): RuntimeAuthorityDecisionReportV1 {
+  return buildRuntimeAuthorityDecisionReport(reports.flatMap((report) => report.decisions));
+}
+
 function deriveWorkflowProjectionMeta(slots: Record<string, unknown>) {
   const projection = asRecord(slots.workflow_write_projection);
   const generatedBy = firstString(projection.generated_by);
@@ -145,13 +276,23 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
   const serviceLifecycleConstraints = resolveNodeServiceLifecycleConstraints({ slots });
   const observedCount = Number(workflowPromotion.observed_count ?? Number.NaN);
   const requiredObservations = Number(workflowPromotion.required_observations ?? Number.NaN);
+  const promotionState = firstString(workflowPromotion.promotion_state);
+  const executionEvidenceAssessment = optionalRecord(slots.execution_evidence_assessment);
   const promotionReady =
-    firstString(workflowPromotion.promotion_state) === "candidate"
+    promotionState === "candidate"
     && Number.isFinite(observedCount)
     && Number.isFinite(requiredObservations)
     && requiredObservations > 0
     && observedCount >= requiredObservations
     && !authorityState.blocks_promotion_readiness;
+  const authorityDecisionReport = buildEntryAuthorityDecisionReport({
+    subject: `workflow:${row.id}`,
+    outcomeContractGate,
+    executionEvidenceAssessment,
+    authorityVisibility,
+    candidateWorkflowVisible: promotionState === "candidate",
+    policyDefaultAttempted: promotionState === "stable",
+  });
   return {
     anchor_id: row.id,
     uri: toNodeUri(tenantId, scope, row.type, row.id),
@@ -162,12 +303,13 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     execution_contract_v1: executionContract,
     source_kind: resolveNodeWorkflowSourceKind(slots),
     promotion_origin: firstString(workflowPromotion.promotion_origin),
-    promotion_state: firstString(workflowPromotion.promotion_state),
+    promotion_state: promotionState,
     contract_trust: contractTrust,
     outcome_contract_gate: outcomeContractGate,
     ...(optionalRecord(slots.authority_gate_v1) ? { authority_gate_v1: optionalRecord(slots.authority_gate_v1) } : {}),
-    ...(optionalRecord(slots.execution_evidence_assessment) ? { execution_evidence_assessment: optionalRecord(slots.execution_evidence_assessment) } : {}),
+    ...(executionEvidenceAssessment ? { execution_evidence_assessment: executionEvidenceAssessment } : {}),
     authority_visibility: authorityVisibility,
+    authority_decision_report: authorityDecisionReport,
     task_family: resolveNodeTaskFamily({ slots }),
     observed_count: Number.isFinite(observedCount) ? observedCount : null,
     required_observations: Number.isFinite(requiredObservations) ? requiredObservations : null,
@@ -216,6 +358,24 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
   const operatorOverride = readPatternOperatorOverride(slots);
   const suppressed = isPatternSuppressed(operatorOverride);
   const credibilityState = patternSurface.credibility_state ?? "candidate";
+  const title = firstString(row.title);
+  const summary = firstString(row.text_summary, resolveNodeAnchorSummary(slots));
+  const authorityVisibility = buildRuntimeAuthorityVisibilityFromSlots({
+    nodeId: row.id,
+    nodeKind: "pattern",
+    title: title ?? summary,
+    slots,
+  });
+  const executionEvidenceAssessment = optionalRecord(slots.execution_evidence_assessment);
+  const authorityDecisionReport = buildEntryAuthorityDecisionReport({
+    subject: `pattern:${row.id}`,
+    outcomeContractGate,
+    executionEvidenceAssessment,
+    authorityVisibility,
+    trustedPatternOnlyVisible: credibilityState === "trusted",
+    policyDefaultAttempted: credibilityState === "trusted",
+    stablePromotionAllowedOverride: false,
+  });
   const distinctRunCount = Number(patternSurface.promotion.distinct_run_count ?? Number.NaN);
   const requiredDistinctRuns = Number(patternSurface.promotion.required_distinct_runs ?? Number.NaN);
   const counterEvidenceCount = Number(patternSurface.promotion.counter_evidence_count ?? Number.NaN);
@@ -224,12 +384,15 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
     anchor_id: row.id,
     uri: toNodeUri(tenantId, scope, row.type, row.id),
     type: row.type,
-    title: firstString(row.title),
-    summary: firstString(row.text_summary, resolveNodeAnchorSummary(slots)),
+    title,
+    summary,
     anchor_level: patternSurface.anchor_level,
     execution_contract_v1: executionContract,
     contract_trust: patternSurface.contract_trust,
     outcome_contract_gate: outcomeContractGate,
+    ...(executionEvidenceAssessment ? { execution_evidence_assessment: executionEvidenceAssessment } : {}),
+    authority_visibility: authorityVisibility,
+    authority_decision_report: authorityDecisionReport,
     selected_tool: patternSurface.selected_tool,
     task_family: patternSurface.task_family,
     error_family: patternSurface.error_family ?? resolveNodeErrorFamily(slots),
@@ -649,6 +812,11 @@ export async function buildExecutionMemoryIntrospectionLite(
   const candidatePatterns = patternEntries.filter((entry) => entry.credibility_state === "candidate");
   const trustedPatterns = patternEntries.filter((entry) => entry.credibility_state === "trusted");
   const contestedPatterns = patternEntries.filter((entry) => entry.credibility_state === "contested" || entry.counter_evidence_open === true);
+  const authorityDecisionReport = combineAuthorityDecisionReports([
+    ...recommendedWorkflows.map((entry) => entry.authority_decision_report),
+    ...candidateWorkflows.map((entry) => entry.authority_decision_report),
+    ...trustedPatterns.map((entry) => entry.authority_decision_report),
+  ]);
 
   const rehydrationCandidates = recommendedWorkflows
     .filter((entry) => entry.rehydration_default_mode)
@@ -808,6 +976,7 @@ export async function buildExecutionMemoryIntrospectionLite(
     pattern_signals: patternSignals,
     workflow_signals: workflowSignals,
     outcome_contract_gate_summary: outcomeContractGateSummary,
+    authority_decision_report: authorityDecisionReport,
     ...summaryBundle,
   };
 }
