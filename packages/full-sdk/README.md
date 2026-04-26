@@ -119,6 +119,10 @@ console.log(outcome.run_id);
 console.log(workflow.authority_summary);
 ```
 
+`retrieveWorkflowContract` returns the stable workflow contract and authority summary by default. The full execution
+introspection payload is debug-only; request it explicitly with `include_introspection: true` when building operator
+diagnostics.
+
 Explicit action-retrieval example:
 
 ```ts
