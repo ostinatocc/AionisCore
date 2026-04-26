@@ -19,6 +19,7 @@ import {
   runtimeBoundaryInventoryAuthorityProducerEntries,
 } from "../../src/memory/runtime-boundary-inventory.ts";
 import { buildExecutionContractFromProjection } from "../../src/memory/execution-contract.ts";
+import { buildRuntimeAuthorityDecisionReportFromGates } from "../../src/memory/authority-decision-report.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 
@@ -113,6 +114,73 @@ test("read-side authority consumers publish non-authoritative reuse boundaries",
     "candidate workflow paths must not emit workflow reuse hints",
   );
   assert.ok(policyMaterialization.authority_rules.includes("trusted_pattern_only_guidance_is_advisory_candidate"));
+});
+
+test("authority decision reporting explains read-side downgrades without granting authority", () => {
+  const report = buildRuntimeAuthorityDecisionReportFromGates({
+    subject: "candidate_reuse",
+    outcomeContractGate: {
+      gate_version: "outcome_contract_gate_v1",
+      status: "insufficient",
+      allows_authoritative: false,
+      requested_trust: "authoritative",
+      effective_trust: "advisory",
+      reasons: ["missing_service_detach_then_probe"],
+      requires_service_lifecycle_outcome: true,
+      decisive_fields: {
+        acceptance_check_count: 1,
+        success_invariant_count: 1,
+        meaningful_success_invariant_count: 1,
+        must_hold_after_exit_count: 1,
+        external_visibility_requirement_count: 1,
+        service_lifecycle_constraint_count: 1,
+        durable_service_lifecycle_constraint_count: 0,
+        service_must_survive_agent_exit_count: 0,
+        service_revalidate_from_fresh_shell_count: 0,
+        service_detach_then_probe_count: 0,
+        service_health_check_count: 1,
+      },
+    },
+    executionEvidenceAssessment: {
+      schema_version: "execution_evidence_assessment_v1",
+      status: "succeeded",
+      allows_authoritative: true,
+      allows_stable_promotion: true,
+      requested_trust: "authoritative",
+      effective_trust: "authoritative",
+      reasons: [],
+      decisive_fields: {
+        validation_passed: true,
+        after_exit_revalidated: true,
+        fresh_shell_probe_passed: true,
+        false_confidence_detected: false,
+        failure_reason_present: false,
+        requires_after_exit_revalidation: true,
+        requires_fresh_shell_probe: true,
+      },
+    },
+    stablePromotionAllowed: false,
+    falseConfidenceDetected: false,
+    candidateWorkflowVisible: true,
+    trustedPatternOnlyVisible: true,
+    policyDefaultAttempted: true,
+  });
+
+  assert.equal(report.report_version, "runtime_authority_decision_report_v1");
+  assert.equal(report.summary.decisions_by_surface.candidate_workflow_reuse.inspect_or_rehydrate_only, 1);
+  assert.equal(report.summary.decisions_by_surface.trusted_pattern_policy_materialization.advisory_only, 1);
+  assert.equal(report.summary.decisions_by_surface.policy_default_materialization.blocked, 1);
+  assert.equal(report.summary.unblocked_false_confidence_count, 0);
+  assert.ok(report.read_side_rules.some((entry) => entry.source_id === "authority_decision_reporting"));
+  assert.ok(report.decisions.some((entry) =>
+    entry.surface === "candidate_workflow_reuse"
+    && entry.rule_refs.includes("candidate_workflow_reuse_is_inspect_or_rehydrate_only")
+  ));
+  assert.ok(report.decisions.some((entry) =>
+    entry.surface === "trusted_pattern_policy_materialization"
+    && entry.disposition === "advisory_only"
+    && entry.rule_refs.includes("trusted_pattern_only_guidance_is_advisory_candidate")
+  ));
 });
 
 test("stable and authoritative producer literals stay in declared producer classes", () => {

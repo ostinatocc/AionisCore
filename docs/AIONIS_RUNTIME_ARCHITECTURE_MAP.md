@@ -190,6 +190,8 @@ Workflow and policy producers that persist `stable`, `active`, or `authoritative
 
 Read-side consumers must preserve the same authority boundary. A candidate workflow may be surfaced for inspection, rehydration, recall evidence, and promotion review, but it must not emit stable workflow tool-source authority, stable workflow steps, workflow reuse policy hints, or default policy contracts. A trusted pattern by itself may select or prefer a tool, but it remains advisory candidate guidance until a stable workflow or a live authoritative execution contract supplies the policy authority.
 
+Authority decision reporting is a read-only Trust Gate summary surface. It may explain outcome contract gates, execution evidence gates, stable promotion decisions, false-confidence blocking, candidate workflow inspect/rehydrate limits, trusted-pattern advisory limits, and policy default materialization decisions. It must not grant Runtime authority, mutate memory, or bypass producer gates.
+
 The producer registry is the source manifest for authority write boundaries. CI boundary consumers must read the unified runtime boundary inventory instead of maintaining independent path allowlists, so a new producer cannot appear as an accidental code-search exception.
 
 ### 3. Orchestrator

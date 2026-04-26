@@ -57,6 +57,8 @@ The report intentionally focuses on product behavior, not test implementation de
    Measures how much of the report is backed by live `external_probe` execution.
 9. `live_execution_coverage_by_family`
    Measures live `external_probe` coverage per Runtime task family, for example `service_publish_validate`, `package_publish_validate`, `git_deploy_webserver`, `task_resume_interrupted_export_pipeline`, `handoff_resume`, and `agent_takeover`.
+10. `authority_decision_report`
+    Explains why each authority decision was allowed, blocked, downgraded to advisory, or limited to inspect/rehydrate. This includes outcome contract gating, execution evidence gating, stable promotion, false-confidence blocking, candidate workflow reuse, and policy default materialization.
 
 ## Live External Probe Slices
 
@@ -140,6 +142,24 @@ For service lifecycle tasks:
 3. fresh-shell visibility requires `fresh_shell_probe_passed=true`
 4. missing or failed lifecycle evidence must keep reusable workflow memory advisory
 
+## Authority Decision Report
+
+Every product report includes `report.authority_decision_report` with:
+
+1. `summary`
+   Counts allowed, blocked, advisory-only, inspect/rehydrate-only, and unblocked false-confidence decisions.
+2. `read_side_rules`
+   Source-owned `authority_rules` copied from the Runtime authority boundary registry. This is where candidate workflow and trusted-pattern-only boundaries are visible to product reporting.
+3. `decisions`
+   Scenario-level decisions with `surface`, `disposition`, `authority_effect`, `reasons`, `rule_refs`, `source_ids`, and `recommended_action`.
+
+Important interpretation rules:
+
+1. `candidate_workflow_reuse` with `inspect_or_rehydrate_only` means the Runtime saw reusable workflow evidence, but it was not stable authority and must not emit stable workflow tool-source authority.
+2. `trusted_pattern_policy_materialization` with `advisory_only` means trusted-pattern-only guidance can steer a tool preference, but cannot become authoritative/default policy by itself.
+3. `policy_default_materialization` with `blocked` means default policy lacked stable workflow support or a live authoritative execution contract.
+4. `false_confidence_gate` with `unblocked_false_confidence` is a release blocker.
+
 ## Recommended Read Path
 
 For product decisions, read:
@@ -150,6 +170,8 @@ For product decisions, read:
 3. `report.blocking_risks`
 4. `report.next_actions`
 5. `report.scenarios[].authority_gate_result`
-6. `report.scenarios[].recommended_next_action`
+6. `report.authority_decision_report.summary`
+7. `report.scenarios[].authority_decision_summary`
+8. `report.scenarios[].recommended_next_action`
 
 For debugging Runtime internals, read the full `RuntimeDogfoodSuiteResult.scenarios[]` payload.

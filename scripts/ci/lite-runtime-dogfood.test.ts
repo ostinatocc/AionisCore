@@ -41,6 +41,20 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.equal(result.report.product_metrics.cross_shell_revalidation_success_rate, 0.8);
   assert.equal(result.report.product_metrics.live_execution_coverage_rate, 0);
   assert.equal(result.report.product_metrics.live_execution_coverage_by_family.service_publish_validate?.rate, 0);
+  assert.equal(result.report.authority_decision_report.report_version, "runtime_authority_decision_report_v1");
+  assert.equal(result.report.authority_decision_report.summary.summary_version, "runtime_authority_decision_summary_v1");
+  assert.equal(result.report.authority_decision_report.summary.decisions_by_surface.candidate_workflow_reuse.inspect_or_rehydrate_only, 2);
+  assert.equal(result.report.authority_decision_report.summary.decisions_by_surface.policy_default_materialization.blocked, 2);
+  assert.equal(result.report.authority_decision_report.summary.unblocked_false_confidence_count, 0);
+  assert.equal(result.report.authority_decision_report.summary.blocked_by_reason.false_confidence_detected, 3);
+  assert.ok(result.report.authority_decision_report.read_side_rules.some((entry) =>
+    entry.source_id === "action_retrieval_outcome_gate"
+    && entry.authority_rules.includes("candidate_workflow_reuse_is_inspect_or_rehydrate_only")
+  ));
+  assert.ok(result.report.authority_decision_report.read_side_rules.some((entry) =>
+    entry.source_id === "policy_materialization_surface"
+    && entry.authority_rules.includes("trusted_pattern_only_guidance_is_advisory_candidate")
+  ));
   assert.ok(result.report.blocking_risks.some((risk) => risk.includes("fixture-backed only")));
   assert.ok(result.report.next_actions.some((action) => action.includes("external_probe")));
 
@@ -94,6 +108,24 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.equal(failedEvidenceReport.product_status, "pass_advisory_only");
   assert.equal(failedEvidenceReport.authority_gate_result, "blocked_by_execution_evidence");
   assert.ok(failedEvidenceReport.authority_blockers.some((blocker) => blocker.includes("after_exit_revalidation_failed")));
+  assert.equal(failedEvidenceReport.authority_decision_summary.decisions_by_surface.execution_evidence_gate.blocked, 1);
+  assert.equal(failedEvidenceReport.authority_decision_summary.decisions_by_surface.candidate_workflow_reuse.inspect_or_rehydrate_only, 1);
+  assert.equal(failedEvidenceReport.authority_decision_summary.decisions_by_surface.policy_default_materialization.blocked, 1);
+  assert.ok(failedEvidenceReport.authority_decisions.some((decision) =>
+    decision.surface === "false_confidence_gate"
+    && decision.disposition === "blocked"
+    && decision.reasons.includes("false_confidence_detected")
+  ));
+  assert.ok(failedEvidenceReport.authority_decisions.some((decision) =>
+    decision.surface === "candidate_workflow_reuse"
+    && decision.disposition === "inspect_or_rehydrate_only"
+    && decision.rule_refs.includes("candidate_workflow_must_not_emit_stable_workflow_tool_source")
+  ));
+  assert.ok(failedEvidenceReport.authority_decisions.some((decision) =>
+    decision.surface === "policy_default_materialization"
+    && decision.disposition === "blocked"
+    && decision.rule_refs.includes("policy_default_requires_stable_workflow_or_live_authoritative_execution_contract")
+  ));
   assert.equal(failedEvidenceReport.product_metrics.false_confidence_blocked, true);
 });
 
