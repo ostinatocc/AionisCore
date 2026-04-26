@@ -28,6 +28,13 @@ Use `--report-json` to print only the report:
 npm run dogfood:lite:runtime -- --report-json
 ```
 
+Use `--list-slices` and `--slice` when debugging one live family:
+
+```bash
+npm run dogfood:lite:runtime:external-probe -- --list-slices
+npm run dogfood:lite:runtime:external-probe -- --slice interrupted_resume --out-json artifacts/runtime-dogfood/interrupted-run.json
+```
+
 ## Product Metrics
 
 The report intentionally focuses on product behavior, not test implementation detail:
@@ -63,6 +70,31 @@ The report intentionally focuses on product behavior, not test implementation de
 6. second-agent takeover validation
 
 Each slice creates a temporary local fixture, launches or validates through a fresh shell, records execution evidence, and feeds the resulting task spec back through the same dogfood contract path. The live runner must not add task-specific Runtime routes or bypass the Contract Compiler and Trust Gate.
+
+## Live Probe Diagnostics
+
+The external-probe run payload includes `diagnostics[]`, one entry per slice. Each diagnostic records:
+
+1. `slice`
+   The live proof family that ran.
+2. `scenario_id`
+   The dogfood scenario compiled from the live proof.
+3. `command`
+   The primary command used to prove the slice.
+4. `cwd`
+   The working directory used for that command.
+5. `duration_ms`
+   Command runtime in milliseconds.
+6. `exit_code`
+   The process exit code, or `null` if unavailable.
+7. `stdout_tail` and `stderr_tail`
+   Bounded tails for failure triage without flooding CI logs.
+8. `failure_class`
+   A stable category such as `service_launch_failed`, `fresh_shell_probe_failed`, `clean_client_install_failed`, `served_web_content_probe_failed`, `served_web_content_mismatch`, or `live_command_probe_failed`.
+9. `commands[]`
+   The ordered command-level diagnostics for multi-step slices such as service launch plus fresh-shell probe.
+
+CI uploads `artifacts/runtime-dogfood/` for every Lite CI run. The primary files are `external-run.json`, `external-report.json`, `external-report.md`, and `external-tasks.json`.
 
 ## Product Status
 

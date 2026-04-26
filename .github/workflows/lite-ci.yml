@@ -34,5 +34,23 @@ jobs:
       - name: Contract tests
         run: npm run -s test:lite
 
+      - name: Runtime dogfood external probe artifacts
+        run: |
+          mkdir -p artifacts/runtime-dogfood
+          npm run -s dogfood:lite:runtime:external-probe -- \
+            --out-json artifacts/runtime-dogfood/external-run.json \
+            --out-report-json artifacts/runtime-dogfood/external-report.json \
+            --out-md artifacts/runtime-dogfood/external-report.md \
+            --out-tasks-json artifacts/runtime-dogfood/external-tasks.json
+
+      - name: Upload runtime dogfood artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-dogfood-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/runtime-dogfood/
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Lite smoke
         run: npm run -s smoke:lite
