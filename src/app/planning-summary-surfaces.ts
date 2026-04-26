@@ -18,6 +18,7 @@ import {
   runtimeAuthorityVisibilityFromEntry,
   summarizeRuntimeAuthorityVisibility,
 } from "../memory/authority-visibility.js";
+import { authorityConsumptionStateFromValue } from "../memory/authority-consumption.js";
 import { safeRecordArray, uniqueStrings } from "./planning-summary-utils.js";
 
 export function summarizePacketEntryLabels(entries: Array<Record<string, unknown>>, field: "title" | "summary", limit = 3): string[] {
@@ -73,6 +74,7 @@ function collectWorkflowEntriesFromSurface(surface: PlannerPacketSummarySurface)
 }
 
 export function isPromotionReadyWorkflowSignal(entry: Record<string, unknown>): boolean {
+  if (authorityConsumptionStateFromValue(entry).blocks_promotion_readiness) return false;
   if (entry.promotion_ready === true) return true;
   const promotionState = typeof entry.promotion_state === "string" ? entry.promotion_state.trim() : "";
   const observedCount = Number(entry.observed_count ?? NaN);
@@ -297,17 +299,9 @@ export function summarizeWorkflowLifecycleSurface(surface: PlannerPacketSummaryS
     const sourceKind = typeof entry.source_kind === "string" ? entry.source_kind.trim() : "";
     const defaultMode = typeof entry.rehydration_default_mode === "string" ? entry.rehydration_default_mode.trim() : "";
     const lastTransition = typeof entry.last_transition === "string" ? entry.last_transition.trim() : "";
-    const promotionState = typeof entry.promotion_state === "string" ? entry.promotion_state.trim() : "";
-    const observedCount = Number(entry.observed_count ?? NaN);
-    const requiredObservations = Number(entry.required_observations ?? NaN);
     if (sourceKind === "playbook") replaySourceCount += 1;
     if (defaultMode === "summary_only" || defaultMode === "partial" || defaultMode === "full") rehydrationReadyCount += 1;
-    if (
-      promotionState === "candidate"
-      && Number.isFinite(observedCount)
-      && Number.isFinite(requiredObservations)
-      && observedCount >= requiredObservations
-    ) {
+    if (isPromotionReadyWorkflowSignal(entry)) {
       promotionReadyCount += 1;
     }
     if (lastTransition === "candidate_observed") transitionCounts.candidate_observed += 1;
@@ -349,11 +343,12 @@ export function summarizeWorkflowMaintenanceSurface(surface: PlannerPacketSummar
     const maintenanceState = typeof entry.maintenance_state === "string" ? entry.maintenance_state.trim() : "";
     const offlinePriority = typeof entry.offline_priority === "string" ? entry.offline_priority.trim() : "";
     const promotionState = typeof entry.promotion_state === "string" ? entry.promotion_state.trim() : "";
+    const authorityState = authorityConsumptionStateFromValue(entry);
     const normalizedState = maintenanceState || (promotionState === "candidate" ? "observe" : "retain");
     const normalizedPriority = offlinePriority || (promotionState === "candidate" ? "promote_candidate" : "retain_workflow");
     if (normalizedState === "observe") observeCount += 1;
     if (normalizedState === "retain") retainCount += 1;
-    if (normalizedPriority === "promote_candidate") promoteCandidateCount += 1;
+    if (normalizedPriority === "promote_candidate" && !authorityState.blocks_promotion_readiness) promoteCandidateCount += 1;
     if (normalizedPriority === "retain_workflow") retainWorkflowCount += 1;
   }
   return {

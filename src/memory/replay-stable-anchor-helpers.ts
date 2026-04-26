@@ -216,7 +216,10 @@ function buildReplayPlaybookAnchor(args: {
     slots: args.slots,
   });
   const { workflowContract, outcomeContractGate } = authority;
-  const promotionState = authority.authorityGate.allows_stable_promotion ? "stable" : "candidate";
+  const allowsStableWorkflow =
+    authority.authorityGate.allows_authoritative
+    && authority.authorityGate.allows_stable_promotion;
+  const promotionState = allowsStableWorkflow ? "stable" : "candidate";
   const payloadCostHint: "low" | "medium" | "high" =
     stepsTotal <= 4 ? "low" : stepsTotal <= 10 ? "medium" : "high";
   const promotionAt = new Date().toISOString();

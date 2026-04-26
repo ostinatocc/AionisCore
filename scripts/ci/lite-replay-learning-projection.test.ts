@@ -91,7 +91,7 @@ test("replay-learning projection artifacts produce candidate workflow before pro
   assert.equal(workflow, undefined);
 });
 
-test("replay-learning projection artifacts auto-promote to stable workflow when observation threshold and outcome gate are met", () => {
+test("replay-learning projection artifacts auto-promote to stable workflow when observation threshold, outcome gate, and explicit evidence are met", () => {
   const source = baseSource({
     contract_trust: "authoritative",
     task_family: "task:repair_export",
@@ -99,6 +99,10 @@ test("replay-learning projection artifacts auto-promote to stable workflow when 
     next_action: "Patch src/routes/export.ts and rerun export tests.",
     acceptance_checks: ["npm run -s test:lite -- export"],
     success_invariants: ["all_acceptance_checks_pass"],
+    execution_evidence_v1: {
+      validation_passed: true,
+      evidence_refs: ["test:replay-learning:export-validation"],
+    },
   });
   const projectedAt = "2026-03-20T00:00:00Z";
   const plan = buildReplayLearningProjectionArtifacts({
@@ -137,6 +141,42 @@ test("replay-learning projection artifacts auto-promote to stable workflow when 
   assert.equal(workflow?.slots?.execution_native_v1?.distillation?.preferred_promotion_target, "workflow");
   assert.equal(workflow?.slots?.outcome_contract_gate?.allows_authoritative, true);
   assert.ok(plan.edges.some((edge) => (edge as any).src?.client_id === plan.workflowClientId && (edge as any).dst?.client_id === plan.episodeClientId));
+});
+
+test("replay-learning projection artifacts do not auto-promote stable workflow from metrics-only evidence", () => {
+  const source = baseSource({
+    contract_trust: "authoritative",
+    task_family: "task:repair_export",
+    target_files: ["src/routes/export.ts"],
+    next_action: "Patch src/routes/export.ts and rerun export tests.",
+    acceptance_checks: ["npm run -s test:lite -- export"],
+    success_invariants: ["all_acceptance_checks_pass"],
+  });
+  const plan = buildReplayLearningProjectionArtifacts({
+    source,
+    matcherFingerprint: "matcher-fp",
+    policyFingerprint: "policy-fp",
+    duplicateRuleNodeId: null,
+    workflowSignature: "replay-learning-workflow-sig",
+    preferTools: ["edit", "test"],
+    shouldCreateRule: true,
+    shouldCreateEpisode: true,
+    shouldPromoteStableWorkflow: true,
+    observedWorkflowCount: 2,
+    projectedAt: "2026-03-20T00:00:00Z",
+    ttlExpiresAt: "2026-04-19T00:00:00Z",
+  });
+
+  const episode = plan.nodes.find((node) => node.client_id === plan.episodeClientId) as Record<string, any> | undefined;
+  const workflow = plan.nodes.find((node) => node.client_id === plan.workflowClientId);
+  assert.ok(episode);
+  assert.equal(plan.shouldPromoteStableWorkflow, false);
+  assert.equal(workflow, undefined);
+  assert.equal(episode?.slots?.summary_kind, "workflow_candidate");
+  assert.equal(episode?.slots?.execution_contract_v1?.contract_trust, "advisory");
+  assert.equal(episode?.slots?.execution_evidence_assessment?.status, "incomplete");
+  assert.equal(episode?.slots?.execution_evidence_assessment?.allows_stable_promotion, false);
+  assert.ok(episode?.slots?.execution_evidence_assessment?.reasons?.includes("missing_explicit_execution_evidence"));
 });
 
 test("replay-learning projection artifacts do not auto-promote stable workflow without outcome contract", () => {

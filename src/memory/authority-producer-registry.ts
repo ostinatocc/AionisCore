@@ -163,6 +163,7 @@ export const RUNTIME_AUTHORITY_BOUNDARY_REGISTRY = [
     mayReadRawAuthoritySurface: true,
     requiredSourceMarkers: [
       "authorityGatedReplayWorkflowContract",
+      "authority.authorityGate.allows_authoritative",
       "authority.authorityGate.allows_stable_promotion",
       "executionEvidenceAssessment",
     ],

@@ -133,7 +133,9 @@ test("workflow stable producers bind stable writes to runtime authority gates", 
   const replayStableAnchorHelpers = read("src/memory/replay-stable-anchor-helpers.ts");
   for (const token of [
     "authorityGatedReplayWorkflowContract",
-    "const promotionState = authority.authorityGate.allows_stable_promotion ? \"stable\" : \"candidate\"",
+    "const allowsStableWorkflow =",
+    "authority.authorityGate.allows_authoritative",
+    "authority.authorityGate.allows_stable_promotion",
     "execution_evidence_assessment: executionEvidenceAssessment",
     "authority_gate_v1: authorityGate",
   ]) {
@@ -170,6 +172,18 @@ test("authority-consuming Runtime boundaries use the shared authority consumptio
   const reviewerPacks = read("src/memory/reviewer-packs.ts");
   assertContains(reviewerPacks, "authority-consumption.js", "reviewer packs must consume the shared authority helper");
   assertContains(reviewerPacks, "authorityConsumptionAllowsActionReuse", "reviewer packs must filter blocked action reuse through the helper");
+
+  const planningSummarySurfaces = read("src/app/planning-summary-surfaces.ts");
+  assertContains(planningSummarySurfaces, "authorityConsumptionStateFromValue", "planning summary surfaces must block failed promotion readiness through the helper");
+  assertContains(planningSummarySurfaces, "blocks_promotion_readiness", "planning summary surfaces must respect promotion-readiness authority blocks");
+
+  const recallActionPacket = read("src/memory/recall-action-packet.ts");
+  assertContains(recallActionPacket, "authorityConsumptionStateFromValue", "recall action packet must derive promotion readiness through the helper");
+  assertContains(recallActionPacket, "blocks_promotion_readiness", "recall action packet must block failed promotion readiness");
+
+  const executionIntrospection = read("src/memory/execution-introspection.ts");
+  assertContains(executionIntrospection, "authorityConsumptionStateFromValue", "execution introspection must derive promotion readiness through the helper");
+  assertContains(executionIntrospection, "blocks_promotion_readiness", "execution introspection must block failed promotion readiness");
 });
 
 test("authority raw field and visibility parser access stays behind declared boundaries", () => {
@@ -207,6 +221,9 @@ test("authority raw field and visibility parser access stays behind declared bou
     "src/memory/context-orchestrator.ts",
     "src/memory/reviewer-packs.ts",
     "src/app/planning-summary-assembly.ts",
+    "src/app/planning-summary-surfaces.ts",
+    "src/memory/recall-action-packet.ts",
+    "src/memory/execution-introspection.ts",
   ]) {
     assertContains(read(file), "authorityConsumptionStateFromValue", `${file} must consume normalized authority state`);
   }

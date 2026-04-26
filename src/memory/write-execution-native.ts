@@ -144,9 +144,12 @@ export function normalizeExecutionNativeSlots(
   let executionNative: Record<string, unknown> | null = existingParsed.success ? { ...existingParsed.data } : null;
   if (anchorParsed.success) {
     const anchor = anchorParsed.data;
+    const workflowPromotionState = firstString(anchor.workflow_promotion?.promotion_state);
     const executionKind =
       anchor.anchor_kind === "workflow"
-        ? "workflow_anchor"
+        ? workflowPromotionState === "candidate"
+          ? "workflow_candidate"
+          : "workflow_anchor"
         : anchor.anchor_kind === "pattern"
           ? "pattern_anchor"
           : "execution_native";
@@ -158,6 +161,8 @@ export function normalizeExecutionNativeSlots(
         summaryKind
         ?? (executionKind === "workflow_anchor"
           ? "workflow_anchor"
+          : executionKind === "workflow_candidate"
+            ? "workflow_candidate"
           : executionKind === "pattern_anchor"
             ? "pattern_anchor"
             : null),

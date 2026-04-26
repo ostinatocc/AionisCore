@@ -28,6 +28,7 @@ import {
   buildRuntimeAuthorityVisibilityFromSlots,
   type RuntimeAuthorityVisibilityV1,
 } from "./authority-visibility.js";
+import { authorityConsumptionStateFromValue } from "./authority-consumption.js";
 
 type NodeRow = RecallNodeRow;
 
@@ -283,6 +284,13 @@ export function buildActionRecallPacket(args: {
       const archiveRelocation = resolveNodeArchiveRelocationSurface(meta.slots);
       const title = node.title ?? null;
       const summary = meta.anchorSummary ?? node.text_summary ?? node.title ?? null;
+      const authorityVisibility = buildRuntimeAuthorityVisibilityFromSlots({
+        nodeId: node.id,
+        nodeKind: "workflow",
+        title: title ?? summary,
+        slots: meta.slots,
+      });
+      const authorityState = authorityConsumptionStateFromValue({ authority_visibility: authorityVisibility });
       const workflowEntry: ActionRecallWorkflow = {
         anchor_id: node.id,
         uri,
@@ -299,7 +307,7 @@ export function buildActionRecallPacket(args: {
         promotion_origin: firstString(meta.workflowPromotion?.promotion_origin) as any,
         required_observations: firstFinite(meta.workflowPromotion?.required_observations),
         observed_count: firstFinite(meta.workflowPromotion?.observed_count),
-        promotion_ready: isWorkflowPromotionReady(meta.workflowPromotion),
+        promotion_ready: isWorkflowPromotionReady(meta.workflowPromotion) && !authorityState.blocks_promotion_readiness,
         workflow_signature: meta.workflowSignature,
         last_transition: firstString(meta.workflowPromotion?.last_transition) as any,
         last_transition_at: firstString(meta.workflowPromotion?.last_transition_at),
@@ -314,12 +322,7 @@ export function buildActionRecallPacket(args: {
         archive_relocation_state: archiveRelocation.relocation_state,
         archive_relocation_target: archiveRelocation.relocation_target,
         archive_payload_scope: archiveRelocation.payload_scope,
-        authority_visibility: buildRuntimeAuthorityVisibilityFromSlots({
-          nodeId: node.id,
-          nodeKind: "workflow",
-          title: title ?? summary,
-          slots: meta.slots,
-        }),
+        authority_visibility: authorityVisibility,
       };
       if (meta.executionKind === "workflow_candidate" || firstString(meta.workflowPromotion?.promotion_state) === "candidate") {
         deferredCandidateWorkflows.push(workflowEntry);
