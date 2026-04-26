@@ -17,6 +17,7 @@ import { explainWorkflowProjectionForSourceNode } from "./workflow-write-project
 import { isPatternSuppressed, readPatternOperatorOverride } from "./pattern-operator-override.js";
 import { buildOutcomeContractGate, type OutcomeContractGate } from "./contract-trust.js";
 import { buildRuntimeAuthorityVisibilityFromSlots } from "./authority-visibility.js";
+import { authorityConsumptionStateFromValue } from "./authority-consumption.js";
 import {
   resolveNodeAnchorSummary,
   resolveNodeAnchorLevel,
@@ -128,6 +129,7 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     title: title ?? summary,
     slots,
   });
+  const authorityState = authorityConsumptionStateFromValue({ authority_visibility: authorityVisibility });
   const semanticForgetting = asRecord(slots.semantic_forgetting_v1);
   const archiveRelocation = asRecord(slots.archive_relocation_v1);
   const workflowPromotion = resolveNodeWorkflowPromotionSurface(slots) ?? {};
@@ -148,7 +150,8 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     && Number.isFinite(observedCount)
     && Number.isFinite(requiredObservations)
     && requiredObservations > 0
-    && observedCount >= requiredObservations;
+    && observedCount >= requiredObservations
+    && !authorityState.blocks_promotion_readiness;
   return {
     anchor_id: row.id,
     uri: toNodeUri(tenantId, scope, row.type, row.id),

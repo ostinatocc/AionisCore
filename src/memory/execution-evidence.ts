@@ -317,6 +317,10 @@ function evidenceReason(prefix: string, value: string): string {
   return `${prefix}:${value}`.slice(0, 128);
 }
 
+function hasExplicitExecutionEvidenceRef(evidence: ExecutionEvidenceV1 | null): boolean {
+  return (evidence?.evidence_refs ?? []).some((ref) => ref !== "source.metrics");
+}
+
 export function extractExecutionEvidenceFromSlots(args: {
   slots?: Record<string, unknown> | null;
   metrics?: unknown;
@@ -353,10 +357,14 @@ export function assessExecutionEvidence(args: {
   const requiresFreshShellProbe =
     args.requiresFreshShellProbe ?? inferRequiresFreshShell(args.executionContract);
   const reasons: string[] = [];
+  const hasExplicitEvidence = hasExplicitExecutionEvidenceRef(evidence);
 
   if (!evidence) {
     reasons.push("missing_execution_evidence");
   } else {
+    if (!hasExplicitEvidence) {
+      reasons.push("missing_explicit_execution_evidence");
+    }
     if (evidence.validation_passed !== true) {
       reasons.push(evidence.validation_passed === false ? "validation_failed" : "missing_validation_passed");
     }
@@ -379,7 +387,7 @@ export function assessExecutionEvidence(args: {
   }
 
   const status = deriveStatus({ evidence, reasons });
-  const allowsAuthoritative = requestedTrust === "authoritative" && status === "succeeded";
+  const allowsAuthoritative = requestedTrust === "authoritative" && status === "succeeded" && hasExplicitEvidence;
   const effectiveTrust = requestedTrust === "authoritative" && !allowsAuthoritative
     ? "advisory"
     : requestedTrust;
@@ -388,7 +396,7 @@ export function assessExecutionEvidence(args: {
     schema_version: "execution_evidence_assessment_v1",
     status,
     allows_authoritative: allowsAuthoritative,
-    allows_stable_promotion: status === "succeeded",
+    allows_stable_promotion: status === "succeeded" && hasExplicitEvidence,
     requested_trust: requestedTrust,
     effective_trust: effectiveTrust,
     reasons: Array.from(new Set(reasons)).slice(0, 16),

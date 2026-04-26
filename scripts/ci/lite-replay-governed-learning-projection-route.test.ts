@@ -783,12 +783,12 @@ test("lite replay repair review writes workflow memory that planning_context con
 
     assert.equal(planningRes.statusCode, 200);
     const planningBody = PlanningContextRouteContractSchema.parse(planningRes.json());
-    assert.equal(planningBody.planner_packet.sections.recommended_workflows.length, 1);
-    assert.equal(planningBody.planner_packet.sections.candidate_workflows.length, 0);
+    assert.equal(planningBody.planner_packet.sections.recommended_workflows.length, 0);
+    assert.equal(planningBody.planner_packet.sections.candidate_workflows.length, 1);
     assert.equal(planningBody.workflow_signals.length, 1);
     assert.equal(planningBody.workflow_signals[0]?.title, "Fix export failure");
-    assert.equal(planningBody.workflow_signals[0]?.promotion_state, "stable");
-    assert.match(planningBody.planning_summary.planner_explanation, /workflow guidance: Fix export failure/);
+    assert.equal(planningBody.workflow_signals[0]?.promotion_state, "candidate");
+    assert.match(planningBody.planning_summary.planner_explanation, /candidate workflows visible but not yet promoted: Fix export failure/);
   } finally {
     await app.close();
     await liteRecallStore.close();

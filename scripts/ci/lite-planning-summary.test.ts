@@ -1315,3 +1315,68 @@ test("buildPlanningSummary surfaces promotion-ready workflow candidates ahead of
     "workflow guidance: Fix export failure; promotion-ready workflow candidates: Replay Episode: Fix export failure; selected tool: edit; trusted pattern support: edit; contested patterns visible but not trusted: bash; rehydration available: Fix export failure; supporting knowledge appended: 1",
   );
 });
+
+test("buildPlanningSummary does not count failed-authority candidates as promotion-ready", () => {
+  const blockedFixture = structuredClone(layeredContextFixture);
+  const candidateWorkflow = (blockedFixture.action_recall_packet.candidate_workflows as any[])[0];
+  candidateWorkflow.observed_count = 2;
+  candidateWorkflow.promotion_ready = true;
+  candidateWorkflow.authority_visibility = {
+    surface_version: "runtime_authority_visibility_v1",
+    node_id: "wf_candidate_1",
+    node_kind: "workflow",
+    title: "Replay Episode: Fix export failure",
+    requested_trust: "advisory",
+    effective_trust: "advisory",
+    status: "insufficient",
+    allows_authoritative: false,
+    allows_stable_promotion: false,
+    authority_blocked: false,
+    stable_promotion_blocked: true,
+    primary_blocker: "execution_evidence:after_exit_revalidation_failed",
+    authority_reasons: ["execution_evidence:after_exit_revalidation_failed"],
+    outcome_contract_reasons: [],
+    execution_evidence_reasons: ["after_exit_revalidation_failed"],
+    execution_evidence_status: "failed",
+    false_confidence_detected: true,
+  };
+  const workflowSignal = (blockedFixture.workflow_signals as any[])[1];
+  workflowSignal.observed_count = 2;
+  workflowSignal.promotion_ready = true;
+  workflowSignal.authority_visibility = candidateWorkflow.authority_visibility;
+
+  const summary = buildPlanningSummary({
+    rules: { considered: 2, matched: 1 },
+    tools: {
+      selection: { selected: "edit" },
+      decision: {
+        decision_id: "d_blocked_ready",
+        pattern_summary: {
+          used_trusted_pattern_tools: ["edit"],
+          skipped_contested_pattern_tools: ["bash"],
+        },
+      },
+    },
+    layered_context: blockedFixture,
+    cost_signals: null,
+    context_est_tokens: 320,
+    context_compaction_profile: "balanced",
+    optimization_profile: "balanced",
+    recall_mode: "balanced",
+  });
+
+  assert.equal(summary.workflow_lifecycle_summary.promotion_ready_count, 0);
+  assert.equal(summary.workflow_maintenance_summary.promote_candidate_count, 0);
+  assert.deepEqual(summary.workflow_signal_summary, {
+    stable_workflow_count: 1,
+    promotion_ready_workflow_count: 0,
+    observing_workflow_count: 1,
+    stable_workflow_titles: ["Fix export failure"],
+    promotion_ready_workflow_titles: [],
+    observing_workflow_titles: ["Replay Episode: Fix export failure"],
+  });
+  assert.equal(
+    summary.planner_explanation,
+    "workflow guidance: Fix export failure; candidate workflows visible but not yet promoted: Replay Episode: Fix export failure; selected tool: edit; trusted pattern support: edit; contested patterns visible but not trusted: bash; rehydration available: Fix export failure; supporting knowledge appended: 1; execution evidence failed: 1",
+  );
+});

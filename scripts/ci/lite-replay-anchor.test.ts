@@ -19,6 +19,25 @@ function tmpDbPath(name: string): string {
   return path.join(dir, `${name}.sqlite`);
 }
 
+function authoritativeReplaySlotOverrides(label: string): Record<string, unknown> {
+  return {
+    contract_trust: "authoritative",
+    task_family: "replay_export_repair",
+    target_files: ["src/routes/export.ts"],
+    next_action: "Patch src/routes/export.ts and rerun the export replay smoke test.",
+    acceptance_checks: ["npm run -s test:lite -- export"],
+    execution_evidence_v1: {
+      schema_version: "execution_evidence_v1",
+      validation_passed: true,
+      after_exit_revalidated: true,
+      fresh_shell_probe_passed: true,
+      failure_reason: null,
+      false_confidence_detected: false,
+      evidence_refs: [`test:${label}:explicit-execution-evidence`],
+    },
+  };
+}
+
 async function seedDraftPlaybook(args: {
   writeStorePath: string;
   playbookId: string;
@@ -114,6 +133,7 @@ test("replayPlaybookPromote writes workflow anchor payload onto stable playbook 
     writeStorePath: dbPath,
     playbookId,
     runId,
+    slotOverrides: authoritativeReplaySlotOverrides("promote"),
   });
   try {
     const replayAccess = liteReplayStore.createReplayAccess();
@@ -187,6 +207,7 @@ test("stable replay playbook anchors are recallable through the procedure recall
     writeStorePath: dbPath,
     playbookId,
     runId,
+    slotOverrides: authoritativeReplaySlotOverrides("recall"),
   });
   const liteRecallStore = createLiteRecallStore(dbPath);
   try {
@@ -266,7 +287,7 @@ test("stable replay playbook anchors are recallable through the procedure recall
   }
 });
 
-test("stable replay playbook recall surfaces persisted contract trust", async () => {
+test("advisory replay playbook recall surfaces persisted contract trust without stable authority", async () => {
   const dbPath = tmpDbPath("recall-contract-trust");
   const playbookId = randomUUID();
   const runId = randomUUID();
@@ -346,8 +367,10 @@ test("stable replay playbook recall surfaces persisted contract trust", async ()
       { recall_access: liteRecallStore.createRecallAccess(), internal_allow_l4_selection: true },
     );
 
-    assert.equal((recall as any).action_recall_packet.recommended_workflows[0]?.contract_trust, "advisory");
-    assert.equal((recall as any).action_recall_packet.recommended_workflows[0]?.execution_contract_v1?.contract_trust, "advisory");
+    assert.equal((recall as any).action_recall_packet.recommended_workflows.length, 0);
+    assert.equal((recall as any).action_recall_packet.candidate_workflows[0]?.contract_trust, "advisory");
+    assert.equal((recall as any).action_recall_packet.candidate_workflows[0]?.execution_contract_v1?.contract_trust, "advisory");
+    assert.equal((recall as any).action_recall_packet.candidate_workflows[0]?.promotion_state, "candidate");
   } finally {
     await liteRecallStore.close();
     await liteReplayStore.close();
@@ -355,7 +378,7 @@ test("stable replay playbook recall surfaces persisted contract trust", async ()
   }
 });
 
-test("replayPlaybookPromote preserves richer recovery contract fields on stable workflow anchors", async () => {
+test("replayPlaybookPromote preserves richer recovery contract fields while advisory anchors remain candidates", async () => {
   const dbPath = tmpDbPath("promote-rich-contract");
   const playbookId = randomUUID();
   const runId = randomUUID();
@@ -477,6 +500,8 @@ test("replayPlaybookPromote preserves richer recovery contract fields on stable 
     });
     const promoted = rows[0];
     assert.ok(promoted);
+    assert.equal(promoted.slots.anchor_v1.workflow_promotion.promotion_state, "candidate");
+    assert.equal(promoted.slots.execution_native_v1.execution_kind, "workflow_candidate");
     assert.equal(promoted.slots.anchor_v1.contract_trust, "advisory");
     assert.equal(promoted.slots.anchor_v1.task_family, "service_publish_validate");
     assert.deepEqual(promoted.slots.anchor_v1.target_files, ["scripts/build_and_serve.py", "pyproject.toml"]);
@@ -514,6 +539,7 @@ test("planning recall prioritizes workflow anchors ahead of generic supporting c
     writeStorePath: dbPath,
     playbookId,
     runId,
+    slotOverrides: authoritativeReplaySlotOverrides("planning-priority"),
   });
   const liteRecallStore = createLiteRecallStore(dbPath);
   try {
@@ -1173,6 +1199,7 @@ test("replayPlaybookPromote normalizes latest stable playbooks onto workflow anc
     playbookId,
     runId,
     status: "active",
+    slotOverrides: authoritativeReplaySlotOverrides("normalize-latest-stable"),
   });
   try {
     const replayAccess = liteReplayStore.createReplayAccess();
