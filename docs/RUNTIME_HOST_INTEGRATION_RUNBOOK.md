@@ -141,11 +141,13 @@ npm run dogfood:lite:runtime -- --out-report-json artifacts/runtime-dogfood/repo
 npm run dogfood:lite:runtime:external-probe -- --out-report-json artifacts/runtime-dogfood/external-report.json
 ```
 
+The external-probe runner should cover service durability, publish/install visibility, deploy/web visibility, interrupted resume, next-day handoff, and agent takeover paths before a host claims broad Runtime readiness.
+
 Before claiming product-level improvement, require:
 
-1. `product_status=pass_live_evidence` for live service, publish/install, or deploy/web paths
+1. `product_status=pass_live_evidence` for each live family being claimed
 2. `false_confidence_rate=0`
 3. `authority_gate_false_positive_rate=0`
 4. `after_exit_evidence_success_rate=1` for service durability slices
-5. `cross_shell_revalidation_success_rate=1` for external visibility slices
+5. `cross_shell_revalidation_success_rate=1` for external visibility and continuity slices
 6. `live_execution_coverage_by_family.<family>.rate=1` for each task family being claimed as product-ready
