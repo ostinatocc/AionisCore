@@ -188,6 +188,8 @@ Authority-producing modules must be declared in `src/memory/authority-producer-r
 
 Workflow and policy producers that persist `stable`, `active`, or `authoritative` reusable memory must bind the write to `runtime_authority_gate_v1`, `outcome_contract_gate_v1`, and execution-evidence assessment for that produced surface. Pattern producers are separate: a stable trusted pattern is advisory guidance only, must remain non-authoritative, and must carry promotion/revalidation or governance provenance.
 
+Read-side consumers must preserve the same authority boundary. A candidate workflow may be surfaced for inspection, rehydration, recall evidence, and promotion review, but it must not emit stable workflow tool-source authority, stable workflow steps, workflow reuse policy hints, or default policy contracts. A trusted pattern by itself may select or prefer a tool, but it remains advisory candidate guidance until a stable workflow or a live authoritative execution contract supplies the policy authority.
+
 The producer registry is the source manifest for authority write boundaries. CI boundary consumers must read the unified runtime boundary inventory instead of maintaining independent path allowlists, so a new producer cannot appear as an accidental code-search exception.
 
 ### 3. Orchestrator

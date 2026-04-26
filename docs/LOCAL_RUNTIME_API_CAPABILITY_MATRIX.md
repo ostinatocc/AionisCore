@@ -75,7 +75,7 @@ These surfaces are local operator/debug views. They are read-only and do not gra
 
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |
-| `GET` | `/v1/runtime/boundary-inventory` | Supported | Source-owned boundary inventory for authority producers and allowed legacy direct-access boundaries. Returns summary counts, files, grouped entries, and read-only semantics. |
+| `GET` | `/v1/runtime/boundary-inventory` | Supported | Source-owned boundary inventory for authority producers, authority consumers, and allowed legacy direct-access boundaries. Returns summary counts, files, grouped entries, `authority_rules`, and read-only semantics. |
 
 ## Memory Write And Handoff
 

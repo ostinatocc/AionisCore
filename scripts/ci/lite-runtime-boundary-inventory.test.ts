@@ -95,6 +95,38 @@ test("runtime boundary inventory keeps authority capabilities and legacy reasons
     assert.ok(workflowProducer.required_source_markers.includes("authorityGate.allows_stable_promotion"));
   }
 
+  const actionRetrieval = RUNTIME_BOUNDARY_INVENTORY.find(
+    (entry) => entry.source === "authority" && entry.source_id === "action_retrieval_outcome_gate",
+  );
+  assert.equal(actionRetrieval?.source, "authority");
+  if (actionRetrieval?.source === "authority") {
+    assert.equal(actionRetrieval.role, "authority_consumer");
+    assert.ok(
+      actionRetrieval.authority_rules.includes("candidate_workflow_reuse_is_inspect_or_rehydrate_only"),
+      "action retrieval must publish the candidate workflow reuse boundary",
+    );
+    assert.ok(
+      actionRetrieval.authority_rules.includes("candidate_workflow_must_not_emit_stable_workflow_tool_source"),
+      "action retrieval must publish the stable tool-source boundary",
+    );
+  }
+
+  const policyMaterialization = RUNTIME_BOUNDARY_INVENTORY.find(
+    (entry) => entry.source === "authority" && entry.source_id === "policy_materialization_surface",
+  );
+  assert.equal(policyMaterialization?.source, "authority");
+  if (policyMaterialization?.source === "authority") {
+    assert.equal(policyMaterialization.role, "authority_consumer");
+    assert.ok(
+      policyMaterialization.authority_rules.includes("trusted_pattern_only_guidance_is_advisory_candidate"),
+      "policy materialization must expose the trusted-pattern-only advisory boundary",
+    );
+    assert.ok(
+      policyMaterialization.authority_rules.includes("policy_default_requires_stable_workflow_or_live_authoritative_execution_contract"),
+      "policy materialization must expose the default-policy authority boundary",
+    );
+  }
+
   const legacyResolver = RUNTIME_BOUNDARY_INVENTORY.find(
     (entry) => entry.source === "legacy_access" && entry.source_id === "node_execution_surface",
   );

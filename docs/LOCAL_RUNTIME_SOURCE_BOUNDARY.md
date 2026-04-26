@@ -30,6 +30,9 @@ Current source boundary:
 - `scripts/ci/lite-runtime-legacy-boundary.test.ts` enforces that direct legacy execution slot access stays inside schema, write/projection, contract resolver, archive, rehydrate, and store-adapter boundaries.
 - `src/memory/passthrough-schema-registry.ts` classifies every remaining open schema surface as compatibility, debug/operator payload, legacy storage, or strict-public-contract debt.
 - `scripts/ci/lite-runtime-passthrough-boundary.test.ts` enforces that new `.passthrough()` usage cannot enter `src/memory/schemas.ts` without an explicit boundary classification.
+- `src/memory/runtime-boundary-inventory.ts` exposes source-owned authority and legacy-access boundary entries plus `authority_rules` for machine-readable Runtime boundary audits.
+- `src/memory/action-retrieval.ts` is an authority consumer only: candidate workflows stay inspect/rehydrate-first and cannot become stable workflow tool-source authority.
+- `src/memory/policy-materialization-surface.ts` is an authority consumer only: trusted-pattern-only guidance stays advisory/candidate, while default policy authority requires a stable workflow or live authoritative execution contract.
 - `src/jobs/` is reduced to kernel-linked helpers only:
   - `associative-linking-lib.ts`
   - `topicClusterLib.ts`

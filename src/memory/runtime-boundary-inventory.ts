@@ -56,6 +56,7 @@ export const RuntimeBoundaryInventoryAuthorityEntrySchema = z.object({
   layer: RuntimeBoundaryInventoryAuthorityLayerSchema,
   role: RuntimeBoundaryInventoryAuthorityRoleSchema,
   producer_kind: RuntimeBoundaryInventoryProducerKindSchema.nullable(),
+  authority_rules: z.array(z.string().min(1)),
   capabilities: RuntimeBoundaryInventoryAuthorityCapabilitiesSchema,
   required_source_markers: z.array(z.string().min(1)),
 }).strict();
@@ -116,6 +117,7 @@ function authorityInventoryEntry(entry: RuntimeAuthorityBoundaryDeclaration): Ru
     layer: entry.layer,
     role: entry.role,
     producer_kind: entry.producerKind ?? null,
+    authority_rules: [...(entry.authorityRules ?? [])],
     capabilities: {
       may_use_runtime_authority_gate: entry.mayUseRuntimeAuthorityGate === true,
       may_use_outcome_contract_gate: entry.mayUseOutcomeContractGate === true,
@@ -143,6 +145,7 @@ function cloneInventoryEntry(entry: RuntimeBoundaryInventoryEntry): RuntimeBound
   if (entry.source === "authority") {
     return {
       ...entry,
+      authority_rules: [...entry.authority_rules],
       capabilities: { ...entry.capabilities },
       required_source_markers: [...entry.required_source_markers],
     };

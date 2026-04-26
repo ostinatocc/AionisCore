@@ -66,9 +66,16 @@ test("runtime boundary inventory route exposes a read-only source-owned surface"
       "layer",
       "role",
       "producer_kind",
+      "authority_rules",
       "capabilities",
       "required_source_markers",
     ]);
+    assert.ok(
+      body.sources.authority.some((entry) =>
+        entry.authority_rules.includes("candidate_workflow_reuse_is_inspect_or_rehydrate_only"),
+      ),
+      "route contract must expose read-side authority rules",
+    );
     assert.deepEqual(Object.keys(body.sources.legacy_access[0] ?? {}), [
       "source",
       "inventory_id",
