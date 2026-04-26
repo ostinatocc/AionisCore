@@ -143,9 +143,9 @@ npm run dogfood:lite:runtime:external-probe -- --out-report-json artifacts/runti
 
 Before claiming product-level improvement, require:
 
-1. `product_status=pass_live_evidence` for at least one live service or publish path
+1. `product_status=pass_live_evidence` for live service, publish/install, or deploy/web paths
 2. `false_confidence_rate=0`
 3. `authority_gate_false_positive_rate=0`
 4. `after_exit_evidence_success_rate=1` for service durability slices
 5. `cross_shell_revalidation_success_rate=1` for external visibility slices
-
+6. `live_execution_coverage_by_family.<family>.rate=1` for each task family being claimed as product-ready

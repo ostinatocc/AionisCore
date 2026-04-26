@@ -213,6 +213,11 @@ export type RuntimeDogfoodReportV1 = {
     authority_gate_false_negative_rate: number;
     stable_promotion_allowed_rate: number;
     live_execution_coverage_rate: number;
+    live_execution_coverage_by_family: Record<string, {
+      live_execution_scenarios: number;
+      total_scenarios: number;
+      rate: number;
+    }>;
   };
   blocking_risks: string[];
   next_actions: string[];
@@ -954,6 +959,29 @@ function nullableRate(values: (boolean | null)[]): number | null {
   return rate(measured.filter(Boolean).length, measured.length);
 }
 
+function liveCoverageByFamily(scenarios: RuntimeDogfoodScenarioResult[]): RuntimeDogfoodReportV1["product_metrics"]["live_execution_coverage_by_family"] {
+  const families = new Map<string, { live: number; total: number }>();
+  for (const scenario of scenarios) {
+    const family = scenario.task_family ?? "unknown";
+    const current = families.get(family) ?? { live: 0, total: 0 };
+    current.total += 1;
+    if (scenario.proof.evidence_source === "external_probe") current.live += 1;
+    families.set(family, current);
+  }
+  return Object.fromEntries(
+    [...families.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([family, counts]) => [
+        family,
+        {
+          live_execution_scenarios: counts.live,
+          total_scenarios: counts.total,
+          rate: rate(counts.live, counts.total),
+        },
+      ]),
+  );
+}
+
 function authorityGateResult(scenario: RuntimeDogfoodScenarioResult): RuntimeDogfoodAuthorityGateResult {
   const outcomeAllows = scenario.metrics.outcome_gate_allows_authoritative;
   const evidenceAllows = scenario.metrics.execution_evidence_allows_authoritative;
@@ -1118,6 +1146,16 @@ function reportBlockingRisks(args: {
   if (args.proofBoundary.live_execution_scenarios === 0) {
     risks.push("suite is fixture-backed only; live external product proof still requires external_probe coverage");
   }
+  if (args.scenarios.some((scenario) =>
+    scenario.proof.evidence_source === "external_probe"
+    && (
+      scenario.metrics.execution_validation_passed === false
+      || scenario.metrics.after_exit_revalidated === false
+      || scenario.metrics.fresh_shell_probe_passed === false
+    )
+  )) {
+    risks.push("one or more live external probes supplied failed execution evidence");
+  }
   return risks;
 }
 
@@ -1176,6 +1214,7 @@ function buildRuntimeDogfoodReport(base: RuntimeDogfoodSuiteWithoutReport): Runt
       authority_gate_false_negative_rate: base.summary.gate_false_negative_rate,
       stable_promotion_allowed_rate: base.summary.stable_promotion_allowed_rate,
       live_execution_coverage_rate: rate(base.proof_boundary.live_execution_scenarios, base.summary.total_scenarios),
+      live_execution_coverage_by_family: liveCoverageByFamily(base.scenarios),
     },
     blocking_risks: reportBlockingRisks({
       proofBoundary: base.proof_boundary,
@@ -1275,6 +1314,7 @@ export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult):
     `- after_exit_evidence_success_rate: ${result.report.product_metrics.after_exit_evidence_success_rate ?? "n/a"}`,
     `- cross_shell_revalidation_success_rate: ${result.report.product_metrics.cross_shell_revalidation_success_rate ?? "n/a"}`,
     `- live_execution_coverage_rate: ${result.report.product_metrics.live_execution_coverage_rate}`,
+    `- live_execution_coverage_by_family: ${Object.entries(result.report.product_metrics.live_execution_coverage_by_family).map(([family, coverage]) => `${family}=${coverage.live_execution_scenarios}/${coverage.total_scenarios}:${coverage.rate}`).join(", ")}`,
     "",
     "## Blocking Risks",
     "",

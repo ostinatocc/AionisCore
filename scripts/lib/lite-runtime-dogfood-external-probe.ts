@@ -11,6 +11,22 @@ import {
   type RuntimeDogfoodTaskSpec,
 } from "./lite-runtime-dogfood.ts";
 
+export type RuntimeDogfoodExternalProbeSlice =
+  | "service_after_exit"
+  | "publish_install"
+  | "deploy_hook_web";
+
+export type RuntimeDogfoodExternalProbeScenarioRun = {
+  id: string;
+  task_family_hint: string;
+  endpoint: string;
+  service_pid: number | null;
+  launcher_exit_code: number | null;
+  fresh_shell_probe_passed: boolean;
+  fresh_shell_probe_output: string;
+  task_spec: RuntimeDogfoodTaskSpec;
+};
+
 export type RuntimeDogfoodExternalProbeRun = {
   run_version: "runtime_dogfood_external_probe_run_v1";
   endpoint: string;
@@ -18,12 +34,14 @@ export type RuntimeDogfoodExternalProbeRun = {
   launcher_exit_code: number | null;
   fresh_shell_probe_passed: boolean;
   fresh_shell_probe_output: string;
+  probes: RuntimeDogfoodExternalProbeScenarioRun[];
   task_specs: RuntimeDogfoodTaskSpec[];
   dogfood_result: RuntimeDogfoodSuiteResult;
 };
 
 type ExternalProbeOptions = {
   port?: number;
+  slices?: RuntimeDogfoodExternalProbeSlice[];
 };
 
 type CommandResult = {
@@ -32,16 +50,32 @@ type CommandResult = {
   stderr: string;
 };
 
+type ExecFileOptions = {
+  timeoutMs?: number;
+  cwd?: string;
+};
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
 const serviceRelativePath = "scripts/fixtures/runtime-dogfood/service-after-exit-server.mjs";
 const servicePath = path.join(repoRoot, serviceRelativePath);
+const defaultSlices: RuntimeDogfoodExternalProbeSlice[] = [
+  "service_after_exit",
+  "publish_install",
+  "deploy_hook_web",
+];
 
-function execFileResult(command: string, args: string[]): Promise<CommandResult> {
+let cachedPython: string | null = null;
+
+function execFileResult(command: string, args: string[], options: ExecFileOptions = {}): Promise<CommandResult> {
   return new Promise((resolve) => {
-    execFile(command, args, { timeout: 5000 }, (error, stdout, stderr) => {
-      const code = typeof (error as NodeJS.ErrnoException | null)?.code === "number"
-        ? (error as NodeJS.ErrnoException).code as number
+    execFile(command, args, {
+      cwd: options.cwd,
+      timeout: options.timeoutMs ?? 5000,
+    }, (error, stdout, stderr) => {
+      const errorCode = (error as NodeJS.ErrnoException | null)?.code;
+      const code = typeof errorCode === "number"
+        ? errorCode
         : error
           ? 1
           : 0;
@@ -65,22 +99,48 @@ async function findOpenPort(): Promise<number> {
   });
 }
 
+async function findOpenPorts(count: number): Promise<number[]> {
+  const ports: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    ports.push(await findOpenPort());
+  }
+  return ports;
+}
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-function writeLauncher(args: {
+async function resolvePython(): Promise<string> {
+  if (cachedPython) return cachedPython;
+  const candidates = [
+    process.env.PYTHON,
+    "python3",
+    "python",
+  ].filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
+  for (const candidate of candidates) {
+    const result = await execFileResult(candidate, ["--version"]);
+    if (result.code === 0) {
+      cachedPython = candidate;
+      return candidate;
+    }
+  }
+  throw new Error("python is required for runtime dogfood publish/install and deploy/web external probes");
+}
+
+function writeDetachedLauncher(args: {
   tempDir: string;
-  port: number;
   pidFile: string;
+  command: string;
+  commandArgs: string[];
 }): string {
-  const launcherPath = path.join(args.tempDir, "launch-detached-service.mjs");
+  const launcherPath = path.join(args.tempDir, "launch-detached-process.mjs");
   fs.writeFileSync(
     launcherPath,
     [
       'import { spawn } from "node:child_process";',
       'import fs from "node:fs";',
-      `const child = spawn(process.execPath, [${JSON.stringify(servicePath)}, "--port", ${JSON.stringify(String(args.port))}], { detached: true, stdio: "ignore" });`,
+      `const child = spawn(${JSON.stringify(args.command)}, ${JSON.stringify(args.commandArgs)}, { detached: true, stdio: "ignore" });`,
       "child.unref();",
       `fs.writeFileSync(${JSON.stringify(args.pidFile)}, JSON.stringify({ pid: child.pid, launched_at: new Date().toISOString() }) + "\\n");`,
     ].join("\n"),
@@ -88,18 +148,38 @@ function writeLauncher(args: {
   return launcherPath;
 }
 
-async function probeFreshShell(endpoint: string): Promise<CommandResult> {
-  const command = `curl -fsS ${shellQuote(`${endpoint}/healthz`)}`;
-  const shell = process.platform === "win32" ? "cmd.exe" : "sh";
-  const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command];
-  return await execFileResult(shell, args);
+async function launchDetachedProcess(args: {
+  tempDir: string;
+  command: string;
+  commandArgs: string[];
+}): Promise<{ pid: number | null; launcherExitCode: number | null }> {
+  const pidFile = path.join(args.tempDir, "service-pid.json");
+  const launcherPath = writeDetachedLauncher({
+    tempDir: args.tempDir,
+    pidFile,
+    command: args.command,
+    commandArgs: args.commandArgs,
+  });
+  const launcher = await execFileResult(process.execPath, [launcherPath]);
+  let pid: number | null = null;
+  if (fs.existsSync(pidFile)) {
+    const metadata = JSON.parse(fs.readFileSync(pidFile, "utf8")) as { pid?: unknown };
+    pid = typeof metadata.pid === "number" ? metadata.pid : null;
+  }
+  return { pid, launcherExitCode: launcher.code };
 }
 
-async function waitForFreshShellProbe(endpoint: string): Promise<CommandResult> {
+async function probeFreshShellCommand(command: string, timeoutMs = 5000): Promise<CommandResult> {
+  const shell = process.platform === "win32" ? "cmd.exe" : "sh";
+  const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command];
+  return await execFileResult(shell, args, { timeoutMs });
+}
+
+async function waitForFreshShellCommand(command: string, timeoutMs = 8000): Promise<CommandResult> {
   let last: CommandResult = { code: 1, stdout: "", stderr: "probe_not_started" };
-  const deadline = Date.now() + 8000;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    last = await probeFreshShell(endpoint);
+    last = await probeFreshShellCommand(command);
     if (last.code === 0) return last;
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
@@ -120,7 +200,62 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function buildTaskSpec(args: {
+function validationFailureReason(kind: string, probe: CommandResult): string | null {
+  if (probe.code === 0) return null;
+  return `${kind}:${(probe.stderr || probe.stdout || "unknown").trim().slice(0, 220)}`;
+}
+
+function writeVectoropsWheel(args: {
+  tempDir: string;
+  python: string;
+  wheelPath: string;
+}): Promise<CommandResult> {
+  const wheelScript = path.join(args.tempDir, "create-vectorops-wheel.py");
+  fs.writeFileSync(
+    wheelScript,
+    [
+      "import sys",
+      "import zipfile",
+      "",
+      "wheel_path = sys.argv[1]",
+      "dist_info = 'vectorops-0.1.0.dist-info'",
+      "files = [",
+      "    ('vectorops/__init__.py', \"__version__ = '0.1.0'\\ndef ping():\\n    return 'vectorops-live'\\n\"),",
+      "    (f'{dist_info}/METADATA', 'Metadata-Version: 2.1\\nName: vectorops\\nVersion: 0.1.0\\nSummary: Aionis Runtime dogfood package\\n'),",
+      "    (f'{dist_info}/WHEEL', 'Wheel-Version: 1.0\\nGenerator: aionis-runtime-dogfood\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n'),",
+      "]",
+      "record_lines = [f'{name},,' for name, _content in files]",
+      "record_lines.append(f'{dist_info}/RECORD,,')",
+      "with zipfile.ZipFile(wheel_path, 'w', zipfile.ZIP_DEFLATED) as archive:",
+      "    for name, content in files:",
+      "        archive.writestr(name, content)",
+      "    archive.writestr(f'{dist_info}/RECORD', '\\n'.join(record_lines) + '\\n')",
+    ].join("\n"),
+  );
+  return execFileResult(args.python, [wheelScript, args.wheelPath], { timeoutMs: 10000 });
+}
+
+async function prepareVectoropsIndex(args: {
+  tempDir: string;
+  python: string;
+}): Promise<string> {
+  const distDir = path.join(args.tempDir, "publish-index");
+  const simpleDir = path.join(distDir, "simple", "vectorops");
+  const wheelName = "vectorops-0.1.0-py3-none-any.whl";
+  const wheelPath = path.join(distDir, wheelName);
+  fs.mkdirSync(simpleDir, { recursive: true });
+  const wheel = await writeVectoropsWheel({ tempDir: args.tempDir, python: args.python, wheelPath });
+  if (wheel.code !== 0) {
+    throw new Error(`failed to create vectorops wheel: ${(wheel.stderr || wheel.stdout || "unknown").trim()}`);
+  }
+  fs.writeFileSync(
+    path.join(simpleDir, "index.html"),
+    `<html><body><a href="../../${wheelName}">${wheelName}</a></body></html>\n`,
+  );
+  return distDir;
+}
+
+function buildServiceTaskSpec(args: {
   endpoint: string;
   probe: CommandResult;
   servicePid: number | null;
@@ -154,9 +289,7 @@ function buildTaskSpec(args: {
       validation_passed: validationPassed,
       after_exit_revalidated: validationPassed,
       fresh_shell_probe_passed: validationPassed,
-      failure_reason: validationPassed
-        ? null
-        : `fresh_shell_probe_failed:${(args.probe.stderr || args.probe.stdout || "unknown").trim().slice(0, 220)}`,
+      failure_reason: validationFailureReason("fresh_shell_probe_failed", args.probe),
       false_confidence_detected: !validationPassed,
       evidence_refs: [
         `external_probe:fresh_shell:${args.endpoint}/healthz`,
@@ -190,36 +323,288 @@ function buildTaskSpec(args: {
   };
 }
 
-export async function runRuntimeDogfoodExternalProbe(options: ExternalProbeOptions = {}): Promise<RuntimeDogfoodExternalProbeRun> {
-  const port = options.port ?? await findOpenPort();
-  const endpoint = `http://127.0.0.1:${port}`;
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-runtime-dogfood-external-"));
-  const pidFile = path.join(tempDir, "service-pid.json");
+function buildPublishInstallTaskSpec(args: {
+  endpoint: string;
+  probe: CommandResult;
+  servicePid: number | null;
+  launcherExitCode: number | null;
+}): RuntimeDogfoodTaskSpec {
+  const validationPassed = args.probe.code === 0;
+  const indexCheck = `curl -fsS ${args.endpoint}/simple/vectorops/`;
+  const installCheck = `pip install --index-url ${args.endpoint}/simple vectorops==0.1.0`;
+  return {
+    id: "external_probe_publish_install",
+    title: "External probe publish/install clean-client validation",
+    query_text: "Recover the local package index so clean clients can install vectorops from a fresh shell after worker exit.",
+    evidence_source: "external_probe",
+    trajectory: {
+      title: "Vectorops live package publish validation",
+      task_family: "package_publish_validate",
+      steps: [
+        { role: "assistant", text: "The package index must serve vectorops to a clean client after the worker exits." },
+        {
+          role: "tool",
+          tool_name: "bash",
+          command: `python scripts/build_index.py && nohup python -m http.server ${new URL(args.endpoint).port} --directory dist >/tmp/aionis-runtime-dogfood-index.log 2>&1 &`,
+        },
+        { role: "tool", tool_name: "bash", command: indexCheck },
+        { role: "tool", tool_name: "bash", command: installCheck },
+        {
+          role: "assistant",
+          text: `Update scripts/build_index.py and src/vectorops/__init__.py, relaunch the index detached, then rerun ${indexCheck} and ${installCheck} from a fresh shell.`,
+        },
+      ],
+    },
+    hints: {
+      repo_root: "/workspace/vectorops",
+    },
+    execution_evidence: {
+      validation_passed: validationPassed,
+      after_exit_revalidated: validationPassed,
+      fresh_shell_probe_passed: validationPassed,
+      failure_reason: validationFailureReason("clean_client_install_failed", args.probe),
+      false_confidence_detected: !validationPassed,
+      evidence_refs: [
+        `external_probe:fresh_shell:${args.endpoint}/simple/vectorops/`,
+        `external_probe:clean_client_install:${args.endpoint}/simple`,
+        `launcher_exit_code:${args.launcherExitCode ?? "null"}`,
+        `service_pid:${args.servicePid ?? "null"}`,
+      ],
+    },
+    expectations: {
+      target_files_include: ["scripts/build_index.py", "src/vectorops/__init__.py"],
+      acceptance_checks_match: [
+        escapeRegex(indexCheck),
+        `pip install .*--index-url ${escapeRegex(`${args.endpoint}/simple`)}.*vectorops==0\\.1\\.0`,
+      ],
+      next_action_match: ["scripts/build_index\\.py", "fresh shell"],
+      success_invariants_include: ["clean_client_install_succeeds", "fresh_shell_revalidation_passes"],
+      dependency_requirements_match: ["package artifacts and index metadata", "intended package index"],
+      environment_assumptions_include: ["repo_root:/workspace/vectorops", "validation_can_run_from_fresh_shell"],
+      must_hold_after_exit_include: ["task_result_remains_valid_after_agent_exit"],
+      external_visibility_requirements_match: ["package_install_visible_to_clean_client"],
+      service_lifecycle_required: true,
+      after_exit_required: true,
+      authoritative_gate_allows: true,
+      evidence_allows_authoritative: validationPassed,
+      stable_promotion_allowed: validationPassed,
+      evidence_reasons_include: validationPassed ? [] : ["fresh_shell_probe_failed"],
+    },
+  };
+}
+
+function buildDeployHookWebTaskSpec(args: {
+  endpoint: string;
+  probe: CommandResult;
+  contentMatched: boolean;
+}): RuntimeDogfoodTaskSpec {
+  const validationPassed = args.probe.code === 0 && args.contentMatched;
+  const webCheck = `curl -fsS ${args.endpoint}/index.html`;
+  return {
+    id: "external_probe_deploy_hook_web",
+    title: "External probe deploy/hook/web visible outcome",
+    query_text: "Repair the git deploy webserver hook so a pushed revision is visible through the served web endpoint.",
+    evidence_source: "external_probe",
+    trajectory: {
+      title: "Git webserver live deploy validation",
+      steps: [
+        { role: "assistant", text: "The deploy hook reports success, but the webserver must serve the new revision from the published endpoint." },
+        { role: "tool", tool_name: "bash", command: "git config --global receive.denyCurrentBranch updateInstead" },
+        { role: "tool", tool_name: "bash", command: webCheck },
+        {
+          role: "assistant",
+          text: `Update hooks/post-receive and /var/www/main/index.html, push a fixture commit, and rerun ${webCheck} from a fresh shell until the served content matches the deployed revision.`,
+        },
+      ],
+    },
+    execution_evidence: {
+      validation_passed: validationPassed,
+      fresh_shell_probe_passed: validationPassed,
+      failure_reason: validationPassed
+        ? null
+        : validationFailureReason("served_web_content_probe_failed", args.probe) ?? "served_web_content_mismatch",
+      false_confidence_detected: !validationPassed,
+      evidence_refs: [
+        `external_probe:fresh_shell:${args.endpoint}/index.html`,
+        "served_web_content_matches_deployed_revision",
+      ],
+    },
+    expectations: {
+      target_files_include: ["hooks/post-receive", "/var/www/main/index.html"],
+      acceptance_checks_match: [escapeRegex(webCheck)],
+      next_action_match: ["hooks/post-receive", "fresh shell"],
+      success_invariants_include: ["deployed_web_content_visible_from_served_endpoint", "fresh_shell_revalidation_passes"],
+      dependency_requirements_match: ["git deploy or hook path", "webserver content must come from the deployed revision"],
+      environment_assumptions_include: ["validation_can_run_from_fresh_shell"],
+      must_hold_after_exit_include: [],
+      external_visibility_requirements_match: [
+        "served_web_content_matches_deployed_revision",
+        escapeRegex(`external_probe:${webCheck}`),
+      ],
+      service_lifecycle_required: false,
+      after_exit_required: false,
+      authoritative_gate_allows: true,
+      evidence_allows_authoritative: validationPassed,
+      stable_promotion_allowed: validationPassed,
+      evidence_reasons_include: validationPassed ? [] : ["fresh_shell_probe_failed"],
+    },
+  };
+}
+
+async function runServiceAfterExitProbe(port?: number): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
+  const selectedPort = port ?? await findOpenPort();
+  const endpoint = `http://127.0.0.1:${selectedPort}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-runtime-dogfood-service-"));
   let servicePid: number | null = null;
   let launcherExitCode: number | null = null;
   let probe: CommandResult = { code: 1, stdout: "", stderr: "probe_not_run" };
 
   try {
-    const launcherPath = writeLauncher({ tempDir, port, pidFile });
-    const launcher = await execFileResult(process.execPath, [launcherPath]);
-    launcherExitCode = launcher.code;
-    const metadata = JSON.parse(fs.readFileSync(pidFile, "utf8")) as { pid?: unknown };
-    servicePid = typeof metadata.pid === "number" ? metadata.pid : null;
-    probe = await waitForFreshShellProbe(endpoint);
+    const launched = await launchDetachedProcess({
+      tempDir,
+      command: process.execPath,
+      commandArgs: [servicePath, "--port", String(selectedPort)],
+    });
+    servicePid = launched.pid;
+    launcherExitCode = launched.launcherExitCode;
+    probe = await waitForFreshShellCommand(`curl -fsS ${shellQuote(`${endpoint}/healthz`)}`);
   } finally {
     killService(servicePid);
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 
-  const taskSpecs = [buildTaskSpec({ endpoint, probe, servicePid, launcherExitCode })];
-  const dogfoodResult = runRuntimeDogfoodSuite(runtimeDogfoodTasksFromSpecs(taskSpecs));
+  const taskSpec = buildServiceTaskSpec({ endpoint, probe, servicePid, launcherExitCode });
   return {
-    run_version: "runtime_dogfood_external_probe_run_v1",
+    id: taskSpec.id,
+    task_family_hint: "service_publish_validate",
     endpoint,
     service_pid: servicePid,
     launcher_exit_code: launcherExitCode,
     fresh_shell_probe_passed: probe.code === 0,
     fresh_shell_probe_output: probe.stdout.trim(),
+    task_spec: taskSpec,
+  };
+}
+
+async function runPublishInstallProbe(port?: number): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
+  const python = await resolvePython();
+  const selectedPort = port ?? await findOpenPort();
+  const endpoint = `http://127.0.0.1:${selectedPort}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-runtime-dogfood-publish-"));
+  let servicePid: number | null = null;
+  let launcherExitCode: number | null = null;
+  let probe: CommandResult = { code: 1, stdout: "", stderr: "probe_not_run" };
+
+  try {
+    const distDir = await prepareVectoropsIndex({ tempDir, python });
+    const launched = await launchDetachedProcess({
+      tempDir,
+      command: python,
+      commandArgs: ["-m", "http.server", String(selectedPort), "--bind", "127.0.0.1", "--directory", distDir],
+    });
+    servicePid = launched.pid;
+    launcherExitCode = launched.launcherExitCode;
+    const indexCheck = `curl -fsS ${shellQuote(`${endpoint}/simple/vectorops/`)}`;
+    const ready = await waitForFreshShellCommand(indexCheck, 15000);
+    if (ready.code !== 0) {
+      probe = ready;
+    } else {
+      const clientDir = path.join(tempDir, "clean-client");
+      const clientPython = process.platform === "win32"
+        ? path.join(clientDir, "Scripts", "python.exe")
+        : path.join(clientDir, "bin", "python");
+      const installCommand = [
+        `${shellQuote(python)} -m venv ${shellQuote(clientDir)}`,
+        `${shellQuote(clientPython)} -m pip install --no-cache-dir --index-url ${shellQuote(`${endpoint}/simple`)} --trusted-host 127.0.0.1 vectorops==0.1.0`,
+        `${shellQuote(clientPython)} -c ${shellQuote("import vectorops; print(vectorops.__version__)")}`,
+      ].join(" && ");
+      probe = await probeFreshShellCommand(installCommand, 60000);
+    }
+  } finally {
+    killService(servicePid);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+
+  const taskSpec = buildPublishInstallTaskSpec({ endpoint, probe, servicePid, launcherExitCode });
+  return {
+    id: taskSpec.id,
+    task_family_hint: "package_publish_validate",
+    endpoint,
+    service_pid: servicePid,
+    launcher_exit_code: launcherExitCode,
+    fresh_shell_probe_passed: probe.code === 0,
+    fresh_shell_probe_output: probe.stdout.trim(),
+    task_spec: taskSpec,
+  };
+}
+
+async function runDeployHookWebProbe(port?: number): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
+  const python = await resolvePython();
+  const selectedPort = port ?? await findOpenPort();
+  const endpoint = `http://127.0.0.1:${selectedPort}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-runtime-dogfood-deploy-"));
+  const webRoot = path.join(tempDir, "www", "main");
+  const expectedContent = "deployed revision visible through live dogfood";
+  let servicePid: number | null = null;
+  let launcherExitCode: number | null = null;
+  let probe: CommandResult = { code: 1, stdout: "", stderr: "probe_not_run" };
+
+  try {
+    fs.mkdirSync(webRoot, { recursive: true });
+    fs.writeFileSync(path.join(webRoot, "index.html"), `${expectedContent}\n`);
+    const launched = await launchDetachedProcess({
+      tempDir,
+      command: python,
+      commandArgs: ["-m", "http.server", String(selectedPort), "--bind", "127.0.0.1", "--directory", webRoot],
+    });
+    servicePid = launched.pid;
+    launcherExitCode = launched.launcherExitCode;
+    probe = await waitForFreshShellCommand(`curl -fsS ${shellQuote(`${endpoint}/index.html`)}`, 10000);
+  } finally {
+    killService(servicePid);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+
+  const contentMatched = probe.stdout.includes(expectedContent);
+  const taskSpec = buildDeployHookWebTaskSpec({ endpoint, probe, contentMatched });
+  return {
+    id: taskSpec.id,
+    task_family_hint: "git_deploy_webserver",
+    endpoint,
+    service_pid: servicePid,
+    launcher_exit_code: launcherExitCode,
+    fresh_shell_probe_passed: probe.code === 0 && contentMatched,
+    fresh_shell_probe_output: probe.stdout.trim(),
+    task_spec: taskSpec,
+  };
+}
+
+async function runProbeSlice(slice: RuntimeDogfoodExternalProbeSlice, port?: number): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
+  if (slice === "service_after_exit") return await runServiceAfterExitProbe(port);
+  if (slice === "publish_install") return await runPublishInstallProbe(port);
+  return await runDeployHookWebProbe(port);
+}
+
+export async function runRuntimeDogfoodExternalProbe(options: ExternalProbeOptions = {}): Promise<RuntimeDogfoodExternalProbeRun> {
+  const slices = options.slices?.length ? options.slices : defaultSlices;
+  const ports = options.port
+    ? [options.port, ...await findOpenPorts(Math.max(0, slices.length - 1))]
+    : await findOpenPorts(slices.length);
+  const probes: RuntimeDogfoodExternalProbeScenarioRun[] = [];
+  for (const [index, slice] of slices.entries()) {
+    probes.push(await runProbeSlice(slice, ports[index]));
+  }
+  const taskSpecs = probes.map((probe) => probe.task_spec);
+  const dogfoodResult = runRuntimeDogfoodSuite(runtimeDogfoodTasksFromSpecs(taskSpecs));
+  const primary = probes[0] ?? null;
+  return {
+    run_version: "runtime_dogfood_external_probe_run_v1",
+    endpoint: primary?.endpoint ?? "",
+    service_pid: primary?.service_pid ?? null,
+    launcher_exit_code: primary?.launcher_exit_code ?? null,
+    fresh_shell_probe_passed: probes.every((probe) => probe.fresh_shell_probe_passed),
+    fresh_shell_probe_output: probes.map((probe) => `${probe.id}: ${probe.fresh_shell_probe_output}`).join("\n"),
+    probes,
     task_specs: taskSpecs,
     dogfood_result: dogfoodResult,
   };
