@@ -19,7 +19,7 @@ function usage(): string {
     "Usage:",
     "  npx tsx scripts/lite-runtime-dogfood-external-probe.ts [--json|--report-json] [--port 43000] [--out-json /path/result.json] [--out-report-json /path/report.json] [--out-md /path/result.md] [--out-tasks-json /path/tasks.json]",
     "",
-    "Runs a Runtime dogfood slice backed by a real detached local service and fresh-shell external probe evidence.",
+    "Runs Runtime dogfood slices backed by live fresh-shell external probe evidence for service, publish/install, and deploy/web task families.",
   ].join("\n");
 }
 

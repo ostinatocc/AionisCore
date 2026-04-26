@@ -37,6 +37,7 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.equal(result.report.product_metrics.after_exit_evidence_success_rate, 0.75);
   assert.equal(result.report.product_metrics.cross_shell_revalidation_success_rate, 0.8);
   assert.equal(result.report.product_metrics.live_execution_coverage_rate, 0);
+  assert.equal(result.report.product_metrics.live_execution_coverage_by_family.service_publish_validate?.rate, 0);
   assert.ok(result.report.blocking_risks.some((risk) => risk.includes("fixture-backed only")));
   assert.ok(result.report.next_actions.some((action) => action.includes("external_probe")));
 
@@ -151,6 +152,7 @@ test("runtime dogfood task specs can carry external probe evidence without code 
   assert.equal(result.summary.after_exit_correct_rate, 1);
   assert.equal(result.report.product_status, "pass_live_evidence");
   assert.equal(result.report.product_metrics.live_execution_coverage_rate, 1);
+  assert.equal(result.report.product_metrics.live_execution_coverage_by_family.service_publish_validate?.rate, 1);
   assert.equal(result.report.product_metrics.after_exit_evidence_success_rate, 1);
   assert.equal(result.report.product_metrics.cross_shell_revalidation_success_rate, 1);
 
@@ -166,18 +168,32 @@ test("runtime dogfood external probe runs a detached service and produces live e
   assert.equal(run.run_version, "runtime_dogfood_external_probe_run_v1");
   assert.equal(run.launcher_exit_code, 0);
   assert.ok(run.service_pid);
+  assert.equal(run.probes.length, 3);
   assert.equal(run.fresh_shell_probe_passed, true);
   assert.equal(run.dogfood_result.overall_status, "pass");
-  assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 1);
+  assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 3);
   assert.equal(run.dogfood_result.proof_boundary.fixture_evidence_scenarios, 0);
   assert.equal(run.dogfood_result.summary.after_exit_correct_rate, 1);
   assert.equal(run.dogfood_result.report.product_status, "pass_live_evidence");
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_rate, 1);
+  assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.service_publish_validate?.rate, 1);
+  assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.package_publish_validate?.rate, 1);
+  assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.git_deploy_webserver?.rate, 1);
+  assert.equal(run.dogfood_result.coverage.task_families.service_publish_validate, 1);
+  assert.equal(run.dogfood_result.coverage.task_families.package_publish_validate, 1);
+  assert.equal(run.dogfood_result.coverage.task_families.git_deploy_webserver, 1);
 
-  const scenario = run.dogfood_result.scenarios[0];
-  assert.equal(scenario?.proof.evidence_source, "external_probe");
-  assert.equal(scenario?.proof.live_external_validation, true);
-  assert.equal(scenario?.metrics.execution_evidence_allows_authoritative, true);
-  assert.equal(scenario?.metrics.stable_promotion_allowed, true);
+  const scenarioIds = new Set(run.dogfood_result.scenarios.map((scenario) => scenario.id));
+  assert.ok(scenarioIds.has("external_probe_service_after_exit"));
+  assert.ok(scenarioIds.has("external_probe_publish_install"));
+  assert.ok(scenarioIds.has("external_probe_deploy_hook_web"));
+  for (const scenario of run.dogfood_result.scenarios) {
+    assert.equal(scenario.proof.evidence_source, "external_probe");
+    assert.equal(scenario.proof.live_external_validation, true);
+    assert.equal(scenario.metrics.execution_evidence_allows_authoritative, true);
+    assert.equal(scenario.metrics.stable_promotion_allowed, true);
+  }
   assert.match(run.fresh_shell_probe_output, /"ok":true/);
+  assert.match(run.fresh_shell_probe_output, /Successfully installed vectorops-0\.1\.0/);
+  assert.match(run.fresh_shell_probe_output, /deployed revision visible through live dogfood/);
 });
