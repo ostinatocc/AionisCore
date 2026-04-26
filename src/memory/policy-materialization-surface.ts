@@ -5,10 +5,10 @@ import {
   choosePreferredTrustedPattern,
   findSelectedWorkflow,
   firstString,
+  isStableWorkflowEntry,
   numeric,
   readPersistedPolicyMemory,
   stringList,
-  supportsWorkflowToolPreference,
   toPolicyHintEntry,
   workflowEvidenceParts,
   workflowToolPreferenceState,
@@ -116,7 +116,12 @@ export function buildDerivedPolicySurface(args: {
     workflow: selectedWorkflow,
     selectedTool,
   });
-  const workflowSupports = workflowPolicyState !== "none";
+  const workflowSupports = args.path.source_kind === "recommended_workflow"
+    && isStableWorkflowEntry(selectedWorkflow)
+    && workflowPolicyState !== "none";
+  const authoritativeWorkflowSupports = workflowSupports && workflowPolicyState === "stable";
+  const authoritativeExecutionContractSupports = args.executionContract?.contract_trust === "authoritative";
+  const authoritativePolicySupports = authoritativeWorkflowSupports || authoritativeExecutionContractSupports;
   if (!patternSupports && !workflowSupports) return null;
 
   const sourceKind =
@@ -137,7 +142,7 @@ export function buildDerivedPolicySurface(args: {
     ?? preferredPatternExecutionContract
     ?? null;
   const policyContractTrust = resolveContractTrustForSteering({
-    computedTrust: patternSupports || workflowPolicyState === "stable" ? "authoritative" : "advisory",
+    computedTrust: authoritativePolicySupports ? "authoritative" : "advisory",
     explicitTrust: firstContractTrust(
       args.executionContract?.contract_trust,
       preferredPattern?.contract_trust,
@@ -147,7 +152,7 @@ export function buildDerivedPolicySurface(args: {
     executionContract: steeringExecutionContract,
   });
   const policyState =
-    (patternSupports || workflowPolicyState === "stable") && policyContractTrust === "authoritative"
+    authoritativePolicySupports && policyContractTrust === "authoritative"
       ? "stable"
       : "candidate";
   const patternConfidence = patternSupports ? (preferredPattern?.confidence ?? 0.82) : 0;
@@ -167,21 +172,22 @@ export function buildDerivedPolicySurface(args: {
   const reason = [
     patternSupports ? `trusted pattern supports ${selectedTool}` : null,
     workflowSupports ? `stable workflow supports ${selectedTool}` : null,
+    authoritativeExecutionContractSupports ? "authoritative execution contract supports policy materialization" : null,
     workflowSupports && selectedWorkflow ? workflowEvidenceParts(selectedWorkflow).join("; ") : null,
   ].filter((value): value is string => !!value).join("; ");
   const workflowSteps = stringList(
-    selectedWorkflow?.workflow_steps && selectedWorkflow.workflow_steps.length > 0
+    workflowSupports && selectedWorkflow?.workflow_steps && selectedWorkflow.workflow_steps.length > 0
       ? selectedWorkflow.workflow_steps
       : args.executionContract?.workflow_steps,
     24,
   );
   const patternHints = stringList(
-    selectedWorkflow?.pattern_hints && selectedWorkflow.pattern_hints.length > 0
+    workflowSupports && selectedWorkflow?.pattern_hints && selectedWorkflow.pattern_hints.length > 0
       ? selectedWorkflow.pattern_hints
       : args.executionContract?.pattern_hints,
     24,
   );
-  const serviceLifecycleConstraints = Array.isArray(selectedWorkflow?.service_lifecycle_constraints)
+  const serviceLifecycleConstraints = workflowSupports && Array.isArray(selectedWorkflow?.service_lifecycle_constraints)
     && selectedWorkflow.service_lifecycle_constraints.length > 0
     ? selectedWorkflow.service_lifecycle_constraints.slice(0, 16)
     : Array.isArray(args.executionContract?.service_lifecycle_constraints)
@@ -189,7 +195,7 @@ export function buildDerivedPolicySurface(args: {
     ? args.executionContract.service_lifecycle_constraints.slice(0, 16)
     : [];
   const targetFiles = stringList(
-    selectedWorkflow?.target_files && selectedWorkflow.target_files.length > 0
+    workflowSupports && selectedWorkflow?.target_files && selectedWorkflow.target_files.length > 0
       ? selectedWorkflow.target_files
       : args.executionContract?.target_files && args.executionContract.target_files.length > 0
         ? args.executionContract.target_files
@@ -281,14 +287,22 @@ export function buildPolicyHintPack(args: {
     introspection: args.introspection,
     path: args.path,
   });
-  if (supportsWorkflowToolPreference({ workflow: selectedWorkflow, selectedTool })) {
+  const workflowPolicyState = workflowToolPreferenceState({
+    workflow: selectedWorkflow,
+    selectedTool,
+  });
+  if (
+    args.path.source_kind === "recommended_workflow"
+    && isStableWorkflowEntry(selectedWorkflow)
+    && workflowPolicyState !== "none"
+  ) {
     hints.push({
       hint_id: `tool_preference:${selectedWorkflow!.anchor_id}:${selectedTool}:workflow`,
       source_kind: "stable_workflow",
       hint_kind: "tool_preference",
       action: "prefer",
       source_anchor_id: selectedWorkflow!.anchor_id,
-      source_anchor_level: "L2",
+      source_anchor_level: firstString(selectedWorkflow!.anchor_level, "L2"),
       selected_tool: selectedTool,
       task_family: firstString(selectedWorkflow!.task_family),
       workflow_signature: firstString(selectedWorkflow!.workflow_signature),
@@ -327,7 +341,7 @@ export function buildPolicyHintPack(args: {
     });
   }
 
-  if (args.path.anchor_id) {
+  if (args.path.anchor_id && args.path.source_kind === "recommended_workflow") {
     const workflowSteps = Array.isArray(args.path.workflow_steps) && args.path.workflow_steps.length > 0
       ? args.path.workflow_steps
       : stringList(selectedWorkflow?.workflow_steps, 24);
