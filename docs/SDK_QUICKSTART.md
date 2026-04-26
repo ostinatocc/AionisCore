@@ -271,6 +271,10 @@ console.log(workflow.execution_contract_v1);
 console.log(workflow.authority_summary);
 ```
 
+`retrieveWorkflowContract` is the stable host-facing read facade. It omits the full execution introspection payload by
+default so hosts do not accidentally depend on debug/internal fields. Use `include_introspection: true` only for
+operator diagnostics; authority still comes from `workflow.authority_summary`.
+
 ## 12. Inspect host bridge task context
 
 ```ts

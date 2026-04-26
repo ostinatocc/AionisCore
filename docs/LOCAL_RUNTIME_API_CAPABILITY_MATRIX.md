@@ -107,6 +107,12 @@ This is one of Lite's `Supported (Subset)` surfaces. The following routes are pr
 This route group is one half of the `Anchor-Guided Rehydration Loop`.
 It serves the `recall -> action retrieval -> runtime hint` portion of the loop.
 
+Host integrations should prefer the SDK host execution-memory contract,
+`host_execution_memory_api_contract_v1`, over stitching raw routes together. The stable host facades are
+`memory.taskStartPlan`, `memory.storeExecutionOutcome`, `memory.retrieveWorkflowContract`, and
+`memory.executionIntrospect`. `retrieveWorkflowContract` intentionally omits the full introspection payload by default;
+`include_introspection: true` is an operator/debug opt-in, not a normal authority path.
+
 Planner-packet contract:
 
 1. `planning_context` and `context_assemble` now expose a stable `planner_packet`

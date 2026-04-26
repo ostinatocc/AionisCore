@@ -301,7 +301,7 @@ export function createRetrieveWorkflowContractMethod(client: AionisHttpClient) {
       outcome_contract_gate: outcomeContractGate,
       authority_visibility: authorityVisibility,
       authority_summary: buildAuthoritySummary(selectedWorkflow, executionContract),
-      introspection: payload.include_introspection === false ? null : introspection,
+      introspection: payload.include_introspection === true ? introspection : null,
     };
   };
 }

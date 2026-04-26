@@ -3,6 +3,7 @@ import test from "node:test";
 import { createAionisRuntimeClient } from "../src/client.js";
 import { createAionisHostBridge } from "../src/host-bridge.js";
 import { AionisRuntimeSdkHttpError } from "../src/error.js";
+import { AIONIS_HOST_EXECUTION_MEMORY_API_CONTRACT } from "../src/host-api-contract.js";
 
 test("createAionisRuntimeClient exposes the full Aionis Core SDK surface and maps requests to expected routes", async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
@@ -1675,4 +1676,103 @@ test("runtime SDK retrieveWorkflowContract selects a contract from execution int
   assert.equal(calls[0]?.body.limit, 4);
   assert.equal(calls[0]?.body.run_id, "workflow-contract-run-1");
   assert.equal(calls[0]?.body.session_id, "workflow-contract-session-1");
+});
+
+test("runtime SDK retrieveWorkflowContract omits debug introspection unless explicitly requested", async () => {
+  const client = createAionisRuntimeClient({
+    baseUrl: "http://127.0.0.1:3001/",
+    fetch: async () =>
+      new Response(JSON.stringify({
+        summary_version: "execution_memory_introspection_v1",
+        tenant_id: "default",
+        scope: "public-workflow-contract-default",
+        recommended_workflows: [{
+          anchor_id: "workflow-anchor-default",
+          workflow_signature: "workflow:default-introspection-policy",
+          contract_trust: "authoritative",
+          outcome_contract_gate: {
+            gate_version: "outcome_contract_gate_v1",
+            status: "sufficient",
+            allows_authoritative: true,
+            requested_trust: "authoritative",
+            effective_trust: "authoritative",
+            reasons: [],
+          },
+          authority_visibility: {
+            surface_version: "runtime_authority_visibility_v1",
+            node_id: "workflow-anchor-default",
+            node_kind: "workflow_anchor",
+            title: "Default introspection policy workflow",
+            requested_trust: "authoritative",
+            effective_trust: "authoritative",
+            status: "sufficient",
+            allows_authoritative: true,
+            allows_stable_promotion: true,
+            authority_blocked: false,
+            stable_promotion_blocked: false,
+            primary_blocker: null,
+            authority_reasons: [],
+            outcome_contract_reasons: [],
+            execution_evidence_reasons: [],
+            execution_evidence_status: "succeeded",
+            false_confidence_detected: false,
+          },
+          execution_contract_v1: {
+            schema_version: "execution_contract_v1",
+            workflow_signature: "workflow:default-introspection-policy",
+            file_path: "src/runtime.ts",
+            contract_trust: "authoritative",
+          },
+        }],
+        candidate_workflows: [],
+        demo_surface: {
+          surface_version: "execution_memory_demo_v1",
+          headline: "debug only",
+        },
+      }), { status: 200, headers: { "content-type": "application/json" } }),
+  });
+
+  const defaultResponse = await client.memory.retrieveWorkflowContract({
+    tenant_id: "default",
+    scope: "public-workflow-contract-default",
+    workflow_signature: "workflow:default-introspection-policy",
+  });
+  const debugResponse = await client.memory.retrieveWorkflowContract({
+    tenant_id: "default",
+    scope: "public-workflow-contract-default",
+    workflow_signature: "workflow:default-introspection-policy",
+    include_introspection: true,
+  });
+
+  assert.equal(defaultResponse.introspection, null);
+  assert.equal(debugResponse.introspection?.summary_version, "execution_memory_introspection_v1");
+  assert.equal(debugResponse.introspection?.demo_surface?.headline, "debug only");
+});
+
+test("full SDK publishes a stable host execution-memory API contract", () => {
+  const contract = AIONIS_HOST_EXECUTION_MEMORY_API_CONTRACT;
+  assert.equal(contract.contract_version, "host_execution_memory_api_contract_v1");
+  assert.deepEqual(contract.public_loop, [
+    "memory.taskStartPlan",
+    "host.execute_and_validate",
+    "memory.storeExecutionOutcome",
+    "memory.retrieveWorkflowContract",
+  ]);
+
+  const facades = new Map(contract.facades.map((entry) => [entry.sdk_method, entry]));
+  assert.deepEqual([...facades.keys()], [
+    "memory.taskStartPlan",
+    "memory.storeExecutionOutcome",
+    "memory.retrieveWorkflowContract",
+    "memory.executionIntrospect",
+  ]);
+  assert.deepEqual(facades.get("memory.taskStartPlan")?.route_paths, [
+    "/v1/memory/kickoff/recommendation",
+    "/v1/memory/planning/context",
+  ]);
+  assert.equal(facades.get("memory.retrieveWorkflowContract")?.debug_policy, "explicit_opt_in");
+  assert.ok(facades.get("memory.retrieveWorkflowContract")?.stable_response_fields.includes("authority_summary"));
+  assert.equal(facades.get("memory.retrieveWorkflowContract")?.stable_response_fields.includes("introspection"), false);
+  assert.ok(facades.get("memory.retrieveWorkflowContract")?.optional_debug_fields.includes("introspection"));
+  assert.ok(facades.get("memory.executionIntrospect")?.stable_response_fields.includes("authority_decision_report"));
 });

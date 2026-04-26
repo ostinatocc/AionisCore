@@ -23,6 +23,19 @@ The loop is:
 taskStartPlan -> execute -> validate -> storeExecutionOutcome -> retrieveWorkflowContract -> reuse or keep advisory
 ```
 
+The stable SDK host contract is `host_execution_memory_api_contract_v1`, exported by `@ostinato/aionis` as
+`AIONIS_HOST_EXECUTION_MEMORY_API_CONTRACT`. Treat it as the machine-readable boundary for host integrations.
+The stable public facades are:
+
+1. `memory.taskStartPlan`
+2. `memory.storeExecutionOutcome`
+3. `memory.retrieveWorkflowContract`
+4. `memory.executionIntrospect`
+
+`executionIntrospect` is a read-only inspection surface. It can explain authority decisions, but it does not grant
+authority. `retrieveWorkflowContract` returns only the stable workflow contract and authority summary by default;
+set `include_introspection: true` only for operator/debug flows that need the full introspection payload.
+
 ## 1. Start With `taskStartPlan`
 
 Use `taskStartPlan` to ask the Runtime for the first action, candidate workflow, uncertainty, and gate action.

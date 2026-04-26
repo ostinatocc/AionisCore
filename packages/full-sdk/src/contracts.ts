@@ -713,6 +713,11 @@ export type AionisRetrieveWorkflowContractRequest = AionisExecutionIntrospectReq
   workflow_signature?: string;
   task_family?: string;
   file_path?: string;
+  /**
+   * Defaults to false. Set true only for operator/debug flows that need the full
+   * execution introspection payload; normal host integrations should read the
+   * stable workflow contract and authority_summary fields instead.
+   */
   include_introspection?: boolean;
 };
 
