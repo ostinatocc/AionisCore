@@ -1,0 +1,598 @@
+{
+  "suite_id": "aionis_real_ab_seed_calibration_v1",
+  "suite_kind": "harness_calibration",
+  "generated_at": "2026-04-27T00:00:00.000Z",
+  "thresholds": {
+    "min_wasted_step_reduction_pct": 20
+  },
+  "tasks": [
+    {
+      "id": "coding_resume_ci_failure",
+      "title": "Resume a partially fixed CI failure",
+      "task_family": "coding_continuity",
+      "task_prompt": "Continue yesterday's CI repair and get the package tests green without rediscovering the same failing file.",
+      "fairness": {
+        "same_model": true,
+        "same_time_budget": true,
+        "same_tool_permissions": true,
+        "same_environment_reset": true,
+        "same_verifier": true
+      },
+      "verifier": {
+        "kind": "command",
+        "command": "npm test -- packages/exporter/exporter.test.mjs",
+        "after_exit_required": false,
+        "external_visibility_required": false
+      },
+      "expected_outcome": {
+        "target_files": ["packages/exporter/src/exporter.ts", "packages/exporter/exporter.test.mjs"],
+        "success_invariants": ["targeted_test_passes"],
+        "acceptance_checks": ["npm test -- packages/exporter/exporter.test.mjs"]
+      },
+      "arms": {
+        "baseline": {
+          "memory_mode": "none",
+          "authority_level": "none",
+          "packet_source": "none",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": false,
+            "wasted_steps": 5,
+            "retry_count": 2,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 2,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 900000,
+            "tokens_to_success": 52000
+          }
+        },
+        "aionis_assisted": {
+          "memory_mode": "aionis_auto",
+          "authority_level": "advisory",
+          "packet_source": "automatic_runtime",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": true,
+            "wasted_steps": 2,
+            "retry_count": 1,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 0,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 540000,
+            "tokens_to_success": 31000
+          }
+        },
+        "negative_control": {
+          "memory_mode": "irrelevant_or_low_trust",
+          "authority_level": "observational",
+          "packet_source": "irrelevant_low_trust",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": false,
+            "wasted_steps": 6,
+            "retry_count": 2,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 2,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 930000,
+            "tokens_to_success": 54000
+          }
+        },
+        "positive_control": {
+          "memory_mode": "oracle_handoff",
+          "authority_level": "authoritative",
+          "packet_source": "oracle_handoff",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": true,
+            "wasted_steps": 1,
+            "retry_count": 0,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 0,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 420000,
+            "tokens_to_success": 23000
+          }
+        }
+      }
+    },
+    {
+      "id": "service_after_exit_health",
+      "title": "Keep a local service alive after agent exit",
+      "task_family": "service_publish_validate",
+      "task_prompt": "Start the health service so it survives the worker shell and prove it from a fresh shell.",
+      "fairness": {
+        "same_model": true,
+        "same_time_budget": true,
+        "same_tool_permissions": true,
+        "same_environment_reset": true,
+        "same_verifier": true
+      },
+      "verifier": {
+        "kind": "external_probe",
+        "command": "curl -fsS http://127.0.0.1:4199/healthz",
+        "after_exit_required": true,
+        "external_visibility_required": true
+      },
+      "expected_outcome": {
+        "target_files": ["scripts/health-server.mjs"],
+        "success_invariants": ["fresh_shell_revalidation_passes", "service_survives_agent_exit"],
+        "acceptance_checks": ["curl -fsS http://127.0.0.1:4199/healthz"]
+      },
+      "arms": {
+        "baseline": {
+          "memory_mode": "none",
+          "authority_level": "none",
+          "packet_source": "none",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": false,
+            "first_correct_action": false,
+            "wasted_steps": 4,
+            "retry_count": 2,
+            "false_confidence": true,
+            "after_exit_correct": false,
+            "wrong_file_touches": 1,
+            "human_intervention_count": 1,
+            "time_to_success_ms": null,
+            "tokens_to_success": 46000
+          }
+        },
+        "aionis_assisted": {
+          "memory_mode": "aionis_auto",
+          "authority_level": "authoritative",
+          "packet_source": "automatic_runtime",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": true,
+            "wasted_steps": 1,
+            "retry_count": 0,
+            "false_confidence": false,
+            "after_exit_correct": true,
+            "wrong_file_touches": 0,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 380000,
+            "tokens_to_success": 24000
+          }
+        },
+        "negative_control": {
+          "memory_mode": "irrelevant_or_low_trust",
+          "authority_level": "advisory",
+          "packet_source": "irrelevant_low_trust",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": false,
+            "first_correct_action": false,
+            "wasted_steps": 5,
+            "retry_count": 2,
+            "false_confidence": true,
+            "after_exit_correct": false,
+            "wrong_file_touches": 1,
+            "human_intervention_count": 1,
+            "time_to_success_ms": null,
+            "tokens_to_success": 49000
+          }
+        },
+        "positive_control": {
+          "memory_mode": "oracle_handoff",
+          "authority_level": "authoritative",
+          "packet_source": "oracle_handoff",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": true,
+            "wasted_steps": 0,
+            "retry_count": 0,
+            "false_confidence": false,
+            "after_exit_correct": true,
+            "wrong_file_touches": 0,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 300000,
+            "tokens_to_success": 18000
+          }
+        }
+      }
+    },
+    {
+      "id": "package_publish_clean_install",
+      "title": "Publish package and prove clean-client install",
+      "task_family": "package_publish_validate",
+      "task_prompt": "Publish a local package index and prove a clean client can install the intended version.",
+      "fairness": {
+        "same_model": true,
+        "same_time_budget": true,
+        "same_tool_permissions": true,
+        "same_environment_reset": true,
+        "same_verifier": true
+      },
+      "verifier": {
+        "kind": "external_probe",
+        "command": "pip install --index-url http://127.0.0.1:4201/simple vectorops==0.1.0",
+        "after_exit_required": true,
+        "external_visibility_required": true
+      },
+      "expected_outcome": {
+        "target_files": ["scripts/build_index.py", "src/vectorops/__init__.py"],
+        "success_invariants": ["clean_client_install_succeeds", "fresh_shell_revalidation_passes"],
+        "acceptance_checks": ["pip install --index-url http://127.0.0.1:4201/simple vectorops==0.1.0"]
+      },
+      "arms": {
+        "baseline": {
+          "memory_mode": "none",
+          "authority_level": "none",
+          "packet_source": "none",
+          "metrics": {
+            "completion": false,
+            "verifier_passed": false,
+            "first_correct_action": false,
+            "wasted_steps": 6,
+            "retry_count": 3,
+            "false_confidence": true,
+            "after_exit_correct": false,
+            "wrong_file_touches": 2,
+            "human_intervention_count": 1,
+            "time_to_success_ms": null,
+            "tokens_to_success": 61000
+          }
+        },
+        "aionis_assisted": {
+          "memory_mode": "aionis_auto",
+          "authority_level": "authoritative",
+          "packet_source": "automatic_runtime",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": true,
+            "wasted_steps": 2,
+            "retry_count": 1,
+            "false_confidence": false,
+            "after_exit_correct": true,
+            "wrong_file_touches": 0,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 700000,
+            "tokens_to_success": 37000
+          }
+        },
+        "negative_control": {
+          "memory_mode": "irrelevant_or_low_trust",
+          "authority_level": "observational",
+          "packet_source": "irrelevant_low_trust",
+          "metrics": {
+            "completion": false,
+            "verifier_passed": false,
+            "first_correct_action": false,
+            "wasted_steps": 7,
+            "retry_count": 3,
+            "false_confidence": false,
+            "after_exit_correct": false,
+            "wrong_file_touches": 2,
+            "human_intervention_count": 1,
+            "time_to_success_ms": null,
+            "tokens_to_success": 64000
+          }
+        },
+        "positive_control": {
+          "memory_mode": "oracle_handoff",
+          "authority_level": "authoritative",
+          "packet_source": "oracle_handoff",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": true,
+            "wasted_steps": 1,
+            "retry_count": 0,
+            "false_confidence": false,
+            "after_exit_correct": true,
+            "wrong_file_touches": 0,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 560000,
+            "tokens_to_success": 28000
+          }
+        }
+      }
+    },
+    {
+      "id": "deploy_hook_web_visible",
+      "title": "Deploy hook makes web content visible",
+      "task_family": "deploy_hook_webserver",
+      "task_prompt": "Repair the deploy hook so the served web endpoint exposes the pushed revision.",
+      "fairness": {
+        "same_model": true,
+        "same_time_budget": true,
+        "same_tool_permissions": true,
+        "same_environment_reset": true,
+        "same_verifier": true
+      },
+      "verifier": {
+        "kind": "external_probe",
+        "command": "curl -fsS http://127.0.0.1:4301/index.html",
+        "after_exit_required": false,
+        "external_visibility_required": true
+      },
+      "expected_outcome": {
+        "target_files": ["hooks/post-receive", "/var/www/main/index.html"],
+        "success_invariants": ["served_web_content_matches_deployed_revision"],
+        "acceptance_checks": ["curl -fsS http://127.0.0.1:4301/index.html"]
+      },
+      "arms": {
+        "baseline": {
+          "memory_mode": "none",
+          "authority_level": "none",
+          "packet_source": "none",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": false,
+            "first_correct_action": false,
+            "wasted_steps": 5,
+            "retry_count": 2,
+            "false_confidence": true,
+            "after_exit_correct": null,
+            "wrong_file_touches": 1,
+            "human_intervention_count": 1,
+            "time_to_success_ms": null,
+            "tokens_to_success": 55000
+          }
+        },
+        "aionis_assisted": {
+          "memory_mode": "aionis_auto",
+          "authority_level": "advisory",
+          "packet_source": "automatic_runtime",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": true,
+            "wasted_steps": 2,
+            "retry_count": 1,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 0,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 760000,
+            "tokens_to_success": 36000
+          }
+        },
+        "negative_control": {
+          "memory_mode": "irrelevant_or_low_trust",
+          "authority_level": "observational",
+          "packet_source": "irrelevant_low_trust",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": false,
+            "first_correct_action": false,
+            "wasted_steps": 6,
+            "retry_count": 2,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 2,
+            "human_intervention_count": 1,
+            "time_to_success_ms": null,
+            "tokens_to_success": 58000
+          }
+        },
+        "positive_control": {
+          "memory_mode": "oracle_handoff",
+          "authority_level": "authoritative",
+          "packet_source": "oracle_handoff",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": true,
+            "wasted_steps": 1,
+            "retry_count": 0,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 0,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 620000,
+            "tokens_to_success": 29000
+          }
+        }
+      }
+    },
+    {
+      "id": "handoff_next_day_resume",
+      "title": "Resume next-day handoff",
+      "task_family": "handoff_resume",
+      "task_prompt": "Resume a paused payment webhook repair from yesterday's handoff without reopening unrelated files.",
+      "fairness": {
+        "same_model": true,
+        "same_time_budget": true,
+        "same_tool_permissions": true,
+        "same_environment_reset": true,
+        "same_verifier": true
+      },
+      "verifier": {
+        "kind": "command",
+        "command": "npm test -- tests/payments/webhook.test.mjs",
+        "after_exit_required": false,
+        "external_visibility_required": false
+      },
+      "expected_outcome": {
+        "target_files": ["src/payments/webhook.ts", "tests/payments/webhook.test.mjs"],
+        "success_invariants": ["webhook_regression_test_passes"],
+        "acceptance_checks": ["npm test -- tests/payments/webhook.test.mjs"]
+      },
+      "arms": {
+        "baseline": {
+          "memory_mode": "none",
+          "authority_level": "none",
+          "packet_source": "none",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": false,
+            "wasted_steps": 4,
+            "retry_count": 1,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 2,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 840000,
+            "tokens_to_success": 50000
+          }
+        },
+        "aionis_assisted": {
+          "memory_mode": "aionis_auto",
+          "authority_level": "advisory",
+          "packet_source": "automatic_runtime",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": true,
+            "wasted_steps": 1,
+            "retry_count": 0,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 0,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 430000,
+            "tokens_to_success": 25000
+          }
+        },
+        "negative_control": {
+          "memory_mode": "irrelevant_or_low_trust",
+          "authority_level": "observational",
+          "packet_source": "irrelevant_low_trust",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": false,
+            "wasted_steps": 5,
+            "retry_count": 1,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 2,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 870000,
+            "tokens_to_success": 51000
+          }
+        },
+        "positive_control": {
+          "memory_mode": "oracle_handoff",
+          "authority_level": "authoritative",
+          "packet_source": "oracle_handoff",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": true,
+            "wasted_steps": 0,
+            "retry_count": 0,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 0,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 360000,
+            "tokens_to_success": 21000
+          }
+        }
+      }
+    },
+    {
+      "id": "agent_takeover_search_indexer",
+      "title": "Second agent takes over search indexer repair",
+      "task_family": "agent_takeover",
+      "task_prompt": "A second worker takes over a half-completed search indexer repair and must continue from the correct file and verifier.",
+      "fairness": {
+        "same_model": true,
+        "same_time_budget": true,
+        "same_tool_permissions": true,
+        "same_environment_reset": true,
+        "same_verifier": true
+      },
+      "verifier": {
+        "kind": "command",
+        "command": "npm test -- tests/search/indexer.test.mjs",
+        "after_exit_required": false,
+        "external_visibility_required": false
+      },
+      "expected_outcome": {
+        "target_files": ["src/search/indexer.ts", "tests/search/indexer.test.mjs"],
+        "success_invariants": ["indexer_regression_test_passes"],
+        "acceptance_checks": ["npm test -- tests/search/indexer.test.mjs"]
+      },
+      "arms": {
+        "baseline": {
+          "memory_mode": "none",
+          "authority_level": "none",
+          "packet_source": "none",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": false,
+            "wasted_steps": 5,
+            "retry_count": 2,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 3,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 980000,
+            "tokens_to_success": 57000
+          }
+        },
+        "aionis_assisted": {
+          "memory_mode": "aionis_auto",
+          "authority_level": "advisory",
+          "packet_source": "automatic_runtime",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": true,
+            "wasted_steps": 2,
+            "retry_count": 1,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 0,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 590000,
+            "tokens_to_success": 33000
+          }
+        },
+        "negative_control": {
+          "memory_mode": "irrelevant_or_low_trust",
+          "authority_level": "observational",
+          "packet_source": "irrelevant_low_trust",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": false,
+            "wasted_steps": 6,
+            "retry_count": 2,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 3,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 1020000,
+            "tokens_to_success": 60000
+          }
+        },
+        "positive_control": {
+          "memory_mode": "oracle_handoff",
+          "authority_level": "authoritative",
+          "packet_source": "oracle_handoff",
+          "metrics": {
+            "completion": true,
+            "verifier_passed": true,
+            "first_correct_action": true,
+            "wasted_steps": 1,
+            "retry_count": 0,
+            "false_confidence": false,
+            "after_exit_correct": null,
+            "wrong_file_touches": 0,
+            "human_intervention_count": 0,
+            "time_to_success_ms": 470000,
+            "tokens_to_success": 26000
+          }
+        }
+      }
+    }
+  ]
+}
