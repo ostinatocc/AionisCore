@@ -35,6 +35,10 @@ import {
   appendRealAbLiveEvidenceAgentEvent,
   validateRealAbLiveEvidenceEventDraft,
 } from "../lib/aionis-real-ab-live-evidence-event-recorder.ts";
+import {
+  buildRealAbLiveEvidenceArmRunPacket,
+  renderRealAbLiveEvidenceArmRunPacketMarkdown,
+} from "../lib/aionis-real-ab-live-evidence-arm-run-packet.ts";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
@@ -764,4 +768,72 @@ test("real A/B live evidence event CLI records events through manifest and arm s
   assert.equal(events.events_by_probe_id.external_probe_service_after_exit.length, 1);
   assert.equal(events.events_by_probe_id.external_probe_service_after_exit[0].correct, true);
   assert.equal(events.events_by_probe_id.external_probe_service_after_exit[0].wasted, false);
+});
+
+test("real A/B live evidence arm run packet maps probes to dogfood command and recorder examples", () => {
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence",
+    task_ids: ["external_probe_service_after_exit", "external_probe_deploy_hook_web"],
+  });
+  const manifestPath = path.join(os.tmpdir(), "first-live-evidence", "manifest.json");
+  const packet = buildRealAbLiveEvidenceArmRunPacket({
+    manifest,
+    manifest_path: manifestPath,
+    arm: "aionis_assisted",
+  });
+  const markdown = renderRealAbLiveEvidenceArmRunPacketMarkdown(packet);
+
+  assert.equal(packet.packet_version, "aionis_real_ab_live_evidence_arm_run_packet_v1");
+  assert.deepEqual(packet.probe_slices, ["service_after_exit", "deploy_hook_web"]);
+  assert.match(packet.dogfood_command, /--slice service_after_exit,deploy_hook_web/);
+  assert.match(packet.recorder_examples.external_probe_service_after_exit, /ab:evidence:event/);
+  assert.match(packet.recorder_examples.external_probe_deploy_hook_web, /--arm aionis_assisted/);
+  assert.ok(packet.guardrails.some((guardrail) => guardrail.includes("manual prompt surgery")));
+  assert.match(markdown, /Aionis Real A\/B Arm Run Packet: aionis_assisted/);
+});
+
+test("real A/B live evidence arm run CLI writes a per-arm runbook", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-live-evidence-arm-"));
+
+  execFileSync("npx", [
+    "tsx",
+    "scripts/aionis-real-ab-live-evidence-init.ts",
+    "--out-dir",
+    dir,
+    "--suite-id",
+    "first-live-evidence",
+    "--task-id",
+    "external_probe_service_after_exit",
+    "--task-id",
+    "external_probe_deploy_hook_web",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+
+  const runbookPath = path.join(dir, "aionis_assisted", "RUNBOOK.md");
+  const packetPath = path.join(dir, "aionis_assisted", "arm-run-packet.json");
+  const output = execFileSync("npx", [
+    "tsx",
+    "scripts/aionis-real-ab-live-evidence-arm-run.ts",
+    "--manifest",
+    path.join(dir, "manifest.json"),
+    "--arm",
+    "aionis_assisted",
+    "--out-json",
+    packetPath,
+    "--out-md",
+    runbookPath,
+    "--md",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  const packet = JSON.parse(fs.readFileSync(packetPath, "utf8"));
+  const runbook = fs.readFileSync(runbookPath, "utf8");
+
+  assert.match(output, /Aionis Real A\/B Arm Run Packet: aionis_assisted/);
+  assert.equal(packet.arm, "aionis_assisted");
+  assert.deepEqual(packet.probe_slices, ["service_after_exit", "deploy_hook_web"]);
+  assert.match(runbook, /Do not copy agent-events\.json or dogfood-run\.json across arms/);
 });
