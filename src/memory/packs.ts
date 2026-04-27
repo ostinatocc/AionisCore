@@ -9,6 +9,7 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { MemoryPackExportRequest, MemoryPackImportRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
+import { mirrorPreparedWriteToEmbeddedRuntime } from "./embedded-write-bridge.js";
 import { buildAionisUri } from "./uri.js";
 
 type PackOptions = {
@@ -656,7 +657,7 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
           capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
         }),
       });
-  if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared, out);
+  await mirrorPreparedWriteToEmbeddedRuntime({ embeddedRuntime: opts.embeddedRuntime, prepared, out });
 
   return {
     ok: true,

@@ -2,6 +2,7 @@ import type pg from "pg";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import { createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
+import { mirrorPreparedWriteToEmbeddedRuntime } from "./embedded-write-bridge.js";
 import { toTenantScopeKey } from "./tenant.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 
@@ -157,7 +158,7 @@ export async function applyReplayMemoryWrite(
       capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
     }),
   });
-  if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
+  await mirrorPreparedWriteToEmbeddedRuntime({ embeddedRuntime: opts.embeddedRuntime, prepared, out });
   if (opts.replayMirror) {
     const replayNodes = extractReplayMirrorNodes(writeReq, prepared, out, opts);
     if (replayNodes.length > 0) {

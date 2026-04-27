@@ -16,6 +16,7 @@ import {
 } from "./replay-learning-artifacts.js";
 import { resolveNodeLifecycleSignals } from "./lifecycle-signals.js";
 import { resolveNodeWorkflowSignature } from "./node-execution-surface.js";
+import { mirrorPreparedWriteToEmbeddedRuntime } from "./embedded-write-bridge.js";
 import { updateRuleState } from "./rules.js";
 import { buildAionisUri } from "./uri.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
@@ -713,7 +714,7 @@ export async function applyReplayLearningProjection(
         capabilities: { shadow_mirror_v2: writeOpts.writeAccessShadowMirrorV2 },
       }),
     });
-    if (writeOpts.embeddedRuntime) await writeOpts.embeddedRuntime.applyWrite(prepared as any, out as any);
+    await mirrorPreparedWriteToEmbeddedRuntime({ embeddedRuntime: writeOpts.embeddedRuntime, prepared, out });
     const createdRule = out.nodes.find((n) => n.client_id === ruleClientId);
     const createdEpisode = out.nodes.find((n) => n.client_id === episodeClientId);
     const createdWorkflow = out.nodes.find((n) => n.client_id === workflowClientId);

@@ -446,3 +446,20 @@ test("memory layer does not import route modules", () => {
     "Memory modules must expose Runtime capabilities upward; they must not depend on route-layer helpers.",
   );
 });
+
+test("memory layer mirrors embedded writes through the shared bridge", () => {
+  const offenders = sourceFilesUnder("src/memory")
+    .filter(({ file }) => file !== "src/memory/embedded-write-bridge.ts")
+    .flatMap(({ file, text }) =>
+      text.split("\n")
+        .filter((line) => line.includes("embeddedRuntime.applyWrite"))
+        .map((line) => `${file}: ${line.trim()}`),
+    )
+    .sort();
+
+  assert.deepEqual(
+    offenders,
+    [],
+    "Memory modules must mirror embedded writes through embedded-write-bridge instead of direct runtime calls.",
+  );
+});

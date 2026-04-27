@@ -1,4 +1,5 @@
 import stableStringify from "fast-json-stable-stringify";
+import type pg from "pg";
 import { sha256Hex } from "../util/crypto.js";
 import { HttpError } from "../util/http.js";
 import { buildAionisUri } from "./uri.js";
@@ -35,6 +36,7 @@ import {
   resolveNodeTaskSignature,
   resolveNodeWorkflowSignature,
 } from "./node-execution-surface.js";
+import { mirrorPreparedWriteToEmbeddedRuntime } from "./embedded-write-bridge.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
@@ -1271,7 +1273,7 @@ export async function writePolicyMemorySnapshot(
       }
     }
   }
-  const out = await applyMemoryWrite(null as any, prepared, {
+  const out = await applyMemoryWrite({} as pg.PoolClient, prepared, {
     maxTextLen: opts.maxTextLen,
     piiRedaction: opts.piiRedaction,
     allowCrossScopeEdges: opts.allowCrossScopeEdges ?? false,
@@ -1280,9 +1282,7 @@ export async function writePolicyMemorySnapshot(
     associativeLinkOrigin: "memory_write",
     write_access: opts.writeAccess,
   });
-  if (opts.embeddedRuntime) {
-    await opts.embeddedRuntime.applyWrite(prepared as never, out as never);
-  }
+  await mirrorPreparedWriteToEmbeddedRuntime({ embeddedRuntime: opts.embeddedRuntime, prepared, out });
   const nodeId = out.nodes[0]!.id;
   return {
     node_id: nodeId,
