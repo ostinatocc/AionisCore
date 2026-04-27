@@ -3,17 +3,14 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const consumerDir = path.dirname(fileURLToPath(import.meta.url));
-const cliPath = path.join(
+const binPath = path.join(
   consumerDir,
   "node_modules",
-  "@ostinato",
-  "aionis-runtime",
-  "dist",
-  "bin",
-  "aionis-runtime.mjs",
+  ".bin",
+  process.platform === "win32" ? "aionis-runtime.cmd" : "aionis-runtime",
 );
 
-const help = spawnSync(process.execPath, [cliPath, "--help"], {
+const help = spawnSync(binPath, ["--help"], {
   cwd: consumerDir,
   encoding: "utf8",
 });
@@ -22,7 +19,20 @@ if (help.status !== 0) {
   throw new Error(`runtime help failed: ${help.stderr || help.stdout}`);
 }
 
-const printed = spawnSync(process.execPath, [cliPath, "start", "--print-env"], {
+const version = spawnSync(binPath, ["--version"], {
+  cwd: consumerDir,
+  encoding: "utf8",
+});
+
+if (version.status !== 0) {
+  throw new Error(`runtime version failed: ${version.stderr || version.stdout}`);
+}
+
+if (version.stdout.trim() !== "0.2.0") {
+  throw new Error(`runtime package printed unexpected version: ${version.stdout}`);
+}
+
+const printed = spawnSync(binPath, ["start", "--print-env"], {
   cwd: consumerDir,
   encoding: "utf8",
 });
@@ -48,6 +58,7 @@ console.log(
       package_name: "@ostinato/aionis-runtime",
       exports_checked: [
         "bin.aionis-runtime",
+        "--version",
         "start",
         "start --print-env",
         "lite loopback defaults",
