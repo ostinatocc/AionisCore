@@ -519,3 +519,28 @@ test("route layer uses concrete Lite write store access contracts", () => {
     }
   }
 });
+
+test("route layer reads execution continuity through resolver surfaces", () => {
+  const offenders = sourceFilesUnder("src/routes")
+    .flatMap(({ file, text }) =>
+      text.split("\n")
+        .filter((line) => /\breadSlot\s*\(/.test(line) || /\bfunction\s+readSlot\b/.test(line))
+        .map((line) => `${file}: ${line.trim()}`),
+    )
+    .sort();
+
+  assert.deepEqual(
+    offenders,
+    [],
+    "Routes must read continuity/contract fields through execution-slot-surface or node-execution-surface, not route-local slot helpers.",
+  );
+
+  const handoff = read("src/routes/handoff.ts");
+  for (const token of [
+    "resolveNodeAcceptanceChecks",
+    "resolveNodeTargetFiles",
+    "resolveNodeNextAction",
+  ]) {
+    assertContains(handoff, token, `handoff route must use ${token}`);
+  }
+});

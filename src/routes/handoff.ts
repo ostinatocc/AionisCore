@@ -10,6 +10,11 @@ import {
   readExecutionStateSlot,
   readExecutionTransitionsSlot,
 } from "../memory/execution-slot-surface.js";
+import {
+  resolveNodeAcceptanceChecks,
+  resolveNodeNextAction,
+  resolveNodeTargetFiles,
+} from "../memory/node-execution-surface.js";
 import { mirrorPreparedWriteToEmbeddedRuntime } from "../memory/embedded-write-bridge.js";
 import { buildHandoffWriteBody, recoverHandoff } from "../memory/handoff.js";
 import type { HandoffRecoverInput, HandoffStoreInput } from "../memory/schemas.js";
@@ -67,10 +72,6 @@ function firstNode<T>(value: unknown): T | null {
 
 function asSlots(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-}
-
-function readSlot(slots: Record<string, unknown> | null, key: string) {
-  return slots && key in slots ? slots[key] : undefined;
 }
 
 export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
@@ -155,15 +156,16 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
     const writeSlots = asSlots(writeNode?.slots);
     const continuitySlots = handoffSlots ?? writeSlots;
     const executionSlots = readExecutionContinuitySlotFields(continuitySlots);
-    const effectiveAcceptanceChecks = Array.isArray(readSlot(continuitySlots, "acceptance_checks"))
-      ? (readSlot(continuitySlots, "acceptance_checks") as unknown[]).filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    const resolvedAcceptanceChecks = resolveNodeAcceptanceChecks({ slots: continuitySlots });
+    const resolvedTargetFiles = resolveNodeTargetFiles({ slots: continuitySlots });
+    const resolvedNextAction = resolveNodeNextAction({ slots: continuitySlots });
+    const effectiveAcceptanceChecks = resolvedAcceptanceChecks.length > 0
+      ? resolvedAcceptanceChecks
       : (args.body.acceptance_checks ?? []);
-    const effectiveTargetFiles = Array.isArray(readSlot(continuitySlots, "target_files"))
-      ? (readSlot(continuitySlots, "target_files") as unknown[]).filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    const effectiveTargetFiles = resolvedTargetFiles.length > 0
+      ? resolvedTargetFiles
       : (args.body.target_files ?? []);
-    const effectiveNextAction = typeof readSlot(continuitySlots, "next_action") === "string"
-      ? String(readSlot(continuitySlots, "next_action"))
-      : (args.body.next_action ?? args.body.handoff_text);
+    const effectiveNextAction = resolvedNextAction ?? args.body.next_action ?? args.body.handoff_text;
     return {
       tenant_id: args.out.tenant_id,
       scope: args.out.scope,
