@@ -23,6 +23,7 @@ import {
 import {
   assembleRealAbDogfoodPairedCaptureFromLiveEvidence,
   validateRealAbLiveEvidenceAssemblerInputs,
+  type RealAbLiveEvidenceAgentEventsFile,
   type RealAbLiveEvidenceLoadedInputs,
   type RealAbLiveEvidenceManifest,
 } from "../lib/aionis-real-ab-live-evidence-assembler.ts";
@@ -30,6 +31,10 @@ import {
   buildRealAbLiveEvidenceBundleFiles,
   buildRealAbLiveEvidenceManifestTemplate,
 } from "../lib/aionis-real-ab-live-evidence-bundle.ts";
+import {
+  appendRealAbLiveEvidenceAgentEvent,
+  validateRealAbLiveEvidenceEventDraft,
+} from "../lib/aionis-real-ab-live-evidence-event-recorder.ts";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
@@ -676,4 +681,87 @@ test("real A/B live evidence init CLI refuses to overwrite scaffold files by def
   }
 
   assert.equal(failed, true);
+});
+
+test("real A/B live evidence event recorder appends action events to a probe bucket", () => {
+  const updated = appendRealAbLiveEvidenceAgentEvent({
+    events_file: { events_by_probe_id: { external_probe_service_after_exit: [] } },
+    probe_id: "external_probe_service_after_exit",
+    event: {
+      kind: "tool_call",
+      command: "nohup node scripts/health-server.mjs --port 4199 >/tmp/health.log 2>&1 &",
+      touched_files: ["scripts/health-server.mjs"],
+      correct: true,
+      wasted: false,
+    },
+  });
+
+  assert.deepEqual(updated.events_by_probe_id.external_probe_service_after_exit, [
+    {
+      kind: "tool_call",
+      command: "nohup node scripts/health-server.mjs --port 4199 >/tmp/health.log 2>&1 &",
+      touched_files: ["scripts/health-server.mjs"],
+      correct: true,
+      wasted: false,
+    },
+  ]);
+});
+
+test("real A/B live evidence event recorder rejects empty or commandless events", () => {
+  assert.deepEqual(validateRealAbLiveEvidenceEventDraft({ kind: "action" }), [
+    "event must include text, command, or touched_files",
+    "action events must include text or command",
+  ]);
+  assert.deepEqual(validateRealAbLiveEvidenceEventDraft({ kind: "tool_call", text: "Run the server" }), [
+    "tool_call events must include command",
+  ]);
+});
+
+test("real A/B live evidence event CLI records events through manifest and arm selection", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-live-evidence-event-"));
+
+  execFileSync("npx", [
+    "tsx",
+    "scripts/aionis-real-ab-live-evidence-init.ts",
+    "--out-dir",
+    dir,
+    "--suite-id",
+    "first-live-evidence",
+    "--task-id",
+    "external_probe_service_after_exit",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+
+  const output = execFileSync("npx", [
+    "tsx",
+    "scripts/aionis-real-ab-live-evidence-event.ts",
+    "--manifest",
+    path.join(dir, "manifest.json"),
+    "--arm",
+    "aionis_assisted",
+    "--probe",
+    "external_probe_service_after_exit",
+    "--kind",
+    "tool_call",
+    "--command",
+    "nohup node scripts/health-server.mjs --port 4199 >/tmp/health.log 2>&1 &",
+    "--touched-file",
+    "scripts/health-server.mjs",
+    "--correct",
+    "--not-wasted",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+
+  const events = JSON.parse(
+    fs.readFileSync(path.join(dir, "aionis_assisted", "agent-events.json"), "utf8"),
+  ) as RealAbLiveEvidenceAgentEventsFile;
+
+  assert.match(output, /Recorded tool_call event/);
+  assert.equal(events.events_by_probe_id.external_probe_service_after_exit.length, 1);
+  assert.equal(events.events_by_probe_id.external_probe_service_after_exit[0].correct, true);
+  assert.equal(events.events_by_probe_id.external_probe_service_after_exit[0].wasted, false);
 });

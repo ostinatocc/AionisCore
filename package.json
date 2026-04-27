@@ -30,6 +30,7 @@
     "ab:capture:sample": "npx tsx scripts/aionis-real-ab-trace-capture.ts --sample --report --fail-on-invalid",
     "ab:evidence:live": "npx tsx scripts/aionis-real-ab-live-evidence.ts",
     "ab:evidence:init": "npx tsx scripts/aionis-real-ab-live-evidence-init.ts",
+    "ab:evidence:event": "npx tsx scripts/aionis-real-ab-live-evidence-event.ts",
     "core:build:runtime-host": "test -f src/runtime-entry.ts",
     "core:build:aionis-doc": "npm --prefix packages/aionis-doc run build",
     "core:build:runtime-core": "npm --prefix packages/runtime-core run build",
