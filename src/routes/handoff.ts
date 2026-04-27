@@ -10,6 +10,7 @@ import {
   readExecutionStateSlot,
   readExecutionTransitionsSlot,
 } from "../memory/execution-slot-surface.js";
+import { mirrorPreparedWriteToEmbeddedRuntime } from "../memory/embedded-write-bridge.js";
 import { buildHandoffWriteBody, recoverHandoff } from "../memory/handoff.js";
 import type { HandoffRecoverInput, HandoffStoreInput } from "../memory/schemas.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "../memory/write.js";
@@ -262,9 +263,7 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
       );
       const out = await runCommittedHandoffWrite(prepared);
 
-      if (embeddedRuntime) {
-        await embeddedRuntime.applyWrite(prepared, out);
-      }
+      await mirrorPreparedWriteToEmbeddedRuntime({ embeddedRuntime, prepared, out });
       const writeNode = firstNode<HandoffWriteBodyNodeLike>(writeBody.nodes);
       const writeSlots = asSlots(writeNode?.slots);
       const appliedExecutionTransitions = applyHandoffExecutionTransitions({ writeSlots });
