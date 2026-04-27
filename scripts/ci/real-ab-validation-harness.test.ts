@@ -8,11 +8,17 @@ import {
   runRealAbValidationSuite,
   type RealAbSuiteInput,
 } from "../lib/aionis-real-ab-validation.ts";
+import {
+  compileRealAbTraceCapture,
+  validateRealAbTraceCapture,
+  type RealAbTraceCaptureInput,
+} from "../lib/aionis-real-ab-trace-capture.ts";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
 const seedPath = path.join(repoRoot, "scripts", "fixtures", "real-ab-validation", "seed-suite.json");
 const traceSeedPath = path.join(repoRoot, "scripts", "fixtures", "real-ab-validation", "trace-suite.json");
+const traceCapturePath = path.join(repoRoot, "scripts", "fixtures", "real-ab-validation", "trace-capture.json");
 
 function readSeed(): RealAbSuiteInput {
   return JSON.parse(fs.readFileSync(seedPath, "utf8")) as RealAbSuiteInput;
@@ -20,6 +26,10 @@ function readSeed(): RealAbSuiteInput {
 
 function readTraceSeed(): RealAbSuiteInput {
   return JSON.parse(fs.readFileSync(traceSeedPath, "utf8")) as RealAbSuiteInput;
+}
+
+function readTraceCapture(): RealAbTraceCaptureInput {
+  return JSON.parse(fs.readFileSync(traceCapturePath, "utf8")) as RealAbTraceCaptureInput;
 }
 
 test("real A/B seed calibration suite passes with harness-only proof boundary", () => {
@@ -111,4 +121,100 @@ test("real A/B harness derives metrics from real agent run traces", () => {
   assert.equal(serviceTask.arms.baseline.metrics.false_confidence, true);
   assert.equal(serviceTask.arms.baseline.metrics.after_exit_correct, false);
   assert.equal(serviceTask.arms.aionis_assisted.metrics.after_exit_correct, true);
+});
+
+test("real A/B trace capture compiles auditable pilot traces into a validation suite", () => {
+  const capture = readTraceCapture();
+  const captureRequirements = validateRealAbTraceCapture(capture);
+  const suite = compileRealAbTraceCapture(capture);
+  const report = runRealAbValidationSuite(suite);
+
+  assert.equal(captureRequirements.every((requirement) => requirement.status === "pass"), true);
+  assert.equal(suite.suite_kind, "pilot_real_trace");
+  assert.equal(report.proof_boundary.claim_level, "pilot_evidence");
+  assert.equal(report.gate.status, "pass");
+  assert.equal(report.summary.total_tasks, 2);
+  assert.equal(report.tasks[0].arms.aionis_assisted.metrics_source, "trace_derived");
+  assert.equal(report.tasks[1].arms.aionis_assisted.metrics.after_exit_correct, true);
+});
+
+test("real A/B trace capture rejects runs without verifier evidence", () => {
+  const capture = readTraceCapture();
+  capture.tasks[0].runs.baseline.events = capture.tasks[0].runs.baseline.events.filter((event) =>
+    event.kind !== "verification"
+  );
+
+  const captureRequirements = validateRealAbTraceCapture(capture);
+  const report = runRealAbValidationSuite(compileRealAbTraceCapture(capture));
+
+  assert.ok(captureRequirements.some((requirement) =>
+    requirement.id === "capture_coding_resume:capture:baseline:verifier" && requirement.status === "fail"
+  ));
+  assert.ok(report.gate.failed_requirements.some((requirement) =>
+    requirement.id === "capture_coding_resume:trace_evidence:baseline:verifier"
+  ));
+});
+
+test("real A/B pilot/product suites reject direct metrics as product evidence", () => {
+  const suite = compileRealAbTraceCapture(readTraceCapture());
+  const baseline = suite.tasks[0].arms.baseline;
+  baseline.metrics = {
+    completion: true,
+    verifier_passed: true,
+    first_correct_action: true,
+    wasted_steps: 0,
+    retry_count: 0,
+    false_confidence: false,
+    after_exit_correct: null,
+    wrong_file_touches: 0,
+    human_intervention_count: 0,
+    time_to_success_ms: 1,
+    tokens_to_success: 1,
+  };
+  delete baseline.trace;
+
+  const report = runRealAbValidationSuite(suite);
+
+  assert.equal(report.gate.status, "fail");
+  assert.ok(report.gate.failed_requirements.some((requirement) =>
+    requirement.id === "capture_coding_resume:trace_evidence:baseline:live_trace"
+  ));
+});
+
+test("real A/B after-exit product evidence requires fresh-shell verifier events", () => {
+  const capture = readTraceCapture();
+  const serviceTreatmentEvents = capture.tasks[1].runs.aionis_assisted.events;
+  const probe = serviceTreatmentEvents.find((event) => event.kind === "external_probe");
+  assert.ok(probe);
+  probe.fresh_shell = false;
+
+  const captureRequirements = validateRealAbTraceCapture(capture);
+  const report = runRealAbValidationSuite(compileRealAbTraceCapture(capture));
+
+  assert.ok(captureRequirements.some((requirement) =>
+    requirement.id === "capture_service_after_exit:capture:aionis_assisted:fresh_shell"
+    && requirement.status === "fail"
+  ));
+  assert.ok(report.gate.failed_requirements.some((requirement) =>
+    requirement.id === "capture_service_after_exit:trace_evidence:aionis_assisted:fresh_shell_probe"
+  ));
+});
+
+test("real A/B product evidence requires external probe command to match the declared verifier", () => {
+  const capture = readTraceCapture();
+  const serviceTreatmentEvents = capture.tasks[1].runs.aionis_assisted.events;
+  const probe = serviceTreatmentEvents.find((event) => event.kind === "external_probe");
+  assert.ok(probe);
+  probe.command = "curl -fsS http://127.0.0.1:9999/healthz";
+
+  const captureRequirements = validateRealAbTraceCapture(capture);
+  const report = runRealAbValidationSuite(compileRealAbTraceCapture(capture));
+
+  assert.ok(captureRequirements.some((requirement) =>
+    requirement.id === "capture_service_after_exit:capture:aionis_assisted:external_probe"
+    && requirement.status === "fail"
+  ));
+  assert.ok(report.gate.failed_requirements.some((requirement) =>
+    requirement.id === "capture_service_after_exit:trace_evidence:aionis_assisted:external_probe"
+  ));
 });
