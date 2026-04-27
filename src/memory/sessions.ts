@@ -18,7 +18,7 @@ import { createPostgresWriteStoreAccess } from "../store/write-access.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { buildAionisUri } from "./uri.js";
-import { commitLitePreparedWriteWithProjection } from "../routes/lite-projected-write.js";
+import { commitLitePreparedWriteWithProjection } from "./lite-projected-write-commit.js";
 import type { LiteGovernanceRuntimeProviders } from "../app/governance-runtime-providers.js";
 
 type SessionWriteOptions = {
@@ -259,8 +259,8 @@ export async function createSession(client: pg.PoolClient, body: unknown, opts: 
   const out = opts.liteWriteStore
     ? (
         await commitLitePreparedWriteWithProjection({
-          prepared: prepared as any,
-          liteWriteStore: opts.liteWriteStore as any,
+          prepared,
+          liteWriteStore: opts.liteWriteStore,
           embedder: opts.embedder,
           governanceReviewProviders: opts.governanceReviewProviders,
           writeOptions: {
@@ -283,7 +283,7 @@ export async function createSession(client: pg.PoolClient, body: unknown, opts: 
           capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
         }),
       });
-  if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
+  if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared, out);
 
   const node = out.nodes.find((n) => n.client_id === sessionCid) ?? out.nodes[0] ?? null;
   return {
@@ -427,8 +427,8 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
   const out = opts.liteWriteStore
     ? (
         await commitLitePreparedWriteWithProjection({
-          prepared: prepared as any,
-          liteWriteStore: opts.liteWriteStore as any,
+          prepared,
+          liteWriteStore: opts.liteWriteStore,
           embedder: opts.embedder,
           governanceReviewProviders: opts.governanceReviewProviders,
           writeOptions: {
@@ -450,7 +450,7 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
           capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
         }),
       });
-  if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
+  if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared, out);
 
   const eventNode = out.nodes.find((n) => n.client_id === eventCid) ?? null;
   const sessionNode = out.nodes.find((n) => n.client_id === sessionCid) ?? null;

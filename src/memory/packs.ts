@@ -612,7 +612,7 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
         nodes: nodes.length,
         edges: edges.length,
         commits_in_pack: pack.commits.length,
-        decisions_in_pack: Array.isArray((pack as any).decisions) ? (pack as any).decisions.length : 0,
+        decisions_in_pack: pack.decisions.length,
       },
     };
   }
@@ -638,13 +638,13 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
     opts.embedder,
   );
   const out = opts.liteWriteStore
-    ? await opts.liteWriteStore.withTx(() => applyMemoryWrite({} as any, prepared, {
+    ? await opts.liteWriteStore.withTx(() => applyMemoryWrite({} as pg.PoolClient, prepared, {
         maxTextLen: opts.maxTextLen,
         piiRedaction: opts.piiRedaction,
         allowCrossScopeEdges: opts.allowCrossScopeEdges,
         shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
         shadowDualWriteStrict: opts.shadowDualWriteStrict,
-        write_access: opts.liteWriteStore as any,
+        write_access: opts.liteWriteStore,
       }))
     : await applyMemoryWrite(client, prepared, {
         maxTextLen: opts.maxTextLen,
@@ -656,7 +656,7 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
           capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
         }),
       });
-  if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
+  if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared, out);
 
   return {
     ok: true,
