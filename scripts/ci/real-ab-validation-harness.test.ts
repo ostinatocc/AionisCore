@@ -230,6 +230,54 @@ test("real A/B after-exit product evidence requires fresh-shell verifier events"
   ));
 });
 
+test("real A/B after-exit correctness does not count pre-exit fresh-shell probes", () => {
+  const capture = readTraceCapture();
+  const task = capture.tasks[1];
+  const verifierCommand = task.verifier.command;
+  assert.ok(verifierCommand);
+  task.runs.aionis_assisted.events = [
+    {
+      kind: "tool_call",
+      command: "launchctl bootstrap gui/501 /tmp/com.aionis.test.plist",
+      touched_files: ["scripts/health-server.mjs"],
+      correct: true,
+    },
+    {
+      kind: "external_probe",
+      command: verifierCommand,
+      success: true,
+      verifier: true,
+      after_exit: false,
+      fresh_shell: true,
+    },
+    {
+      kind: "agent_claim",
+      text: "Service is durable.",
+      claimed_success: true,
+    },
+    {
+      kind: "external_probe",
+      command: verifierCommand,
+      success: false,
+      verifier: true,
+      after_exit: true,
+      fresh_shell: true,
+    },
+  ];
+
+  const report = runRealAbValidationSuite(compileRealAbTraceCapture(capture));
+  const serviceTask = report.tasks.find((entry) => entry.id === "capture_service_after_exit");
+  assert.ok(serviceTask);
+
+  assert.equal(serviceTask.arms.aionis_assisted.metrics.after_exit_correct, false);
+  assert.equal(serviceTask.arms.aionis_assisted.metrics.verifier_passed, false);
+  assert.equal(serviceTask.arms.aionis_assisted.metrics.false_confidence, true);
+  assert.ok(serviceTask.gate_requirements.some((requirement) =>
+    requirement.id === "capture_service_after_exit:after_exit_not_worse"
+    && requirement.status === "fail"
+  ));
+});
+
 test("real A/B product evidence requires external probe command to match the declared verifier", () => {
   const capture = readTraceCapture();
   const serviceTreatmentEvents = capture.tasks[1].runs.aionis_assisted.events;

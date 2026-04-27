@@ -157,6 +157,7 @@ test("runtime dogfood task specs can carry external probe evidence without code 
         validation_passed: true,
         after_exit_revalidated: true,
         fresh_shell_probe_passed: true,
+        validation_boundary: "external_verifier",
         evidence_refs: ["external:probe:metrics-service-healthz"],
       },
       expectations: {

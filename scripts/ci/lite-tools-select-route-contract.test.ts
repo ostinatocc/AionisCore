@@ -1136,6 +1136,7 @@ test("policy governance apply route can retire and reactivate persisted policy m
         validation_passed: true,
         after_exit_revalidated: true,
         fresh_shell_probe_passed: true,
+        validation_boundary: "external_verifier",
         failure_reason: null,
         false_confidence_detected: false,
         evidence_refs: ["tools_feedback_policy_governance:fresh_shell_export_test"],

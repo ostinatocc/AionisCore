@@ -314,6 +314,7 @@ test("replay-learning projection artifacts preserve richer recovery contract fie
       validation_passed: true,
       after_exit_revalidated: true,
       fresh_shell_probe_passed: true,
+      validation_boundary: "external_verifier",
       evidence_refs: ["test:replay-learning:fresh-shell-install"],
     },
   });

@@ -179,12 +179,14 @@ function buildSessionEventPayload(args: {
       validation_passed: true,
       after_exit_revalidated: true,
       fresh_shell_probe_passed: true,
+      validation_boundary: "external_verifier",
     },
     execution_evidence: [{
       ref: `evidence://session-event/${args.eventId}`,
       validation_passed: true,
       after_exit_revalidated: true,
       fresh_shell_probe_passed: true,
+      validation_boundary: "external_verifier",
     }],
     execution_state_v1: {
       version: 1,

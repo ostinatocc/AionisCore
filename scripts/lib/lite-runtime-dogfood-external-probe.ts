@@ -376,6 +376,7 @@ function buildServiceTaskSpec(args: {
       validation_passed: validationPassed,
       after_exit_revalidated: validationPassed,
       fresh_shell_probe_passed: validationPassed,
+      validation_boundary: "external_verifier",
       failure_reason: validationFailureReason("fresh_shell_probe_failed", args.probe),
       false_confidence_detected: !validationPassed,
       evidence_refs: [
@@ -449,6 +450,7 @@ function buildPublishInstallTaskSpec(args: {
       validation_passed: validationPassed,
       after_exit_revalidated: validationPassed,
       fresh_shell_probe_passed: validationPassed,
+      validation_boundary: "external_verifier",
       failure_reason: validationFailureReason("clean_client_install_failed", args.probe),
       false_confidence_detected: !validationPassed,
       evidence_refs: [
@@ -507,6 +509,7 @@ function buildDeployHookWebTaskSpec(args: {
     execution_evidence: {
       validation_passed: validationPassed,
       fresh_shell_probe_passed: validationPassed,
+      validation_boundary: "external_verifier",
       failure_reason: validationPassed
         ? null
         : validationFailureReason("served_web_content_probe_failed", args.probe) ?? "served_web_content_mismatch",
@@ -570,6 +573,7 @@ function buildLiveCommandTaskSpec(args: {
     execution_evidence: {
       validation_passed: validationPassed,
       fresh_shell_probe_passed: validationPassed,
+      validation_boundary: "external_verifier",
       failure_reason: validationFailureReason("live_command_probe_failed", args.probe),
       false_confidence_detected: !validationPassed,
       evidence_refs: [

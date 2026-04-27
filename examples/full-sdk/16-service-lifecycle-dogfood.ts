@@ -171,6 +171,7 @@ async function main() {
     printJson("Fresh shell probe", {
       endpoint,
       fresh_shell_probe_passed: true,
+      validation_boundary: "external_verifier",
       output: JSON.parse(freshShellOutput),
     });
 
@@ -196,12 +197,14 @@ async function main() {
         validation_passed: true,
         after_exit_revalidated: true,
         fresh_shell_probe_passed: true,
+        validation_boundary: "external_verifier",
       },
       execution_evidence: [{
         ref: `fresh-shell:${endpoint}`,
         kind: "fresh_shell_probe",
         status: "success",
         endpoint,
+        validation_boundary: "external_verifier",
       }],
       workflow_limit: 6,
     });
@@ -233,6 +236,7 @@ async function main() {
         validation_passed: true,
         after_exit_revalidated: true,
         fresh_shell_probe_passed: true,
+        validation_boundary: "external_verifier",
         evidence_refs: [`fresh-shell:${endpoint}`],
       },
       metadata: {
@@ -248,6 +252,7 @@ async function main() {
           summary: "fresh shell probe reached detached service",
           after_exit_revalidated: true,
           fresh_shell_probe_passed: true,
+          validation_boundary: "external_verifier",
           endpoint,
         },
         artifact_refs: [`fresh-shell:${endpoint}`],

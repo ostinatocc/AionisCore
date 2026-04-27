@@ -3,12 +3,20 @@ import { ContractTrustSchema, type ContractTrust } from "./contract-trust.js";
 import type { ExecutionContractV1 } from "./execution-contract.js";
 
 const EvidenceStringList = z.array(z.string().trim().min(1).max(256)).max(32).default([]);
+const ExecutionValidationBoundarySchema = z.enum([
+  "unknown",
+  "agent_self",
+  "runtime_orchestrator",
+  "external_verifier",
+]);
+export type ExecutionValidationBoundary = z.infer<typeof ExecutionValidationBoundarySchema>;
 
 export const ExecutionEvidenceV1Schema = z.object({
   schema_version: z.literal("execution_evidence_v1"),
   validation_passed: z.boolean().nullable().default(null),
   after_exit_revalidated: z.boolean().nullable().default(null),
   fresh_shell_probe_passed: z.boolean().nullable().default(null),
+  validation_boundary: ExecutionValidationBoundarySchema.default("unknown"),
   failure_reason: z.string().trim().min(1).max(256).nullable().default(null),
   false_confidence_detected: z.boolean().default(false),
   evidence_refs: EvidenceStringList,
@@ -27,10 +35,12 @@ export const ExecutionEvidenceAssessmentV1Schema = z.object({
     validation_passed: z.boolean().nullable(),
     after_exit_revalidated: z.boolean().nullable(),
     fresh_shell_probe_passed: z.boolean().nullable(),
+    validation_boundary: ExecutionValidationBoundarySchema,
     false_confidence_detected: z.boolean(),
     failure_reason_present: z.boolean(),
     requires_after_exit_revalidation: z.boolean(),
     requires_fresh_shell_probe: z.boolean(),
+    requires_external_validation_boundary: z.boolean(),
   }),
 });
 export type ExecutionEvidenceAssessmentV1 = z.infer<typeof ExecutionEvidenceAssessmentV1Schema>;
@@ -60,6 +70,21 @@ function statusToValidation(value: unknown): boolean | null {
   if (["ok", "pass", "passed", "success", "succeeded", "complete", "completed"].includes(status)) return true;
   if (["fail", "failed", "failure", "error", "errored", "blocked", "timeout", "timed_out"].includes(status)) return false;
   return null;
+}
+
+function normalizeValidationBoundary(value: unknown): ExecutionValidationBoundary {
+  const raw = nullableString(value)?.toLowerCase().replace(/[-\s]+/g, "_");
+  if (!raw) return "unknown";
+  if (["agent", "agent_self", "same_agent", "self", "self_reported", "worker_self"].includes(raw)) {
+    return "agent_self";
+  }
+  if (["runtime", "runtime_orchestrator", "orchestrator", "parent", "parent_process"].includes(raw)) {
+    return "runtime_orchestrator";
+  }
+  if (["external", "external_probe", "external_verifier", "verifier", "independent_verifier"].includes(raw)) {
+    return "external_verifier";
+  }
+  return "unknown";
 }
 
 function uniqueEvidenceRefs(values: unknown[], limit = 32): string[] {
@@ -159,6 +184,16 @@ function compileEvidenceFromRecord(args: {
     "fresh_shell_validation_passed",
     "revalidate_from_fresh_shell_passed",
   );
+  const validationBoundary = normalizeValidationBoundary(
+    record.validation_boundary
+    ?? record.validationBoundary
+    ?? record.validation_actor
+    ?? record.validationActor
+    ?? record.probe_actor
+    ?? record.probeActor
+    ?? record.verifier_actor
+    ?? record.verifierActor,
+  );
   const failureReason =
     nullableString(record.failure_reason)
     ?? nullableString(record.error)
@@ -195,6 +230,7 @@ function compileEvidenceFromRecord(args: {
     validation_passed: validationPassed,
     after_exit_revalidated: afterExitRevalidated,
     fresh_shell_probe_passed: freshShellProbePassed,
+    validation_boundary: validationBoundary,
     failure_reason: failureReason,
     false_confidence_detected: falseConfidenceDetected,
     evidence_refs: evidenceRefs,
@@ -243,6 +279,16 @@ function metricEvidence(metrics: unknown): ExecutionEvidenceV1 | null {
     "fresh_shell_validation_passed",
     "revalidate_from_fresh_shell_passed",
   );
+  const validationBoundary = normalizeValidationBoundary(
+    record.validation_boundary
+    ?? record.validationBoundary
+    ?? record.validation_actor
+    ?? record.validationActor
+    ?? record.probe_actor
+    ?? record.probeActor
+    ?? record.verifier_actor
+    ?? record.verifierActor,
+  );
   const failureReason =
     nullableString(record.failure_reason)
     ?? nullableString(record.error)
@@ -270,6 +316,7 @@ function metricEvidence(metrics: unknown): ExecutionEvidenceV1 | null {
     validation_passed: validationPassed,
     after_exit_revalidated: afterExitRevalidated,
     fresh_shell_probe_passed: freshShellProbePassed,
+    validation_boundary: validationBoundary,
     failure_reason: failureReason,
     false_confidence_detected: falseConfidenceDetected,
     evidence_refs: evidenceRefs.length > 0 ? evidenceRefs : ["source.metrics"],
@@ -321,6 +368,11 @@ function hasExplicitExecutionEvidenceRef(evidence: ExecutionEvidenceV1 | null): 
   return (evidence?.evidence_refs ?? []).some((ref) => ref !== "source.metrics");
 }
 
+function validationBoundaryAllowsExternalVerification(evidence: ExecutionEvidenceV1 | null): boolean {
+  return evidence?.validation_boundary === "runtime_orchestrator"
+    || evidence?.validation_boundary === "external_verifier";
+}
+
 export function extractExecutionEvidenceFromSlots(args: {
   slots?: Record<string, unknown> | null;
   metrics?: unknown;
@@ -356,6 +408,7 @@ export function assessExecutionEvidence(args: {
     args.requiresAfterExitRevalidation ?? inferRequiresAfterExit(args.executionContract);
   const requiresFreshShellProbe =
     args.requiresFreshShellProbe ?? inferRequiresFreshShell(args.executionContract);
+  const requiresExternalValidationBoundary = requiresAfterExitRevalidation || requiresFreshShellProbe;
   const reasons: string[] = [];
   const hasExplicitEvidence = hasExplicitExecutionEvidenceRef(evidence);
 
@@ -382,6 +435,13 @@ export function assessExecutionEvidence(args: {
           : "missing_fresh_shell_probe",
       );
     }
+    if (requiresExternalValidationBoundary && !validationBoundaryAllowsExternalVerification(evidence)) {
+      reasons.push(
+        evidence.validation_boundary === "agent_self"
+          ? "agent_self_validation_boundary"
+          : "missing_external_validation_boundary",
+      );
+    }
     if (evidence.false_confidence_detected) reasons.push("false_confidence_detected");
     if (evidence.failure_reason) reasons.push(evidenceReason("failure_reason", evidence.failure_reason));
   }
@@ -404,10 +464,12 @@ export function assessExecutionEvidence(args: {
       validation_passed: evidence?.validation_passed ?? null,
       after_exit_revalidated: evidence?.after_exit_revalidated ?? null,
       fresh_shell_probe_passed: evidence?.fresh_shell_probe_passed ?? null,
+      validation_boundary: evidence?.validation_boundary ?? "unknown",
       false_confidence_detected: evidence?.false_confidence_detected ?? false,
       failure_reason_present: !!evidence?.failure_reason,
       requires_after_exit_revalidation: requiresAfterExitRevalidation,
       requires_fresh_shell_probe: requiresFreshShellProbe,
+      requires_external_validation_boundary: requiresExternalValidationBoundary,
     },
   });
 }
@@ -416,6 +478,7 @@ export function buildExecutionEvidenceFromValidation(args: {
   validationPassed: boolean;
   afterExitRevalidated?: boolean | null;
   freshShellProbePassed?: boolean | null;
+  validationBoundary?: ExecutionValidationBoundary;
   failureReason?: string | null;
   falseConfidenceDetected?: boolean;
   evidenceRefs?: string[];
@@ -425,6 +488,7 @@ export function buildExecutionEvidenceFromValidation(args: {
     validation_passed: args.validationPassed,
     after_exit_revalidated: args.afterExitRevalidated ?? null,
     fresh_shell_probe_passed: args.freshShellProbePassed ?? null,
+    validation_boundary: args.validationBoundary ?? "unknown",
     failure_reason: args.failureReason ?? null,
     false_confidence_detected: args.falseConfidenceDetected ?? false,
     evidence_refs: args.evidenceRefs ?? [],

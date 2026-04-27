@@ -365,8 +365,9 @@ function deriveAfterExitCorrect(trace: RealAbRunTrace, task: RealAbTaskSpec): bo
   if (typeof trace.outcome?.after_exit_correct === "boolean") return trace.outcome.after_exit_correct;
   if (!task.verifier.after_exit_required) return null;
   return trace.events.some((event) =>
-    (event.after_exit === true || event.fresh_shell === true)
+    event.after_exit === true
     && (event.kind === "verification" || event.kind === "external_probe" || event.verifier === true)
+    && eventMatchesVerifierCommand(event, task.verifier)
     && event.success === true
   );
 }

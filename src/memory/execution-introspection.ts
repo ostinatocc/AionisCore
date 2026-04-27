@@ -133,6 +133,14 @@ function requiresFreshShellFromGate(gate: OutcomeContractGate): boolean {
     || gate.decisive_fields.service_revalidate_from_fresh_shell_count > 0;
 }
 
+function executionValidationBoundaryForReport(value: unknown): ExecutionEvidenceAssessmentV1["decisive_fields"]["validation_boundary"] {
+  return value === "agent_self"
+    || value === "runtime_orchestrator"
+    || value === "external_verifier"
+    ? value
+    : "unknown";
+}
+
 function normalizeExecutionEvidenceAssessmentForReport(args: {
   value: unknown;
   requestedTrust: ContractTrustForReport;
@@ -157,11 +165,15 @@ function normalizeExecutionEvidenceAssessmentForReport(args: {
         validation_passed: nullableBoolean(decisiveFields.validation_passed),
         after_exit_revalidated: nullableBoolean(decisiveFields.after_exit_revalidated),
         fresh_shell_probe_passed: nullableBoolean(decisiveFields.fresh_shell_probe_passed),
+        validation_boundary: executionValidationBoundaryForReport(decisiveFields.validation_boundary),
         false_confidence_detected: decisiveFields.false_confidence_detected === true,
         failure_reason_present: decisiveFields.failure_reason_present === true,
         requires_after_exit_revalidation: decisiveFields.requires_after_exit_revalidation === true
           || requiresAfterExitFromGate(args.outcomeContractGate),
         requires_fresh_shell_probe: decisiveFields.requires_fresh_shell_probe === true
+          || requiresFreshShellFromGate(args.outcomeContractGate),
+        requires_external_validation_boundary: decisiveFields.requires_external_validation_boundary === true
+          || requiresAfterExitFromGate(args.outcomeContractGate)
           || requiresFreshShellFromGate(args.outcomeContractGate),
       },
     };
@@ -182,10 +194,13 @@ function normalizeExecutionEvidenceAssessmentForReport(args: {
       validation_passed: null,
       after_exit_revalidated: null,
       fresh_shell_probe_passed: null,
+      validation_boundary: "unknown",
       false_confidence_detected: args.authorityVisibility?.false_confidence_detected === true,
       failure_reason_present: false,
       requires_after_exit_revalidation: requiresAfterExitFromGate(args.outcomeContractGate),
       requires_fresh_shell_probe: requiresFreshShellFromGate(args.outcomeContractGate),
+      requires_external_validation_boundary: requiresAfterExitFromGate(args.outcomeContractGate)
+        || requiresFreshShellFromGate(args.outcomeContractGate),
     },
   };
 }

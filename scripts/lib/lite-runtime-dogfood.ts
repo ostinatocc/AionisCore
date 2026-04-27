@@ -454,6 +454,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         validationPassed: true,
         afterExitRevalidated: true,
         freshShellProbePassed: true,
+        validationBoundary: "external_verifier",
         evidenceRefs: ["dogfood:service_after_exit:fresh_shell_probe"],
       }),
     },
@@ -495,6 +496,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         validationPassed: true,
         afterExitRevalidated: true,
         freshShellProbePassed: true,
+        validationBoundary: "external_verifier",
         evidenceRefs: ["dogfood:publish_install:pip_install_fresh_shell"],
       }),
     },
@@ -530,6 +532,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
       execution_evidence: buildExecutionEvidenceFromValidation({
         validationPassed: true,
         freshShellProbePassed: true,
+        validationBoundary: "external_verifier",
         evidenceRefs: ["dogfood:deploy_hook_web:external_curl_probe"],
       }),
     },
@@ -563,6 +566,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
       evidence_source: "declared_fixture",
       execution_evidence: buildExecutionEvidenceFromValidation({
         validationPassed: true,
+        validationBoundary: "external_verifier",
         evidenceRefs: ["dogfood:interrupted_resume:targeted_export_test"],
       }),
     },
@@ -597,6 +601,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
       evidence_source: "declared_fixture",
       execution_evidence: buildExecutionEvidenceFromValidation({
         validationPassed: true,
+        validationBoundary: "external_verifier",
         evidenceRefs: ["dogfood:handoff_next_day:targeted_payment_webhook_test"],
       }),
     },
@@ -631,6 +636,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
       evidence_source: "declared_fixture",
       execution_evidence: buildExecutionEvidenceFromValidation({
         validationPassed: true,
+        validationBoundary: "external_verifier",
         evidenceRefs: ["dogfood:agent_takeover:targeted_search_indexer_test"],
       }),
     },
@@ -665,6 +671,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
       evidence_source: "declared_fixture",
       execution_evidence: buildExecutionEvidenceFromValidation({
         validationPassed: true,
+        validationBoundary: "external_verifier",
         evidenceRefs: ["dogfood:cross_agent_db_handoff:integrity_check"],
       }),
     },
@@ -709,6 +716,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         validationPassed: true,
         afterExitRevalidated: true,
         freshShellProbePassed: true,
+        validationBoundary: "external_verifier",
         evidenceRefs: ["dogfood:thin_service_missing_detach:probe"],
       }),
     },
@@ -730,6 +738,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         validationPassed: true,
         afterExitRevalidated: false,
         freshShellProbePassed: false,
+        validationBoundary: "external_verifier",
         failureReason: "fresh_shell_probe_connection_refused_after_agent_exit",
         falseConfidenceDetected: true,
         evidenceRefs: ["dogfood:service_after_exit_evidence_failed:fresh_shell_probe"],

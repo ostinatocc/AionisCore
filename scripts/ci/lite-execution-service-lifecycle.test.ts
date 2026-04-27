@@ -212,6 +212,7 @@ test("execution evidence blocks authoritative learning after failed after-exit p
     validationPassed: true,
     afterExitRevalidated: false,
     freshShellProbePassed: false,
+    validationBoundary: "external_verifier",
     failureReason: "fresh_shell_probe_connection_refused_after_agent_exit",
     falseConfidenceDetected: true,
     evidenceRefs: ["test:fresh-shell-probe"],
@@ -264,6 +265,7 @@ test("runtime authority gate rejects validation-only evidence for after-exit ser
     requestedTrust: "authoritative",
     evidence: buildExecutionEvidenceFromValidation({
       validationPassed: true,
+      validationBoundary: "agent_self",
       evidenceRefs: ["test:agent-side-validation-only"],
     }),
   });
@@ -275,6 +277,57 @@ test("runtime authority gate rejects validation-only evidence for after-exit ser
   assert.equal(authority.authorityGate.effective_trust, "advisory");
   assert.ok(authority.authorityGate.reasons.includes("execution_evidence:missing_after_exit_revalidation"));
   assert.ok(authority.authorityGate.reasons.includes("execution_evidence:missing_fresh_shell_probe"));
+  assert.ok(authority.authorityGate.reasons.includes("execution_evidence:agent_self_validation_boundary"));
+});
+
+test("execution evidence rejects agent-self fresh-shell proof for after-exit authority", () => {
+  const contract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    task_family: "service_publish_validate",
+    target_files: ["scripts/dev-server.mjs"],
+    next_action: "Launch detached service and validate from a fresh shell after exit.",
+    service_lifecycle_constraints: [
+      {
+        version: 1,
+        service_kind: "http",
+        label: "service:http://localhost:4173/healthz",
+        launch_reference: "launchctl bootstrap gui/501 /tmp/com.aionis.test.plist",
+        endpoint: "http://localhost:4173/healthz",
+        must_survive_agent_exit: true,
+        revalidate_from_fresh_shell: true,
+        detach_then_probe: true,
+        health_checks: ["curl -fsS http://localhost:4173/healthz"],
+        teardown_notes: [],
+      },
+    ],
+    acceptance_checks: ["curl -fsS http://localhost:4173/healthz"],
+    success_invariants: ["fresh_shell_revalidation_passes"],
+    must_hold_after_exit: ["service_endpoint_still_serves_after_exit:http://localhost:4173/healthz"],
+    external_visibility_requirements: ["endpoint_reachable_from_fresh_shell:http://localhost:4173/healthz"],
+    provenance: {
+      source_kind: "manual_context",
+    },
+  });
+
+  const selfVerifiedEvidence = buildExecutionEvidenceFromValidation({
+    validationPassed: true,
+    afterExitRevalidated: true,
+    freshShellProbePassed: true,
+    validationBoundary: "agent_self",
+    evidenceRefs: ["test:agent-self-fresh-shell-probe"],
+  });
+  const assessment = assessExecutionEvidence({
+    executionContract: contract,
+    evidence: selfVerifiedEvidence,
+    requestedTrust: "authoritative",
+  });
+
+  assert.equal(assessment.status, "incomplete");
+  assert.equal(assessment.allows_authoritative, false);
+  assert.equal(assessment.allows_stable_promotion, false);
+  assert.equal(assessment.decisive_fields.validation_boundary, "agent_self");
+  assert.equal(assessment.decisive_fields.requires_external_validation_boundary, true);
+  assert.ok(assessment.reasons.includes("agent_self_validation_boundary"));
 });
 
 test("execution evidence compiler preserves service lifecycle proof from metrics", () => {
@@ -305,6 +358,7 @@ test("execution evidence compiler normalizes route side outputs into execution_e
         validation_passed: true,
         after_exit_revalidated: false,
         fresh_shell_probe_passed: false,
+        validation_boundary: "external_verifier",
       },
       execution_evidence: [{
         ref: "evidence://service/fresh-shell-probe",

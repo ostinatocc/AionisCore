@@ -743,12 +743,14 @@ test("memory/write stable workflow governance blocks promotion when execution ev
           validation_passed: true,
           after_exit_revalidated: true,
           fresh_shell_probe_passed: true,
+          validation_boundary: "external_verifier",
         },
         executionEvidence: [{
           ref: "evidence://service/run-1",
           validation_passed: true,
           after_exit_revalidated: true,
           fresh_shell_probe_passed: true,
+          validation_boundary: "external_verifier",
         }],
       }),
     });
@@ -773,12 +775,14 @@ test("memory/write stable workflow governance blocks promotion when execution ev
           validation_passed: true,
           after_exit_revalidated: false,
           fresh_shell_probe_passed: false,
+          validation_boundary: "external_verifier",
         },
         executionEvidence: [{
           ref: "evidence://service/run-2",
           validation_passed: true,
           after_exit_revalidated: false,
           fresh_shell_probe_passed: false,
+          validation_boundary: "external_verifier",
           failure_reason: "service_not_reachable_after_agent_exit",
         }],
         workflowPromotionGovernanceReview: {
