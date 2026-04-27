@@ -52,10 +52,17 @@ type AutomationDefaults = {
   defaultActorId?: string | null;
 };
 
-type LiteAutomationReplayRunner = (body: unknown, options: any) => Promise<any>;
+type LiteAutomationReplayResult = {
+  mode?: unknown;
+  playbook?: unknown;
+  run?: unknown;
+  summary?: unknown;
+};
+
+type LiteAutomationReplayRunner = (body: unknown, options: unknown) => Promise<LiteAutomationReplayResult>;
 
 type LiteAutomationExecutionDeps = {
-  buildReplayRunOptions: (source: string) => any;
+  buildReplayRunOptions: (source: string) => unknown;
   replayRunner: LiteAutomationReplayRunner;
 };
 
