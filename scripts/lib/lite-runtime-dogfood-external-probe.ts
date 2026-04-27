@@ -10,6 +10,7 @@ import {
   type RuntimeDogfoodSuiteResult,
   type RuntimeDogfoodTaskSpec,
 } from "./lite-runtime-dogfood.ts";
+import { buildRuntimeVerifierExecutionEvidenceV1 } from "../../src/execution/index.ts";
 
 export type RuntimeDogfoodExternalProbeSlice =
   | "service_after_exit"
@@ -292,6 +293,42 @@ function validationFailureReason(kind: string, probe: CommandResult): string | n
   return `${kind}:${(probe.stderr || probe.stdout || "unknown").trim().slice(0, 220)}`;
 }
 
+function runtimeVerifierEvidence(args: {
+  verifierId: string;
+  command: string;
+  probe: CommandResult;
+  success?: boolean;
+  failureReason?: string | null;
+  afterAgentExit?: boolean;
+  externalVisibilityRequired?: boolean;
+  evidenceRefs?: string[];
+}) {
+  const success = args.success ?? args.probe.code === 0;
+  return buildRuntimeVerifierExecutionEvidenceV1({
+    request: {
+      version: 1,
+      verifier_id: args.verifierId,
+      command: args.command,
+      cwd: repoRoot,
+      fresh_shell: true,
+      after_agent_exit: args.afterAgentExit ?? false,
+      external_visibility_required: args.externalVisibilityRequired ?? false,
+      validation_boundary: "external_verifier",
+      evidence_refs: args.evidenceRefs ?? [],
+    },
+    commandResult: {
+      exit_code: args.probe.code,
+      timed_out: false,
+      stdout_tail: outputTail(args.probe.stdout),
+      stderr_tail: outputTail(args.probe.stderr),
+      duration_ms: args.probe.durationMs,
+      success,
+    },
+    agentClaimedSuccess: false,
+    failureReason: args.failureReason,
+  });
+}
+
 function writeVectoropsWheel(args: {
   tempDir: string;
   python: string;
@@ -372,19 +409,20 @@ function buildServiceTaskSpec(args: {
         },
       ],
     },
-    execution_evidence: {
-      validation_passed: validationPassed,
-      after_exit_revalidated: validationPassed,
-      fresh_shell_probe_passed: validationPassed,
-      validation_boundary: "external_verifier",
-      failure_reason: validationFailureReason("fresh_shell_probe_failed", args.probe),
-      false_confidence_detected: !validationPassed,
-      evidence_refs: [
+    execution_evidence: runtimeVerifierEvidence({
+      verifierId: "service_after_exit_fresh_shell_probe",
+      command: healthCheck,
+      probe: args.probe,
+      success: validationPassed,
+      failureReason: validationFailureReason("fresh_shell_probe_failed", args.probe),
+      afterAgentExit: true,
+      externalVisibilityRequired: true,
+      evidenceRefs: [
         `external_probe:fresh_shell:${args.endpoint}/healthz`,
         `launcher_exit_code:${args.launcherExitCode ?? "null"}`,
         `service_pid:${args.servicePid ?? "null"}`,
       ],
-    },
+    }),
     expectations: {
       target_files_include: [serviceRelativePath],
       acceptance_checks_match: [escapeRegex(healthCheck)],
@@ -446,20 +484,21 @@ function buildPublishInstallTaskSpec(args: {
     hints: {
       repo_root: "/workspace/vectorops",
     },
-    execution_evidence: {
-      validation_passed: validationPassed,
-      after_exit_revalidated: validationPassed,
-      fresh_shell_probe_passed: validationPassed,
-      validation_boundary: "external_verifier",
-      failure_reason: validationFailureReason("clean_client_install_failed", args.probe),
-      false_confidence_detected: !validationPassed,
-      evidence_refs: [
+    execution_evidence: runtimeVerifierEvidence({
+      verifierId: "publish_install_clean_client_probe",
+      command: installCheck,
+      probe: args.probe,
+      success: validationPassed,
+      failureReason: validationFailureReason("clean_client_install_failed", args.probe),
+      afterAgentExit: true,
+      externalVisibilityRequired: true,
+      evidenceRefs: [
         `external_probe:fresh_shell:${args.endpoint}/simple/vectorops/`,
         `external_probe:clean_client_install:${args.endpoint}/simple`,
         `launcher_exit_code:${args.launcherExitCode ?? "null"}`,
         `service_pid:${args.servicePid ?? "null"}`,
       ],
-    },
+    }),
     expectations: {
       target_files_include: ["scripts/build_index.py", "src/vectorops/__init__.py"],
       acceptance_checks_match: [
@@ -506,19 +545,20 @@ function buildDeployHookWebTaskSpec(args: {
         },
       ],
     },
-    execution_evidence: {
-      validation_passed: validationPassed,
-      fresh_shell_probe_passed: validationPassed,
-      validation_boundary: "external_verifier",
-      failure_reason: validationPassed
+    execution_evidence: runtimeVerifierEvidence({
+      verifierId: "deploy_hook_web_external_probe",
+      command: webCheck,
+      probe: args.probe,
+      success: validationPassed,
+      failureReason: validationPassed
         ? null
         : validationFailureReason("served_web_content_probe_failed", args.probe) ?? "served_web_content_mismatch",
-      false_confidence_detected: !validationPassed,
-      evidence_refs: [
+      externalVisibilityRequired: true,
+      evidenceRefs: [
         `external_probe:fresh_shell:${args.endpoint}/index.html`,
         "served_web_content_matches_deployed_revision",
       ],
-    },
+    }),
     expectations: {
       target_files_include: ["hooks/post-receive", "/var/www/main/index.html"],
       acceptance_checks_match: [escapeRegex(webCheck)],
@@ -570,17 +610,17 @@ function buildLiveCommandTaskSpec(args: {
         { role: "assistant", text: args.nextAction },
       ],
     },
-    execution_evidence: {
-      validation_passed: validationPassed,
-      fresh_shell_probe_passed: validationPassed,
-      validation_boundary: "external_verifier",
-      failure_reason: validationFailureReason("live_command_probe_failed", args.probe),
-      false_confidence_detected: !validationPassed,
-      evidence_refs: [
+    execution_evidence: runtimeVerifierEvidence({
+      verifierId: `${args.id}_live_command_probe`,
+      command: args.validationCommand,
+      probe: args.probe,
+      success: validationPassed,
+      failureReason: validationFailureReason("live_command_probe_failed", args.probe),
+      evidenceRefs: [
         args.evidenceRef,
         `external_probe:fresh_shell:${args.validationCommand}`,
       ],
-    },
+    }),
     expectations: {
       target_files_include: args.targetFiles,
       acceptance_checks_match: [escapeRegex(args.validationCommand)],
