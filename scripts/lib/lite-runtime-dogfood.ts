@@ -194,6 +194,36 @@ export type RuntimeDogfoodScenarioReport = {
   recommended_next_action: string;
 };
 
+export const runtimeDogfoodRequiredLiveTaskFamilies = [
+  "agent_takeover",
+  "git_deploy_webserver",
+  "handoff_resume",
+  "package_publish_validate",
+  "service_publish_validate",
+  "task_resume_interrupted_export_pipeline",
+] as const;
+
+export type RuntimeDogfoodReadinessRequirement = {
+  id: string;
+  scope: "regression" | "live_product";
+  status: "pass" | "fail";
+  actual: string | number | boolean | null;
+  expected: string | number | boolean;
+  message: string;
+};
+
+export type RuntimeDogfoodReadinessGateV1 = {
+  gate_version: "runtime_dogfood_readiness_gate_v1";
+  claim_level: "not_ready" | "regression" | "live_product";
+  regression_status: "pass" | "fail";
+  live_product_status: "pass" | "fail";
+  required_live_task_families: readonly string[];
+  requirements: RuntimeDogfoodReadinessRequirement[];
+  failed_requirements: RuntimeDogfoodReadinessRequirement[];
+  live_product_blockers: string[];
+  operator_summary: string;
+};
+
 export type RuntimeDogfoodReportV1 = {
   report_version: "runtime_dogfood_report_v1";
   generated_at: string;
@@ -230,6 +260,7 @@ export type RuntimeDogfoodReportV1 = {
     }>;
   };
   authority_decision_report: RuntimeAuthorityDecisionReportV1;
+  readiness_gate: RuntimeDogfoodReadinessGateV1;
   blocking_risks: string[];
   next_actions: string[];
   scenarios: RuntimeDogfoodScenarioReport[];
@@ -1205,6 +1236,195 @@ function reportNextActions(args: {
   return actions.slice(0, 8);
 }
 
+function readinessRequirement(args: {
+  id: string;
+  scope: RuntimeDogfoodReadinessRequirement["scope"];
+  passed: boolean;
+  actual: RuntimeDogfoodReadinessRequirement["actual"];
+  expected: RuntimeDogfoodReadinessRequirement["expected"];
+  message: string;
+}): RuntimeDogfoodReadinessRequirement {
+  return {
+    id: args.id,
+    scope: args.scope,
+    status: args.passed ? "pass" : "fail",
+    actual: args.actual,
+    expected: args.expected,
+    message: args.message,
+  };
+}
+
+function metricEqualsOne(value: number | null): boolean {
+  return value === 1;
+}
+
+function metricEqualsZero(value: number | null): boolean {
+  return value === 0;
+}
+
+function buildRuntimeDogfoodReadinessGate(args: {
+  overallStatus: RuntimeDogfoodReportV1["overall_status"];
+  productStatus: RuntimeDogfoodReportV1["product_status"];
+  productMetrics: RuntimeDogfoodReportV1["product_metrics"];
+}): RuntimeDogfoodReadinessGateV1 {
+  const metrics = args.productMetrics;
+  const requirements: RuntimeDogfoodReadinessRequirement[] = [
+    readinessRequirement({
+      id: "overall_status_pass",
+      scope: "regression",
+      passed: args.overallStatus === "pass",
+      actual: args.overallStatus,
+      expected: "pass",
+      message: "Dogfood scenarios must pass contract, evidence, and authority assertions.",
+    }),
+    readinessRequirement({
+      id: "product_status_not_failure",
+      scope: "regression",
+      passed: !args.productStatus.startsWith("fail_"),
+      actual: args.productStatus,
+      expected: "non_failure",
+      message: "Dogfood report must not expose a failing product status.",
+    }),
+    readinessRequirement({
+      id: "all_scenarios_passed",
+      scope: "regression",
+      passed: metrics.passed_scenarios === metrics.total_scenarios,
+      actual: `${metrics.passed_scenarios}/${metrics.total_scenarios}`,
+      expected: "all",
+      message: "Every scenario in the selected suite must pass.",
+    }),
+    readinessRequirement({
+      id: "first_correct_action_rate_one",
+      scope: "regression",
+      passed: metricEqualsOne(metrics.first_correct_action_rate),
+      actual: metrics.first_correct_action_rate,
+      expected: 1,
+      message: "Contract Compiler output must produce a correct first action for every scenario.",
+    }),
+    readinessRequirement({
+      id: "wasted_steps_zero",
+      scope: "regression",
+      passed: metricEqualsZero(metrics.wasted_steps),
+      actual: metrics.wasted_steps,
+      expected: 0,
+      message: "Compiled workflows must not include noisy or non-actionable steps.",
+    }),
+    readinessRequirement({
+      id: "unblocked_false_confidence_zero",
+      scope: "regression",
+      passed: metricEqualsZero(metrics.unblocked_false_confidence_rate),
+      actual: metrics.unblocked_false_confidence_rate,
+      expected: 0,
+      message: "False confidence must never reach stable promotion.",
+    }),
+    readinessRequirement({
+      id: "all_false_confidence_blocked",
+      scope: "regression",
+      passed: metrics.false_confidence_detected_count === metrics.false_confidence_blocked_count,
+      actual: `${metrics.false_confidence_blocked_count}/${metrics.false_confidence_detected_count}`,
+      expected: "all_detected_blocked",
+      message: "Every detected false-confidence case must be blocked by the Trust Gate.",
+    }),
+    readinessRequirement({
+      id: "authority_gate_false_positive_zero",
+      scope: "regression",
+      passed: metricEqualsZero(metrics.authority_gate_false_positive_rate),
+      actual: metrics.authority_gate_false_positive_rate,
+      expected: 0,
+      message: "Outcome Contract gate must not allow authority when the scenario expects denial.",
+    }),
+    readinessRequirement({
+      id: "authority_gate_false_negative_zero",
+      scope: "regression",
+      passed: metricEqualsZero(metrics.authority_gate_false_negative_rate),
+      actual: metrics.authority_gate_false_negative_rate,
+      expected: 0,
+      message: "Outcome Contract gate must not deny authority when the scenario expects allowance.",
+    }),
+    readinessRequirement({
+      id: "after_exit_contract_correctness_one",
+      scope: "regression",
+      passed: metrics.after_exit_contract_correctness_rate === null || metricEqualsOne(metrics.after_exit_contract_correctness_rate),
+      actual: metrics.after_exit_contract_correctness_rate,
+      expected: 1,
+      message: "Lifecycle-sensitive contracts must express after-exit correctness requirements.",
+    }),
+    readinessRequirement({
+      id: "product_status_live_evidence",
+      scope: "live_product",
+      passed: args.productStatus === "pass_live_evidence",
+      actual: args.productStatus,
+      expected: "pass_live_evidence",
+      message: "A live product readiness claim requires live external probe evidence.",
+    }),
+    readinessRequirement({
+      id: "live_execution_coverage_rate_one",
+      scope: "live_product",
+      passed: metricEqualsOne(metrics.live_execution_coverage_rate),
+      actual: metrics.live_execution_coverage_rate,
+      expected: 1,
+      message: "Every scenario in the readiness suite must be backed by live external execution evidence.",
+    }),
+    readinessRequirement({
+      id: "after_exit_evidence_success_rate_one",
+      scope: "live_product",
+      passed: metricEqualsOne(metrics.after_exit_evidence_success_rate),
+      actual: metrics.after_exit_evidence_success_rate,
+      expected: 1,
+      message: "Live lifecycle evidence must prove after-exit durability for all measured scenarios.",
+    }),
+    readinessRequirement({
+      id: "cross_shell_revalidation_success_rate_one",
+      scope: "live_product",
+      passed: metricEqualsOne(metrics.cross_shell_revalidation_success_rate),
+      actual: metrics.cross_shell_revalidation_success_rate,
+      expected: 1,
+      message: "Live external visibility must be revalidated from a fresh shell for all measured scenarios.",
+    }),
+  ];
+
+  for (const family of runtimeDogfoodRequiredLiveTaskFamilies) {
+    const coverage = metrics.live_execution_coverage_by_family[family];
+    requirements.push(readinessRequirement({
+      id: `live_family_coverage_${family}`,
+      scope: "live_product",
+      passed: !!coverage && coverage.total_scenarios > 0 && coverage.rate === 1,
+      actual: coverage ? `${coverage.live_execution_scenarios}/${coverage.total_scenarios}` : "0/0",
+      expected: "1/1",
+      message: `Live readiness requires full external-probe coverage for ${family}.`,
+    }));
+  }
+
+  const regressionFailures = requirements.filter((entry) => entry.scope === "regression" && entry.status === "fail");
+  const liveProductFailures = requirements.filter((entry) => entry.scope === "live_product" && entry.status === "fail");
+  const regressionStatus = regressionFailures.length === 0 ? "pass" : "fail";
+  const liveProductStatus = regressionStatus === "pass" && liveProductFailures.length === 0 ? "pass" : "fail";
+  const claimLevel: RuntimeDogfoodReadinessGateV1["claim_level"] =
+    liveProductStatus === "pass"
+      ? "live_product"
+      : regressionStatus === "pass"
+        ? "regression"
+        : "not_ready";
+  const operatorSummary =
+    claimLevel === "live_product"
+      ? "Live product readiness passed across required dogfood task families."
+      : claimLevel === "regression"
+        ? "Regression readiness passed, but live product readiness is blocked until required external-probe coverage passes."
+        : "Dogfood readiness failed; fix regression blockers before making product claims.";
+
+  return {
+    gate_version: "runtime_dogfood_readiness_gate_v1",
+    claim_level: claimLevel,
+    regression_status: regressionStatus,
+    live_product_status: liveProductStatus,
+    required_live_task_families: runtimeDogfoodRequiredLiveTaskFamilies,
+    requirements,
+    failed_requirements: requirements.filter((entry) => entry.status === "fail"),
+    live_product_blockers: liveProductFailures.map((entry) => entry.id),
+    operator_summary: operatorSummary,
+  };
+}
+
 function buildRuntimeDogfoodReport(base: RuntimeDogfoodSuiteWithoutReport): RuntimeDogfoodReportV1 {
   const afterExitEvidenceScenarios = base.scenarios.filter((scenario) => scenario.metrics.after_exit_revalidated !== null);
   const freshShellScenarios = base.scenarios.filter((scenario) => scenario.metrics.fresh_shell_probe_passed !== null);
@@ -1216,6 +1436,25 @@ function buildRuntimeDogfoodReport(base: RuntimeDogfoodSuiteWithoutReport): Runt
     proofBoundary: base.proof_boundary,
     summary: base.summary,
   });
+  const productMetrics: RuntimeDogfoodReportV1["product_metrics"] = {
+    passed_scenarios: base.summary.passed_scenarios,
+    total_scenarios: base.summary.total_scenarios,
+    first_correct_action_rate: base.summary.first_correct_action_rate,
+    wasted_steps: base.summary.wasted_step_count,
+    retries: base.summary.retry_signal_count,
+    false_confidence_rate: base.summary.unblocked_false_confidence_rate,
+    false_confidence_detected_count: base.summary.false_confidence_detected_count,
+    false_confidence_blocked_count: base.summary.false_confidence_blocked_count,
+    unblocked_false_confidence_rate: base.summary.unblocked_false_confidence_rate,
+    after_exit_contract_correctness_rate: base.summary.after_exit_correct_rate,
+    after_exit_evidence_success_rate: nullableRate(afterExitEvidenceScenarios.map((scenario) => scenario.metrics.after_exit_revalidated)),
+    cross_shell_revalidation_success_rate: nullableRate(freshShellScenarios.map((scenario) => scenario.metrics.fresh_shell_probe_passed)),
+    authority_gate_false_positive_rate: base.summary.gate_false_positive_rate,
+    authority_gate_false_negative_rate: base.summary.gate_false_negative_rate,
+    stable_promotion_allowed_rate: base.summary.stable_promotion_allowed_rate,
+    live_execution_coverage_rate: rate(base.proof_boundary.live_execution_scenarios, base.summary.total_scenarios),
+    live_execution_coverage_by_family: liveCoverageByFamily(base.scenarios),
+  };
   return {
     report_version: "runtime_dogfood_report_v1",
     generated_at: base.generated_at,
@@ -1224,26 +1463,13 @@ function buildRuntimeDogfoodReport(base: RuntimeDogfoodSuiteWithoutReport): Runt
     product_status: productStatus,
     proof_boundary: base.proof_boundary,
     coverage: base.coverage,
-    product_metrics: {
-      passed_scenarios: base.summary.passed_scenarios,
-      total_scenarios: base.summary.total_scenarios,
-      first_correct_action_rate: base.summary.first_correct_action_rate,
-      wasted_steps: base.summary.wasted_step_count,
-      retries: base.summary.retry_signal_count,
-      false_confidence_rate: base.summary.unblocked_false_confidence_rate,
-      false_confidence_detected_count: base.summary.false_confidence_detected_count,
-      false_confidence_blocked_count: base.summary.false_confidence_blocked_count,
-      unblocked_false_confidence_rate: base.summary.unblocked_false_confidence_rate,
-      after_exit_contract_correctness_rate: base.summary.after_exit_correct_rate,
-      after_exit_evidence_success_rate: nullableRate(afterExitEvidenceScenarios.map((scenario) => scenario.metrics.after_exit_revalidated)),
-      cross_shell_revalidation_success_rate: nullableRate(freshShellScenarios.map((scenario) => scenario.metrics.fresh_shell_probe_passed)),
-      authority_gate_false_positive_rate: base.summary.gate_false_positive_rate,
-      authority_gate_false_negative_rate: base.summary.gate_false_negative_rate,
-      stable_promotion_allowed_rate: base.summary.stable_promotion_allowed_rate,
-      live_execution_coverage_rate: rate(base.proof_boundary.live_execution_scenarios, base.summary.total_scenarios),
-      live_execution_coverage_by_family: liveCoverageByFamily(base.scenarios),
-    },
+    product_metrics: productMetrics,
     authority_decision_report: authorityDecisionReport,
+    readiness_gate: buildRuntimeDogfoodReadinessGate({
+      overallStatus: base.overall_status,
+      productStatus,
+      productMetrics,
+    }),
     blocking_risks: reportBlockingRisks({
       proofBoundary: base.proof_boundary,
       summary: base.summary,
@@ -1329,6 +1555,25 @@ export function formatRuntimeDogfoodMarkdown(result: RuntimeDogfoodSuiteResult):
     `Status: ${result.overall_status}`,
     `Product status: ${result.report.product_status}`,
     `Report version: ${result.report.report_version}`,
+    `Readiness claim: ${result.report.readiness_gate.claim_level}`,
+    `Regression gate: ${result.report.readiness_gate.regression_status}`,
+    `Live product gate: ${result.report.readiness_gate.live_product_status}`,
+    `Readiness summary: ${result.report.readiness_gate.operator_summary}`,
+    "",
+    "## Readiness Gate",
+    "",
+    `- gate_version: ${result.report.readiness_gate.gate_version}`,
+    `- claim_level: ${result.report.readiness_gate.claim_level}`,
+    `- regression_status: ${result.report.readiness_gate.regression_status}`,
+    `- live_product_status: ${result.report.readiness_gate.live_product_status}`,
+    `- required_live_task_families: ${result.report.readiness_gate.required_live_task_families.join(", ")}`,
+    `- live_product_blockers: ${result.report.readiness_gate.live_product_blockers.join(", ") || "none"}`,
+    "",
+    ...(result.report.readiness_gate.failed_requirements.length > 0
+      ? result.report.readiness_gate.failed_requirements.map((requirement) =>
+          `- FAIL ${requirement.id}: actual=${requirement.actual ?? "null"} expected=${requirement.expected}; ${requirement.message}`
+        )
+      : ["- failed_requirements: none"]),
     "",
     "## Product Metrics",
     "",

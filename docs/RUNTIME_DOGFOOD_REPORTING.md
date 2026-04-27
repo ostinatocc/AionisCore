@@ -28,6 +28,13 @@ Use `--report-json` to print only the report:
 npm run dogfood:lite:runtime -- --report-json
 ```
 
+Use the readiness gate when a job must fail unless the dogfood run is product-ready:
+
+```bash
+npm run dogfood:lite:runtime:readiness
+npm run dogfood:lite:runtime:external-probe -- --require-live-readiness --out-gate-json artifacts/runtime-dogfood/external-readiness-gate.json
+```
+
 Use `--list-slices` and `--slice` when debugging one live family:
 
 ```bash
@@ -59,6 +66,37 @@ The report intentionally focuses on product behavior, not test implementation de
    Measures live `external_probe` coverage per Runtime task family, for example `service_publish_validate`, `package_publish_validate`, `git_deploy_webserver`, `task_resume_interrupted_export_pipeline`, `handoff_resume`, and `agent_takeover`.
 10. `authority_decision_report`
     Explains why each authority decision was allowed, blocked, downgraded to advisory, or limited to inspect/rehydrate. This includes outcome contract gating, execution evidence gating, stable promotion, false-confidence blocking, candidate workflow reuse, and policy default materialization.
+
+## Readiness Gate
+
+Every report includes `readiness_gate` with contract `runtime_dogfood_readiness_gate_v1`.
+
+The gate has two layers:
+
+1. `regression_status`
+   Passes when the selected dogfood suite has no contract/evidence/assertion failures, no unblocked false confidence, no authority-gate false positives or false negatives, no wasted workflow steps, and correct after-exit contract expression where measured.
+2. `live_product_status`
+   Passes only when `regression_status=pass`, the report has `pass_live_evidence`, live coverage is complete, after-exit evidence succeeds, cross-shell revalidation succeeds, and every required live task family has full external-probe coverage.
+
+The required live task families are:
+
+1. `service_publish_validate`
+2. `package_publish_validate`
+3. `git_deploy_webserver`
+4. `task_resume_interrupted_export_pipeline`
+5. `handoff_resume`
+6. `agent_takeover`
+
+Interpretation:
+
+1. `claim_level=live_product`
+   The dogfood run can support a live product readiness claim.
+2. `claim_level=regression`
+   The Runtime passed regression safety checks, but live product readiness is still blocked by missing or partial external-probe coverage.
+3. `claim_level=not_ready`
+   A regression blocker exists. Fix Runtime behavior before making product claims.
+
+`--gate-json` prints only the gate. `--out-gate-json` writes it as an artifact. `--require-live-readiness` exits non-zero unless `live_product_status=pass`.
 
 ## Live External Probe Slices
 
@@ -96,7 +134,7 @@ The external-probe run payload includes `diagnostics[]`, one entry per slice. Ea
 9. `commands[]`
    The ordered command-level diagnostics for multi-step slices such as service launch plus fresh-shell probe.
 
-CI uploads `artifacts/runtime-dogfood/` for every Lite CI run. The primary files are `external-run.json`, `external-report.json`, `external-report.md`, and `external-tasks.json`.
+CI uploads `artifacts/runtime-dogfood/` for every Lite CI run. The primary files are `external-run.json`, `external-report.json`, `external-readiness-gate.json`, `external-report.md`, and `external-tasks.json`.
 
 ## Product Status
 
@@ -165,13 +203,14 @@ Important interpretation rules:
 For product decisions, read:
 
 1. `report.product_status`
-2. `report.product_metrics`
+2. `report.readiness_gate`
+3. `report.product_metrics`
    Include `live_execution_coverage_by_family` when comparing task-family readiness.
-3. `report.blocking_risks`
-4. `report.next_actions`
-5. `report.scenarios[].authority_gate_result`
-6. `report.authority_decision_report.summary`
-7. `report.scenarios[].authority_decision_summary`
-8. `report.scenarios[].recommended_next_action`
+4. `report.blocking_risks`
+5. `report.next_actions`
+6. `report.scenarios[].authority_gate_result`
+7. `report.authority_decision_report.summary`
+8. `report.scenarios[].authority_decision_summary`
+9. `report.scenarios[].recommended_next_action`
 
 For debugging Runtime internals, read the full `RuntimeDogfoodSuiteResult.scenarios[]` payload.

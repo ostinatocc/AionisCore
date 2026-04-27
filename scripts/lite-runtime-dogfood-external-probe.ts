@@ -11,10 +11,13 @@ import {
 type CliOptions = {
   json: boolean;
   reportJson: boolean;
+  gateJson: boolean;
+  requireLiveReadiness: boolean;
   listSlices: boolean;
   slices: RuntimeDogfoodExternalProbeSlice[];
   outJson: string | null;
   outReportJson: string | null;
+  outGateJson: string | null;
   outMarkdown: string | null;
   outTasksJson: string | null;
   port: number | null;
@@ -23,7 +26,7 @@ type CliOptions = {
 function usage(): string {
   return [
     "Usage:",
-    "  npx tsx scripts/lite-runtime-dogfood-external-probe.ts [--json|--report-json] [--list-slices] [--slice service_after_exit] [--port 43000] [--out-json /path/result.json] [--out-report-json /path/report.json] [--out-md /path/result.md] [--out-tasks-json /path/tasks.json]",
+    "  npx tsx scripts/lite-runtime-dogfood-external-probe.ts [--json|--report-json|--gate-json] [--require-live-readiness] [--list-slices] [--slice service_after_exit] [--port 43000] [--out-json /path/result.json] [--out-report-json /path/report.json] [--out-gate-json /path/gate.json] [--out-md /path/result.md] [--out-tasks-json /path/tasks.json]",
     "",
     "Runs Runtime dogfood slices backed by live fresh-shell external probe evidence for service, publish/install, deploy/web, interrupted resume, handoff, and agent takeover task families.",
   ].join("\n");
@@ -42,10 +45,13 @@ function parseSliceValue(value: string): RuntimeDogfoodExternalProbeSlice[] {
 function parseArgs(argv: string[]): CliOptions {
   let json = false;
   let reportJson = false;
+  let gateJson = false;
+  let requireLiveReadiness = false;
   let listSlices = false;
   const slices: RuntimeDogfoodExternalProbeSlice[] = [];
   let outJson: string | null = null;
   let outReportJson: string | null = null;
+  let outGateJson: string | null = null;
   let outMarkdown: string | null = null;
   let outTasksJson: string | null = null;
   let port: number | null = null;
@@ -57,6 +63,14 @@ function parseArgs(argv: string[]): CliOptions {
     }
     if (arg === "--report-json") {
       reportJson = true;
+      continue;
+    }
+    if (arg === "--gate-json") {
+      gateJson = true;
+      continue;
+    }
+    if (arg === "--require-live-readiness") {
+      requireLiveReadiness = true;
       continue;
     }
     if (arg === "--list-slices") {
@@ -77,6 +91,11 @@ function parseArgs(argv: string[]): CliOptions {
     }
     if (arg === "--out-report-json") {
       outReportJson = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    if (arg === "--out-gate-json") {
+      outGateJson = argv[i + 1] ?? null;
       i += 1;
       continue;
     }
@@ -103,7 +122,7 @@ function parseArgs(argv: string[]): CliOptions {
     }
     throw new Error(`unknown argument: ${arg}`);
   }
-  return { json, reportJson, listSlices, slices, outJson, outReportJson, outMarkdown, outTasksJson, port };
+  return { json, reportJson, gateJson, requireLiveReadiness, listSlices, slices, outJson, outReportJson, outGateJson, outMarkdown, outTasksJson, port };
 }
 
 function ensureParent(filePath: string): void {
@@ -128,6 +147,10 @@ async function main(): Promise<void> {
     ensureParent(options.outReportJson);
     fs.writeFileSync(options.outReportJson, `${JSON.stringify(run.dogfood_result.report, null, 2)}\n`);
   }
+  if (options.outGateJson) {
+    ensureParent(options.outGateJson);
+    fs.writeFileSync(options.outGateJson, `${JSON.stringify(run.dogfood_result.report.readiness_gate, null, 2)}\n`);
+  }
   if (options.outTasksJson) {
     ensureParent(options.outTasksJson);
     fs.writeFileSync(options.outTasksJson, `${JSON.stringify({ tasks: run.task_specs }, null, 2)}\n`);
@@ -136,7 +159,9 @@ async function main(): Promise<void> {
     ensureParent(options.outMarkdown);
     fs.writeFileSync(options.outMarkdown, formatRuntimeDogfoodMarkdown(run.dogfood_result));
   }
-  if (options.reportJson) {
+  if (options.gateJson) {
+    console.log(JSON.stringify(run.dogfood_result.report.readiness_gate, null, 2));
+  } else if (options.reportJson) {
     console.log(JSON.stringify(run.dogfood_result.report, null, 2));
   } else if (options.json) {
     console.log(JSON.stringify(run, null, 2));
@@ -144,6 +169,9 @@ async function main(): Promise<void> {
     console.log(formatRuntimeDogfoodMarkdown(run.dogfood_result));
   }
   if (run.dogfood_result.overall_status !== "pass" || !run.fresh_shell_probe_passed) {
+    process.exitCode = 1;
+  }
+  if (options.requireLiveReadiness && run.dogfood_result.report.readiness_gate.live_product_status !== "pass") {
     process.exitCode = 1;
   }
 }
