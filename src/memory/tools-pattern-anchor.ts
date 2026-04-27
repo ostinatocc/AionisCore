@@ -22,6 +22,7 @@ import {
   extractTaskCue,
   extractTaskFamily,
 } from "./pattern-trust-shaping.js";
+import { mirrorPreparedWriteToEmbeddedRuntime } from "./embedded-write-bridge.js";
 import type { ContractTrust } from "./contract-trust.js";
 
 const STABLE_PATTERN_MIN_DISTINCT_RUNS = 3;
@@ -852,9 +853,7 @@ export async function writeToolsDecisionPatternAnchor(
     associativeLinkOrigin: "memory_write",
     write_access: writeAccess,
   });
-  if (opts.embeddedRuntime) {
-    await opts.embeddedRuntime.applyWrite(prepared as never, out as never);
-  }
+  await mirrorPreparedWriteToEmbeddedRuntime({ embeddedRuntime: opts.embeddedRuntime, prepared, out });
   return {
     node_id: out.nodes[0]!.id,
     client_id: clientId,
