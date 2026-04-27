@@ -395,3 +395,23 @@ test("automation replay bridge keeps replay options and results typed", () => {
     );
   }
 });
+
+test("runtime services expose typed access factories", () => {
+  const text = read("src/app/runtime-services.ts");
+  for (const token of [
+    'import type pg from "pg";',
+    "type RecallStoreAccess",
+    "type WriteStoreAccess",
+    'import type { ReplayStoreAccess } from "../store/replay-access.js";',
+    "const recallAccessForClient = (_client: pg.PoolClient): RecallStoreAccess | null => liteRecallAccess;",
+    "const writeAccessForClient = (_client: pg.PoolClient): WriteStoreAccess => liteWriteStore;",
+    "const replayAccessForClient = (_client: pg.PoolClient): ReplayStoreAccess | null => liteReplayAccess;",
+  ]) {
+    assertContains(text, token, `runtime-services must preserve typed service access boundary ${token}`);
+  }
+  assert.equal(
+    /\bany\b/.test(text),
+    false,
+    "runtime-services must not widen service access factories through bare any.",
+  );
+});
