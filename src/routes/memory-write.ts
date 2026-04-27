@@ -9,6 +9,7 @@ import {
   type LiteGovernanceRuntimeProviderBuilderOptions,
 } from "../app/governance-runtime-providers.js";
 import type { TopicClusterParams, TopicClusterResult } from "../jobs/topicClusterLib.js";
+import { mirrorPreparedWriteToEmbeddedRuntime, type EmbeddedWriteMirrorRuntime } from "../memory/embedded-write-bridge.js";
 import { collectExecutionWriteOverlaySlots } from "../memory/execution-slot-surface.js";
 import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } from "../memory/write.js";
 import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "../memory/lite-projected-write-commit.js";
@@ -51,10 +52,6 @@ type EffectiveWritePolicyLike = ReturnType<typeof computeEffectiveWritePolicy>;
 type WriteWarningLike = { code: string; message: string; details?: Record<string, unknown> };
 type LiteInlineEmbeddingResultLike = { updated: number; failed: number; error?: string | null } | null;
 
-type EmbeddedRuntimeLike = {
-  applyWrite: (prepared: PreparedWriteLike, out: WriteResultLike) => Promise<void>;
-};
-
 function isEnqueuedTopicCluster(result: WriteResultLike["topic_cluster"]): result is { enqueued: true } {
   return !!result && "enqueued" in result && result.enqueued === true;
 }
@@ -76,7 +73,7 @@ export function registerMemoryWriteRoutes(args: {
   store: StoreLike;
   embedder: EmbeddingProvider | null;
   embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
-  embeddedRuntime: EmbeddedRuntimeLike | null;
+  embeddedRuntime: EmbeddedWriteMirrorRuntime | null;
   liteWriteStore?: LiteWriteStoreLike | null;
   writeAccessForClient: (client: pg.PoolClient) => WriteStoreAccess;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
@@ -286,9 +283,11 @@ export function registerMemoryWriteRoutes(args: {
         executionStateStore.applyTransition(transition);
       }
     }
-    if (embeddedRuntime) {
-      await embeddedRuntime.applyWrite(args.prepared, args.out);
-    }
+    await mirrorPreparedWriteToEmbeddedRuntime({
+      embeddedRuntime,
+      prepared: args.prepared,
+      out: args.out,
+    });
   };
   const buildWriteLogPayload = (args: {
     out: WriteResultLike;

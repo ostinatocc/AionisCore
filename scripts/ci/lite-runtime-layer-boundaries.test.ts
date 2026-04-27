@@ -464,6 +464,22 @@ test("memory layer mirrors embedded writes through the shared bridge", () => {
   );
 });
 
+test("route layer mirrors embedded writes through the shared bridge", () => {
+  const offenders = sourceFilesUnder("src/routes")
+    .flatMap(({ file, text }) =>
+      text.split("\n")
+        .filter((line) => line.includes("embeddedRuntime.applyWrite"))
+        .map((line) => `${file}: ${line.trim()}`),
+    )
+    .sort();
+
+  assert.deepEqual(
+    offenders,
+    [],
+    "Routes must mirror embedded writes through embedded-write-bridge instead of direct runtime calls.",
+  );
+});
+
 test("handoff recovery keeps Lite read access typed", () => {
   const text = read("src/memory/handoff.ts");
   assertContains(
