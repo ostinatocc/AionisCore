@@ -28,6 +28,7 @@
     "ab:validate:json": "npx tsx scripts/aionis-real-ab-validation.ts --seed --json",
     "ab:validate:trace": "npx tsx scripts/aionis-real-ab-validation.ts --spec scripts/fixtures/real-ab-validation/trace-suite.json --fail-on-regression",
     "ab:capture:sample": "npx tsx scripts/aionis-real-ab-trace-capture.ts --sample --report --fail-on-invalid",
+    "ab:evidence:live": "npx tsx scripts/aionis-real-ab-live-evidence.ts",
     "core:build:runtime-host": "test -f src/runtime-entry.ts",
     "core:build:aionis-doc": "npm --prefix packages/aionis-doc run build",
     "core:build:runtime-core": "npm --prefix packages/runtime-core run build",

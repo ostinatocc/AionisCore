@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -18,6 +20,12 @@ import {
   validateRealAbDogfoodPairedCapture,
   type RealAbDogfoodPairedCaptureInput,
 } from "../lib/aionis-real-ab-dogfood-capture.ts";
+import {
+  assembleRealAbDogfoodPairedCaptureFromLiveEvidence,
+  validateRealAbLiveEvidenceAssemblerInputs,
+  type RealAbLiveEvidenceLoadedInputs,
+  type RealAbLiveEvidenceManifest,
+} from "../lib/aionis-real-ab-live-evidence-assembler.ts";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
@@ -436,4 +444,137 @@ test("real A/B dogfood paired capture rejects arms without captured agent action
     requirement.id === "dogfood_capture:external_probe_service_after_exit:aionis_assisted:agent_action_events"
     && requirement.status === "fail"
   ));
+});
+
+function liveEvidenceManifest(): RealAbLiveEvidenceManifest {
+  return {
+    manifest_version: "aionis_real_ab_live_evidence_manifest_v1",
+    suite_id: "aionis_real_ab_live_evidence_fixture_v1",
+    suite_kind: "pilot_real_trace",
+    generated_at: "2026-04-27T00:00:00.000Z",
+    fairness: {
+      same_model: true,
+      same_time_budget: true,
+      same_tool_permissions: true,
+      same_environment_reset: true,
+      same_verifier: true,
+    },
+    task_ids: ["external_probe_service_after_exit"],
+    arms: {
+      baseline: {
+        source_run_id: "live-baseline",
+        memory_mode: "none",
+        authority_level: "none",
+        packet_source: "none",
+        dogfood_run_path: "baseline-dogfood.json",
+        agent_events_path: "baseline-events.json",
+      },
+      aionis_assisted: {
+        source_run_id: "live-aionis",
+        memory_mode: "aionis_auto",
+        authority_level: "authoritative",
+        packet_source: "automatic_runtime",
+        dogfood_run_path: "aionis-dogfood.json",
+        agent_events_path: "aionis-events.json",
+      },
+      negative_control: {
+        source_run_id: "live-negative",
+        memory_mode: "irrelevant_or_low_trust",
+        authority_level: "observational",
+        packet_source: "irrelevant_low_trust",
+        dogfood_run_path: "negative-dogfood.json",
+        agent_events_path: "negative-events.json",
+      },
+      positive_control: {
+        source_run_id: "live-positive",
+        memory_mode: "oracle_handoff",
+        authority_level: "authoritative",
+        packet_source: "oracle_handoff",
+        dogfood_run_path: "positive-dogfood.json",
+        agent_events_path: "positive-events.json",
+      },
+    },
+  };
+}
+
+function loadedLiveEvidence(): RealAbLiveEvidenceLoadedInputs {
+  const paired = pairedDogfoodInput();
+  return {
+    baseline: {
+      dogfood_run: paired.arms.baseline.dogfood_run,
+      agent_events: { events_by_probe_id: paired.arms.baseline.agent_events_by_probe_id },
+    },
+    aionis_assisted: {
+      dogfood_run: paired.arms.aionis_assisted.dogfood_run,
+      agent_events: { events_by_probe_id: paired.arms.aionis_assisted.agent_events_by_probe_id },
+    },
+    negative_control: {
+      dogfood_run: paired.arms.negative_control.dogfood_run,
+      agent_events: { events_by_probe_id: paired.arms.negative_control.agent_events_by_probe_id },
+    },
+    positive_control: {
+      dogfood_run: paired.arms.positive_control.dogfood_run,
+      agent_events: { events_by_probe_id: paired.arms.positive_control.agent_events_by_probe_id },
+    },
+  };
+}
+
+test("real A/B live evidence assembler builds paired dogfood capture from separate arm artifacts", () => {
+  const manifest = liveEvidenceManifest();
+  const loaded = loadedLiveEvidence();
+  const assemblerRequirements = validateRealAbLiveEvidenceAssemblerInputs({ manifest, loaded });
+  const paired = assembleRealAbDogfoodPairedCaptureFromLiveEvidence({ manifest, loaded });
+  const dogfoodRequirements = validateRealAbDogfoodPairedCapture(paired);
+  const capture = compileRealAbDogfoodPairedCapture(paired);
+  const report = runRealAbValidationSuite(compileRealAbTraceCapture(capture));
+
+  assert.equal(assemblerRequirements.every((requirement) => requirement.status === "pass"), true);
+  assert.equal(dogfoodRequirements.every((requirement) => requirement.status === "pass"), true);
+  assert.equal(paired.capture_version, "aionis_real_ab_dogfood_paired_capture_v1");
+  assert.equal(paired.arms.baseline.source_run_id, "live-baseline");
+  assert.equal(report.gate.status, "pass");
+});
+
+test("real A/B live evidence assembler rejects loaded arm artifacts without probe events", () => {
+  const manifest = liveEvidenceManifest();
+  const loaded = loadedLiveEvidence();
+  loaded.aionis_assisted.agent_events = { events_by_probe_id: { external_probe_service_after_exit: [] } };
+
+  const assemblerRequirements = validateRealAbLiveEvidenceAssemblerInputs({ manifest, loaded });
+
+  assert.ok(assemblerRequirements.some((requirement) =>
+    requirement.id === "live_evidence:external_probe_service_after_exit:aionis_assisted:agent_events_present"
+    && requirement.status === "fail"
+  ));
+});
+
+test("real A/B live evidence CLI assembles separate arm files into a validation report", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-live-evidence-"));
+  const manifest = liveEvidenceManifest();
+  const loaded = loadedLiveEvidence();
+
+  for (const arm of ["baseline", "aionis_assisted", "negative_control", "positive_control"] as const) {
+    const armManifest = manifest.arms[arm];
+    fs.writeFileSync(path.join(dir, armManifest.dogfood_run_path), `${JSON.stringify(loaded[arm].dogfood_run, null, 2)}\n`);
+    fs.writeFileSync(path.join(dir, armManifest.agent_events_path), `${JSON.stringify(loaded[arm].agent_events, null, 2)}\n`);
+  }
+
+  const manifestPath = path.join(dir, "manifest.json");
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const output = execFileSync("npx", [
+    "tsx",
+    "scripts/aionis-real-ab-live-evidence.ts",
+    "--manifest",
+    manifestPath,
+    "--report",
+    "--fail-on-invalid",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+
+  assert.match(output, /Aionis Real A\/B Validation Report/);
+  assert.match(output, /Gate: \*\*pass\*\*/);
+  assert.match(output, /aionis_real_ab_live_evidence_fixture_v1/);
 });
