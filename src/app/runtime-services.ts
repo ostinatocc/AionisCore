@@ -1,3 +1,4 @@
+import type pg from "pg";
 import type { Env } from "../config.js";
 import { createNoopDb } from "../db.js";
 import { createEmbeddingProviderFromEnv } from "../embeddings/index.js";
@@ -7,14 +8,17 @@ import {
   parseAllowedSandboxCommands,
 } from "../memory/sandbox.js";
 import {
+  type RecallStoreAccess,
   type RecallStoreCapabilities,
 } from "../store/recall-access.js";
 import { createLiteRecallStore } from "../store/lite-recall-store.js";
 import { createLiteReplayStore } from "../store/lite-replay-store.js";
 import { createLiteHostStore } from "../store/lite-host-store.js";
 import {
+  type WriteStoreAccess,
   type WriteStoreCapabilities,
 } from "../store/write-access.js";
+import type { ReplayStoreAccess } from "../store/replay-access.js";
 import { createLiteWriteStore } from "../store/lite-write-store.js";
 import { createLiteAutomationStore } from "../store/lite-automation-store.js";
 import { createLiteAutomationRunStore } from "../store/lite-automation-run-store.js";
@@ -163,9 +167,9 @@ export async function createRuntimeServices(env: Env) {
     packs_import: true,
   } as const;
 
-  const recallAccessForClient = (_client: any) => liteRecallAccess;
-  const writeAccessForClient = (_client: any) => liteWriteStore;
-  const replayAccessForClient = (_client: any) => liteReplayAccess;
+  const recallAccessForClient = (_client: pg.PoolClient): RecallStoreAccess | null => liteRecallAccess;
+  const writeAccessForClient = (_client: pg.PoolClient): WriteStoreAccess => liteWriteStore;
+  const replayAccessForClient = (_client: pg.PoolClient): ReplayStoreAccess | null => liteReplayAccess;
   const requireStoreFeatureCapability = (_capability: keyof typeof storeFeatureCapabilities): void => {};
 
   const recallLimiter = env.RATE_LIMIT_ENABLED
