@@ -141,7 +141,7 @@ export function registerMemoryWriteRoutes(args: {
           // Lite write path cannot safely run sync clustering inside the SQLite write transaction.
           prepared.topic_cluster_async = policy.trigger_topic_cluster ? true : policy.topic_cluster_async;
           return commitLitePreparedWriteWithProjection({
-            prepared: prepared as any,
+            prepared,
             liteWriteStore: liteWriteStore!,
             embedder: writeEmbedder,
             governanceReviewProviders: governanceProviders.workflowProjection,
