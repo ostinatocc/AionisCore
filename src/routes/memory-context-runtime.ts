@@ -36,7 +36,9 @@ import {
   type StaticContextBlock,
 } from "../memory/schemas.js";
 import {
+  runRuntimeVerificationSurfaceV1,
   resolveExecutionPacketAssembly,
+  type RuntimeVerificationSurfaceV1,
   type ExecutionPacketAssemblyMode,
   type ExecutionPacketV1,
   type ExecutionStateV1,
@@ -402,6 +404,7 @@ function buildExecutionKernelResponse(
     execution_packet_v1?: ExecutionPacketV1;
     execution_state_v1?: ExecutionStateV1;
   },
+  runtimeVerification?: RuntimeVerificationSurfaceV1 | null,
   plannerSurface?: {
     action_recall_packet?: unknown;
     candidate_workflows?: unknown;
@@ -416,6 +419,7 @@ function buildExecutionKernelResponse(
     state_first_assembly: sourceMode === "state_first",
     execution_packet_v1_present: !!parsed.execution_packet_v1,
     execution_state_v1_present: !!parsed.execution_state_v1,
+    ...(runtimeVerification ? { runtime_verification: runtimeVerification } : {}),
     ...summaryBundle,
   };
 }
@@ -1366,6 +1370,53 @@ export function registerMemoryContextRuntimeRoutes(args: {
           ...(Array.isArray(args.parsed.static_context_blocks) ? args.parsed.static_context_blocks : []),
         ]
       : mergeExecutionPacketStaticBlocks(args.parsed);
+  const resolveContextRuntimeVerification = async (args: {
+    parsed: ParsedPlanningContext | ParsedContextAssemble;
+    executionKernel: ReturnType<typeof resolveExecutionKernelContext>;
+  }): Promise<RuntimeVerificationSurfaceV1 | null> => {
+    if (!args.executionKernel.packet) return null;
+    const control = args.parsed.runtime_verification ?? { version: 1, mode: "plan" as const };
+    return runRuntimeVerificationSurfaceV1(
+      args.executionKernel.packet,
+      {
+        ...control,
+        validation_boundary: "runtime_orchestrator",
+      },
+      {
+        allowExecution: env.APP_ENV !== "prod",
+        executionBlockedReason: "runtime_verifier_execution_blocked_in_prod",
+      },
+    );
+  };
+  const appendRuntimeVerificationEvidence = <
+    TParsed extends ParsedPlanningContext | ParsedContextAssemble,
+  >(args: {
+    parsed: TParsed;
+    runtimeVerification: RuntimeVerificationSurfaceV1 | null;
+    parse: (input: unknown) => TParsed;
+  }): TParsed => {
+    const evidence = args.runtimeVerification?.evidence_for_trust_gate;
+    if (!evidence) return args.parsed;
+    return args.parse({
+      ...args.parsed,
+      execution_evidence: [
+        ...(Array.isArray(args.parsed.execution_evidence) ? args.parsed.execution_evidence : []),
+        evidence,
+      ],
+      execution_result_summary: {
+        ...(args.parsed.execution_result_summary ?? {}),
+        runtime_verification_v1: {
+          surface_version: args.runtimeVerification.surface_version,
+          requested_mode: args.runtimeVerification.requested_mode,
+          execution_state: args.runtimeVerification.execution_state,
+          request_count: args.runtimeVerification.request_count,
+          result_count: args.runtimeVerification.result_count,
+          authoritative_evidence_ready: args.runtimeVerification.summary.authoritative_evidence_ready,
+          reason_codes: args.runtimeVerification.summary.reason_codes,
+        },
+      },
+    });
+  };
   const recordContextAssemblyTelemetrySafe = async (args: {
     req: ContextRuntimeRequest;
     tenantId: string;
@@ -1700,6 +1751,16 @@ export function registerMemoryContextRuntimeRoutes(args: {
       defaultScope: env.MEMORY_SCOPE,
       defaultTenantId: env.MEMORY_TENANT_ID,
     }).parsed;
+    const executionKernel = resolveExecutionKernelContext(parsed);
+    const runtimeVerification = await resolveContextRuntimeVerification({
+      parsed,
+      executionKernel,
+    });
+    parsed = appendRuntimeVerificationEvidence({
+      parsed,
+      runtimeVerification,
+      parse: PlanningContextRequest.parse,
+    });
     const planningExecutionContext = buildExecutionContinuityContext(parsed);
 
     let out: PlanningContextRouteOutput;
@@ -1781,8 +1842,6 @@ export function registerMemoryContextRuntimeRoutes(args: {
     });
     const contextChars = diagnostics.contextChars;
     const contextEstTokens = diagnostics.contextEstTokens;
-
-    const executionKernel = resolveExecutionKernelContext(parsed);
 
     req.log.info(
       {
@@ -1902,7 +1961,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     return reply.code(200).send({
       tenant_id: tenantIdOut,
       scope: recallOut.scope,
-      execution_kernel: buildExecutionKernelResponse(executionKernel.source_mode, parsed, plannerSurface),
+      execution_kernel: buildExecutionKernelResponse(executionKernel.source_mode, parsed, runtimeVerification, plannerSurface),
       query: { text: q, embedding_provider: surfaceEmbedder.name },
       recall: {
         ...recallOut,
@@ -1992,6 +2051,16 @@ export function registerMemoryContextRuntimeRoutes(args: {
       defaultScope: env.MEMORY_SCOPE,
       defaultTenantId: env.MEMORY_TENANT_ID,
     }).parsed;
+    const executionKernel = resolveExecutionKernelContext(parsed);
+    const runtimeVerification = await resolveContextRuntimeVerification({
+      parsed,
+      executionKernel,
+    });
+    parsed = appendRuntimeVerificationEvidence({
+      parsed,
+      runtimeVerification,
+      parse: ContextAssembleRequest.parse,
+    });
     const executionContext = buildExecutionContinuityContext(parsed);
 
     let out: ContextAssembleRouteOutput;
@@ -2077,7 +2146,6 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const contextChars = diagnostics.contextChars;
     const contextEstTokens = diagnostics.contextEstTokens;
 
-    const executionKernel = resolveExecutionKernelContext(parsed);
     const effectiveStaticBlocks = buildEffectiveStaticBlocks({
       parsed,
       executionKernel,
@@ -2198,7 +2266,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     return reply.code(200).send({
       tenant_id: tenantIdOut,
       scope: recallOut.scope,
-      execution_kernel: buildExecutionKernelResponse(executionKernel.source_mode, parsed, plannerSurface),
+      execution_kernel: buildExecutionKernelResponse(executionKernel.source_mode, parsed, runtimeVerification, plannerSurface),
       query: { text: q, embedding_provider: surfaceEmbedder.name },
       recall: {
         ...recallOut,

@@ -9,6 +9,10 @@ import {
   ExecutionStateV1Schema,
 } from "../execution/types.js";
 import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
+import {
+  RuntimeVerificationControlV1Schema,
+  RuntimeVerificationSurfaceV1Schema,
+} from "../execution/verification.js";
 import { ContractTrustSchema, OutcomeContractGateSchema } from "./contract-trust.js";
 import { ExecutionContractV1Schema } from "./execution-contract.js";
 
@@ -870,6 +874,7 @@ export const PlanningContextRequest = z.object({
   execution_evidence: z.array(z.record(z.unknown())).optional(),
   execution_state_v1: ExecutionStateV1Schema.optional(),
   execution_packet_v1: ExecutionPacketV1Schema.optional(),
+  runtime_verification: RuntimeVerificationControlV1Schema.optional(),
   trajectory: TrajectoryCompileSourceSchema.optional(),
   trajectory_hints: TrajectoryCompileHintsSchema.optional(),
 });
@@ -919,6 +924,7 @@ export const ContextAssembleRequest = z.object({
   execution_evidence: z.array(z.record(z.unknown())).optional(),
   execution_state_v1: ExecutionStateV1Schema.optional(),
   execution_packet_v1: ExecutionPacketV1Schema.optional(),
+  runtime_verification: RuntimeVerificationControlV1Schema.optional(),
   trajectory: TrajectoryCompileSourceSchema.optional(),
   trajectory_hints: TrajectoryCompileHintsSchema.optional(),
 });
@@ -1823,6 +1829,7 @@ export const ExecutionKernelPacketSummarySchema = z.object({
   state_first_assembly: z.boolean(),
   execution_packet_v1_present: z.boolean(),
   execution_state_v1_present: z.boolean(),
+  runtime_verification: RuntimeVerificationSurfaceV1Schema.optional(),
   pattern_signal_summary: PatternSignalSummarySchema,
   workflow_signal_summary: WorkflowSignalSummarySchema,
   workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,

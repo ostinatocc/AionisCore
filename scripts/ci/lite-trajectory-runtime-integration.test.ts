@@ -186,6 +186,46 @@ function packagePublishTrajectory() {
   };
 }
 
+function runtimeVerifierCommand() {
+  return `${JSON.stringify(process.execPath)} -e "process.stdout.write('ok')"`;
+}
+
+function runtimeVerifierExecutionPacket(command = runtimeVerifierCommand()) {
+  return {
+    version: 1,
+    state_id: "runtime-verifier-packet-1",
+    current_stage: "review",
+    active_role: "review",
+    task_brief: "Verify the detached service outcome from the runtime parent",
+    target_files: ["scripts/status-server.mjs"],
+    next_action: "Run the parent runtime verifier from a fresh shell after the agent exits.",
+    hard_constraints: ["do not trust agent self-verification for after-exit service proof"],
+    accepted_facts: [],
+    rejected_paths: [],
+    pending_validations: [command],
+    unresolved_blockers: [],
+    rollback_notes: [],
+    service_lifecycle_constraints: [
+      {
+        version: 1,
+        service_kind: "process",
+        label: "status-service-parent-proof",
+        launch_reference: "launchctl bootstrap gui/501 /tmp/com.aionis.status.plist",
+        endpoint: null,
+        must_survive_agent_exit: true,
+        revalidate_from_fresh_shell: true,
+        detach_then_probe: true,
+        health_checks: [command],
+        teardown_notes: [],
+      },
+    ],
+    review_contract: null,
+    resume_anchor: null,
+    artifact_refs: [],
+    evidence_refs: ["agent:return:claimed_success"],
+  };
+}
+
 test("trajectory-aware augmentation upgrades thin placeholders and refreshes stale compile summary", () => {
   const parsed = PlanningContextRequest.parse({
     tenant_id: "default",
@@ -348,6 +388,130 @@ test("planning/context compiles trajectory into execution kernel inputs", async 
     assert.ok(body.execution_summary.collaboration_summary.target_file_count >= 2);
     assert.ok(body.execution_summary.collaboration_summary.acceptance_check_count >= 2);
     assert.equal(body.execution_summary.collaboration_summary.resume_anchor_present, true);
+  } finally {
+    await app.close();
+  }
+});
+
+test("planning/context plans runtime verifier requests from execution packet without self-verification evidence", async () => {
+  const app = await buildApp();
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "Verify the detached service from the runtime parent after the agent exits.",
+        context: {},
+        tool_candidates: ["bash", "test"],
+        execution_packet_v1: runtimeVerifierExecutionPacket(),
+        runtime_verification: {
+          mode: "plan",
+          agent_lifecycle_state: "agent_exited",
+        },
+      },
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    const body = PlanningContextRouteContractSchema.parse(JSON.parse(response.body));
+    const runtimeVerification = body.execution_kernel.runtime_verification;
+    assert.ok(runtimeVerification);
+    assert.equal(runtimeVerification.requested_mode, "plan");
+    assert.equal(runtimeVerification.execution_state, "planned");
+    assert.equal(runtimeVerification.request_count, 1);
+    assert.equal(runtimeVerification.result_count, 0);
+    assert.equal(runtimeVerification.evidence_for_trust_gate, null);
+    assert.equal(runtimeVerification.summary.authoritative_evidence_ready, false);
+    assert.ok(runtimeVerification.summary.reason_codes.includes("planned_not_executed"));
+    assert.equal(runtimeVerification.requests[0]?.after_agent_exit, true);
+    assert.equal(runtimeVerification.requests[0]?.fresh_shell, true);
+    assert.equal(runtimeVerification.requests[0]?.validation_boundary, "runtime_orchestrator");
+  } finally {
+    await app.close();
+  }
+});
+
+test("planning/context blocks after-exit runtime verifier execution until agent exit is confirmed", async () => {
+  const app = await buildApp();
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "Verify the detached service from the runtime parent after the agent exits.",
+        context: {},
+        tool_candidates: ["bash", "test"],
+        execution_packet_v1: runtimeVerifierExecutionPacket(),
+        runtime_verification: {
+          mode: "execute",
+          agent_lifecycle_state: "agent_running",
+          agent_claimed_success: true,
+          timeout_ms: 10_000,
+        },
+      },
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    const body = PlanningContextRouteContractSchema.parse(JSON.parse(response.body));
+    const runtimeVerification = body.execution_kernel.runtime_verification;
+    assert.ok(runtimeVerification);
+    assert.equal(runtimeVerification.execution_state, "blocked");
+    assert.equal(runtimeVerification.request_count, 1);
+    assert.equal(runtimeVerification.executable_request_count, 0);
+    assert.equal(runtimeVerification.blocked_request_count, 1);
+    assert.equal(runtimeVerification.result_count, 0);
+    assert.equal(runtimeVerification.evidence_for_trust_gate, null);
+    assert.equal(runtimeVerification.blocked_requests[0]?.reason, "agent_exit_not_confirmed");
+    assert.ok(runtimeVerification.summary.reason_codes.includes("agent_exit_not_confirmed"));
+  } finally {
+    await app.close();
+  }
+});
+
+test("planning/context executes runtime verifier after confirmed agent exit and feeds evidence to execution side outputs", async () => {
+  const app = await buildApp();
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "Verify the detached service from the runtime parent after the agent exits.",
+        context: {},
+        tool_candidates: ["bash", "test"],
+        execution_packet_v1: runtimeVerifierExecutionPacket(),
+        runtime_verification: {
+          mode: "execute",
+          agent_lifecycle_state: "agent_exited",
+          agent_claimed_success: true,
+          timeout_ms: 10_000,
+        },
+      },
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    const body = PlanningContextRouteContractSchema.parse(JSON.parse(response.body));
+    const runtimeVerification = body.execution_kernel.runtime_verification;
+    assert.ok(runtimeVerification);
+    assert.equal(runtimeVerification.execution_state, "executed");
+    assert.equal(runtimeVerification.request_count, 1);
+    assert.equal(runtimeVerification.executable_request_count, 1);
+    assert.equal(runtimeVerification.blocked_request_count, 0);
+    assert.equal(runtimeVerification.result_count, 1);
+    assert.equal(runtimeVerification.results[0]?.command_result.stdout_tail, "ok");
+    assert.equal(runtimeVerification.evidence_for_trust_gate?.validation_boundary, "runtime_orchestrator");
+    assert.equal(runtimeVerification.evidence_for_trust_gate?.validation_passed, true);
+    assert.equal(runtimeVerification.evidence_for_trust_gate?.after_exit_revalidated, true);
+    assert.equal(runtimeVerification.evidence_for_trust_gate?.fresh_shell_probe_passed, true);
+    assert.equal(runtimeVerification.evidence_for_trust_gate?.false_confidence_detected, false);
+    assert.equal(runtimeVerification.summary.authoritative_evidence_ready, true);
+    assert.ok(runtimeVerification.summary.reason_codes.includes("after_exit_revalidated"));
+    assert.ok(runtimeVerification.summary.reason_codes.includes("fresh_shell_probe_passed"));
+    assert.equal(body.execution_summary.collaboration_summary.side_output_evidence_count, 1);
   } finally {
     await app.close();
   }
