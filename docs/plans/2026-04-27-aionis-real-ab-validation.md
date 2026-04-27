@@ -1,5 +1,8 @@
 # Aionis Real A/B Validation Implementation Plan
 
+Document status: Approved working plan
+Date: 2026-04-27
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Build a falsifiable real-task A/B validation harness that can measure whether Aionis execution memory improves agent outcomes without changing the model, tools, verifier, or environment.
