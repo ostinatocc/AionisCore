@@ -69,9 +69,9 @@ Aionis Runtime is ready to evaluate today through:
 
 The current release path is backed by:
 
-1. `npm run -s sdk:test` is passing
-2. `npm run -s lite:test` is passing at `207/207`
-3. the docs site remains part of the baseline and should keep `docs:check` green
+1. `npm run -s sdk:test` is passing at `20/20`
+2. `npm run -s lite:test` is passing at `319/319`
+3. `npm run -s docs:check` keeps the public docs route and reference baseline green
 
 ## Runtime snapshot
 

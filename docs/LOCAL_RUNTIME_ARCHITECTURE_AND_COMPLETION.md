@@ -8,7 +8,7 @@ This document is the canonical architecture reference for the current Lite local
 
 It describes the runtime as it exists in the source tree today. It does not try to preserve older completion tracking language or historical codebase metrics.
 
-For the public summary of what ships today, see [../apps/docs/docs/evidence/stable-baseline.md](../apps/docs/docs/evidence/stable-baseline.md).
+For the public summary of what ships today, see [../apps/docs/docs/evidence/what-ships-today.md](../apps/docs/docs/evidence/what-ships-today.md).
 
 For endpoint-by-endpoint public surface details, see [LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md](LOCAL_RUNTIME_API_CAPABILITY_MATRIX.md).
 

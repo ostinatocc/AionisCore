@@ -21,7 +21,7 @@
     "docs:dev": "npm run docs:start",
     "docs:build": "vitepress build apps/docs",
     "docs:sync:core-path": "node scripts/sync-core-path.mjs",
-    "docs:check": "node scripts/sync-core-path.mjs --check && node scripts/ci/docs-reference-check.mjs && npm run -s docs:build",
+    "docs:check": "node scripts/sync-core-path.mjs --check && node scripts/ci/docs-reference-check.mjs && npm run -s docs:build && node scripts/ci/docs-site-route-check.mjs",
     "docs:serve": "vitepress preview apps/docs --host 0.0.0.0",
     "docs:preview": "npm run docs:serve",
     "core:build:runtime-host": "test -f src/runtime-entry.ts",

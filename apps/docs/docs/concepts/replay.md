@@ -50,4 +50,4 @@ successful execution -> replay run -> playbook -> stable workflow anchor -> bett
 
 - [Replay and Playbooks reference](../reference/replay-and-playbooks.md)
 - [Replay to Playbook guide](../guides/replay-to-playbook.md)
-- [Validation and Benchmarks](../evidence/validation-and-benchmarks.md)
+- [Validation and Evidence](../evidence/validation-and-benchmarks.md)

@@ -166,15 +166,15 @@ flowchart TD
 
 The architectural point is simple: continuity, self-evolution, forgetting, and governance all live on explicit runtime seams instead of being hidden inside a single opaque system.
 
-## Benchmarks And Validation
+## Evidence And Validation
 
 The current public validation signals include:
 
 | Metric | Current result | Entry point |
 | --- | --- | --- |
 | Runnable self-evolving proofs | `6` | [Proof By Evidence](apps/docs/docs/evidence/proof-by-evidence.md) |
-| Real-provider A/B snapshot | `31 / 31` vs thin · `25 / 25` vs chat · `25 / 25` vs vector | [Validation and Benchmarks](apps/docs/docs/evidence/validation-and-benchmarks.md) |
-| Strict replay reuse | `3 / 3`, `0` replay tokens | [Validation and Benchmarks](apps/docs/docs/evidence/validation-and-benchmarks.md) |
+| Real-provider A/B snapshot | `31 / 31` vs thin · `25 / 25` vs chat · `25 / 25` vs vector | [Validation and Evidence](apps/docs/docs/evidence/validation-and-benchmarks.md) |
+| Strict replay reuse | `3 / 3`, `0` replay tokens | [Validation and Evidence](apps/docs/docs/evidence/validation-and-benchmarks.md) |
 | Lite runtime test suite | `319 / 319` | `npm run -s lite:test` |
 | Public SDK test suite | `20 / 20` | `npm run -s sdk:test` |
 

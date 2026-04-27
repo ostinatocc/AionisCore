@@ -43,8 +43,8 @@ features:
 <div class="trust-strip" aria-label="Project status">
   <span>Lite Developer Preview v0.4.0</span>
   <span>SDK v0.4.0</span>
-  <span>Apache-2.0 licensed</span>
-  <span>15 / 15 benchmark scenarios</span>
+  <span>Runtime package v0.2.0</span>
+  <span>319 / 319 Lite tests</span>
 </div>
 
 ## Positioning
@@ -272,13 +272,14 @@ flowchart TD
   <p>Continuity, self-evolution, forgetting, and governance all live on explicit runtime seams. The SDK, routes, stores, sandbox, and automation path are visible and inspectable by design.</p>
 </div>
 
-## Benchmarks And Validation
+## Evidence And Validation
 
 | Metric | Current result | Entry point |
 | --- | --- | --- |
+| Release line | `Lite Developer Preview v0.4.0` | [What Ships Today](/docs/evidence/what-ships-today) |
 | Runnable self-evolving proofs | `6` | [Proof By Evidence](/docs/evidence/proof-by-evidence) |
-| Real-provider A/B snapshot | `31 / 31` vs thin · `25 / 25` vs chat · `25 / 25` vs vector | [Validation and Benchmarks](/docs/evidence/validation-and-benchmarks) |
-| Strict replay reuse | `3 / 3`, `0` replay tokens | [Validation and Benchmarks](/docs/evidence/validation-and-benchmarks) |
+| Real-provider A/B snapshot | `31 / 31` vs thin · `25 / 25` vs chat · `25 / 25` vs vector | [Validation and Evidence](/docs/evidence/validation-and-benchmarks) |
+| Strict replay reuse | `3 / 3`, `0` replay tokens | [Validation and Evidence](/docs/evidence/validation-and-benchmarks) |
 | Lite runtime test suite | `319 / 319` | `npm run -s lite:test` |
 | Public SDK test suite | `20 / 20` | `npm run -s sdk:test` |
 
@@ -289,9 +290,9 @@ flowchart TD
     <p>Task start improvement, policy memory, governance, provenance, session continuity, and semantic forgetting are all defended by runnable Lite evidence.</p>
   </div>
   <div class="home-proof-card">
-    <span class="home-proof-label">Benchmarks</span>
+    <span class="home-proof-label">Validation</span>
     <span class="home-proof-value">31/31 · 25/25 · 25/25</span>
-    <p>Real-provider A/B coverage now spans repeated starts, forgetting, replay, multi-cycle refinement, and production simulation.</p>
+    <p>Real-provider A/B coverage remains one evidence input across repeated starts, forgetting, replay, multi-cycle refinement, and production simulation.</p>
   </div>
   <div class="home-proof-card">
     <span class="home-proof-label">SDK tests</span>

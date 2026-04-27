@@ -39,6 +39,6 @@ The agent returns:
 The benchmark report is the best proof source for this flow:
 
 - [Memory reference](../reference/memory.md)
-- [Validation and Benchmarks](../evidence/validation-and-benchmarks.md)
+- [Validation and Evidence](../evidence/validation-and-benchmarks.md)
 
 That report already calls out kickoff hit rate, path hit rate, stale-memory interference rate, and repeated-task cost reduction.
