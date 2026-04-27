@@ -1,5 +1,6 @@
 import type pg from "pg";
 import { assertEmbeddingSurfaceForbidden } from "../embeddings/surface-policy.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { memoryFind, memoryFindLite } from "./find.js";
 import { memoryResolve, memoryResolveLite } from "./resolve.js";
 import {
@@ -40,11 +41,6 @@ import {
   type ExecutionContractV1,
 } from "./execution-contract.js";
 import { HttpError } from "../util/http.js";
-
-type LiteWriteStoreLike = {
-  findNodes: (...args: any[]) => Promise<any>;
-  resolveNode: (...args: any[]) => Promise<any>;
-};
 
 type HandoffNode = {
   id: string;
@@ -937,7 +933,7 @@ function pickLatestHandoffCandidate(nodes: unknown[]): HandoffFindCandidate | nu
 
 export async function recoverHandoff(args: {
   client?: pg.PoolClient;
-  liteWriteStore?: LiteWriteStoreLike | null;
+  liteWriteStore?: LiteWriteStore | null;
   executionStateStore?: InMemoryExecutionStateStore | null;
   input: unknown;
   defaultScope: string;
@@ -987,7 +983,7 @@ export async function recoverHandoff(args: {
     };
 
     const findResult = args.liteWriteStore
-      ? await memoryFindLite(args.liteWriteStore as any, findInput, args.defaultScope, args.defaultTenantId)
+      ? await memoryFindLite(args.liteWriteStore, findInput, args.defaultScope, args.defaultTenantId)
       : await memoryFind(args.client!, findInput, args.defaultScope, args.defaultTenantId);
 
     const matchedNodeList = Array.isArray(findResult.nodes) ? findResult.nodes : [];
@@ -1026,7 +1022,7 @@ export async function recoverHandoff(args: {
   };
 
   const resolved = args.liteWriteStore
-    ? await memoryResolveLite(args.liteWriteStore as any, resolveInput, args.defaultScope, args.defaultTenantId)
+    ? await memoryResolveLite(args.liteWriteStore, resolveInput, args.defaultScope, args.defaultTenantId)
     : await memoryResolve(args.client!, resolveInput, args.defaultScope, args.defaultTenantId);
 
   if (!resolved || typeof resolved !== "object" || !("node" in resolved) || !resolved.node) {
