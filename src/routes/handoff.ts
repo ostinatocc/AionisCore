@@ -111,18 +111,18 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
   const runCommittedHandoffWrite = async (prepared: PreparedHandoffWrite): Promise<HandoffWriteResult> =>
     (
       await commitLitePreparedWriteWithProjection({
-      prepared: prepared as any,
-      liteWriteStore,
-      embedder: writeEmbedder,
-      governanceReviewProviders: governanceProviders.workflowProjection,
-      writeOptions: {
-        maxTextLen: env.MAX_TEXT_LEN,
-        piiRedaction: env.PII_REDACTION,
-        allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
-        shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
-        shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
-        associativeLinkOrigin: "handoff_store",
-      },
+        prepared,
+        liteWriteStore,
+        embedder: writeEmbedder,
+        governanceReviewProviders: governanceProviders.workflowProjection,
+        writeOptions: {
+          maxTextLen: env.MAX_TEXT_LEN,
+          piiRedaction: env.PII_REDACTION,
+          allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+          shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+          shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+          associativeLinkOrigin: "handoff_store",
+        },
       })
     ).out;
   const applyHandoffExecutionTransitions = (args: {

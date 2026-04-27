@@ -415,3 +415,17 @@ test("runtime services expose typed access factories", () => {
     "runtime-services must not widen service access factories through bare any.",
   );
 });
+
+test("route write projection paths keep prepared writes typed", () => {
+  for (const file of [
+    "src/routes/handoff.ts",
+    "src/routes/memory-write.ts",
+    "src/routes/lite-projected-write.ts",
+  ]) {
+    assert.equal(
+      /\bas\s+any\b/.test(read(file)),
+      false,
+      `${file} must keep Lite write projection boundaries typed without untyped casts.`,
+    );
+  }
+});

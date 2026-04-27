@@ -1,37 +1,17 @@
 import type pg from "pg";
 import type { EmbeddingProvider } from "../embeddings/types.js";
-import { applyMemoryWrite } from "../memory/write.js";
+import type { AssociativeLinkTriggerOrigin } from "../memory/associative-linking-types.js";
+import { applyMemoryWrite, type PreparedWrite } from "../memory/write.js";
+import type { WriteStoreAccess } from "../store/write-access.js";
 import { completeLiteInlineEmbeddings, type LiteInlineEmbeddingStore } from "./lite-inline-embedding.js";
 import { appendLiteWorkflowProjection, type LiteWorkflowProjectionStore } from "./lite-workflow-projection.js";
 
-type PreparedProjectionNode = {
-  id: string;
-  client_id?: string;
-  scope: string;
-  type: string;
-  memory_lane: "private" | "shared";
-  producer_agent_id?: string;
-  owner_agent_id?: string;
-  owner_team_id?: string;
-  title?: string;
-  text_summary?: string;
-  slots: Record<string, unknown>;
-  embed_text?: string;
-};
-
-type PreparedProjectionWrite = {
-  scope: string;
-  auto_embed_effective?: boolean;
-  nodes: PreparedProjectionNode[];
-  edges: Array<Record<string, unknown>>;
-};
-
-export type LiteProjectedWriteStore = LiteWorkflowProjectionStore & LiteInlineEmbeddingStore & {
+export type LiteProjectedWriteStore = WriteStoreAccess & LiteWorkflowProjectionStore & LiteInlineEmbeddingStore & {
   withTx: <T>(fn: () => Promise<T>) => Promise<T>;
 };
 
 export async function commitLitePreparedWriteWithProjection(args: {
-  prepared: PreparedProjectionWrite;
+  prepared: PreparedWrite;
   liteWriteStore: LiteProjectedWriteStore;
   embedder: EmbeddingProvider | null;
   governanceReviewProviders?: Parameters<typeof appendLiteWorkflowProjection>[0]["governanceReviewProviders"];
@@ -41,7 +21,7 @@ export async function commitLitePreparedWriteWithProjection(args: {
     allowCrossScopeEdges: boolean;
     shadowDualWriteEnabled: boolean;
     shadowDualWriteStrict: boolean;
-    associativeLinkOrigin?: string;
+    associativeLinkOrigin?: AssociativeLinkTriggerOrigin;
   };
 }) {
   await appendLiteWorkflowProjection({
@@ -50,15 +30,15 @@ export async function commitLitePreparedWriteWithProjection(args: {
     governanceReviewProviders: args.governanceReviewProviders,
   });
   const out = await args.liteWriteStore.withTx(() =>
-    applyMemoryWrite({} as pg.PoolClient, args.prepared as any, {
+    applyMemoryWrite({} as pg.PoolClient, args.prepared, {
       maxTextLen: args.writeOptions.maxTextLen,
       piiRedaction: args.writeOptions.piiRedaction,
       allowCrossScopeEdges: args.writeOptions.allowCrossScopeEdges,
       shadowDualWriteEnabled: args.writeOptions.shadowDualWriteEnabled,
       shadowDualWriteStrict: args.writeOptions.shadowDualWriteStrict,
-      write_access: args.liteWriteStore as any,
+      write_access: args.liteWriteStore,
       ...(args.writeOptions.associativeLinkOrigin
-        ? { associativeLinkOrigin: args.writeOptions.associativeLinkOrigin as any }
+        ? { associativeLinkOrigin: args.writeOptions.associativeLinkOrigin }
         : {}),
     }),
   );
