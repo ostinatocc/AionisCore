@@ -5,6 +5,19 @@ export const RUNTIME_LEGACY_EXECUTION_SLOT_NAMES = [
   "parseNodeAnchor",
 ] as const;
 
+export const RUNTIME_EXECUTION_STATE_SLOT_NAMES = [
+  "execution_result_summary",
+  "execution_artifacts",
+  "execution_evidence",
+  "delegation_records_v1",
+  "execution_contract_v1",
+  "execution_state_v1",
+  "execution_packet_v1",
+  "control_profile_v1",
+  "execution_transition_v1",
+  "execution_transitions_v1",
+] as const;
+
 export type RuntimeLegacyAccessBoundaryKind =
   | "manifest"
   | "schema"
@@ -44,6 +57,12 @@ export const RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY = [
     file: "src/memory/node-execution-surface.ts",
     kind: "contract_resolver",
     reason: "central resolver surface for legacy execution slots",
+  },
+  {
+    id: "execution_slot_surface",
+    file: "src/memory/execution-slot-surface.ts",
+    kind: "contract_resolver",
+    reason: "central resolver surface for execution state, packet, transition, and continuity slots",
   },
   {
     id: "policy_memory_writer",
