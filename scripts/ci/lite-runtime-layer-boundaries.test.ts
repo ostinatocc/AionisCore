@@ -496,3 +496,26 @@ test("handoff recovery keeps Lite read access typed", () => {
     assert.equal(text.includes(token), false, `handoff recovery must not widen Lite read access through ${token}`);
   }
 });
+
+test("route layer uses concrete Lite write store access contracts", () => {
+  for (const file of [
+    "src/routes/handoff.ts",
+    "src/routes/memory-write.ts",
+    "src/routes/memory-replay-core.ts",
+    "src/routes/memory-replay-governed.ts",
+  ]) {
+    const text = read(file);
+    assertContains(
+      text,
+      'import type { LiteWriteStore } from "../store/lite-write-store.js";',
+      `${file} must depend on the concrete Lite write store contract`,
+    );
+    for (const token of [
+      "type LiteWriteStoreLike",
+      "liteWriteStore?: LiteWriteStoreLike",
+      "liteWriteStore: LiteWriteStoreLike",
+    ]) {
+      assert.equal(text.includes(token), false, `${file} must not widen Lite write access through ${token}`);
+    }
+  }
+});

@@ -12,7 +12,8 @@ import type { TopicClusterParams, TopicClusterResult } from "../jobs/topicCluste
 import { mirrorPreparedWriteToEmbeddedRuntime, type EmbeddedWriteMirrorRuntime } from "../memory/embedded-write-bridge.js";
 import { collectExecutionWriteOverlaySlots } from "../memory/execution-slot-surface.js";
 import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } from "../memory/write.js";
-import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "../memory/lite-projected-write-commit.js";
+import { commitLitePreparedWriteWithProjection } from "../memory/lite-projected-write-commit.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 import type { WriteStoreAccess } from "../store/write-access.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import { HttpError } from "../util/http.js";
@@ -21,23 +22,6 @@ import type { InflightGateToken } from "../util/inflight_gate.js";
 type StoreLike = {
   withTx: <T>(fn: (client: pg.PoolClient) => Promise<T>) => Promise<T>;
 };
-
-type LiteWriteStoreLike = WriteStoreAccess & {
-  withTx: <T>(fn: () => Promise<T>) => Promise<T>;
-  setNodeEmbeddingReady: (args: {
-    scope: string;
-    id: string;
-    embedding: number[];
-    embeddingModel: string;
-  }) => Promise<void>;
-  setNodeEmbeddingFailed: (args: {
-    scope: string;
-    id: string;
-    error: string;
-  }) => Promise<void>;
-  close?: () => Promise<void>;
-  healthSnapshot?: () => unknown;
-} & LiteProjectedWriteStore;
 
 type MemoryWriteRequest = FastifyRequest<{ Body: unknown }>;
 
@@ -74,7 +58,7 @@ export function registerMemoryWriteRoutes(args: {
   embedder: EmbeddingProvider | null;
   embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
   embeddedRuntime: EmbeddedWriteMirrorRuntime | null;
-  liteWriteStore?: LiteWriteStoreLike | null;
+  liteWriteStore?: LiteWriteStore | null;
   writeAccessForClient: (client: pg.PoolClient) => WriteStoreAccess;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
