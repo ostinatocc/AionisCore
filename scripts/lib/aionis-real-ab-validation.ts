@@ -122,7 +122,7 @@ export type RealAbTaskSpec = {
     success_invariants: string[];
     acceptance_checks?: string[];
   };
-  arms: Record<RealAbArm, RealAbResolvedArmObservation>;
+  arms: Record<RealAbArm, RealAbArmObservation>;
 };
 
 export type RealAbSuiteInput = {
@@ -166,7 +166,7 @@ export type RealAbTaskResult = {
     tokens_to_success_delta: number | null;
   };
   gate_requirements: RealAbGateRequirement[];
-  arms: Record<RealAbArm, RealAbArmObservation>;
+  arms: Record<RealAbArm, RealAbResolvedArmObservation>;
 };
 
 export type RealAbReport = {
@@ -505,7 +505,106 @@ function validateArmMeasurements(task: RealAbTaskSpec): RealAbGateRequirement[] 
   });
 }
 
-function buildTaskResult(task: RealAbTaskSpec): RealAbTaskResult {
+function verifierEvents(trace: RealAbRunTrace): RealAbTraceEvent[] {
+  return trace.events.filter((event) =>
+    event.kind === "verification" || event.kind === "external_probe" || event.verifier === true
+  );
+}
+
+function eventMatchesVerifierCommand(event: RealAbTraceEvent, verifier: RealAbVerifierSpec): boolean {
+  return !verifier.command || event.command === verifier.command;
+}
+
+function validateLiveTraceEvidence(task: RealAbTaskSpec, suiteKind: RealAbSuiteKind): RealAbGateRequirement[] {
+  if (suiteKind === "harness_calibration") {
+    return [];
+  }
+
+  return realAbRequiredArms.flatMap((arm) => {
+    const observation = task.arms?.[arm];
+    const trace = observation?.trace;
+    const hasTrace = trace?.trace_version === "aionis_agent_run_trace_v1";
+    const taskVerifierEvents = trace ? verifierEvents(trace) : [];
+    const hasVerifier = taskVerifierEvents.length > 0;
+    const hasExternalProbe = trace?.events.some((event) =>
+      eventMatchesVerifierCommand(event, task.verifier)
+      && (event.kind === "external_probe" || event.verifier === true)
+    ) ?? false;
+    const hasAfterExitVerifier = taskVerifierEvents.some((event) => event.after_exit === true);
+    const hasFreshShellVerifier = taskVerifierEvents.some((event) => event.fresh_shell === true);
+
+    const requirements: RealAbGateRequirement[] = [
+      requirement({
+        id: `${task.id}:trace_evidence:${arm}:live_trace`,
+        scope: "task",
+        ok: hasTrace,
+        actual: trace?.trace_version ?? (observation?.metrics ? "metrics_only" : null),
+        expected: "aionis_agent_run_trace_v1",
+        message: "pilot/product evidence must use auditable run traces instead of direct metrics",
+      }),
+      requirement({
+        id: `${task.id}:trace_evidence:${arm}:run_id`,
+        scope: "task",
+        ok: typeof trace?.run_id === "string" && trace.run_id.length > 0,
+        actual: trace?.run_id ?? null,
+        expected: "non_empty_run_id",
+        message: "live trace evidence must include a stable run id",
+      }),
+      requirement({
+        id: `${task.id}:trace_evidence:${arm}:events`,
+        scope: "task",
+        ok: Array.isArray(trace?.events) && trace.events.length > 0,
+        actual: trace?.events.length ?? 0,
+        expected: "events_present",
+        message: "live trace evidence must include execution events",
+      }),
+      requirement({
+        id: `${task.id}:trace_evidence:${arm}:verifier`,
+        scope: "task",
+        ok: hasVerifier,
+        actual: hasVerifier,
+        expected: true,
+        message: "live trace evidence must include verifier or external probe events",
+      }),
+    ];
+
+    if (task.verifier.kind === "external_probe" || task.verifier.external_visibility_required) {
+      requirements.push(requirement({
+        id: `${task.id}:trace_evidence:${arm}:external_probe`,
+        scope: "task",
+        ok: hasExternalProbe,
+        actual: hasExternalProbe,
+        expected: true,
+        message: "external-visibility tasks require an external probe event",
+      }));
+    }
+
+    if (task.verifier.after_exit_required) {
+      requirements.push(
+        requirement({
+          id: `${task.id}:trace_evidence:${arm}:after_exit_probe`,
+          scope: "task",
+          ok: hasAfterExitVerifier,
+          actual: hasAfterExitVerifier,
+          expected: true,
+          message: "after-exit tasks require an after-exit verifier event",
+        }),
+        requirement({
+          id: `${task.id}:trace_evidence:${arm}:fresh_shell_probe`,
+          scope: "task",
+          ok: hasFreshShellVerifier,
+          actual: hasFreshShellVerifier,
+          expected: true,
+          message: "after-exit tasks require revalidation from a fresh shell",
+        }),
+      );
+    }
+
+    return requirements;
+  });
+}
+
+function buildTaskResult(task: RealAbTaskSpec, suiteKind: RealAbSuiteKind): RealAbTaskResult {
   const arms = resolveTaskArms(task);
   const baseline = arms.baseline.metrics;
   const treatment = arms.aionis_assisted.metrics;
@@ -528,6 +627,7 @@ function buildTaskResult(task: RealAbTaskSpec): RealAbTaskResult {
     ...validateArmMeasurements(task),
     ...validateFairness(task),
     ...validateArmSemantics(task),
+    ...validateLiveTraceEvidence(task, suiteKind),
     requirement({
       id: `${task.id}:completion_not_worse`,
       scope: "task",
@@ -621,7 +721,7 @@ function proofBoundaryFor(suiteKind: RealAbSuiteKind): RealAbReport["proof_bound
 
 export function runRealAbValidationSuite(input: RealAbSuiteInput): RealAbReport {
   const thresholds = { ...defaultThresholds, ...(input.thresholds ?? {}) };
-  const tasks = input.tasks.map(buildTaskResult);
+  const tasks = input.tasks.map((task) => buildTaskResult(task, input.suite_kind));
   const baselineMetrics = tasks.map((task) => task.arms.baseline.metrics);
   const treatmentMetrics = tasks.map((task) => task.arms.aionis_assisted.metrics);
   const negativeArms = tasks.map((task) => task.arms.negative_control);

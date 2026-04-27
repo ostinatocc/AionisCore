@@ -1,0 +1,275 @@
+{
+  "capture_version": "aionis_real_ab_trace_capture_v1",
+  "suite_id": "aionis_real_ab_trace_capture_fixture_v1",
+  "suite_kind": "pilot_real_trace",
+  "generated_at": "2026-04-27T00:00:00.000Z",
+  "tasks": [
+    {
+      "id": "capture_coding_resume",
+      "title": "Captured coding resume comparison",
+      "task_family": "coding_continuity",
+      "task_prompt": "Resume an interrupted exporter fix from captured execution events.",
+      "fairness": {
+        "same_model": true,
+        "same_time_budget": true,
+        "same_tool_permissions": true,
+        "same_environment_reset": true,
+        "same_verifier": true
+      },
+      "verifier": {
+        "kind": "command",
+        "command": "npm test -- tests/exporter.test.mjs",
+        "after_exit_required": false,
+        "external_visibility_required": false
+      },
+      "expected_outcome": {
+        "target_files": ["src/exporter.ts", "tests/exporter.test.mjs"],
+        "success_invariants": ["exporter_regression_test_passes"],
+        "acceptance_checks": ["npm test -- tests/exporter.test.mjs"]
+      },
+      "runs": {
+        "baseline": {
+          "run_id": "capture-baseline-exporter",
+          "memory_mode": "none",
+          "authority_level": "none",
+          "packet_source": "none",
+          "started_at_ms": 0,
+          "ended_at_ms": 780000,
+          "events": [
+            {
+              "kind": "action",
+              "text": "Inspect package metadata first.",
+              "touched_files": ["package.json"],
+              "correct": false,
+              "wasted": true,
+              "tokens": 2000
+            },
+            {
+              "kind": "action",
+              "text": "Patch src/exporter.ts after reading the failing test.",
+              "touched_files": ["src/exporter.ts", "tests/exporter.test.mjs"],
+              "correct": true,
+              "tokens": 7000
+            },
+            {
+              "kind": "verification",
+              "command": "npm test -- tests/exporter.test.mjs",
+              "success": true,
+              "verifier": true,
+              "tokens": 1500
+            }
+          ]
+        },
+        "aionis_assisted": {
+          "run_id": "capture-aionis-exporter",
+          "memory_mode": "aionis_auto",
+          "authority_level": "advisory",
+          "packet_source": "automatic_runtime",
+          "started_at_ms": 0,
+          "ended_at_ms": 360000,
+          "events": [
+            {
+              "kind": "action",
+              "text": "Open src/exporter.ts first because the captured Aionis packet identifies the failed target.",
+              "touched_files": ["src/exporter.ts"],
+              "correct": true,
+              "tokens": 1800
+            },
+            {
+              "kind": "verification",
+              "command": "npm test -- tests/exporter.test.mjs",
+              "success": true,
+              "verifier": true,
+              "tokens": 1200
+            }
+          ]
+        },
+        "negative_control": {
+          "run_id": "capture-negative-exporter",
+          "memory_mode": "irrelevant_or_low_trust",
+          "authority_level": "observational",
+          "packet_source": "irrelevant_low_trust",
+          "started_at_ms": 0,
+          "ended_at_ms": 800000,
+          "events": [
+            {
+              "kind": "action",
+              "text": "Follow unrelated auth middleware memory.",
+              "touched_files": ["src/auth/middleware.ts"],
+              "correct": false,
+              "wasted": true,
+              "tokens": 2800
+            },
+            {
+              "kind": "action",
+              "text": "Patch src/exporter.ts after rejecting the irrelevant memory.",
+              "touched_files": ["src/exporter.ts"],
+              "correct": true,
+              "tokens": 7000
+            },
+            {
+              "kind": "verification",
+              "command": "npm test -- tests/exporter.test.mjs",
+              "success": true,
+              "verifier": true,
+              "tokens": 1600
+            }
+          ]
+        },
+        "positive_control": {
+          "run_id": "capture-positive-exporter",
+          "memory_mode": "oracle_handoff",
+          "authority_level": "authoritative",
+          "packet_source": "oracle_handoff",
+          "started_at_ms": 0,
+          "ended_at_ms": 250000,
+          "events": [
+            {
+              "kind": "action",
+              "text": "Apply the known exporter fix and run the exact verifier.",
+              "touched_files": ["src/exporter.ts", "tests/exporter.test.mjs"],
+              "correct": true,
+              "tokens": 1400
+            },
+            {
+              "kind": "verification",
+              "command": "npm test -- tests/exporter.test.mjs",
+              "success": true,
+              "verifier": true,
+              "tokens": 1100
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "capture_service_after_exit",
+      "title": "Captured service after-exit comparison",
+      "task_family": "service_publish_validate",
+      "task_prompt": "Start a local service and prove it remains reachable after the agent exits.",
+      "fairness": {
+        "same_model": true,
+        "same_time_budget": true,
+        "same_tool_permissions": true,
+        "same_environment_reset": true,
+        "same_verifier": true
+      },
+      "verifier": {
+        "kind": "external_probe",
+        "command": "curl -fsS http://127.0.0.1:4199/healthz",
+        "after_exit_required": true,
+        "external_visibility_required": true
+      },
+      "expected_outcome": {
+        "target_files": ["scripts/health-server.mjs"],
+        "success_invariants": ["service_survives_agent_exit", "fresh_shell_revalidation_passes"],
+        "acceptance_checks": ["curl -fsS http://127.0.0.1:4199/healthz"]
+      },
+      "runs": {
+        "baseline": {
+          "run_id": "capture-baseline-service",
+          "memory_mode": "none",
+          "authority_level": "none",
+          "packet_source": "none",
+          "started_at_ms": 0,
+          "ended_at_ms": 620000,
+          "events": [
+            {
+              "kind": "tool_call",
+              "command": "node scripts/health-server.mjs --port 4199",
+              "touched_files": ["scripts/health-server.mjs"],
+              "correct": false,
+              "wasted": true
+            },
+            {
+              "kind": "agent_claim",
+              "text": "The service is running.",
+              "claimed_success": true
+            },
+            {
+              "kind": "external_probe",
+              "command": "curl -fsS http://127.0.0.1:4199/healthz",
+              "success": false,
+              "verifier": true,
+              "after_exit": true,
+              "fresh_shell": true
+            }
+          ]
+        },
+        "aionis_assisted": {
+          "run_id": "capture-aionis-service",
+          "memory_mode": "aionis_auto",
+          "authority_level": "authoritative",
+          "packet_source": "automatic_runtime",
+          "started_at_ms": 0,
+          "ended_at_ms": 300000,
+          "events": [
+            {
+              "kind": "tool_call",
+              "command": "nohup node scripts/health-server.mjs --port 4199 >/tmp/health.log 2>&1 &",
+              "touched_files": ["scripts/health-server.mjs"],
+              "correct": true
+            },
+            {
+              "kind": "external_probe",
+              "command": "curl -fsS http://127.0.0.1:4199/healthz",
+              "success": true,
+              "verifier": true,
+              "after_exit": true,
+              "fresh_shell": true
+            }
+          ]
+        },
+        "negative_control": {
+          "run_id": "capture-negative-service",
+          "memory_mode": "irrelevant_or_low_trust",
+          "authority_level": "advisory",
+          "packet_source": "irrelevant_low_trust",
+          "started_at_ms": 0,
+          "ended_at_ms": 650000,
+          "events": [
+            {
+              "kind": "action",
+              "text": "Inspect unrelated package publishing memory first.",
+              "touched_files": ["scripts/build_index.py"],
+              "correct": false,
+              "wasted": true
+            },
+            {
+              "kind": "external_probe",
+              "command": "curl -fsS http://127.0.0.1:4199/healthz",
+              "success": false,
+              "verifier": true,
+              "after_exit": true,
+              "fresh_shell": true
+            }
+          ]
+        },
+        "positive_control": {
+          "run_id": "capture-positive-service",
+          "memory_mode": "oracle_handoff",
+          "authority_level": "authoritative",
+          "packet_source": "oracle_handoff",
+          "started_at_ms": 0,
+          "ended_at_ms": 220000,
+          "events": [
+            {
+              "kind": "tool_call",
+              "command": "nohup node scripts/health-server.mjs --port 4199 >/tmp/health.log 2>&1 &",
+              "touched_files": ["scripts/health-server.mjs"],
+              "correct": true
+            },
+            {
+              "kind": "external_probe",
+              "command": "curl -fsS http://127.0.0.1:4199/healthz",
+              "success": true,
+              "verifier": true,
+              "after_exit": true,
+              "fresh_shell": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
