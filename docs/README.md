@@ -50,3 +50,7 @@ Use this index when you want the public documentation surface only.
 ## 5. Boundary Rule
 
 Internal planning notes, audits, migration sketches, release-maintenance notes, and contributor-only taxonomy documents are kept off the public `main` documentation surface.
+
+## 6. Release Notes
+
+1. [releases/v0.4.0.md](releases/v0.4.0.md)

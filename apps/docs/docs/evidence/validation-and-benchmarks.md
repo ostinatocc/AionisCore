@@ -24,9 +24,9 @@ The current outward-facing validation state is:
 
 | Surface | Current result |
 | --- | --- |
-| Lite runtime test suite | `211 / 211 pass` |
-| Public SDK test suite | `14 / 14 pass` |
-| Docs reference integrity | `47 active markdown files checked` |
+| Lite runtime test suite | `319 / 319 pass` |
+| Public SDK test suite | `20 / 20 pass` |
+| Docs reference integrity | `48 active markdown files checked` |
 | Real-provider A/B vs `thin_baseline` | `31 / 31 winner = aionis` |
 | Real-provider A/B vs `chat_history_baseline` | `25 / 25 winner = aionis` |
 | Real-provider A/B vs `vector_recall_baseline` | `25 / 25 winner = aionis` |

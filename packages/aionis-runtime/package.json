@@ -1,6 +1,6 @@
 {
   "name": "@ostinato/aionis-runtime",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Standalone local-first Aionis Runtime package for self-evolving execution memory on a local machine.",
   "type": "module",
   "bin": {

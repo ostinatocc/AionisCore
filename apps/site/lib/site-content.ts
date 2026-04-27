@@ -86,31 +86,41 @@ export const metrics = [
   { label: "Real-provider A/B vs thin", value: "31 / 31" },
   { label: "Real-provider A/B vs chat", value: "25 / 25" },
   { label: "Real-provider A/B vs vector", value: "25 / 25" },
-  { label: "Lite runtime tests", value: "211 / 211" },
-  { label: "Public SDK tests", value: "14 / 14" },
+  { label: "Lite runtime tests", value: "319 / 319" },
+  { label: "Public SDK tests", value: "20 / 20" },
 ] as const;
 
 export const heroSignals = [
-  { label: "Runtime package", value: "0.1.0", tone: "cyan" },
-  { label: "SDK package", value: "0.3.0", tone: "amber" },
-  { label: "GitHub Release", value: "v0.3.0", tone: "cyan" },
+  { label: "Runtime package", value: "0.2.0", tone: "cyan" },
+  { label: "SDK package", value: "0.4.0", tone: "amber" },
+  { label: "GitHub Release", value: "v0.4.0", tone: "cyan" },
   { label: "Reproducible proofs", value: "6", tone: "amber" },
 ] as const;
 
 export const releaseHighlights = [
-  "Standalone runtime install path via npx",
-  "First-class Action Retrieval runtime surface",
-  "Uncertainty gates and operator hints",
-  "Replay flow modularized into cleaner orchestration paths",
+  "Lite Developer Preview release-readiness gate passed",
+  "Runtime authority, outcome, and legacy-access boundaries hardened",
+  "SDK host execution-memory facades expanded",
+  "Service lifecycle, dogfood, and package release proof paths added",
 ] as const;
 
 export const releaseSummary = {
-  version: "v0.3.0",
-  title: "Aionis Runtime v0.3.0",
-  body: "This release turns Aionis into a clearer public product shape with a standalone runtime package, stronger runtime decision surfaces, cleaner startup gates, and docs that treat installation and evaluation as first-class user paths.",
+  version: "v0.4.0",
+  title: "Aionis Runtime v0.4.0 Lite Developer Preview",
+  body: "This release moves the Lite runtime into a preview-ready line with hardened Runtime boundaries, authority and outcome gates, expanded SDK host facades, live dogfood proof paths, package release checks, and explicit release-readiness documentation.",
 } as const;
 
 export const changelogEntries = [
+  {
+    version: "v0.4.0",
+    date: "2026-04-27",
+    title: "Lite Developer Preview readiness",
+    bullets: [
+      "Prepared @ostinato/aionis@0.4.0 and @ostinato/aionis-runtime@0.2.0",
+      "Hardened Runtime boundaries across Contract Compiler, Trust Gate, Orchestrator, Learning Loop, route, host, and Lite store seams",
+      "Documented release readiness after build, Lite tests, package release checks, docs build, and smoke all passed",
+    ],
+  },
   {
     version: "v0.3.0",
     date: "2026-04-20",

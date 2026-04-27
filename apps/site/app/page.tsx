@@ -45,10 +45,10 @@ export default function HomePage() {
             <Reveal className="hero-copy">
               <div className="hero-kicker-row">
                 <span className="chip is-hot">
-                  <span className="dot" /> Runtime v0.3.0
+                  <span className="dot" /> Runtime v0.4.0
                 </span>
                 <span className="chip is-green">
-                  <span className="dot" /> 207 / 207 tests green
+                  <span className="dot" /> 319 / 319 tests green
                 </span>
                 <span className="chip">
                   <span className="dot" /> Public SDK
@@ -464,10 +464,10 @@ export default function HomePage() {
             <Reveal delay={80}>
               <aside className="release-card">
                 <SectionLabel tone="magenta">Current baseline</SectionLabel>
-                <h3>v0.3.0</h3>
+                <h3>v0.4.0</h3>
                 <p>
-                  Public runtime package, public SDK, GitHub release, standalone install path, and the new decision
-                  layer.
+                  Lite Developer Preview with hardened Runtime boundaries, package release checks, dogfood proof paths,
+                  and explicit release-readiness documentation.
                 </p>
                 <div className="metric-grid">
                   {metrics.map((metric) => (
@@ -480,7 +480,7 @@ export default function HomePage() {
                 <div className="button-row">
                   <a
                     className="button-secondary"
-                    href="https://github.com/ostinatocc/AionisCore/releases/tag/v0.3.0"
+                    href="https://github.com/ostinatocc/AionisCore/releases/tag/v0.4.0"
                     target="_blank"
                     rel="noreferrer"
                   >

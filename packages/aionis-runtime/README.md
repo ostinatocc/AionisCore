@@ -2,6 +2,8 @@
 
 Standalone local-first Aionis Runtime package.
 
+Current release line: `0.2.0` for the Aionis Lite Developer Preview.
+
 ## Start
 
 ```bash

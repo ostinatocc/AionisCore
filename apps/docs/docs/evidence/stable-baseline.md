@@ -16,7 +16,7 @@ This page gives the clearest external answer to a practical question:
     <span class="doc-chip">Lite runtime</span>
     <span class="doc-chip">Public SDK</span>
     <span class="doc-chip">Task start · handoff · replay · action retrieval</span>
-    <span class="doc-chip">207 / 207 lite tests</span>
+    <span class="doc-chip">319 / 319 lite tests</span>
   </div>
 </div>
 

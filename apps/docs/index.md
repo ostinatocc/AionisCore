@@ -41,8 +41,8 @@ features:
 </div>
 
 <div class="trust-strip" aria-label="Project status">
-  <span>Lite ships today</span>
-  <span>SDK v0.3.0</span>
+  <span>Lite Developer Preview v0.4.0</span>
+  <span>SDK v0.4.0</span>
   <span>Apache-2.0 licensed</span>
   <span>15 / 15 benchmark scenarios</span>
 </div>
@@ -279,8 +279,8 @@ flowchart TD
 | Runnable self-evolving proofs | `6` | [Proof By Evidence](/docs/evidence/proof-by-evidence) |
 | Real-provider A/B snapshot | `31 / 31` vs thin · `25 / 25` vs chat · `25 / 25` vs vector | [Validation and Benchmarks](/docs/evidence/validation-and-benchmarks) |
 | Strict replay reuse | `3 / 3`, `0` replay tokens | [Validation and Benchmarks](/docs/evidence/validation-and-benchmarks) |
-| Lite runtime test suite | `211 / 211` | `npm run -s lite:test` |
-| Public SDK test suite | `14 / 14` | `npm run -s sdk:test` |
+| Lite runtime test suite | `319 / 319` | `npm run -s lite:test` |
+| Public SDK test suite | `20 / 20` | `npm run -s sdk:test` |
 
 <div class="home-proof-grid">
   <div class="home-proof-card">
@@ -295,12 +295,12 @@ flowchart TD
   </div>
   <div class="home-proof-card">
     <span class="home-proof-label">SDK tests</span>
-    <span class="home-proof-value">14 / 14</span>
+    <span class="home-proof-value">20 / 20</span>
     <p>The public SDK surface is validated directly instead of only being implied by route behavior.</p>
   </div>
   <div class="home-proof-card">
     <span class="home-proof-label">Lite tests</span>
-    <span class="home-proof-value">211 / 211</span>
+    <span class="home-proof-value">319 / 319</span>
     <p>The current Lite runtime baseline stays green across replay, recall, handoff, policy, forgetting, and automation.</p>
   </div>
 </div>

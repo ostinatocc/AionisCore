@@ -264,7 +264,7 @@ export function DashboardMock() {
         <span className="dash-dots"><i /><i /><i /></span>
         <span className="dash-title">runtime · localhost:4100</span>
         <span className="dash-status">
-          <i className="live" /> LIVE · 207 / 207 tests green
+          <i className="live" /> LIVE · 319 / 319 tests green
         </span>
       </div>
 

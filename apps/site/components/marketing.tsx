@@ -43,7 +43,7 @@ export function SiteHeader() {
         <span className="runtime-dot" />
         <span className="hc-tag">Runtime</span>
         <code>npx @ostinato/aionis-runtime start</code>
-        <span className="hc-right">v0.3.0 · Public release</span>
+        <span className="hc-right">v0.4.0 · Lite Developer Preview</span>
       </div>
       <div className="container header-bar">
         <Link href="/" className="brand" aria-label="Aionis home">
