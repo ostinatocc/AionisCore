@@ -17,6 +17,15 @@ test("runtime cli prints help", () => {
   assert.match(result.stdout, /aionis-runtime start/);
 });
 
+test("runtime cli prints package version", () => {
+  const result = spawnSync(process.execPath, [cliPath, "--version"], {
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), "0.2.0");
+});
+
 test("runtime cli prints standalone lite defaults", () => {
   const cwd = path.join(packageDir, ".tmp", "consumer-cwd");
   mkdirSync(cwd, { recursive: true });

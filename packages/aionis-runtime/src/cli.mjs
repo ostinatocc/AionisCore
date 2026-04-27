@@ -19,8 +19,27 @@ function printHelp() {
 }
 
 function printVersion() {
-  const packageJson = require("../package.json");
+  const packageJson = readPackageJson();
   process.stdout.write(`${packageJson.version}\n`);
+}
+
+function readPackageJson() {
+  const candidates = [
+    path.join(cliDir, "..", "package.json"),
+    path.join(cliDir, "..", "..", "package.json"),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      return require(candidate);
+    } catch (error) {
+      if (error && error.code !== "MODULE_NOT_FOUND") {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error("Unable to locate @ostinato/aionis-runtime package.json");
 }
 
 function assertNodeSqliteSupport() {
