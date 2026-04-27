@@ -340,3 +340,32 @@ test("learning loop modules do not import orchestrator response builders", () =>
     "tools-feedback must use the shared policy materialization surface for feedback-driven policy memory.",
   );
 });
+
+test("host route registration keeps Runtime route dependency slices explicit", () => {
+  const text = read("src/host/http-host.ts");
+  for (const token of [
+    "type RuntimeWriteRouteRegistrationArgs = Pick<",
+    "type RuntimeRecallRouteRegistrationArgs = Pick<",
+    "type RuntimeReplayAndAutomationRouteRegistrationArgs = Pick<",
+    "type RuntimeSandboxRouteRegistrationArgs = Pick<",
+    "function registerRuntimeWriteRoutes(args: RuntimeWriteRouteRegistrationArgs)",
+    "function registerRuntimeRecallRoutes(args: RuntimeRecallRouteRegistrationArgs)",
+    "function registerRuntimeReplayAndAutomationRoutes(args: RuntimeReplayAndAutomationRouteRegistrationArgs)",
+    "function registerRuntimeSandboxRoutes(args: RuntimeSandboxRouteRegistrationArgs)",
+  ]) {
+    assertContains(text, token, `http-host must preserve segmented Runtime route boundary ${token}`);
+  }
+
+  for (const token of [
+    "function registerMemoryRoutes(args: RegisterApplicationRoutesArgs)",
+    "function registerRuntimeKernelRoutes(args: RegisterApplicationRoutesArgs)",
+    "db: any;",
+    "recallAccessForClient: (client: any) => any;",
+  ]) {
+    assert.equal(
+      text.includes(token),
+      false,
+      `http-host must not widen Runtime route registration through ${token}`,
+    );
+  }
+});

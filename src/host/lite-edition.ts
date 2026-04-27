@@ -8,8 +8,52 @@ export const LITE_SERVER_ONLY_ROUTE_GROUPS = {
   },
 } as const;
 
+export const LITE_PRODUCT_BOUNDARY = {
+  boundary_version: "lite_product_boundary_v1",
+  product_claim: "local_first_execution_memory_runtime",
+  release_scope: "v0.1_rc",
+  included_surfaces: [
+    "lite-daemon",
+    "local-sqlite-memory-stores",
+    "execution-memory-kernel",
+    "contract-compiler",
+    "trust-gate",
+    "orchestrator-read-surfaces",
+    "learning-loop-projections",
+    "semantic-forgetting-and-rehydration",
+    "replay-and-playbook-kernel",
+    "automation-lite-kernel",
+    "sandbox-runtime",
+    "sdk-and-host-bridge",
+    "inspector-debug-surface",
+  ],
+  excluded_surfaces: [
+    {
+      surface: "cloud-multi-tenant-control-plane",
+      reason: "Lite v0.1 is local-first and does not claim hosted multi-tenant production control-plane semantics.",
+    },
+    {
+      surface: "server-admin-governance-routes",
+      reason: "Admin/control governance routes remain server-only and return structured server_only_in_lite errors.",
+    },
+    {
+      surface: "production-auth-and-tenant-quota",
+      reason: "Lite v0.1 intentionally runs MEMORY_AUTH_MODE=off and TENANT_QUOTA_ENABLED=false behind loopback defaults.",
+    },
+  ],
+} as const;
+
+export function buildLiteProductBoundary() {
+  return {
+    ...LITE_PRODUCT_BOUNDARY,
+    included_surfaces: [...LITE_PRODUCT_BOUNDARY.included_surfaces],
+    excluded_surfaces: LITE_PRODUCT_BOUNDARY.excluded_surfaces.map((entry) => ({ ...entry })),
+  };
+}
+
 export function buildLiteRouteMatrix() {
   return {
+    product_boundary: buildLiteProductBoundary(),
     kernel_required_routes: [
       "memory-write",
       "memory-handoff",

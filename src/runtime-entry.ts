@@ -199,7 +199,6 @@ export async function startAionisRuntime(): Promise<void> {
   const applicationRouteArgs: RegisterApplicationRoutesArgs = {
     app,
     env,
-    db,
     store,
     embedder,
     embeddingSurfacePolicy,
@@ -211,7 +210,6 @@ export async function startAionisRuntime(): Promise<void> {
     liteAutomationStore,
     liteAutomationRunStore,
     recallTextEmbedBatcher,
-    recallAccessForClient,
     writeStoreCapabilities,
     requireAdminToken,
     requireStoreFeatureCapability,
