@@ -397,6 +397,100 @@ function serviceLifecycleConstraint(): Record<string, unknown> {
   };
 }
 
+function runtimeVerifierCommand() {
+  return `${JSON.stringify(process.execPath)} -e "process.stdout.write('ok')"`;
+}
+
+function runtimeVerifierServiceConstraint(command = runtimeVerifierCommand()): Record<string, unknown> {
+  return {
+    version: 1,
+    service_kind: "process",
+    label: "runtime-verifier-parent-proof",
+    launch_reference: "launchctl bootstrap gui/501 /tmp/com.aionis.runtime-verifier.plist",
+    endpoint: null,
+    must_survive_agent_exit: true,
+    revalidate_from_fresh_shell: true,
+    detach_then_probe: true,
+    health_checks: [command],
+    teardown_notes: [],
+  };
+}
+
+function runtimeVerifierExecutionPacket(args: {
+  stateId: string;
+  taskBrief: string;
+  filePath: string;
+  command?: string;
+}) {
+  const command = args.command ?? runtimeVerifierCommand();
+  const serviceConstraint = runtimeVerifierServiceConstraint(command);
+  return {
+    version: 1,
+    state_id: args.stateId,
+    current_stage: "review",
+    active_role: "review",
+    task_brief: args.taskBrief,
+    target_files: [args.filePath],
+    next_action: `Verify ${args.filePath} from the runtime parent after the agent exits.`,
+    hard_constraints: ["do not trust agent self-verification for after-exit service proof"],
+    accepted_facts: [],
+    rejected_paths: [],
+    pending_validations: [command],
+    unresolved_blockers: [],
+    rollback_notes: [],
+    service_lifecycle_constraints: [serviceConstraint],
+    review_contract: null,
+    resume_anchor: {
+      anchor: `resume:${args.filePath}`,
+      file_path: args.filePath,
+      symbol: null,
+      repo_root: "/Volumes/ziel/Aionisgo",
+    },
+    artifact_refs: [],
+    evidence_refs: ["agent:return:claimed_success"],
+  };
+}
+
+async function runtimeVerifierEvidenceFromPlanning(args: {
+  app: ReturnType<typeof Fastify>;
+  stateId: string;
+  taskBrief: string;
+  filePath: string;
+  command?: string;
+}) {
+  const response = await args.app.inject({
+    method: "POST",
+    url: "/v1/memory/planning/context",
+    payload: {
+      tenant_id: "default",
+      scope: "default",
+      query_text: args.taskBrief,
+      context: {},
+      tool_candidates: ["bash", "test"],
+      execution_packet_v1: runtimeVerifierExecutionPacket({
+        stateId: args.stateId,
+        taskBrief: args.taskBrief,
+        filePath: args.filePath,
+        command: args.command,
+      }),
+      runtime_verification: {
+        mode: "execute",
+        agent_lifecycle_state: "agent_exited",
+        agent_claimed_success: true,
+        timeout_ms: 10_000,
+      },
+    },
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  const body = PlanningContextRouteContractSchema.parse(response.json());
+  const runtimeVerification = body.execution_kernel.runtime_verification;
+  assert.ok(runtimeVerification);
+  assert.equal(runtimeVerification.execution_state, "executed");
+  assert.equal(runtimeVerification.summary.authoritative_evidence_ready, true);
+  assert.ok(runtimeVerification.evidence_for_trust_gate);
+  return runtimeVerification.evidence_for_trust_gate as Record<string, unknown>;
+}
+
 test("memory/write keeps workflow candidates promotion-ready until governance admits stable workflow promotion", async () => {
   const dbPath = tmpDbPath("projection");
   const app = Fastify();
@@ -709,6 +803,139 @@ test("memory/write stable workflow governance preview evaluates admitted review 
     const planningBody = PlanningContextRouteContractSchema.parse(planning.json());
     assert.equal(planningBody.planner_packet.sections.recommended_workflows.length, 1);
     assert.equal(planningBody.workflow_signals[0]?.promotion_state, "stable");
+  } finally {
+    await app.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("memory/write consumes runtime verifier evidence from planning_context for stable workflow promotion", async () => {
+  const dbPath = tmpDbPath("projection-runtime-verifier-evidence");
+  const app = Fastify();
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  try {
+    registerApp({ app, liteWriteStore, liteRecallStore });
+
+    const command = runtimeVerifierCommand();
+    const serviceConstraint = runtimeVerifierServiceConstraint(command);
+    const taskBrief = "Fix service publish validation with runtime verifier evidence";
+    const filePath = "src/routes/service.ts";
+    const firstEvidence = await runtimeVerifierEvidenceFromPlanning({
+      app,
+      stateId: `runtime-verifier:${randomUUID()}`,
+      taskBrief,
+      filePath,
+      command,
+    });
+
+    const firstWrite = await app.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildExecutionWritePayload({
+        eventId: randomUUID(),
+        title: "Patch service publish path with runtime verifier evidence",
+        inputText: "continue fixing service publish path with runtime verifier evidence",
+        taskBrief,
+        stateId: `state:${randomUUID()}`,
+        filePath,
+        modifiedFiles: [filePath],
+        pendingValidations: [command],
+        contractTrust: "authoritative",
+        serviceLifecycleConstraints: [serviceConstraint],
+        executionEvidence: [firstEvidence],
+      }),
+    });
+    assert.equal(firstWrite.statusCode, 200, firstWrite.body);
+
+    const secondEvidence = await runtimeVerifierEvidenceFromPlanning({
+      app,
+      stateId: `runtime-verifier:${randomUUID()}`,
+      taskBrief,
+      filePath,
+      command,
+    });
+    const secondWrite = await app.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildExecutionWritePayload({
+        eventId: randomUUID(),
+        title: "Patch service publish path with runtime verifier evidence again",
+        inputText: "continue fixing service publish path with runtime verifier evidence second run",
+        taskBrief,
+        stateId: `state:${randomUUID()}`,
+        filePath,
+        modifiedFiles: [filePath],
+        pendingValidations: [command],
+        contractTrust: "authoritative",
+        serviceLifecycleConstraints: [serviceConstraint],
+        executionEvidence: [secondEvidence],
+        workflowPromotionGovernanceReview: {
+          promote_memory: {
+            review_result: {
+              review_version: "promote_memory_semantic_review_v1",
+              adjudication: {
+                operation: "promote_memory",
+                disposition: "recommend",
+                target_kind: "workflow",
+                target_level: "L2",
+                reason: "runtime verifier evidence proves the workflow outcome after agent exit",
+                confidence: 0.93,
+                strategic_value: "high",
+              },
+            },
+          },
+        },
+      }),
+    });
+    assert.equal(secondWrite.statusCode, 200, secondWrite.body);
+
+    const storedStable = await liteWriteStore.findNodes({
+      scope: "default",
+      type: "procedure",
+      slotsContains: {
+        summary_kind: "workflow_anchor",
+      },
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 20,
+      offset: 0,
+    });
+    const stableWorkflowNode = storedStable.rows.find((row) => {
+      const projection = (row.slots?.workflow_write_projection ?? null) as Record<string, unknown> | null;
+      return projection?.auto_promoted === true;
+    }) ?? null;
+    assert.ok(stableWorkflowNode);
+    const authorityGate = stableWorkflowNode.slots?.authority_gate_v1 as Record<string, unknown>;
+    const evidenceAssessment = stableWorkflowNode.slots?.execution_evidence_assessment as Record<string, unknown>;
+    const stableEvidence = stableWorkflowNode.slots?.execution_evidence_v1 as Record<string, unknown>;
+    assert.equal(authorityGate.allows_authoritative, true);
+    assert.equal(authorityGate.allows_stable_promotion, true);
+    assert.equal(evidenceAssessment.status, "succeeded");
+    assert.equal(evidenceAssessment.allows_stable_promotion, true);
+    assert.equal(stableEvidence.validation_boundary, "runtime_orchestrator");
+    assert.equal(stableEvidence.after_exit_revalidated, true);
+    assert.equal(stableEvidence.fresh_shell_probe_passed, true);
+    assert.ok((stableEvidence.evidence_refs as string[]).some((ref) => ref.startsWith("runtime_verifier:")));
+
+    const planning = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: taskBrief,
+        context: {
+          goal: taskBrief,
+        },
+        tool_candidates: ["bash", "edit", "test"],
+      },
+    });
+    assert.equal(planning.statusCode, 200, planning.body);
+    const planningBody = PlanningContextRouteContractSchema.parse(planning.json());
+    assert.equal(planningBody.planner_packet.sections.recommended_workflows.length, 1);
+    assert.equal(planningBody.workflow_signals[0]?.promotion_state, "stable");
+    assert.equal(planningBody.workflow_signals[0]?.authority_visibility?.allows_stable_promotion, true);
   } finally {
     await app.close();
     await liteWriteStore.close();
