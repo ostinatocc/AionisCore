@@ -34,6 +34,13 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.equal(result.summary.unblocked_false_confidence_rate, 0);
   assert.equal(result.report.report_version, "runtime_dogfood_report_v1");
   assert.equal(result.report.product_status, "pass_fixture_evidence_only");
+  assert.equal(result.report.readiness_gate.gate_version, "runtime_dogfood_readiness_gate_v1");
+  assert.equal(result.report.readiness_gate.claim_level, "regression");
+  assert.equal(result.report.readiness_gate.regression_status, "pass");
+  assert.equal(result.report.readiness_gate.live_product_status, "fail");
+  assert.ok(result.report.readiness_gate.live_product_blockers.includes("product_status_live_evidence"));
+  assert.ok(result.report.readiness_gate.live_product_blockers.includes("live_execution_coverage_rate_one"));
+  assert.ok(result.report.readiness_gate.live_product_blockers.includes("after_exit_evidence_success_rate_one"));
   assert.equal(result.report.product_metrics.first_correct_action_rate, 1);
   assert.equal(result.report.product_metrics.false_confidence_rate, 0);
   assert.equal(result.report.product_metrics.after_exit_contract_correctness_rate, 1);
@@ -186,6 +193,10 @@ test("runtime dogfood task specs can carry external probe evidence without code 
   assert.equal(result.summary.first_correct_action_rate, 1);
   assert.equal(result.summary.after_exit_correct_rate, 1);
   assert.equal(result.report.product_status, "pass_live_evidence");
+  assert.equal(result.report.readiness_gate.claim_level, "regression");
+  assert.equal(result.report.readiness_gate.regression_status, "pass");
+  assert.equal(result.report.readiness_gate.live_product_status, "fail");
+  assert.ok(result.report.readiness_gate.live_product_blockers.includes("live_family_coverage_agent_takeover"));
   assert.equal(result.report.product_metrics.live_execution_coverage_rate, 1);
   assert.equal(result.report.product_metrics.live_execution_coverage_by_family.service_publish_validate?.rate, 1);
   assert.equal(result.report.product_metrics.after_exit_evidence_success_rate, 1);
@@ -211,6 +222,11 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.equal(run.dogfood_result.proof_boundary.fixture_evidence_scenarios, 0);
   assert.equal(run.dogfood_result.summary.after_exit_correct_rate, 1);
   assert.equal(run.dogfood_result.report.product_status, "pass_live_evidence");
+  assert.equal(run.dogfood_result.report.readiness_gate.claim_level, "live_product");
+  assert.equal(run.dogfood_result.report.readiness_gate.regression_status, "pass");
+  assert.equal(run.dogfood_result.report.readiness_gate.live_product_status, "pass");
+  assert.deepEqual(run.dogfood_result.report.readiness_gate.live_product_blockers, []);
+  assert.deepEqual(run.dogfood_result.report.readiness_gate.failed_requirements, []);
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_rate, 1);
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.service_publish_validate?.rate, 1);
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.package_publish_validate?.rate, 1);
@@ -269,6 +285,10 @@ test("runtime dogfood external probe can run one selected slice with diagnostics
   assert.equal(run.fresh_shell_probe_passed, true);
   assert.equal(run.dogfood_result.overall_status, "pass");
   assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 1);
+  assert.equal(run.dogfood_result.report.readiness_gate.claim_level, "regression");
+  assert.equal(run.dogfood_result.report.readiness_gate.regression_status, "pass");
+  assert.equal(run.dogfood_result.report.readiness_gate.live_product_status, "fail");
+  assert.ok(run.dogfood_result.report.readiness_gate.live_product_blockers.includes("live_family_coverage_service_publish_validate"));
   assert.equal(run.probes[0]?.id, "external_probe_interrupted_resume");
   assert.equal(run.diagnostics[0]?.slice, "interrupted_resume");
   assert.equal(run.diagnostics[0]?.scenario_id, "external_probe_interrupted_resume");

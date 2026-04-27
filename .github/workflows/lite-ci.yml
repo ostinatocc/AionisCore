@@ -38,8 +38,10 @@ jobs:
         run: |
           mkdir -p artifacts/runtime-dogfood
           npm run -s dogfood:lite:runtime:external-probe -- \
+            --require-live-readiness \
             --out-json artifacts/runtime-dogfood/external-run.json \
             --out-report-json artifacts/runtime-dogfood/external-report.json \
+            --out-gate-json artifacts/runtime-dogfood/external-readiness-gate.json \
             --out-md artifacts/runtime-dogfood/external-report.md \
             --out-tasks-json artifacts/runtime-dogfood/external-tasks.json
 

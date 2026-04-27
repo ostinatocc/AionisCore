@@ -11,8 +11,11 @@ import {
 type CliOptions = {
   json: boolean;
   reportJson: boolean;
+  gateJson: boolean;
+  requireLiveReadiness: boolean;
   outJson: string | null;
   outReportJson: string | null;
+  outGateJson: string | null;
   outMarkdown: string | null;
   tasksJson: string | null;
 };
@@ -20,7 +23,7 @@ type CliOptions = {
 function usage(): string {
   return [
     "Usage:",
-    "  npx tsx scripts/lite-runtime-dogfood.ts [--json|--report-json] [--tasks-json /path/tasks.json] [--out-json /path/result.json] [--out-report-json /path/report.json] [--out-md /path/result.md]",
+    "  npx tsx scripts/lite-runtime-dogfood.ts [--json|--report-json|--gate-json] [--require-live-readiness] [--tasks-json /path/tasks.json] [--out-json /path/result.json] [--out-report-json /path/report.json] [--out-gate-json /path/gate.json] [--out-md /path/result.md]",
     "",
     "Runs a product dogfood slice over real Runtime task families.",
     "",
@@ -31,8 +34,11 @@ function usage(): string {
 function parseArgs(argv: string[]): CliOptions {
   let json = false;
   let reportJson = false;
+  let gateJson = false;
+  let requireLiveReadiness = false;
   let outJson: string | null = null;
   let outReportJson: string | null = null;
+  let outGateJson: string | null = null;
   let outMarkdown: string | null = null;
   let tasksJson: string | null = null;
   for (let i = 0; i < argv.length; i += 1) {
@@ -45,6 +51,14 @@ function parseArgs(argv: string[]): CliOptions {
       reportJson = true;
       continue;
     }
+    if (arg === "--gate-json") {
+      gateJson = true;
+      continue;
+    }
+    if (arg === "--require-live-readiness") {
+      requireLiveReadiness = true;
+      continue;
+    }
     if (arg === "--out-json") {
       outJson = argv[i + 1] ?? null;
       i += 1;
@@ -52,6 +66,11 @@ function parseArgs(argv: string[]): CliOptions {
     }
     if (arg === "--out-report-json") {
       outReportJson = argv[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    if (arg === "--out-gate-json") {
+      outGateJson = argv[i + 1] ?? null;
       i += 1;
       continue;
     }
@@ -71,7 +90,7 @@ function parseArgs(argv: string[]): CliOptions {
     }
     throw new Error(`unknown argument: ${arg}`);
   }
-  return { json, reportJson, outJson, outReportJson, outMarkdown, tasksJson };
+  return { json, reportJson, gateJson, requireLiveReadiness, outJson, outReportJson, outGateJson, outMarkdown, tasksJson };
 }
 
 function ensureParent(filePath: string): void {
@@ -105,11 +124,17 @@ function main(): void {
     ensureParent(options.outReportJson);
     fs.writeFileSync(options.outReportJson, `${JSON.stringify(result.report, null, 2)}\n`);
   }
+  if (options.outGateJson) {
+    ensureParent(options.outGateJson);
+    fs.writeFileSync(options.outGateJson, `${JSON.stringify(result.report.readiness_gate, null, 2)}\n`);
+  }
   if (options.outMarkdown) {
     ensureParent(options.outMarkdown);
     fs.writeFileSync(options.outMarkdown, formatRuntimeDogfoodMarkdown(result));
   }
-  if (options.reportJson) {
+  if (options.gateJson) {
+    console.log(JSON.stringify(result.report.readiness_gate, null, 2));
+  } else if (options.reportJson) {
     console.log(JSON.stringify(result.report, null, 2));
   } else if (options.json) {
     console.log(JSON.stringify(result, null, 2));
@@ -117,6 +142,9 @@ function main(): void {
     console.log(formatRuntimeDogfoodMarkdown(result));
   }
   if (result.overall_status !== "pass") {
+    process.exitCode = 1;
+  }
+  if (options.requireLiveReadiness && result.report.readiness_gate.live_product_status !== "pass") {
     process.exitCode = 1;
   }
 }
