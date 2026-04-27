@@ -24,10 +24,11 @@ Owned by:
 2. `src/runtime-entry.ts`
 3. `src/app/runtime-services.ts`
 4. `src/app/request-guards.ts`
-5. `src/host/http-host.ts`
-6. `src/host/lite-edition.ts`
-7. `src/memory/*`
-8. `src/store/*`
+5. `src/app/runtime-telemetry.ts`
+6. `src/host/http-host.ts`
+7. `src/host/lite-edition.ts`
+8. `src/memory/*`
+9. `src/store/*`
 
 Responsibilities:
 
