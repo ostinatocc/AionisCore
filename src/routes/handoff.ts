@@ -4,9 +4,12 @@ import type { Env } from "../config.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { InMemoryExecutionStateStore } from "../execution/state-store.js";
-import { ExecutionStateV1Schema } from "../execution/types.js";
-import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
 import { buildLiteGovernanceRuntimeProviders } from "../app/governance-runtime-providers.js";
+import {
+  readExecutionContinuitySlotFields,
+  readExecutionStateSlot,
+  readExecutionTransitionsSlot,
+} from "../memory/execution-slot-surface.js";
 import { buildHandoffWriteBody, recoverHandoff } from "../memory/handoff.js";
 import type { HandoffRecoverInput, HandoffStoreInput } from "../memory/schemas.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "../memory/write.js";
@@ -125,16 +128,15 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
   const applyHandoffExecutionTransitions = (args: {
     writeSlots: Record<string, unknown> | null;
   }) => {
-    if (!executionStateStore || !args.writeSlots || readSlot(args.writeSlots, "execution_state_v1") === undefined) {
+    const executionState = readExecutionStateSlot(args.writeSlots);
+    if (!executionStateStore || !executionState) {
       return undefined;
     }
-    const executionState = ExecutionStateV1Schema.parse(readSlot(args.writeSlots, "execution_state_v1"));
     let storedState = executionStateStore.put(executionState);
-    const rawTransitions = readSlot(args.writeSlots, "execution_transitions_v1");
-    if (!Array.isArray(rawTransitions)) return undefined;
+    const transitions = readExecutionTransitionsSlot(args.writeSlots);
+    if (!transitions) return undefined;
     const appliedTransitions: Array<Record<string, unknown>> = [];
-    for (const rawTransition of rawTransitions) {
-      const parsed = ExecutionStateTransitionV1Schema.parse(rawTransition);
+    for (const parsed of transitions) {
       const transition = {
         ...parsed,
         expected_revision: storedState.revision,
@@ -155,6 +157,7 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
     const writeNode = firstNode<HandoffWriteBodyNodeLike>(args.writeBody.nodes);
     const writeSlots = asSlots(writeNode?.slots);
     const continuitySlots = handoffSlots ?? writeSlots;
+    const executionSlots = readExecutionContinuitySlotFields(continuitySlots);
     const effectiveAcceptanceChecks = Array.isArray(readSlot(continuitySlots, "acceptance_checks"))
       ? (readSlot(continuitySlots, "acceptance_checks") as unknown[]).filter((value): value is string => typeof value === "string" && value.trim().length > 0)
       : (args.body.acceptance_checks ?? []);
@@ -193,16 +196,16 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
             memory_lane: args.body.memory_lane,
           }
         : null,
-      execution_result_summary: readSlot(continuitySlots, "execution_result_summary"),
-      execution_artifacts: readSlot(continuitySlots, "execution_artifacts"),
-      execution_evidence: readSlot(continuitySlots, "execution_evidence"),
-      delegation_records_v1: readSlot(continuitySlots, "delegation_records_v1"),
-      execution_contract_v1: readSlot(continuitySlots, "execution_contract_v1"),
-      execution_state_v1: readSlot(continuitySlots, "execution_state_v1"),
-      execution_packet_v1: readSlot(continuitySlots, "execution_packet_v1"),
-      control_profile_v1: readSlot(continuitySlots, "control_profile_v1"),
+      execution_result_summary: executionSlots.execution_result_summary,
+      execution_artifacts: executionSlots.execution_artifacts,
+      execution_evidence: executionSlots.execution_evidence,
+      delegation_records_v1: executionSlots.delegation_records_v1,
+      execution_contract_v1: executionSlots.execution_contract_v1,
+      execution_state_v1: executionSlots.execution_state_v1,
+      execution_packet_v1: executionSlots.execution_packet_v1,
+      control_profile_v1: executionSlots.control_profile_v1,
       execution_transitions_v1:
-        args.appliedExecutionTransitions ?? readSlot(continuitySlots, "execution_transitions_v1"),
+        args.appliedExecutionTransitions ?? executionSlots.execution_transitions_v1,
     };
   };
   const runHandoffRecoverForPrincipal = (body: HandoffRecoverInput, principal: AuthPrincipal | null) =>

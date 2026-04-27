@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { RUNTIME_LEGACY_EXECUTION_SLOT_NAMES } from "../../src/memory/legacy-access-registry.ts";
+import {
+  RUNTIME_EXECUTION_STATE_SLOT_NAMES,
+  RUNTIME_LEGACY_EXECUTION_SLOT_NAMES,
+} from "../../src/memory/legacy-access-registry.ts";
 import {
   runtimeBoundaryInventoryLegacyAccessEntries,
   runtimeBoundaryInventoryLegacyFiles,
@@ -14,6 +17,20 @@ const SRC = path.join(ROOT, "src");
 
 const LEGACY_EXECUTION_SLOT_PATTERN =
   new RegExp(`\\b(?:${RUNTIME_LEGACY_EXECUTION_SLOT_NAMES.join("|")})\\b`);
+const EXECUTION_STATE_SLOT_PATTERN =
+  new RegExp(`(?:${RUNTIME_EXECUTION_STATE_SLOT_NAMES.join("|")})`);
+const DIRECT_ROUTE_EXECUTION_SLOT_ACCESS_PATTERN =
+  new RegExp(
+    [
+      `readSlot\\([^\\n;]*["'](?:${RUNTIME_EXECUTION_STATE_SLOT_NAMES.join("|")})["']`,
+      `\\bslots\\?\\.\\s*(?:${RUNTIME_EXECUTION_STATE_SLOT_NAMES.join("|")})\\b`,
+      `\\bslots\\.\\s*(?:${RUNTIME_EXECUTION_STATE_SLOT_NAMES.join("|")})\\b`,
+      `\\bslots\\s*\\[\\s*["'](?:${RUNTIME_EXECUTION_STATE_SLOT_NAMES.join("|")})["']\\s*\\]`,
+      `\\.slots\\?\\.\\s*(?:${RUNTIME_EXECUTION_STATE_SLOT_NAMES.join("|")})\\b`,
+      `\\.slots\\.\\s*(?:${RUNTIME_EXECUTION_STATE_SLOT_NAMES.join("|")})\\b`,
+      `\\.slots\\s*\\[\\s*["'](?:${RUNTIME_EXECUTION_STATE_SLOT_NAMES.join("|")})["']\\s*\\]`,
+    ].join("|"),
+  );
 
 function toRepoRelative(filePath: string): string {
   return path.relative(ROOT, filePath).split(path.sep).join("/");
@@ -70,6 +87,27 @@ test("legacy execution slots stay constrained to boundary modules", () => {
       "Runtime consumers must not directly read anchor_v1/execution_native_v1.",
       "Use node-execution-surface or execution-contract resolvers instead.",
       `Allowed boundaries: ${[...allowedDirectLegacySlotBoundaries].sort().join(", ")}`,
+    ].join("\n"),
+  );
+});
+
+test("route layer resolves execution state slots through boundary surfaces", () => {
+  const offenders = listTypeScriptFiles(path.join(SRC, "routes"))
+    .map((filePath) => ({
+      file: toRepoRelative(filePath),
+      text: fs.readFileSync(filePath, "utf8"),
+    }))
+    .filter((entry) => EXECUTION_STATE_SLOT_PATTERN.test(entry.text))
+    .filter((entry) => DIRECT_ROUTE_EXECUTION_SLOT_ACCESS_PATTERN.test(entry.text))
+    .map((entry) => entry.file)
+    .sort();
+
+  assert.deepEqual(
+    offenders,
+    [],
+    [
+      "Routes must not directly read execution state/packet/transition slot keys.",
+      "Use src/memory/execution-slot-surface.ts or a narrower memory boundary resolver instead.",
     ].join("\n"),
   );
 });

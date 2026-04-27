@@ -3,14 +3,13 @@ import type pg from "pg";
 import type { Env } from "../config.js";
 import type { InMemoryExecutionStateStore } from "../execution/state-store.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
-import { ExecutionStateV1Schema } from "../execution/types.js";
-import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import {
   buildLiteGovernanceRuntimeProviders,
   type LiteGovernanceRuntimeProviderBuilderOptions,
 } from "../app/governance-runtime-providers.js";
 import type { TopicClusterParams, TopicClusterResult } from "../jobs/topicClusterLib.js";
+import { collectExecutionWriteOverlaySlots } from "../memory/execution-slot-surface.js";
 import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } from "../memory/write.js";
 import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "./lite-projected-write.js";
 import type { WriteStoreAccess } from "../store/write-access.js";
@@ -69,31 +68,6 @@ function resolveWriteScopeTenant(args: {
     scope: args.out.scope ?? args.prepared.scope_public ?? args.env.MEMORY_SCOPE,
     tenantId: args.out.tenant_id ?? args.prepared.tenant_id ?? args.env.MEMORY_TENANT_ID,
   };
-}
-
-function readSlot(slots: Record<string, unknown>, key: string): unknown {
-  return key in slots ? slots[key] : undefined;
-}
-
-function collectExecutionWriteOverlays(nodes: PreparedWriteLike["nodes"]): {
-  states: Array<ReturnType<typeof ExecutionStateV1Schema.parse>>;
-  transitions: Array<ReturnType<typeof ExecutionStateTransitionV1Schema.parse>>;
-} {
-  const states: Array<ReturnType<typeof ExecutionStateV1Schema.parse>> = [];
-  const transitions: Array<ReturnType<typeof ExecutionStateTransitionV1Schema.parse>> = [];
-  for (const node of nodes) {
-    const slots = node.slots;
-    if (!slots || typeof slots !== "object") continue;
-    const executionState = readSlot(slots, "execution_state_v1");
-    if (executionState !== undefined) {
-      states.push(ExecutionStateV1Schema.parse(executionState));
-    }
-    const executionTransition = readSlot(slots, "execution_transition_v1");
-    if (executionTransition !== undefined) {
-      transitions.push(ExecutionStateTransitionV1Schema.parse(executionTransition));
-    }
-  }
-  return { states, transitions };
 }
 
 export function registerMemoryWriteRoutes(args: {
@@ -302,7 +276,7 @@ export function registerMemoryWriteRoutes(args: {
   const applyWriteSideEffects = async (args: {
     prepared: PreparedWriteRouteState;
     out: WriteResultLike;
-    executionOverlays: ReturnType<typeof collectExecutionWriteOverlays> | null;
+    executionOverlays: ReturnType<typeof collectExecutionWriteOverlaySlots> | null;
   }) => {
     if (executionStateStore && args.executionOverlays) {
       for (const state of args.executionOverlays.states) {
@@ -352,7 +326,7 @@ export function registerMemoryWriteRoutes(args: {
     );
     const preparedForRoute: PreparedWriteRouteState = prepared;
     const liteModeActive = env.AIONIS_EDITION === "lite" && !!liteWriteStore;
-    const executionOverlays = executionStateStore ? collectExecutionWriteOverlays(preparedForRoute.nodes) : null;
+    const executionOverlays = executionStateStore ? collectExecutionWriteOverlaySlots(preparedForRoute.nodes) : null;
     if (env.MEMORY_WRITE_REQUIRE_NODES && prepared.nodes.length === 0) {
       throw new HttpError(
         400,
@@ -385,7 +359,7 @@ export function registerMemoryWriteRoutes(args: {
     req: MemoryWriteRequest;
     prepared: PreparedWriteLike;
     preparedForRoute: PreparedWriteRouteState;
-    executionOverlays: ReturnType<typeof collectExecutionWriteOverlays> | null;
+    executionOverlays: ReturnType<typeof collectExecutionWriteOverlaySlots> | null;
     out: WriteResultLike;
     computedPolicy: EffectiveWritePolicyLike;
     policy: EffectiveWritePolicyLike;

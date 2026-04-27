@@ -167,6 +167,15 @@ test("runtime boundary inventory keeps authority capabilities and legacy reasons
     assert.equal(legacyResolver.legacy_access_kind, "contract_resolver");
     assert.ok(legacyResolver.reason.includes("resolver"));
   }
+
+  const executionSlotResolver = RUNTIME_BOUNDARY_INVENTORY.find(
+    (entry) => entry.source === "legacy_access" && entry.source_id === "execution_slot_surface",
+  );
+  assert.equal(executionSlotResolver?.source, "legacy_access");
+  if (executionSlotResolver?.source === "legacy_access") {
+    assert.equal(executionSlotResolver.legacy_access_kind, "contract_resolver");
+    assert.ok(executionSlotResolver.reason.includes("execution state"));
+  }
 });
 
 test("runtime boundary inventory exposes selector helpers for CI boundary consumers", () => {
