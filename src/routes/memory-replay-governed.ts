@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import { ReplayPlaybookDispatchRequest, ReplayPlaybookRunRequest } from "../memory/schemas.js";
 import { replayPlaybookDispatch, replayPlaybookRepairReview, replayPlaybookRun } from "../memory/replay.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
 
@@ -13,14 +14,11 @@ type ReplayGovernedRequestKind =
   | "replay_playbook_run"
   | "replay_playbook_dispatch";
 type ReplayGovernedRateKind = "write" | "recall";
-type LiteWriteStoreLike = NonNullable<ReplayPlaybookReviewOptionsLike["writeAccess"]> & {
-  withTx: <T>(fn: () => Promise<T>) => Promise<T>;
-};
 
 export function registerMemoryReplayGovernedRoutes(args: {
   app: FastifyInstance;
   env: { AIONIS_EDITION?: string };
-  liteWriteStore: LiteWriteStoreLike;
+  liteWriteStore: LiteWriteStore;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
     req: FastifyRequest,

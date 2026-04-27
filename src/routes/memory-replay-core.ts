@@ -17,6 +17,7 @@ import {
 } from "../memory/replay.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 
 type StoreLike = {
   withTx: <T>(fn: (client: pg.PoolClient) => Promise<T>) => Promise<T>;
@@ -27,9 +28,6 @@ type ReplayCoreRequest = FastifyRequest<{ Body: unknown }>;
 
 type ReplayWriteOptionsLike = Parameters<typeof replayRunStart>[2];
 type ReplayReadOptionsLike = Parameters<typeof replayRunGet>[2];
-type LiteWriteStoreLike = NonNullable<ReplayWriteOptionsLike["writeAccess"]> & {
-  withTx: <T>(fn: () => Promise<T>) => Promise<T>;
-};
 
 type ReplayCoreRequestKind =
   | "replay_run_start"
@@ -55,7 +53,7 @@ export function registerMemoryReplayCoreRoutes(args: {
   embeddedRuntime: ReplayWriteOptionsLike["embeddedRuntime"];
   liteReplayAccess?: ReplayWriteOptionsLike["replayAccess"];
   liteReplayStore?: ReplayWriteOptionsLike["replayMirror"];
-  liteWriteStore?: LiteWriteStoreLike | null;
+  liteWriteStore?: LiteWriteStore | null;
   writeAccessShadowMirrorV2: boolean;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (

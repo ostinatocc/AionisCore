@@ -16,14 +16,10 @@ import type { HandoffRecoverInput, HandoffStoreInput } from "../memory/schemas.j
 import { applyMemoryWrite, prepareMemoryWrite } from "../memory/write.js";
 import { HandoffRecoverRequest, HandoffStoreRequest } from "../memory/schemas.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
-import type { WriteStoreAccess } from "../store/write-access.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
-import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "../memory/lite-projected-write-commit.js";
-
-type LiteWriteStoreLike = NonNullable<NonNullable<Parameters<typeof recoverHandoff>[0]>["liteWriteStore"]> & WriteStoreAccess & {
-  withTx: <T>(fn: () => Promise<T>) => Promise<T>;
-} & LiteProjectedWriteStore;
+import { commitLitePreparedWriteWithProjection } from "../memory/lite-projected-write-commit.js";
 
 type HandoffRouteKind = "handoff_store" | "handoff_recover";
 
@@ -50,7 +46,7 @@ type RegisterHandoffRoutesArgs = {
   embedder: EmbeddingProvider | null;
   embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
   embeddedRuntime: EmbeddedMemoryRuntime | null;
-  liteWriteStore: LiteWriteStoreLike;
+  liteWriteStore: LiteWriteStore;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
     req: FastifyRequest,
