@@ -416,6 +416,32 @@ test("runtime services expose typed access factories", () => {
   );
 });
 
+test("host bootstrap keeps lifecycle and store contracts typed", () => {
+  const text = read("src/host/bootstrap.ts");
+  for (const token of [
+    'import Fastify, { type FastifyInstance } from "fastify";',
+    'import type pg from "pg";',
+    'import type { MemoryStore } from "../store/memory-store.js";',
+    'import type { RecallStoreAccess } from "../store/recall-access.js";',
+    'import type { ReplayStoreAccess } from "../store/replay-access.js";',
+    'import type { WriteStoreAccess } from "../store/write-access.js";',
+    "app: FastifyInstance;",
+    "store: MemoryStore;",
+    "recallAccessForClient: (client: pg.PoolClient) => RecallStoreAccess | null;",
+    "replayAccessForClient: (client: pg.PoolClient) => ReplayStoreAccess | null;",
+    "writeAccessForClient: (client: pg.PoolClient) => WriteStoreAccess;",
+    "liteWriteStore?: WriteStoreAccess | null;",
+    "export async function listenHttpApp(app: FastifyInstance, env: Env)",
+  ]) {
+    assertContains(text, token, `host bootstrap must preserve typed boundary ${token}`);
+  }
+  assert.equal(
+    /\bany\b/.test(text),
+    false,
+    "host bootstrap must not widen app/store lifecycle boundaries through bare any.",
+  );
+});
+
 test("Lite write projection commit paths keep prepared writes typed", () => {
   for (const file of [
     "src/routes/handoff.ts",
