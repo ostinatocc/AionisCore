@@ -285,7 +285,6 @@ export function registerHealthRoute(args: {
 export type RegisterApplicationRoutesArgs = {
   app: FastifyInstance;
   env: Env;
-  db: any;
   store: any;
   embedder: any;
   embeddingSurfacePolicy: EmbeddingSurfacePolicy;
@@ -297,7 +296,6 @@ export type RegisterApplicationRoutesArgs = {
   liteAutomationStore: any;
   liteAutomationRunStore: any;
   recallTextEmbedBatcher: unknown;
-  recallAccessForClient: (client: any) => any;
   writeStoreCapabilities: {
     shadow_mirror_v2: boolean;
   };
@@ -340,7 +338,119 @@ export type RegisterApplicationRoutesArgs = {
   runTopicClusterForEventIds: (client: any, args: any) => Promise<any>;
 };
 
-function registerAdminRoutes(args: RegisterApplicationRoutesArgs) {
+type RuntimeBoundaryRouteRegistrationArgs = Pick<RegisterApplicationRoutesArgs, "app" | "env">;
+type RuntimeAdminRouteRegistrationArgs = Pick<RegisterApplicationRoutesArgs, "app">;
+
+type RuntimeWriteRouteRegistrationArgs = Pick<
+  RegisterApplicationRoutesArgs,
+  | "app"
+  | "env"
+  | "store"
+  | "embedder"
+  | "embeddingSurfacePolicy"
+  | "embeddedRuntime"
+  | "liteWriteStore"
+  | "liteRecallAccess"
+  | "writeStoreCapabilities"
+  | "requireStoreFeatureCapability"
+  | "requireMemoryPrincipal"
+  | "withIdentityFromRequest"
+  | "enforceRateLimit"
+  | "enforceTenantQuota"
+  | "tenantFromBody"
+  | "acquireInflightSlot"
+  | "writeAccessForClient"
+  | "runTopicClusterForEventIds"
+>;
+
+type RuntimeRecallRouteRegistrationArgs = Pick<
+  RegisterApplicationRoutesArgs,
+  | "app"
+  | "env"
+  | "embedder"
+  | "embeddingSurfacePolicy"
+  | "embeddedRuntime"
+  | "liteWriteStore"
+  | "liteRecallAccess"
+  | "recallTextEmbedBatcher"
+  | "requireMemoryPrincipal"
+  | "withIdentityFromRequest"
+  | "enforceRateLimit"
+  | "enforceTenantQuota"
+  | "enforceRecallTextEmbedQuota"
+  | "buildRecallAuth"
+  | "tenantFromBody"
+  | "acquireInflightSlot"
+  | "hasExplicitRecallKnobs"
+  | "resolveRecallProfile"
+  | "resolveExplicitRecallMode"
+  | "resolveClassAwareRecallProfile"
+  | "withRecallProfileDefaults"
+  | "resolveRecallStrategy"
+  | "resolveAdaptiveRecallProfile"
+  | "resolveAdaptiveRecallHardCap"
+  | "inferRecallStrategyFromKnobs"
+  | "buildRecallTrajectory"
+  | "embedRecallTextQuery"
+  | "mapRecallTextEmbeddingError"
+  | "recordContextAssemblyTelemetryBestEffort"
+>;
+
+type RuntimeReplayAndAutomationRouteRegistrationArgs = Pick<
+  RegisterApplicationRoutesArgs,
+  | "app"
+  | "env"
+  | "store"
+  | "embedder"
+  | "embeddingSurfacePolicy"
+  | "embeddedRuntime"
+  | "liteReplayAccess"
+  | "liteReplayStore"
+  | "liteWriteStore"
+  | "liteAutomationStore"
+  | "liteAutomationRunStore"
+  | "writeStoreCapabilities"
+  | "requireMemoryPrincipal"
+  | "withIdentityFromRequest"
+  | "enforceRateLimit"
+  | "enforceTenantQuota"
+  | "tenantFromBody"
+  | "acquireInflightSlot"
+  | "withReplayRepairReviewDefaults"
+  | "buildReplayRepairReviewOptions"
+  | "buildAutomationReplayRunOptions"
+>;
+
+type RuntimeSandboxRouteRegistrationArgs = Pick<
+  RegisterApplicationRoutesArgs,
+  | "app"
+  | "env"
+  | "store"
+  | "sandboxExecutor"
+  | "requireAdminToken"
+  | "withIdentityFromRequest"
+  | "enforceRateLimit"
+  | "enforceTenantQuota"
+  | "tenantFromBody"
+  | "scopeFromBody"
+  | "projectFromBody"
+  | "enforceSandboxTenantBudget"
+>;
+
+type RuntimeKernelRouteRegistrationArgs =
+  & RuntimeWriteRouteRegistrationArgs
+  & RuntimeRecallRouteRegistrationArgs
+  & RuntimeReplayAndAutomationRouteRegistrationArgs
+  & RuntimeSandboxRouteRegistrationArgs;
+
+function registerRuntimeBoundaryRoutes(args: RuntimeBoundaryRouteRegistrationArgs) {
+  registerRuntimeBoundaryInventoryRoutes({
+    app: args.app,
+    env: args.env,
+  });
+}
+
+function registerAdminRoutes(args: RuntimeAdminRouteRegistrationArgs) {
   const {
     app,
   } = args;
@@ -348,7 +458,7 @@ function registerAdminRoutes(args: RegisterApplicationRoutesArgs) {
   registerLiteServerOnlyRoutes(app);
 }
 
-function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
+function registerRuntimeWriteRoutes(args: RuntimeWriteRouteRegistrationArgs) {
   const {
     app,
     env,
@@ -356,45 +466,16 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
     embedder,
     embeddingSurfacePolicy,
     embeddedRuntime,
-  liteReplayAccess,
-  liteReplayStore,
-  liteWriteStore,
-  liteAutomationStore,
-  liteAutomationRunStore,
-  recallTextEmbedBatcher,
-  recallAccessForClient,
-  liteRecallAccess,
-  writeStoreCapabilities,
-    requireAdminToken,
+    liteWriteStore,
+    liteRecallAccess,
+    writeStoreCapabilities,
     requireStoreFeatureCapability,
     requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,
     enforceTenantQuota,
-    enforceRecallTextEmbedQuota,
-    buildRecallAuth,
     tenantFromBody,
-    scopeFromBody,
-    projectFromBody,
     acquireInflightSlot,
-    hasExplicitRecallKnobs,
-    resolveRecallProfile,
-    resolveExplicitRecallMode,
-    resolveClassAwareRecallProfile,
-    withRecallProfileDefaults,
-    resolveRecallStrategy,
-    resolveAdaptiveRecallProfile,
-    resolveAdaptiveRecallHardCap,
-    inferRecallStrategyFromKnobs,
-    buildRecallTrajectory,
-    embedRecallTextQuery,
-    mapRecallTextEmbeddingError,
-    recordContextAssemblyTelemetryBestEffort,
-    withReplayRepairReviewDefaults,
-    buildReplayRepairReviewOptions,
-    buildAutomationReplayRunOptions,
-    sandboxExecutor,
-    enforceSandboxTenantBudget,
     writeAccessForClient,
     runTopicClusterForEventIds,
   } = args;
@@ -462,6 +543,40 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
     tenantFromBody,
     acquireInflightSlot,
   });
+}
+
+function registerRuntimeRecallRoutes(args: RuntimeRecallRouteRegistrationArgs) {
+  const {
+    app,
+    env,
+    embedder,
+    embeddingSurfacePolicy,
+    embeddedRuntime,
+    liteWriteStore,
+    liteRecallAccess,
+    recallTextEmbedBatcher,
+    requireMemoryPrincipal,
+    withIdentityFromRequest,
+    enforceRateLimit,
+    enforceTenantQuota,
+    enforceRecallTextEmbedQuota,
+    buildRecallAuth,
+    tenantFromBody,
+    acquireInflightSlot,
+    hasExplicitRecallKnobs,
+    resolveRecallProfile,
+    resolveExplicitRecallMode,
+    resolveClassAwareRecallProfile,
+    withRecallProfileDefaults,
+    resolveRecallStrategy,
+    resolveAdaptiveRecallProfile,
+    resolveAdaptiveRecallHardCap,
+    inferRecallStrategyFromKnobs,
+    buildRecallTrajectory,
+    embedRecallTextQuery,
+    mapRecallTextEmbeddingError,
+    recordContextAssemblyTelemetryBestEffort,
+  } = args;
 
   registerMemoryRecallRoutes({
     app,
@@ -533,6 +648,32 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
     tenantFromBody,
     acquireInflightSlot,
   });
+}
+
+function registerRuntimeReplayAndAutomationRoutes(args: RuntimeReplayAndAutomationRouteRegistrationArgs) {
+  const {
+    app,
+    env,
+    store,
+    embedder,
+    embeddingSurfacePolicy,
+    embeddedRuntime,
+    liteReplayAccess,
+    liteReplayStore,
+    liteWriteStore,
+    liteAutomationStore,
+    liteAutomationRunStore,
+    writeStoreCapabilities,
+    requireMemoryPrincipal,
+    withIdentityFromRequest,
+    enforceRateLimit,
+    enforceTenantQuota,
+    tenantFromBody,
+    acquireInflightSlot,
+    withReplayRepairReviewDefaults,
+    buildReplayRepairReviewOptions,
+    buildAutomationReplayRunOptions,
+  } = args;
 
   registerMemoryReplayCoreRoutes({
     app,
@@ -584,6 +725,23 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
       buildAutomationReplayRunOptions,
     });
   }
+}
+
+function registerRuntimeSandboxRoutes(args: RuntimeSandboxRouteRegistrationArgs) {
+  const {
+    app,
+    env,
+    store,
+    sandboxExecutor,
+    requireAdminToken,
+    withIdentityFromRequest,
+    enforceRateLimit,
+    enforceTenantQuota,
+    tenantFromBody,
+    scopeFromBody,
+    projectFromBody,
+    enforceSandboxTenantBudget,
+  } = args;
 
   registerMemorySandboxRoutes({
     app,
@@ -601,12 +759,16 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
   });
 }
 
+function registerRuntimeKernelRoutes(args: RuntimeKernelRouteRegistrationArgs) {
+  registerRuntimeWriteRoutes(args);
+  registerRuntimeRecallRoutes(args);
+  registerRuntimeReplayAndAutomationRoutes(args);
+  registerRuntimeSandboxRoutes(args);
+}
+
 export function registerApplicationRoutes(args: RegisterApplicationRoutesArgs) {
   assertLiteOnlySourceTree(args.env);
-  registerRuntimeBoundaryInventoryRoutes({
-    app: args.app,
-    env: args.env,
-  });
+  registerRuntimeBoundaryRoutes(args);
   registerAdminRoutes(args);
-  registerMemoryRoutes(args);
+  registerRuntimeKernelRoutes(args);
 }

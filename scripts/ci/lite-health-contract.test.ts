@@ -60,6 +60,13 @@ test("health route exposes stable runtime/storage/lite/sandbox envelopes", async
     assert.equal(body.lite.stores.replay.mode, "sqlite_mirror_v1");
     assert.equal(body.lite.stores.automation_definitions.mode, "sqlite_automation_v1");
     assert.equal(body.lite.stores.automation_runs.mode, "sqlite_automation_run_v1");
+    assert.equal(body.lite.route_matrix.product_boundary.boundary_version, "lite_product_boundary_v1");
+    assert.equal(body.lite.route_matrix.product_boundary.product_claim, "local_first_execution_memory_runtime");
+    assert.ok(body.lite.route_matrix.product_boundary.included_surfaces.includes("execution-memory-kernel"));
+    assert.ok(body.lite.route_matrix.product_boundary.included_surfaces.includes("sdk-and-host-bridge"));
+    assert.ok(body.lite.route_matrix.product_boundary.excluded_surfaces.some((entry: { surface: string }) =>
+      entry.surface === "cloud-multi-tenant-control-plane"
+    ));
     assert.equal(body.lite.route_matrix.server_only_route_groups[0].group, "admin_control");
     assert.equal(body.sandbox.tenant_budget.window_hours, 24);
     assert.equal(body.sandbox.remote_egress.cidr_count, 1);
