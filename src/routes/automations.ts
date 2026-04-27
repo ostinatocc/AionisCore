@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type pg from "pg";
 import { replayPlaybookRun } from "../memory/replay.js";
 import {
   automationCreateLite,
@@ -27,13 +28,17 @@ type AutomationRouteKind =
   | "automation_run_resume";
 
 type AutomationRequest = FastifyRequest<{ Body: unknown }>;
+type ReplayPlaybookRunOptionsLike = Parameters<typeof replayPlaybookRun>[2];
+type AutomationLiteWriteAccess = NonNullable<
+  NonNullable<ReplayPlaybookRunOptionsLike["writeOptions"]>["writeAccess"]
+>;
 
 export function registerAutomationRoutes(args: {
   app: FastifyInstance;
   env: { MEMORY_SCOPE: string; MEMORY_TENANT_ID: string; LITE_LOCAL_ACTOR_ID: string };
   automationStore: LiteAutomationStore;
   automationRunStore: LiteAutomationRunStore;
-  liteWriteStore?: any;
+  liteWriteStore?: AutomationLiteWriteAccess;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
     req: FastifyRequest,
@@ -45,7 +50,7 @@ export function registerAutomationRoutes(args: {
   enforceTenantQuota: (req: FastifyRequest, reply: FastifyReply, kind: "write" | "recall", tenantId: string) => Promise<void>;
   tenantFromBody: (body: unknown) => string;
   acquireInflightSlot: (kind: "write" | "recall") => Promise<InflightGateToken>;
-  buildAutomationReplayRunOptions: (reply: FastifyReply, source: string) => any;
+  buildAutomationReplayRunOptions: (reply: FastifyReply, source: string) => ReplayPlaybookRunOptionsLike;
 }) {
   const {
     app,
@@ -161,7 +166,8 @@ export function registerAutomationRoutes(args: {
               }
               return options;
             },
-            replayRunner: (replayBody, replayOptions) => replayPlaybookRun({} as any, replayBody, replayOptions),
+            replayRunner: (replayBody, replayOptions) =>
+              replayPlaybookRun({} as pg.PoolClient, replayBody, replayOptions as ReplayPlaybookRunOptionsLike),
           },
         }),
     });
@@ -221,7 +227,8 @@ export function registerAutomationRoutes(args: {
               }
               return options;
             },
-            replayRunner: (replayBody, replayOptions) => replayPlaybookRun({} as any, replayBody, replayOptions),
+            replayRunner: (replayBody, replayOptions) =>
+              replayPlaybookRun({} as pg.PoolClient, replayBody, replayOptions as ReplayPlaybookRunOptionsLike),
           },
         }),
     });

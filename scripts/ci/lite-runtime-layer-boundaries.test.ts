@@ -344,6 +344,10 @@ test("learning loop modules do not import orchestrator response builders", () =>
 test("host route registration keeps Runtime route dependency slices explicit", () => {
   const text = read("src/host/http-host.ts");
   for (const token of [
+    "type RuntimeStoreCapability =",
+    "type RuntimeLiteWriteStore =",
+    "type RuntimeLiteRecallAccess =",
+    "type RuntimeSandboxExecutor =",
     "type RuntimeWriteRouteRegistrationArgs = Pick<",
     "type RuntimeRecallRouteRegistrationArgs = Pick<",
     "type RuntimeReplayAndAutomationRouteRegistrationArgs = Pick<",
@@ -366,6 +370,28 @@ test("host route registration keeps Runtime route dependency slices explicit", (
       text.includes(token),
       false,
       `http-host must not widen Runtime route registration through ${token}`,
+    );
+  }
+
+  const registerArgsMatch = /export type RegisterApplicationRoutesArgs = \{([\s\S]*?)\n\};/.exec(text);
+  assert.ok(registerArgsMatch, "http-host must expose a single typed RegisterApplicationRoutesArgs contract");
+  const registerArgsBody = registerArgsMatch[1] ?? "";
+  assert.equal(
+    /\bany\b/.test(registerArgsBody),
+    false,
+    "RegisterApplicationRoutesArgs must depend on typed route capabilities instead of widening to bare any.",
+  );
+});
+
+test("automation replay bridge keeps replay options and results typed", () => {
+  for (const file of [
+    "src/routes/automations.ts",
+    "src/memory/automation-lite.ts",
+  ]) {
+    assert.equal(
+      /\bany\b/.test(read(file)),
+      false,
+      `${file} must use typed replay capabilities or unknown, not bare any, across automation execution boundaries.`,
     );
   }
 });

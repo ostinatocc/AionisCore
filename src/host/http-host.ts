@@ -2,10 +2,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import type { Env } from "../config.js";
 import type { Db } from "../db.js";
+import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import { recordMemoryRequestTelemetry, type MemoryRequestTelemetryInput } from "../app/runtime-telemetry.js";
 import type { IdentityRequestKind, InflightKind, RateLimitKind, TenantQuotaKind } from "../app/request-guards.js";
-import type { RecallEndpoint } from "../app/recall-policy.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
 import { registerMemoryAccessRoutes } from "../routes/memory-access.js";
@@ -84,7 +84,7 @@ export function registerHostErrorHandler(app: FastifyInstance) {
 export function logMemoryApiConfig(args: {
   app: FastifyInstance;
   env: Env;
-  embedder: any;
+  embedder: EmbeddingProvider | null;
   embeddingSurfacePolicy: EmbeddingSurfacePolicy;
   sandboxRemoteAllowedHosts: Set<string>;
   sandboxTenantBudgetPolicy: Map<string, unknown>;
@@ -224,7 +224,7 @@ export function registerHealthRoute(args: {
   liteWriteStore?: { healthSnapshot: () => unknown } | null;
   liteAutomationStore?: HealthSnapshotProvider | null;
   liteAutomationRunStore?: HealthSnapshotProvider | null;
-  sandboxExecutor: any;
+  sandboxExecutor: HealthSnapshotProvider;
   sandboxTenantBudgetPolicy: Map<string, unknown>;
   sandboxRemoteAllowedCidrs: Set<string>;
 }) {
@@ -282,25 +282,80 @@ export function registerHealthRoute(args: {
   }));
 }
 
+type MemoryWriteRouteArgs = Parameters<typeof registerMemoryWriteRoutes>[0];
+type HandoffRouteArgs = Parameters<typeof registerHandoffRoutes>[0];
+type MemoryAccessRouteArgs = Parameters<typeof registerMemoryAccessRoutes>[0];
+type MemoryLifecycleRouteArgs = Parameters<typeof registerLiteMemoryLifecycleRoutes>[0];
+type MemoryRecallRouteArgs = Parameters<typeof registerMemoryRecallRoutes>[0];
+type MemoryContextRouteArgs = Parameters<typeof registerMemoryContextRuntimeRoutes>[0];
+type MemoryFeedbackRouteArgs = Parameters<typeof registerMemoryFeedbackToolRoutes>[0];
+type MemoryReplayCoreRouteArgs = Parameters<typeof registerMemoryReplayCoreRoutes>[0];
+type MemoryReplayGovernedRouteArgs = Parameters<typeof registerMemoryReplayGovernedRoutes>[0];
+type AutomationRouteArgs = Parameters<typeof registerAutomationRoutes>[0];
+type MemorySandboxRouteArgs = Parameters<typeof registerMemorySandboxRoutes>[0];
+
+type RuntimeStoreCapability =
+  & MemoryWriteRouteArgs["store"]
+  & MemoryReplayCoreRouteArgs["store"]
+  & MemorySandboxRouteArgs["store"];
+
+type RuntimeEmbeddedMemory =
+  | (
+    & NonNullable<MemoryWriteRouteArgs["embeddedRuntime"]>
+    & NonNullable<HandoffRouteArgs["embeddedRuntime"]>
+    & NonNullable<MemoryRecallRouteArgs["embeddedRuntime"]>
+    & NonNullable<MemoryContextRouteArgs["embeddedRuntime"]>
+    & NonNullable<MemoryFeedbackRouteArgs["embeddedRuntime"]>
+    & NonNullable<MemoryReplayCoreRouteArgs["embeddedRuntime"]>
+  )
+  | null;
+
+type RuntimeLiteWriteStore =
+  & NonNullable<MemoryWriteRouteArgs["liteWriteStore"]>
+  & HandoffRouteArgs["liteWriteStore"]
+  & MemoryAccessRouteArgs["liteWriteStore"]
+  & MemoryLifecycleRouteArgs["liteWriteStore"]
+  & MemoryRecallRouteArgs["liteWriteStore"]
+  & MemoryContextRouteArgs["liteWriteStore"]
+  & MemoryFeedbackRouteArgs["liteWriteStore"]
+  & NonNullable<MemoryReplayCoreRouteArgs["liteWriteStore"]>
+  & MemoryReplayGovernedRouteArgs["liteWriteStore"];
+
+type RuntimeLiteRecallAccess =
+  & MemoryAccessRouteArgs["liteRecallAccess"]
+  & MemoryRecallRouteArgs["liteRecallAccess"]
+  & MemoryContextRouteArgs["liteRecallAccess"]
+  & MemoryFeedbackRouteArgs["liteRecallAccess"];
+
+type RuntimeLiteReplayAccess = NonNullable<MemoryReplayCoreRouteArgs["liteReplayAccess"]>;
+type RuntimeLiteReplayStore = NonNullable<MemoryReplayCoreRouteArgs["liteReplayStore"]>;
+type RuntimeSandboxExecutor =
+  & MemorySandboxRouteArgs["sandboxExecutor"]
+  & HealthSnapshotProvider;
+
+type RuntimeReplayRunOptionsBuilder =
+  & MemoryReplayGovernedRouteArgs["buildReplayPlaybookRunOptions"]
+  & AutomationRouteArgs["buildAutomationReplayRunOptions"];
+
 export type RegisterApplicationRoutesArgs = {
   app: FastifyInstance;
   env: Env;
-  store: any;
-  embedder: any;
+  store: RuntimeStoreCapability;
+  embedder: EmbeddingProvider | null;
   embeddingSurfacePolicy: EmbeddingSurfacePolicy;
-  embeddedRuntime: any;
-  liteRecallAccess: any;
-  liteReplayAccess: any;
-  liteReplayStore: any;
-  liteWriteStore: any;
-  liteAutomationStore: any;
-  liteAutomationRunStore: any;
+  embeddedRuntime: RuntimeEmbeddedMemory;
+  liteRecallAccess: RuntimeLiteRecallAccess;
+  liteReplayAccess: RuntimeLiteReplayAccess;
+  liteReplayStore: RuntimeLiteReplayStore;
+  liteWriteStore: RuntimeLiteWriteStore;
+  liteAutomationStore: AutomationRouteArgs["automationStore"] | null;
+  liteAutomationRunStore: AutomationRouteArgs["automationRunStore"] | null;
   recallTextEmbedBatcher: unknown;
   writeStoreCapabilities: {
     shadow_mirror_v2: boolean;
   };
   requireAdminToken: (req: FastifyRequest) => void;
-  requireStoreFeatureCapability: (...args: any[]) => void;
+  requireStoreFeatureCapability: MemoryAccessRouteArgs["requireStoreFeatureCapability"];
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
     req: FastifyRequest,
@@ -311,31 +366,31 @@ export type RegisterApplicationRoutesArgs = {
   enforceRateLimit: (req: FastifyRequest, reply: FastifyReply, kind: RateLimitKind) => Promise<void>;
   enforceTenantQuota: (req: FastifyRequest, reply: FastifyReply, kind: TenantQuotaKind, tenantId: string) => Promise<void>;
   enforceRecallTextEmbedQuota: (req: FastifyRequest, reply: FastifyReply, tenantId: string) => Promise<void>;
-  buildRecallAuth: (req: FastifyRequest, allowEmbeddings: boolean) => any;
+  buildRecallAuth: MemoryRecallRouteArgs["buildRecallAuth"] & MemoryContextRouteArgs["buildRecallAuth"];
   tenantFromBody: (body: unknown) => string;
   scopeFromBody: (body: unknown) => string;
   projectFromBody: (body: unknown) => string | null;
   acquireInflightSlot: (kind: InflightKind) => Promise<InflightGateToken>;
-  hasExplicitRecallKnobs: (body: unknown) => boolean;
-  resolveRecallProfile: (endpoint: RecallEndpoint, tenantId: string | null | undefined) => any;
-  resolveExplicitRecallMode: (body: unknown, baseProfile: any, explicitRecallKnobs: boolean) => any;
-  resolveClassAwareRecallProfile: (...args: any[]) => any;
-  withRecallProfileDefaults: (body: unknown, defaults: any) => any;
-  resolveRecallStrategy: (body: unknown, explicitRecallKnobs: boolean) => any;
-  resolveAdaptiveRecallProfile: (profile: any, waitMs: number, explicitRecallKnobs: boolean) => any;
-  resolveAdaptiveRecallHardCap: (knobs: any, waitMs: number, explicitRecallKnobs: boolean) => any;
-  inferRecallStrategyFromKnobs: (knobs: any) => any;
-  buildRecallTrajectory: (args: any) => any;
-  embedRecallTextQuery: (...args: any[]) => Promise<any>;
-  mapRecallTextEmbeddingError: (...args: any[]) => any;
-  recordContextAssemblyTelemetryBestEffort: (...args: any[]) => Promise<void>;
-  withReplayRepairReviewDefaults: (...args: any[]) => any;
-  buildReplayRepairReviewOptions: (...args: any[]) => any;
-  buildAutomationReplayRunOptions: (reply: FastifyReply, source: string) => any;
-  sandboxExecutor: any;
+  hasExplicitRecallKnobs: MemoryRecallRouteArgs["hasExplicitRecallKnobs"];
+  resolveRecallProfile: MemoryRecallRouteArgs["resolveRecallProfile"] & MemoryContextRouteArgs["resolveRecallProfile"];
+  resolveExplicitRecallMode: MemoryRecallRouteArgs["resolveExplicitRecallMode"] & MemoryContextRouteArgs["resolveExplicitRecallMode"];
+  resolveClassAwareRecallProfile: MemoryContextRouteArgs["resolveClassAwareRecallProfile"];
+  withRecallProfileDefaults: MemoryRecallRouteArgs["withRecallProfileDefaults"] & MemoryContextRouteArgs["withRecallProfileDefaults"];
+  resolveRecallStrategy: MemoryRecallRouteArgs["resolveRecallStrategy"] & MemoryContextRouteArgs["resolveRecallStrategy"];
+  resolveAdaptiveRecallProfile: MemoryRecallRouteArgs["resolveAdaptiveRecallProfile"] & MemoryContextRouteArgs["resolveAdaptiveRecallProfile"];
+  resolveAdaptiveRecallHardCap: MemoryRecallRouteArgs["resolveAdaptiveRecallHardCap"] & MemoryContextRouteArgs["resolveAdaptiveRecallHardCap"];
+  inferRecallStrategyFromKnobs: MemoryRecallRouteArgs["inferRecallStrategyFromKnobs"] & MemoryContextRouteArgs["inferRecallStrategyFromKnobs"];
+  buildRecallTrajectory: MemoryRecallRouteArgs["buildRecallTrajectory"] & MemoryContextRouteArgs["buildRecallTrajectory"];
+  embedRecallTextQuery: MemoryContextRouteArgs["embedRecallTextQuery"];
+  mapRecallTextEmbeddingError: MemoryContextRouteArgs["mapRecallTextEmbeddingError"];
+  recordContextAssemblyTelemetryBestEffort: MemoryContextRouteArgs["recordContextAssemblyTelemetryBestEffort"];
+  withReplayRepairReviewDefaults: MemoryReplayGovernedRouteArgs["withReplayRepairReviewDefaults"];
+  buildReplayRepairReviewOptions: MemoryReplayGovernedRouteArgs["buildReplayRepairReviewOptions"];
+  buildAutomationReplayRunOptions: RuntimeReplayRunOptionsBuilder;
+  sandboxExecutor: RuntimeSandboxExecutor;
   enforceSandboxTenantBudget: (reply: FastifyReply, tenantId: string, scope: string, projectId?: string | null) => Promise<void>;
-  writeAccessForClient: (client: any) => any;
-  runTopicClusterForEventIds: (client: any, args: any) => Promise<any>;
+  writeAccessForClient: MemoryWriteRouteArgs["writeAccessForClient"];
+  runTopicClusterForEventIds: MemoryWriteRouteArgs["runTopicClusterForEventIds"];
 };
 
 type RuntimeBoundaryRouteRegistrationArgs = Pick<RegisterApplicationRoutesArgs, "app" | "env">;
@@ -709,7 +764,7 @@ function registerRuntimeReplayAndAutomationRoutes(args: RuntimeReplayAndAutomati
     buildReplayPlaybookRunOptions: buildAutomationReplayRunOptions,
   });
 
-  if (env.AIONIS_EDITION === "lite" && liteAutomationStore) {
+  if (env.AIONIS_EDITION === "lite" && liteAutomationStore && liteAutomationRunStore) {
     registerAutomationRoutes({
       app,
       env,
