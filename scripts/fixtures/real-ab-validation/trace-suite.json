@@ -1,0 +1,323 @@
+{
+  "suite_id": "aionis_real_ab_trace_calibration_v1",
+  "suite_kind": "harness_calibration",
+  "generated_at": "2026-04-27T00:00:00.000Z",
+  "tasks": [
+    {
+      "id": "trace_coding_resume",
+      "title": "Trace-derived coding resume comparison",
+      "task_family": "coding_continuity",
+      "task_prompt": "Resume a partially fixed exporter task from trace data instead of hand-written metrics.",
+      "fairness": {
+        "same_model": true,
+        "same_time_budget": true,
+        "same_tool_permissions": true,
+        "same_environment_reset": true,
+        "same_verifier": true
+      },
+      "verifier": {
+        "kind": "command",
+        "command": "npm test -- tests/exporter.test.mjs",
+        "after_exit_required": false,
+        "external_visibility_required": false
+      },
+      "expected_outcome": {
+        "target_files": ["src/exporter.ts", "tests/exporter.test.mjs"],
+        "success_invariants": ["exporter_regression_test_passes"],
+        "acceptance_checks": ["npm test -- tests/exporter.test.mjs"]
+      },
+      "arms": {
+        "baseline": {
+          "memory_mode": "none",
+          "authority_level": "none",
+          "packet_source": "none",
+          "trace": {
+            "trace_version": "aionis_agent_run_trace_v1",
+            "run_id": "trace-baseline-exporter",
+            "started_at_ms": 0,
+            "ended_at_ms": 900000,
+            "events": [
+              {
+                "kind": "action",
+                "text": "Inspect package metadata first.",
+                "touched_files": ["package.json"],
+                "correct": false,
+                "wasted": true,
+                "tokens": 2000
+              },
+              {
+                "kind": "tool_call",
+                "command": "rg exporter",
+                "correct": false,
+                "wasted": true,
+                "tokens": 4000
+              },
+              {
+                "kind": "retry",
+                "text": "Retry after finding the failing test.",
+                "retry": true,
+                "tokens": 1000
+              },
+              {
+                "kind": "action",
+                "text": "Patch src/exporter.ts and tests/exporter.test.mjs.",
+                "touched_files": ["src/exporter.ts", "tests/exporter.test.mjs"],
+                "correct": true,
+                "tokens": 8000
+              },
+              {
+                "kind": "verification",
+                "command": "npm test -- tests/exporter.test.mjs",
+                "success": true,
+                "verifier": true,
+                "tokens": 2000
+              }
+            ]
+          }
+        },
+        "aionis_assisted": {
+          "memory_mode": "aionis_auto",
+          "authority_level": "advisory",
+          "packet_source": "automatic_runtime",
+          "trace": {
+            "trace_version": "aionis_agent_run_trace_v1",
+            "run_id": "trace-aionis-exporter",
+            "started_at_ms": 0,
+            "ended_at_ms": 460000,
+            "events": [
+              {
+                "kind": "action",
+                "text": "Open src/exporter.ts first because the continuity packet names it as the target file.",
+                "touched_files": ["src/exporter.ts"],
+                "correct": true,
+                "tokens": 2000
+              },
+              {
+                "kind": "tool_call",
+                "command": "npm test -- tests/exporter.test.mjs",
+                "correct": true,
+                "tokens": 2000
+              },
+              {
+                "kind": "verification",
+                "command": "npm test -- tests/exporter.test.mjs",
+                "success": true,
+                "verifier": true,
+                "tokens": 1500
+              }
+            ]
+          }
+        },
+        "negative_control": {
+          "memory_mode": "irrelevant_or_low_trust",
+          "authority_level": "observational",
+          "packet_source": "irrelevant_low_trust",
+          "trace": {
+            "trace_version": "aionis_agent_run_trace_v1",
+            "run_id": "trace-negative-exporter",
+            "started_at_ms": 0,
+            "ended_at_ms": 930000,
+            "events": [
+              {
+                "kind": "action",
+                "text": "Follow irrelevant auth middleware memory.",
+                "touched_files": ["src/auth/middleware.ts"],
+                "correct": false,
+                "wasted": true,
+                "tokens": 3000
+              },
+              {
+                "kind": "tool_call",
+                "command": "rg exporter",
+                "correct": false,
+                "wasted": true,
+                "tokens": 3000
+              },
+              {
+                "kind": "action",
+                "text": "Patch src/exporter.ts after inspecting the verifier.",
+                "touched_files": ["src/exporter.ts"],
+                "correct": true,
+                "tokens": 7000
+              },
+              {
+                "kind": "verification",
+                "command": "npm test -- tests/exporter.test.mjs",
+                "success": true,
+                "verifier": true,
+                "tokens": 2000
+              }
+            ]
+          }
+        },
+        "positive_control": {
+          "memory_mode": "oracle_handoff",
+          "authority_level": "authoritative",
+          "packet_source": "oracle_handoff",
+          "trace": {
+            "trace_version": "aionis_agent_run_trace_v1",
+            "run_id": "trace-positive-exporter",
+            "started_at_ms": 0,
+            "ended_at_ms": 320000,
+            "events": [
+              {
+                "kind": "action",
+                "text": "Apply the known fix in src/exporter.ts and run the known verifier.",
+                "touched_files": ["src/exporter.ts", "tests/exporter.test.mjs"],
+                "correct": true,
+                "tokens": 1500
+              },
+              {
+                "kind": "verification",
+                "command": "npm test -- tests/exporter.test.mjs",
+                "success": true,
+                "verifier": true,
+                "tokens": 1200
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "trace_service_after_exit",
+      "title": "Trace-derived service after-exit comparison",
+      "task_family": "service_publish_validate",
+      "task_prompt": "Prove a service stays available after the worker exits using trace events.",
+      "fairness": {
+        "same_model": true,
+        "same_time_budget": true,
+        "same_tool_permissions": true,
+        "same_environment_reset": true,
+        "same_verifier": true
+      },
+      "verifier": {
+        "kind": "external_probe",
+        "command": "curl -fsS http://127.0.0.1:4199/healthz",
+        "after_exit_required": true,
+        "external_visibility_required": true
+      },
+      "expected_outcome": {
+        "target_files": ["scripts/health-server.mjs"],
+        "success_invariants": ["service_survives_agent_exit", "fresh_shell_revalidation_passes"],
+        "acceptance_checks": ["curl -fsS http://127.0.0.1:4199/healthz"]
+      },
+      "arms": {
+        "baseline": {
+          "memory_mode": "none",
+          "authority_level": "none",
+          "packet_source": "none",
+          "trace": {
+            "trace_version": "aionis_agent_run_trace_v1",
+            "run_id": "trace-baseline-service",
+            "events": [
+              {
+                "kind": "tool_call",
+                "command": "node scripts/health-server.mjs --port 4199",
+                "touched_files": ["scripts/health-server.mjs"],
+                "correct": false,
+                "wasted": true
+              },
+              {
+                "kind": "agent_claim",
+                "text": "The service is running.",
+                "claimed_success": true
+              },
+              {
+                "kind": "external_probe",
+                "command": "curl -fsS http://127.0.0.1:4199/healthz",
+                "success": false,
+                "verifier": true,
+                "after_exit": true,
+                "fresh_shell": true
+              }
+            ]
+          }
+        },
+        "aionis_assisted": {
+          "memory_mode": "aionis_auto",
+          "authority_level": "authoritative",
+          "packet_source": "automatic_runtime",
+          "trace": {
+            "trace_version": "aionis_agent_run_trace_v1",
+            "run_id": "trace-aionis-service",
+            "events": [
+              {
+                "kind": "tool_call",
+                "command": "nohup node scripts/health-server.mjs --port 4199 >/tmp/health.log 2>&1 &",
+                "touched_files": ["scripts/health-server.mjs"],
+                "correct": true
+              },
+              {
+                "kind": "external_probe",
+                "command": "curl -fsS http://127.0.0.1:4199/healthz",
+                "success": true,
+                "verifier": true,
+                "after_exit": true,
+                "fresh_shell": true
+              }
+            ]
+          }
+        },
+        "negative_control": {
+          "memory_mode": "irrelevant_or_low_trust",
+          "authority_level": "advisory",
+          "packet_source": "irrelevant_low_trust",
+          "trace": {
+            "trace_version": "aionis_agent_run_trace_v1",
+            "run_id": "trace-negative-service",
+            "events": [
+              {
+                "kind": "action",
+                "text": "Inspect unrelated package publishing memory first.",
+                "touched_files": ["scripts/build_index.py"],
+                "correct": false,
+                "wasted": true
+              },
+              {
+                "kind": "tool_call",
+                "command": "node scripts/health-server.mjs --port 4199",
+                "touched_files": ["scripts/health-server.mjs"],
+                "correct": false,
+                "wasted": true
+              },
+              {
+                "kind": "external_probe",
+                "command": "curl -fsS http://127.0.0.1:4199/healthz",
+                "success": false,
+                "verifier": true,
+                "after_exit": true,
+                "fresh_shell": true
+              }
+            ]
+          }
+        },
+        "positive_control": {
+          "memory_mode": "oracle_handoff",
+          "authority_level": "authoritative",
+          "packet_source": "oracle_handoff",
+          "trace": {
+            "trace_version": "aionis_agent_run_trace_v1",
+            "run_id": "trace-positive-service",
+            "events": [
+              {
+                "kind": "tool_call",
+                "command": "nohup node scripts/health-server.mjs --port 4199 >/tmp/health.log 2>&1 &",
+                "touched_files": ["scripts/health-server.mjs"],
+                "correct": true
+              },
+              {
+                "kind": "external_probe",
+                "command": "curl -fsS http://127.0.0.1:4199/healthz",
+                "success": true,
+                "verifier": true,
+                "after_exit": true,
+                "fresh_shell": true
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

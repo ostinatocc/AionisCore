@@ -1,0 +1,794 @@
+export const realAbRequiredArms = [
+  "baseline",
+  "aionis_assisted",
+  "negative_control",
+  "positive_control",
+] as const;
+
+export type RealAbArm = typeof realAbRequiredArms[number];
+
+export type RealAbSuiteKind =
+  | "harness_calibration"
+  | "pilot_real_trace"
+  | "product_real_trace";
+
+export type RealAbMemoryMode =
+  | "none"
+  | "aionis_auto"
+  | "irrelevant_or_low_trust"
+  | "oracle_handoff";
+
+export type RealAbAuthorityLevel =
+  | "none"
+  | "observational"
+  | "advisory"
+  | "authoritative";
+
+export type RealAbFairnessContract = {
+  same_model: boolean;
+  same_time_budget: boolean;
+  same_tool_permissions: boolean;
+  same_environment_reset: boolean;
+  same_verifier: boolean;
+};
+
+export type RealAbVerifierSpec = {
+  kind: "command" | "external_probe" | "manual";
+  command?: string;
+  after_exit_required?: boolean;
+  external_visibility_required?: boolean;
+};
+
+export type RealAbArmMetrics = {
+  completion: boolean;
+  verifier_passed: boolean;
+  first_correct_action: boolean;
+  wasted_steps: number;
+  retry_count: number;
+  false_confidence: boolean;
+  after_exit_correct: boolean | null;
+  wrong_file_touches: number;
+  human_intervention_count: number;
+  time_to_success_ms?: number | null;
+  tokens_to_success?: number | null;
+};
+
+export type RealAbTraceEventKind =
+  | "action"
+  | "tool_call"
+  | "verification"
+  | "external_probe"
+  | "agent_claim"
+  | "retry"
+  | "human_intervention";
+
+export type RealAbTraceEvent = {
+  kind: RealAbTraceEventKind;
+  timestamp_ms?: number;
+  text?: string;
+  command?: string;
+  touched_files?: string[];
+  correct?: boolean;
+  wasted?: boolean;
+  retry?: boolean;
+  success?: boolean;
+  verifier?: boolean;
+  after_exit?: boolean;
+  fresh_shell?: boolean;
+  claimed_success?: boolean;
+  false_confidence?: boolean;
+  human_intervention?: boolean;
+  tokens?: number;
+};
+
+export type RealAbRunTrace = {
+  trace_version: "aionis_agent_run_trace_v1";
+  run_id: string;
+  started_at_ms?: number;
+  ended_at_ms?: number;
+  events: RealAbTraceEvent[];
+  outcome?: Partial<RealAbArmMetrics>;
+};
+
+export type RealAbArmObservation = {
+  memory_mode: RealAbMemoryMode;
+  authority_level: RealAbAuthorityLevel;
+  packet_source: "none" | "automatic_runtime" | "irrelevant_low_trust" | "oracle_handoff";
+  metrics?: RealAbArmMetrics;
+  trace?: RealAbRunTrace;
+  notes?: string[];
+};
+
+export type RealAbResolvedArmObservation = Omit<RealAbArmObservation, "metrics"> & {
+  metrics: RealAbArmMetrics;
+  metrics_source: "provided" | "trace_derived";
+  trace_summary?: {
+    run_id: string;
+    event_count: number;
+    action_event_count: number;
+    verifier_event_count: number;
+  };
+};
+
+export type RealAbTaskSpec = {
+  id: string;
+  title: string;
+  task_family: string;
+  task_prompt: string;
+  fairness: RealAbFairnessContract;
+  verifier: RealAbVerifierSpec;
+  expected_outcome: {
+    target_files?: string[];
+    success_invariants: string[];
+    acceptance_checks?: string[];
+  };
+  arms: Record<RealAbArm, RealAbResolvedArmObservation>;
+};
+
+export type RealAbSuiteInput = {
+  suite_id: string;
+  suite_kind: RealAbSuiteKind;
+  generated_at?: string;
+  thresholds?: Partial<RealAbThresholds>;
+  tasks: RealAbTaskSpec[];
+};
+
+export type RealAbThresholds = {
+  min_wasted_step_reduction_pct: number;
+};
+
+export type RealAbGateRequirement = {
+  id: string;
+  scope: "task" | "suite";
+  status: "pass" | "fail";
+  actual: string | number | boolean | null;
+  expected: string | number | boolean;
+  message: string;
+};
+
+export type RealAbTaskResult = {
+  id: string;
+  title: string;
+  task_family: string;
+  status: "pass" | "fail";
+  fairness_status: "pass" | "fail";
+  verifier: RealAbVerifierSpec;
+  deltas: {
+    completion_delta: number;
+    first_correct_action_delta: number;
+    wasted_step_delta: number;
+    retry_delta: number;
+    false_confidence_delta: number;
+    after_exit_correct_delta: number | null;
+    wrong_file_touch_delta: number;
+    human_intervention_delta: number;
+    time_to_success_delta_ms: number | null;
+    tokens_to_success_delta: number | null;
+  };
+  gate_requirements: RealAbGateRequirement[];
+  arms: Record<RealAbArm, RealAbArmObservation>;
+};
+
+export type RealAbReport = {
+  report_version: "aionis_real_ab_validation_report_v1";
+  generated_at: string;
+  suite_id: string;
+  suite_kind: RealAbSuiteKind;
+  proof_boundary: {
+    boundary_version: "aionis_real_ab_proof_boundary_v1";
+    claim_level: "harness_only" | "pilot_evidence" | "product_evidence";
+    statement: string;
+    live_trace_required_for_product_claim: boolean;
+  };
+  thresholds: RealAbThresholds;
+  gate: {
+    gate_version: "aionis_real_ab_gate_v1";
+    status: "pass" | "fail";
+    failed_requirements: RealAbGateRequirement[];
+    requirements: RealAbGateRequirement[];
+  };
+  summary: {
+    total_tasks: number;
+    task_families: Record<string, number>;
+    baseline_completion_rate: number;
+    treatment_completion_rate: number;
+    baseline_first_correct_action_rate: number;
+    treatment_first_correct_action_rate: number;
+    wasted_step_reduction_pct: number | null;
+    baseline_false_confidence_rate: number;
+    treatment_false_confidence_rate: number;
+    baseline_after_exit_correctness_rate: number | null;
+    treatment_after_exit_correctness_rate: number | null;
+    negative_control_authoritative_count: number;
+    positive_control_sanity_rate: number;
+  };
+  tasks: RealAbTaskResult[];
+};
+
+const defaultThresholds: RealAbThresholds = {
+  min_wasted_step_reduction_pct: 20,
+};
+
+function boolToNumber(value: boolean): number {
+  return value ? 1 : 0;
+}
+
+function nullableBoolToNumber(value: boolean | null): number | null {
+  return value === null ? null : boolToNumber(value);
+}
+
+function rate(values: boolean[]): number {
+  if (values.length === 0) return 0;
+  return values.filter(Boolean).length / values.length;
+}
+
+function nullableRate(values: Array<boolean | null>): number | null {
+  const filtered = values.filter((value): value is boolean => value !== null);
+  if (filtered.length === 0) return null;
+  return rate(filtered);
+}
+
+function sum(values: number[]): number {
+  return values.reduce((total, value) => total + value, 0);
+}
+
+function pctReduction(before: number, after: number): number | null {
+  if (before <= 0) return after <= before ? 0 : -Infinity;
+  return ((before - after) / before) * 100;
+}
+
+function requirement(args: Omit<RealAbGateRequirement, "status"> & { ok: boolean }): RealAbGateRequirement {
+  return {
+    id: args.id,
+    scope: args.scope,
+    status: args.ok ? "pass" : "fail",
+    actual: args.actual,
+    expected: args.expected,
+    message: args.message,
+  };
+}
+
+function validateRequiredArms(task: RealAbTaskSpec): RealAbGateRequirement[] {
+  return realAbRequiredArms.map((arm) =>
+    requirement({
+      id: `${task.id}:arm:${arm}`,
+      scope: "task",
+      ok: Boolean(task.arms?.[arm]),
+      actual: Boolean(task.arms?.[arm]),
+      expected: true,
+      message: `task must include ${arm} arm`,
+    })
+  );
+}
+
+function validateFairness(task: RealAbTaskSpec): RealAbGateRequirement[] {
+  return Object.entries(task.fairness).map(([key, value]) =>
+    requirement({
+      id: `${task.id}:fairness:${key}`,
+      scope: "task",
+      ok: value === true,
+      actual: value,
+      expected: true,
+      message: `A/B fairness requires ${key}`,
+    })
+  );
+}
+
+function validateArmSemantics(task: RealAbTaskSpec): RealAbGateRequirement[] {
+  const baseline = task.arms.baseline;
+  const treatment = task.arms.aionis_assisted;
+  const negative = task.arms.negative_control;
+  const positive = task.arms.positive_control;
+
+  return [
+    requirement({
+      id: `${task.id}:baseline_no_memory`,
+      scope: "task",
+      ok: baseline.memory_mode === "none" && baseline.packet_source === "none",
+      actual: baseline.memory_mode,
+      expected: "none",
+      message: "baseline must not receive Aionis memory",
+    }),
+    requirement({
+      id: `${task.id}:treatment_automatic_memory`,
+      scope: "task",
+      ok: treatment.memory_mode === "aionis_auto" && treatment.packet_source === "automatic_runtime",
+      actual: treatment.packet_source,
+      expected: "automatic_runtime",
+      message: "treatment must use automatically generated Aionis memory",
+    }),
+    requirement({
+      id: `${task.id}:negative_low_trust_memory`,
+      scope: "task",
+      ok: negative.memory_mode === "irrelevant_or_low_trust" && negative.authority_level !== "authoritative",
+      actual: negative.authority_level,
+      expected: "not_authoritative",
+      message: "negative control must not become authoritative",
+    }),
+    requirement({
+      id: `${task.id}:positive_oracle_handoff`,
+      scope: "task",
+      ok: positive.memory_mode === "oracle_handoff" && positive.packet_source === "oracle_handoff",
+      actual: positive.packet_source,
+      expected: "oracle_handoff",
+      message: "positive control must use oracle handoff",
+    }),
+  ];
+}
+
+function isActionEvent(event: RealAbTraceEvent): boolean {
+  return event.kind === "action" || event.kind === "tool_call";
+}
+
+function eventText(event: RealAbTraceEvent): string {
+  return [
+    event.text,
+    event.command,
+    ...(event.touched_files ?? []),
+  ].filter((entry): entry is string => typeof entry === "string").join("\n");
+}
+
+function eventTouchesExpectedTarget(event: RealAbTraceEvent, task: RealAbTaskSpec): boolean {
+  const targets = task.expected_outcome.target_files ?? [];
+  if (targets.length === 0) return false;
+  const text = eventText(event);
+  return targets.some((target) => text.includes(target));
+}
+
+function eventMatchesAcceptanceCheck(event: RealAbTraceEvent, task: RealAbTaskSpec): boolean {
+  const checks = task.expected_outcome.acceptance_checks ?? [];
+  if (checks.length === 0) return false;
+  const text = eventText(event);
+  return checks.some((check) => text.includes(check));
+}
+
+function isEventCorrect(event: RealAbTraceEvent, task: RealAbTaskSpec): boolean {
+  if (typeof event.correct === "boolean") return event.correct;
+  return eventTouchesExpectedTarget(event, task) || eventMatchesAcceptanceCheck(event, task);
+}
+
+function isEventWasted(event: RealAbTraceEvent, task: RealAbTaskSpec): boolean {
+  if (typeof event.wasted === "boolean") return event.wasted;
+  return isActionEvent(event) && event.correct === false;
+}
+
+function deriveVerifierPassed(trace: RealAbRunTrace): boolean {
+  if (typeof trace.outcome?.verifier_passed === "boolean") return trace.outcome.verifier_passed;
+  const verifierEvents = trace.events.filter((event) =>
+    event.kind === "verification" || event.kind === "external_probe" || event.verifier === true
+  );
+  if (verifierEvents.length === 0) return false;
+  return verifierEvents[verifierEvents.length - 1].success === true;
+}
+
+function deriveAfterExitCorrect(trace: RealAbRunTrace, task: RealAbTaskSpec): boolean | null {
+  if (typeof trace.outcome?.after_exit_correct === "boolean") return trace.outcome.after_exit_correct;
+  if (!task.verifier.after_exit_required) return null;
+  return trace.events.some((event) =>
+    (event.after_exit === true || event.fresh_shell === true)
+    && (event.kind === "verification" || event.kind === "external_probe" || event.verifier === true)
+    && event.success === true
+  );
+}
+
+function deriveFalseConfidence(trace: RealAbRunTrace): boolean {
+  if (typeof trace.outcome?.false_confidence === "boolean") return trace.outcome.false_confidence;
+  if (trace.events.some((event) => event.false_confidence === true)) return true;
+  return trace.events.some((event, index) =>
+    event.kind === "agent_claim"
+    && event.claimed_success === true
+    && trace.events.slice(index + 1).some((later) =>
+      (later.kind === "verification" || later.kind === "external_probe" || later.verifier === true)
+      && later.success === false
+    )
+  );
+}
+
+function deriveWrongFileTouches(trace: RealAbRunTrace, task: RealAbTaskSpec): number {
+  const targets = new Set(task.expected_outcome.target_files ?? []);
+  if (targets.size === 0) return 0;
+  return trace.events.reduce((count, event) => {
+    if (!isActionEvent(event)) return count;
+    return count + (event.touched_files ?? []).filter((file) => !targets.has(file)).length;
+  }, 0);
+}
+
+function deriveTimeToSuccessMs(trace: RealAbRunTrace): number | null {
+  if (typeof trace.outcome?.time_to_success_ms === "number") return trace.outcome.time_to_success_ms;
+  if (typeof trace.started_at_ms === "number" && typeof trace.ended_at_ms === "number") {
+    return Math.max(0, trace.ended_at_ms - trace.started_at_ms);
+  }
+  return null;
+}
+
+export function deriveMetricsFromTrace(task: RealAbTaskSpec, trace: RealAbRunTrace): RealAbArmMetrics {
+  const actionEvents = trace.events.filter(isActionEvent);
+  const firstAction = actionEvents[0] ?? null;
+  const verifierPassed = deriveVerifierPassed(trace);
+  return {
+    completion: typeof trace.outcome?.completion === "boolean" ? trace.outcome.completion : verifierPassed,
+    verifier_passed: verifierPassed,
+    first_correct_action: typeof trace.outcome?.first_correct_action === "boolean"
+      ? trace.outcome.first_correct_action
+      : firstAction
+        ? isEventCorrect(firstAction, task)
+        : false,
+    wasted_steps: typeof trace.outcome?.wasted_steps === "number"
+      ? trace.outcome.wasted_steps
+      : trace.events.filter((event) => isEventWasted(event, task)).length,
+    retry_count: typeof trace.outcome?.retry_count === "number"
+      ? trace.outcome.retry_count
+      : trace.events.filter((event) => event.kind === "retry" || event.retry === true).length,
+    false_confidence: deriveFalseConfidence(trace),
+    after_exit_correct: deriveAfterExitCorrect(trace, task),
+    wrong_file_touches: typeof trace.outcome?.wrong_file_touches === "number"
+      ? trace.outcome.wrong_file_touches
+      : deriveWrongFileTouches(trace, task),
+    human_intervention_count: typeof trace.outcome?.human_intervention_count === "number"
+      ? trace.outcome.human_intervention_count
+      : trace.events.filter((event) => event.kind === "human_intervention" || event.human_intervention === true).length,
+    time_to_success_ms: deriveTimeToSuccessMs(trace),
+    tokens_to_success: typeof trace.outcome?.tokens_to_success === "number"
+      ? trace.outcome.tokens_to_success
+      : trace.events.some((event) => typeof event.tokens === "number")
+        ? trace.events.reduce((total, event) => total + (event.tokens ?? 0), 0)
+        : null,
+  };
+}
+
+function resolveArmObservation(task: RealAbTaskSpec, arm: RealAbArm): RealAbResolvedArmObservation {
+  const observation = task.arms[arm];
+  if (observation.metrics) {
+    return {
+      ...observation,
+      metrics: observation.metrics,
+      metrics_source: "provided",
+    };
+  }
+  if (observation.trace) {
+    const actionEventCount = observation.trace.events.filter(isActionEvent).length;
+    const verifierEventCount = observation.trace.events.filter((event) =>
+      event.kind === "verification" || event.kind === "external_probe" || event.verifier === true
+    ).length;
+    return {
+      ...observation,
+      metrics: deriveMetricsFromTrace(task, observation.trace),
+      metrics_source: "trace_derived",
+      trace_summary: {
+        run_id: observation.trace.run_id,
+        event_count: observation.trace.events.length,
+        action_event_count: actionEventCount,
+        verifier_event_count: verifierEventCount,
+      },
+    };
+  }
+  return {
+    ...observation,
+    metrics: {
+      completion: false,
+      verifier_passed: false,
+      first_correct_action: false,
+      wasted_steps: 0,
+      retry_count: 0,
+      false_confidence: false,
+      after_exit_correct: task.verifier.after_exit_required ? false : null,
+      wrong_file_touches: 0,
+      human_intervention_count: 0,
+      time_to_success_ms: null,
+      tokens_to_success: null,
+    },
+    metrics_source: "provided",
+  };
+}
+
+function resolveTaskArms(task: RealAbTaskSpec): Record<RealAbArm, RealAbResolvedArmObservation> {
+  return {
+    baseline: resolveArmObservation(task, "baseline"),
+    aionis_assisted: resolveArmObservation(task, "aionis_assisted"),
+    negative_control: resolveArmObservation(task, "negative_control"),
+    positive_control: resolveArmObservation(task, "positive_control"),
+  };
+}
+
+function validateArmMeasurements(task: RealAbTaskSpec): RealAbGateRequirement[] {
+  return realAbRequiredArms.map((arm) => {
+    const observation = task.arms?.[arm];
+    const hasMeasurement = Boolean(observation?.metrics || observation?.trace);
+    return requirement({
+      id: `${task.id}:measurement:${arm}`,
+      scope: "task",
+      ok: hasMeasurement,
+      actual: hasMeasurement,
+      expected: true,
+      message: `${arm} must include either metrics or a trace`,
+    });
+  });
+}
+
+function buildTaskResult(task: RealAbTaskSpec): RealAbTaskResult {
+  const arms = resolveTaskArms(task);
+  const baseline = arms.baseline.metrics;
+  const treatment = arms.aionis_assisted.metrics;
+  const positive = arms.positive_control.metrics;
+
+  const afterExitDelta = nullableBoolToNumber(treatment.after_exit_correct) !== null
+    && nullableBoolToNumber(baseline.after_exit_correct) !== null
+    ? boolToNumber(treatment.after_exit_correct === true) - boolToNumber(baseline.after_exit_correct === true)
+    : null;
+
+  const timeDelta = typeof treatment.time_to_success_ms === "number" && typeof baseline.time_to_success_ms === "number"
+    ? treatment.time_to_success_ms - baseline.time_to_success_ms
+    : null;
+  const tokenDelta = typeof treatment.tokens_to_success === "number" && typeof baseline.tokens_to_success === "number"
+    ? treatment.tokens_to_success - baseline.tokens_to_success
+    : null;
+
+  const gateRequirements: RealAbGateRequirement[] = [
+    ...validateRequiredArms(task),
+    ...validateArmMeasurements(task),
+    ...validateFairness(task),
+    ...validateArmSemantics(task),
+    requirement({
+      id: `${task.id}:completion_not_worse`,
+      scope: "task",
+      ok: boolToNumber(treatment.completion) >= boolToNumber(baseline.completion),
+      actual: boolToNumber(treatment.completion) - boolToNumber(baseline.completion),
+      expected: 0,
+      message: "treatment completion must not be worse than baseline",
+    }),
+    requirement({
+      id: `${task.id}:false_confidence_not_worse`,
+      scope: "task",
+      ok: boolToNumber(treatment.false_confidence) <= boolToNumber(baseline.false_confidence),
+      actual: boolToNumber(treatment.false_confidence) - boolToNumber(baseline.false_confidence),
+      expected: 0,
+      message: "treatment false confidence must not be higher than baseline",
+    }),
+    requirement({
+      id: `${task.id}:positive_control_sensitive`,
+      scope: "task",
+      ok: boolToNumber(positive.first_correct_action) >= boolToNumber(baseline.first_correct_action)
+        && boolToNumber(positive.completion) >= boolToNumber(baseline.completion),
+      actual: boolToNumber(positive.first_correct_action) - boolToNumber(baseline.first_correct_action),
+      expected: 0,
+      message: "positive control must show the task can benefit from good context",
+    }),
+  ];
+
+  if (task.verifier.after_exit_required) {
+    gateRequirements.push(requirement({
+      id: `${task.id}:after_exit_not_worse`,
+      scope: "task",
+      ok: treatment.after_exit_correct === true,
+      actual: treatment.after_exit_correct,
+      expected: true,
+      message: "after-exit tasks require treatment after-exit correctness",
+    }));
+  }
+
+  return {
+    id: task.id,
+    title: task.title,
+    task_family: task.task_family,
+    status: gateRequirements.every((entry) => entry.status === "pass") ? "pass" : "fail",
+    fairness_status: [...validateRequiredArms(task), ...validateFairness(task)].every((entry) => entry.status === "pass")
+      ? "pass"
+      : "fail",
+    verifier: task.verifier,
+    deltas: {
+      completion_delta: boolToNumber(treatment.completion) - boolToNumber(baseline.completion),
+      first_correct_action_delta: boolToNumber(treatment.first_correct_action) - boolToNumber(baseline.first_correct_action),
+      wasted_step_delta: treatment.wasted_steps - baseline.wasted_steps,
+      retry_delta: treatment.retry_count - baseline.retry_count,
+      false_confidence_delta: boolToNumber(treatment.false_confidence) - boolToNumber(baseline.false_confidence),
+      after_exit_correct_delta: afterExitDelta,
+      wrong_file_touch_delta: treatment.wrong_file_touches - baseline.wrong_file_touches,
+      human_intervention_delta: treatment.human_intervention_count - baseline.human_intervention_count,
+      time_to_success_delta_ms: timeDelta,
+      tokens_to_success_delta: tokenDelta,
+    },
+    gate_requirements: gateRequirements,
+    arms,
+  };
+}
+
+function proofBoundaryFor(suiteKind: RealAbSuiteKind): RealAbReport["proof_boundary"] {
+  switch (suiteKind) {
+    case "product_real_trace":
+      return {
+        boundary_version: "aionis_real_ab_proof_boundary_v1",
+        claim_level: "product_evidence",
+        statement: "This suite can support product-value claims if traces are real, paired, and reproducible.",
+        live_trace_required_for_product_claim: false,
+      };
+    case "pilot_real_trace":
+      return {
+        boundary_version: "aionis_real_ab_proof_boundary_v1",
+        claim_level: "pilot_evidence",
+        statement: "This suite can support directional pilot claims but not broad product claims.",
+        live_trace_required_for_product_claim: true,
+      };
+    case "harness_calibration":
+    default:
+      return {
+        boundary_version: "aionis_real_ab_proof_boundary_v1",
+        claim_level: "harness_only",
+        statement: "This suite validates the A/B harness mechanics only; it does not prove Aionis product value.",
+        live_trace_required_for_product_claim: true,
+      };
+  }
+}
+
+export function runRealAbValidationSuite(input: RealAbSuiteInput): RealAbReport {
+  const thresholds = { ...defaultThresholds, ...(input.thresholds ?? {}) };
+  const tasks = input.tasks.map(buildTaskResult);
+  const baselineMetrics = tasks.map((task) => task.arms.baseline.metrics);
+  const treatmentMetrics = tasks.map((task) => task.arms.aionis_assisted.metrics);
+  const negativeArms = tasks.map((task) => task.arms.negative_control);
+  const baselineWasted = sum(baselineMetrics.map((metrics) => metrics.wasted_steps));
+  const treatmentWasted = sum(treatmentMetrics.map((metrics) => metrics.wasted_steps));
+  const wastedStepReductionPct = pctReduction(baselineWasted, treatmentWasted);
+  const taskFamilies = input.tasks.reduce<Record<string, number>>((acc, task) => {
+    acc[task.task_family] = (acc[task.task_family] ?? 0) + 1;
+    return acc;
+  }, {});
+  const positiveControlSanityRate = rate(tasks.map((task) =>
+    boolToNumber(task.arms.positive_control.metrics.first_correct_action) >= boolToNumber(task.arms.baseline.metrics.first_correct_action)
+    && boolToNumber(task.arms.positive_control.metrics.completion) >= boolToNumber(task.arms.baseline.metrics.completion)
+  ));
+
+  const summary: RealAbReport["summary"] = {
+    total_tasks: input.tasks.length,
+    task_families: taskFamilies,
+    baseline_completion_rate: rate(baselineMetrics.map((metrics) => metrics.completion)),
+    treatment_completion_rate: rate(treatmentMetrics.map((metrics) => metrics.completion)),
+    baseline_first_correct_action_rate: rate(baselineMetrics.map((metrics) => metrics.first_correct_action)),
+    treatment_first_correct_action_rate: rate(treatmentMetrics.map((metrics) => metrics.first_correct_action)),
+    wasted_step_reduction_pct: Number.isFinite(wastedStepReductionPct ?? 0) ? wastedStepReductionPct : null,
+    baseline_false_confidence_rate: rate(baselineMetrics.map((metrics) => metrics.false_confidence)),
+    treatment_false_confidence_rate: rate(treatmentMetrics.map((metrics) => metrics.false_confidence)),
+    baseline_after_exit_correctness_rate: nullableRate(baselineMetrics.map((metrics) => metrics.after_exit_correct)),
+    treatment_after_exit_correctness_rate: nullableRate(treatmentMetrics.map((metrics) => metrics.after_exit_correct)),
+    negative_control_authoritative_count: negativeArms.filter((arm) => arm.authority_level === "authoritative").length,
+    positive_control_sanity_rate: positiveControlSanityRate,
+  };
+
+  const suiteRequirements: RealAbGateRequirement[] = [
+    requirement({
+      id: "suite:completion_not_worse",
+      scope: "suite",
+      ok: summary.treatment_completion_rate >= summary.baseline_completion_rate,
+      actual: summary.treatment_completion_rate,
+      expected: summary.baseline_completion_rate,
+      message: "treatment completion rate must not be lower than baseline",
+    }),
+    requirement({
+      id: "suite:false_confidence_not_worse",
+      scope: "suite",
+      ok: summary.treatment_false_confidence_rate <= summary.baseline_false_confidence_rate,
+      actual: summary.treatment_false_confidence_rate,
+      expected: summary.baseline_false_confidence_rate,
+      message: "treatment false-confidence rate must not exceed baseline",
+    }),
+    requirement({
+      id: "suite:wasted_steps_reduced",
+      scope: "suite",
+      ok: baselineWasted === 0 ? treatmentWasted <= baselineWasted : (wastedStepReductionPct ?? -Infinity) >= thresholds.min_wasted_step_reduction_pct,
+      actual: wastedStepReductionPct,
+      expected: thresholds.min_wasted_step_reduction_pct,
+      message: "treatment should reduce wasted steps enough to justify Aionis complexity",
+    }),
+    requirement({
+      id: "suite:negative_control_safe",
+      scope: "suite",
+      ok: summary.negative_control_authoritative_count === 0,
+      actual: summary.negative_control_authoritative_count,
+      expected: 0,
+      message: "negative control memory must never become authoritative",
+    }),
+    requirement({
+      id: "suite:positive_control_sensitive",
+      scope: "suite",
+      ok: summary.positive_control_sanity_rate === 1,
+      actual: summary.positive_control_sanity_rate,
+      expected: 1,
+      message: "positive control must show all tasks are context-sensitive",
+    }),
+  ];
+
+  if (summary.baseline_after_exit_correctness_rate !== null && summary.treatment_after_exit_correctness_rate !== null) {
+    suiteRequirements.push(requirement({
+      id: "suite:after_exit_not_worse",
+      scope: "suite",
+      ok: summary.treatment_after_exit_correctness_rate >= summary.baseline_after_exit_correctness_rate,
+      actual: summary.treatment_after_exit_correctness_rate,
+      expected: summary.baseline_after_exit_correctness_rate,
+      message: "treatment after-exit correctness must not be worse than baseline",
+    }));
+  }
+
+  const requirements = [
+    ...tasks.flatMap((task) => task.gate_requirements),
+    ...suiteRequirements,
+  ];
+  const failedRequirements = requirements.filter((entry) => entry.status === "fail");
+
+  return {
+    report_version: "aionis_real_ab_validation_report_v1",
+    generated_at: input.generated_at ?? new Date().toISOString(),
+    suite_id: input.suite_id,
+    suite_kind: input.suite_kind,
+    proof_boundary: proofBoundaryFor(input.suite_kind),
+    thresholds,
+    gate: {
+      gate_version: "aionis_real_ab_gate_v1",
+      status: failedRequirements.length === 0 ? "pass" : "fail",
+      failed_requirements: failedRequirements,
+      requirements,
+    },
+    summary,
+    tasks,
+  };
+}
+
+function pct(value: number | null): string {
+  if (value === null) return "n/a";
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function signed(value: number | null): string {
+  if (value === null) return "n/a";
+  return value > 0 ? `+${value}` : `${value}`;
+}
+
+export function renderRealAbMarkdownReport(report: RealAbReport): string {
+  const lines = [
+    `# Aionis Real A/B Validation Report`,
+    "",
+    `- Suite: \`${report.suite_id}\``,
+    `- Kind: \`${report.suite_kind}\``,
+    `- Gate: **${report.gate.status}**`,
+    `- Proof boundary: ${report.proof_boundary.statement}`,
+    "",
+    "## Summary",
+    "",
+    `| Metric | Baseline | Aionis assisted |`,
+    `| --- | ---: | ---: |`,
+    `| Completion rate | ${pct(report.summary.baseline_completion_rate)} | ${pct(report.summary.treatment_completion_rate)} |`,
+    `| First correct action rate | ${pct(report.summary.baseline_first_correct_action_rate)} | ${pct(report.summary.treatment_first_correct_action_rate)} |`,
+    `| False confidence rate | ${pct(report.summary.baseline_false_confidence_rate)} | ${pct(report.summary.treatment_false_confidence_rate)} |`,
+    `| After-exit correctness | ${pct(report.summary.baseline_after_exit_correctness_rate)} | ${pct(report.summary.treatment_after_exit_correctness_rate)} |`,
+    "",
+    `Wasted-step reduction: ${report.summary.wasted_step_reduction_pct === null ? "n/a" : `${report.summary.wasted_step_reduction_pct.toFixed(1)}%`}`,
+    `Negative-control authoritative count: ${report.summary.negative_control_authoritative_count}`,
+    `Positive-control sanity rate: ${pct(report.summary.positive_control_sanity_rate)}`,
+    "",
+    "## Task Results",
+    "",
+    `| Task | Family | Status | First action delta | Wasted step delta | False-confidence delta |`,
+    `| --- | --- | --- | ---: | ---: | ---: |`,
+    ...report.tasks.map((task) =>
+      `| ${task.id} | ${task.task_family} | ${task.status} | ${signed(task.deltas.first_correct_action_delta)} | ${signed(task.deltas.wasted_step_delta)} | ${signed(task.deltas.false_confidence_delta)} |`
+    ),
+    "",
+  ];
+
+  if (report.gate.failed_requirements.length > 0) {
+    lines.push("## Failed Requirements", "");
+    for (const failed of report.gate.failed_requirements) {
+      lines.push(`- \`${failed.id}\`: ${failed.message} (actual: ${String(failed.actual)}, expected: ${String(failed.expected)})`);
+    }
+    lines.push("");
+  }
+
+  lines.push(
+    "## Interpretation",
+    "",
+    report.proof_boundary.live_trace_required_for_product_claim
+      ? "This report must not be used as product proof until it is backed by live paired agent traces."
+      : "This report can support product evidence claims only within the declared task families and trace boundary.",
+    "",
+  );
+
+  return `${lines.join("\n")}\n`;
+}
