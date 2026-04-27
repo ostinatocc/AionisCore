@@ -39,6 +39,10 @@ import {
   buildRealAbLiveEvidenceArmRunPacket,
   renderRealAbLiveEvidenceArmRunPacketMarkdown,
 } from "../lib/aionis-real-ab-live-evidence-arm-run-packet.ts";
+import {
+  buildRealAbLiveEvidenceStatusReport,
+  renderRealAbLiveEvidenceStatusMarkdown,
+} from "../lib/aionis-real-ab-live-evidence-status.ts";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
@@ -836,4 +840,84 @@ test("real A/B live evidence arm run CLI writes a per-arm runbook", () => {
   assert.equal(packet.arm, "aionis_assisted");
   assert.deepEqual(packet.probe_slices, ["service_after_exit", "deploy_hook_web"]);
   assert.match(runbook, /Do not copy agent-events\.json or dogfood-run\.json across arms/);
+});
+
+test("real A/B live evidence status reports missing agent action evidence by arm and probe", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-live-evidence-status-"));
+
+  execFileSync("npx", [
+    "tsx",
+    "scripts/aionis-real-ab-live-evidence-init.ts",
+    "--out-dir",
+    dir,
+    "--suite-id",
+    "first-live-evidence",
+    "--task-id",
+    "external_probe_service_after_exit",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+
+  const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")) as RealAbLiveEvidenceManifest;
+  const loaded = loadedLiveEvidence();
+  for (const arm of ["baseline", "aionis_assisted", "negative_control", "positive_control"] as const) {
+    fs.writeFileSync(
+      path.join(dir, manifest.arms[arm].dogfood_run_path),
+      `${JSON.stringify(loaded[arm].dogfood_run, null, 2)}\n`,
+    );
+  }
+
+  const report = buildRealAbLiveEvidenceStatusReport({
+    manifest_path: path.join(dir, "manifest.json"),
+  });
+  const markdown = renderRealAbLiveEvidenceStatusMarkdown(report);
+
+  assert.equal(report.ready_for_live_evidence, false);
+  assert.equal(report.summary.dogfood_runs_present, 4);
+  assert.equal(report.summary.missing_agent_action_slots, 4);
+  assert.deepEqual(report.arms.aionis_assisted.probes[0].missing, [
+    "agent_events_empty",
+    "agent_action_events_missing",
+  ]);
+  assert.match(markdown, /Ready for live evidence: \*\*no\*\*/);
+});
+
+test("real A/B live evidence status CLI exits non-zero when evidence is incomplete", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-live-evidence-status-cli-"));
+
+  execFileSync("npx", [
+    "tsx",
+    "scripts/aionis-real-ab-live-evidence-init.ts",
+    "--out-dir",
+    dir,
+    "--suite-id",
+    "first-live-evidence",
+    "--task-id",
+    "external_probe_service_after_exit",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+
+  let failed = false;
+  try {
+    execFileSync("npx", [
+      "tsx",
+      "scripts/aionis-real-ab-live-evidence-status.ts",
+      "--manifest",
+      path.join(dir, "manifest.json"),
+      "--fail-on-not-ready",
+    ], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+  } catch (error) {
+    failed = true;
+    const stdout = String((error as { stdout?: unknown }).stdout ?? "");
+    assert.match(stdout, /Ready for live evidence: \*\*no\*\*/);
+  }
+
+  assert.equal(failed, true);
 });
