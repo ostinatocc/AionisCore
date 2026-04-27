@@ -3,11 +3,11 @@
 > Aionis Runtime is the self-evolving continuity execution-memory engine for agent systems.<br>
 > It learns from every run to improve task starts, stabilize handoffs, reuse successful workflows, and forget intelligently.
 
-`Lite ships today` · `@ostinato/aionis-runtime` · `@ostinato/aionis` · `6 live proofs`
+`Lite Developer Preview v0.4.0` · `@ostinato/aionis-runtime` · `@ostinato/aionis` · `6 live proofs`
 
 [Docs Site](https://ostinatocc.github.io/AionisCore/) · [Proof By Evidence](apps/docs/docs/evidence/proof-by-evidence.md) · [SDK Quickstart](docs/SDK_QUICKSTART.md) · [Examples](examples/full-sdk/README.md)
 
-- Status: active technical beta · local-first Lite runtime · public SDK v0.3.0
+- Status: Lite Developer Preview · local-first Lite runtime · public SDK v0.4.0 · runtime package v0.2.0
 - Runtime requirements: Node 22+ · SQLite via `node:sqlite` · local macOS or Linux shell recommended
 - Security posture: Lite binds to `127.0.0.1` by default; sandbox remote allowlists fail closed.
 
@@ -175,8 +175,8 @@ The current public validation signals include:
 | Runnable self-evolving proofs | `6` | [Proof By Evidence](apps/docs/docs/evidence/proof-by-evidence.md) |
 | Real-provider A/B snapshot | `31 / 31` vs thin · `25 / 25` vs chat · `25 / 25` vs vector | [Validation and Benchmarks](apps/docs/docs/evidence/validation-and-benchmarks.md) |
 | Strict replay reuse | `3 / 3`, `0` replay tokens | [Validation and Benchmarks](apps/docs/docs/evidence/validation-and-benchmarks.md) |
-| Lite runtime test suite | `211 / 211` | `npm run -s lite:test` |
-| Public SDK test suite | `14 / 14` | `npm run -s sdk:test` |
+| Lite runtime test suite | `319 / 319` | `npm run -s lite:test` |
+| Public SDK test suite | `20 / 20` | `npm run -s sdk:test` |
 
 The strongest proofs to look at first are:
 

@@ -152,7 +152,7 @@ export default function BenchmarksPage() {
                   <code>npm run -s lite:test</code>
                 </td>
                 <td>
-                  <strong>211 / 211 pass</strong>
+                  <strong>319 / 319 pass</strong>
                 </td>
               </tr>
               <tr>
@@ -161,7 +161,7 @@ export default function BenchmarksPage() {
                   <code>npm run -s sdk:test</code>
                 </td>
                 <td>
-                  <strong>14 / 14 pass</strong>
+                  <strong>20 / 20 pass</strong>
                 </td>
               </tr>
               <tr>

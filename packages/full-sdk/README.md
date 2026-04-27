@@ -2,6 +2,8 @@
 
 `@ostinato/aionis` is the public SDK for integrating Aionis Runtime into a coding agent or local agent runtime.
 
+Current release line: `0.4.0` for the Aionis Lite Developer Preview.
+
 Use it when you want an agent to:
 
 - start repeated tasks with a better first action
