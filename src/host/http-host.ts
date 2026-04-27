@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import type { Env } from "../config.js";
 import type { Db } from "../db.js";
 import type { EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
-import { recordMemoryRequestTelemetry, type MemoryRequestTelemetryInput } from "../control-plane.js";
+import { recordMemoryRequestTelemetry, type MemoryRequestTelemetryInput } from "../app/runtime-telemetry.js";
 import type { IdentityRequestKind, InflightKind, RateLimitKind, TenantQuotaKind } from "../app/request-guards.js";
 import type { RecallEndpoint } from "../app/recall-policy.js";
 import type { AuthPrincipal } from "../util/auth.js";

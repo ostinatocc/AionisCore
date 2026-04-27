@@ -14,6 +14,7 @@ Current source boundary:
 - `src/runtime-entry.ts` is the runtime truth for local startup.
 - `src/app/runtime-services.ts` is narrowed to local-runtime store/runtime wiring only.
 - `src/app/request-guards.ts` is narrowed to local-only identity and rate-limit guards.
+- `src/app/runtime-telemetry.ts` owns local memory request and context assembly telemetry without pulling in control-plane auth, audit, or tenant quota plumbing.
 - `src/routes/memory-access.ts` is narrowed to local SQLite access only.
 - `src/routes/memory-access.ts` also exposes local anchor payload rehydration without restoring server lifecycle routes.
 - `src/routes/memory-feedback-tools.ts` is narrowed to local SQLite feedback/rules/tools access only.
@@ -41,6 +42,7 @@ Explicitly removed from this repo:
 - benchmark, perf, hosted, and backfill jobs
 - dev, eval, MCP, SDK, and bench entrypoints
 - admin/control and automation route source files
+- control-plane auth/audit/quota plumbing from the Lite runtime entry path
 - benchmark fixtures and job docs tied to the full/server topology
 
 The local automation kernel currently supports:

@@ -11,6 +11,7 @@ const FORBIDDEN_PATHS = [
   "src/dev/contract-smoke.ts",
   "src/eval/score.ts",
   "src/sdk/index.ts",
+  "src/control-plane.ts",
   "src/memory/automation.ts",
   "src/routes/admin-control-alerts.ts",
   "src/routes/admin-control-config.ts",
@@ -137,6 +138,22 @@ test("lite request guards do not keep full auth or tenant quota plumbing", () =>
   }
   assert.match(requestGuardsFile, /aionis-lite request guards only support MEMORY_AUTH_MODE=off/);
   assert.match(requestGuardsFile, /aionis-lite request guards only support TENANT_QUOTA_ENABLED=false/);
+});
+
+test("lite host uses local runtime telemetry instead of control-plane plumbing", () => {
+  const runtimeEntryFile = fs.readFileSync(path.join(ROOT, "src", "runtime-entry.ts"), "utf8");
+  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
+  const runtimeTelemetryFile = fs.readFileSync(path.join(ROOT, "src", "app", "runtime-telemetry.ts"), "utf8");
+
+  assert.equal(runtimeEntryFile.includes("./control-plane.js"), false, "runtime-entry should not import control-plane");
+  assert.equal(hostFile.includes("../control-plane.js"), false, "http-host should not import control-plane");
+  assert.match(runtimeEntryFile, /\.\/app\/runtime-telemetry\.js/);
+  assert.match(hostFile, /\.\.\/app\/runtime-telemetry\.js/);
+  assert.match(runtimeTelemetryFile, /recordMemoryRequestTelemetry/);
+  assert.match(runtimeTelemetryFile, /recordMemoryContextAssemblyTelemetry/);
+  assert.equal(runtimeTelemetryFile.includes("createApiKeyPrincipalResolver"), false);
+  assert.equal(runtimeTelemetryFile.includes("createTenantQuotaResolver"), false);
+  assert.equal(runtimeTelemetryFile.includes("recordControlAuditEvent"), false);
 });
 
 test("lite health surface avoids backend implementation detail fields", () => {

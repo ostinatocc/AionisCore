@@ -25,7 +25,7 @@ import { createRuntimeServices } from "./app/runtime-services.js";
 import { loadEnv } from "./config.js";
 import {
   recordMemoryContextAssemblyTelemetry,
-} from "./control-plane.js";
+} from "./app/runtime-telemetry.js";
 import { runTopicClusterForEventIds } from "./jobs/topicClusterLib.js";
 
 export async function startAionisRuntime(): Promise<void> {
