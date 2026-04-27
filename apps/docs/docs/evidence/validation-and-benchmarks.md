@@ -1,11 +1,11 @@
 ---
-title: Validation And Benchmarks
+title: Validation And Evidence
 slug: /evidence/validation-and-benchmarks
 ---
 
-# Validation and benchmarks
+# Validation and evidence
 
-One of Aionis' strongest traits is that the runtime is not justified only by narrative. It is backed by green public test suites, reproducible proofs, real-provider A/B benchmarks, and systems snapshots.
+One of Aionis' strongest traits is that the runtime is not justified only by narrative. It is backed by green public test suites, reproducible proofs, release-readiness gates, real-provider A/B comparisons, and systems snapshots.
 
 <div class="doc-lead">
   <span class="doc-kicker">Why this page exists</span>
@@ -13,6 +13,7 @@ One of Aionis' strongest traits is that the runtime is not justified only by nar
   <div class="doc-chip-row">
     <span class="doc-chip">Build checks</span>
     <span class="doc-chip">Route and contract tests</span>
+    <span class="doc-chip">Release readiness</span>
     <span class="doc-chip">Real-provider A/B</span>
     <span class="doc-chip">Systems snapshots</span>
   </div>
@@ -24,6 +25,9 @@ The current outward-facing validation state is:
 
 | Surface | Current result |
 | --- | --- |
+| Release line | `Lite Developer Preview v0.4.0` |
+| Public SDK package | `@ostinato/aionis@0.4.0` |
+| Runtime package | `@ostinato/aionis-runtime@0.2.0` |
 | Lite runtime test suite | `319 / 319 pass` |
 | Public SDK test suite | `20 / 20 pass` |
 | Docs reference integrity | `48 active markdown files checked` |
