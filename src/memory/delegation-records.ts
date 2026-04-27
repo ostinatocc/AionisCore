@@ -6,7 +6,7 @@ import { resolveTenantScope } from "./tenant.js";
 import { prepareMemoryWrite, applyMemoryWrite } from "./write.js";
 import { createPostgresWriteStoreAccess } from "../store/write-access.js";
 import { DelegationRecordsWriteRequest, type DelegationRecordsWriteInput } from "./schemas.js";
-import { commitLitePreparedWriteWithProjection } from "../routes/lite-projected-write.js";
+import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "./lite-projected-write-commit.js";
 import type { LiteGovernanceRuntimeProviders } from "../app/governance-runtime-providers.js";
 
 type DelegationRecordsWriteOptions = {
@@ -19,7 +19,7 @@ type DelegationRecordsWriteOptions = {
   shadowDualWriteStrict: boolean;
   writeAccessShadowMirrorV2: boolean;
   embedder: EmbeddingProvider | null;
-  liteWriteStore?: NonNullable<Parameters<typeof commitLitePreparedWriteWithProjection>[0]["liteWriteStore"]> | null;
+  liteWriteStore?: LiteProjectedWriteStore | null;
   governanceReviewProviders?: LiteGovernanceRuntimeProviders["workflowProjection"];
 };
 
@@ -153,7 +153,7 @@ export async function writeDelegationRecords(
   const out = opts.liteWriteStore
     ? (
         await commitLitePreparedWriteWithProjection({
-          prepared: prepared as any,
+          prepared,
           liteWriteStore: opts.liteWriteStore,
           embedder: opts.embedder,
           governanceReviewProviders: opts.governanceReviewProviders,

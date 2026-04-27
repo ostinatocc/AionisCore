@@ -11,7 +11,7 @@ import {
 import type { TopicClusterParams, TopicClusterResult } from "../jobs/topicClusterLib.js";
 import { collectExecutionWriteOverlaySlots } from "../memory/execution-slot-surface.js";
 import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } from "../memory/write.js";
-import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "./lite-projected-write.js";
+import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "../memory/lite-projected-write-commit.js";
 import type { WriteStoreAccess } from "../store/write-access.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import { HttpError } from "../util/http.js";

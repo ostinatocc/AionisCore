@@ -416,11 +416,11 @@ test("runtime services expose typed access factories", () => {
   );
 });
 
-test("route write projection paths keep prepared writes typed", () => {
+test("Lite write projection commit paths keep prepared writes typed", () => {
   for (const file of [
     "src/routes/handoff.ts",
     "src/routes/memory-write.ts",
-    "src/routes/lite-projected-write.ts",
+    "src/memory/lite-projected-write-commit.ts",
   ]) {
     assert.equal(
       /\bas\s+any\b/.test(read(file)),
@@ -428,4 +428,21 @@ test("route write projection paths keep prepared writes typed", () => {
       `${file} must keep Lite write projection boundaries typed without untyped casts.`,
     );
   }
+});
+
+test("memory layer does not import route modules", () => {
+  const offenders = sourceFilesUnder("src/memory")
+    .flatMap(({ file, text }) => {
+      const imports = text.split("\n").filter((line) => /^\s*import\b/.test(line));
+      return imports
+        .filter((line) => line.includes("../routes/") || line.includes('"../../routes/') || line.includes("'../../routes/"))
+        .map((line) => `${file}: ${line.trim()}`);
+    })
+    .sort();
+
+  assert.deepEqual(
+    offenders,
+    [],
+    "Memory modules must expose Runtime capabilities upward; they must not depend on route-layer helpers.",
+  );
 });

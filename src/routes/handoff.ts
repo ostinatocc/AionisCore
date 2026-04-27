@@ -18,7 +18,7 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import type { WriteStoreAccess } from "../store/write-access.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
-import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "./lite-projected-write.js";
+import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "../memory/lite-projected-write-commit.js";
 
 type LiteWriteStoreLike = NonNullable<NonNullable<Parameters<typeof recoverHandoff>[0]>["liteWriteStore"]> & WriteStoreAccess & {
   withTx: <T>(fn: () => Promise<T>) => Promise<T>;
