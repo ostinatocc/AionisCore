@@ -463,3 +463,20 @@ test("memory layer mirrors embedded writes through the shared bridge", () => {
     "Memory modules must mirror embedded writes through embedded-write-bridge instead of direct runtime calls.",
   );
 });
+
+test("handoff recovery keeps Lite read access typed", () => {
+  const text = read("src/memory/handoff.ts");
+  assertContains(
+    text,
+    'import type { LiteWriteStore } from "../store/lite-write-store.js";',
+    "handoff recovery must depend on the concrete Lite read/resolve store contract",
+  );
+  for (const token of [
+    "type LiteWriteStoreLike",
+    "liteWriteStore as any",
+    "memoryFindLite(args.liteWriteStore as",
+    "memoryResolveLite(args.liteWriteStore as",
+  ]) {
+    assert.equal(text.includes(token), false, `handoff recovery must not widen Lite read access through ${token}`);
+  }
+});
