@@ -13,6 +13,11 @@ import {
   validateRealAbTraceCapture,
   type RealAbTraceCaptureInput,
 } from "../lib/aionis-real-ab-trace-capture.ts";
+import {
+  compileRealAbDogfoodPairedCapture,
+  validateRealAbDogfoodPairedCapture,
+  type RealAbDogfoodPairedCaptureInput,
+} from "../lib/aionis-real-ab-dogfood-capture.ts";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
@@ -216,5 +221,219 @@ test("real A/B product evidence requires external probe command to match the dec
   ));
   assert.ok(report.gate.failed_requirements.some((requirement) =>
     requirement.id === "capture_service_after_exit:trace_evidence:aionis_assisted:external_probe"
+  ));
+});
+
+function dogfoodRun(args: {
+  runId: string;
+  probeId: string;
+  success: boolean;
+  command?: string;
+}): RealAbDogfoodPairedCaptureInput["arms"]["baseline"]["dogfood_run"] {
+  const command = args.command ?? "curl -fsS http://127.0.0.1:4199/healthz";
+  const taskSpec = {
+    id: args.probeId,
+    title: "Dogfood service after-exit validation",
+    query_text: "Start a detached service and prove it from a fresh shell.",
+    evidence_source: "external_probe",
+    trajectory: {
+      title: "Dogfood service after-exit validation",
+      task_family: "service_publish_validate",
+      steps: [
+        { role: "assistant", text: "Start the service detached and validate it externally." },
+        { role: "tool", tool_name: "bash", command },
+      ],
+    },
+    execution_evidence: {
+      validation_passed: args.success,
+      after_exit_revalidated: args.success,
+      fresh_shell_probe_passed: args.success,
+      false_confidence_detected: !args.success,
+      failure_reason: args.success ? null : "fresh_shell_probe_failed",
+      evidence_refs: [`external_probe:fresh_shell:${command}`],
+    },
+    expectations: {
+      target_files_include: ["scripts/health-server.mjs"],
+      acceptance_checks_match: [command],
+      next_action_match: ["scripts/health-server.mjs", "fresh shell"],
+      success_invariants_include: ["fresh_shell_revalidation_passes"],
+      dependency_requirements_match: ["service launch must not depend on the agent shell"],
+      environment_assumptions_include: ["validation_can_run_from_fresh_shell"],
+      must_hold_after_exit_include: ["task_result_remains_valid_after_agent_exit"],
+      external_visibility_requirements_match: ["endpoint_reachable"],
+      service_lifecycle_required: true,
+      after_exit_required: true,
+      authoritative_gate_allows: true,
+      evidence_allows_authoritative: args.success,
+      stable_promotion_allowed: args.success,
+      evidence_reasons_include: args.success ? [] : ["fresh_shell_probe_failed"],
+    },
+  };
+  return {
+    run_version: "runtime_dogfood_external_probe_run_v1",
+    endpoint: "http://127.0.0.1:4199",
+    service_pid: args.success ? 1234 : null,
+    launcher_exit_code: 0,
+    fresh_shell_probe_passed: args.success,
+    fresh_shell_probe_output: args.success ? "ok" : "",
+    probes: [
+      {
+        id: args.probeId,
+        task_family_hint: "service_publish_validate",
+        endpoint: "http://127.0.0.1:4199",
+        service_pid: args.success ? 1234 : null,
+        launcher_exit_code: 0,
+        fresh_shell_probe_passed: args.success,
+        fresh_shell_probe_output: args.success ? "ok" : "",
+        diagnostics: {
+          slice: "service_after_exit",
+          scenario_id: args.probeId,
+          command_count: 1,
+          command,
+          cwd: repoRoot,
+          duration_ms: 42,
+          exit_code: args.success ? 0 : 1,
+          stdout_tail: args.success ? "ok" : "",
+          stderr_tail: args.success ? "" : "connection refused",
+          failure_class: args.success ? "none" : "fresh_shell_probe_failed",
+          commands: [],
+        },
+        task_spec: taskSpec,
+      },
+    ],
+    diagnostics: [],
+    task_specs: [taskSpec],
+    dogfood_result: {
+      suite_version: "runtime_dogfood_suite_v1",
+      generated_at: "2026-04-27T00:00:00.000Z",
+      overall_status: args.success ? "pass" : "fail",
+      scenarios: [],
+      summary: {},
+      proof_boundary: {},
+      coverage: {},
+      report: {},
+    },
+  } as RealAbDogfoodPairedCaptureInput["arms"]["baseline"]["dogfood_run"];
+}
+
+function pairedDogfoodInput(): RealAbDogfoodPairedCaptureInput {
+  const probeId = "external_probe_service_after_exit";
+  return {
+    capture_version: "aionis_real_ab_dogfood_paired_capture_v1",
+    suite_id: "aionis_real_ab_dogfood_paired_fixture_v1",
+    suite_kind: "pilot_real_trace",
+    generated_at: "2026-04-27T00:00:00.000Z",
+    fairness: {
+      same_model: true,
+      same_time_budget: true,
+      same_tool_permissions: true,
+      same_environment_reset: true,
+      same_verifier: true,
+    },
+    task_ids: [probeId],
+    arms: {
+      baseline: {
+        source_run_id: "dogfood-baseline",
+        memory_mode: "none",
+        authority_level: "none",
+        packet_source: "none",
+        dogfood_run: dogfoodRun({ runId: "dogfood-baseline", probeId, success: false }),
+        agent_events_by_probe_id: {
+          [probeId]: [
+            {
+              kind: "action",
+              text: "Start the service in the foreground and assume it is available.",
+              touched_files: ["scripts/health-server.mjs"],
+              correct: false,
+              wasted: true,
+            },
+            {
+              kind: "agent_claim",
+              text: "The service is running.",
+              claimed_success: true,
+            },
+          ],
+        },
+      },
+      aionis_assisted: {
+        source_run_id: "dogfood-aionis",
+        memory_mode: "aionis_auto",
+        authority_level: "authoritative",
+        packet_source: "automatic_runtime",
+        dogfood_run: dogfoodRun({ runId: "dogfood-aionis", probeId, success: true }),
+        agent_events_by_probe_id: {
+          [probeId]: [
+            {
+              kind: "tool_call",
+              command: "nohup node scripts/health-server.mjs --port 4199 >/tmp/health.log 2>&1 &",
+              touched_files: ["scripts/health-server.mjs"],
+              correct: true,
+            },
+          ],
+        },
+      },
+      negative_control: {
+        source_run_id: "dogfood-negative",
+        memory_mode: "irrelevant_or_low_trust",
+        authority_level: "observational",
+        packet_source: "irrelevant_low_trust",
+        dogfood_run: dogfoodRun({ runId: "dogfood-negative", probeId, success: false }),
+        agent_events_by_probe_id: {
+          [probeId]: [
+            {
+              kind: "action",
+              text: "Follow unrelated package publish memory.",
+              touched_files: ["scripts/build_index.py"],
+              correct: false,
+              wasted: true,
+            },
+          ],
+        },
+      },
+      positive_control: {
+        source_run_id: "dogfood-positive",
+        memory_mode: "oracle_handoff",
+        authority_level: "authoritative",
+        packet_source: "oracle_handoff",
+        dogfood_run: dogfoodRun({ runId: "dogfood-positive", probeId, success: true }),
+        agent_events_by_probe_id: {
+          [probeId]: [
+            {
+              kind: "tool_call",
+              command: "nohup node scripts/health-server.mjs --port 4199 >/tmp/health.log 2>&1 &",
+              touched_files: ["scripts/health-server.mjs"],
+              correct: true,
+            },
+          ],
+        },
+      },
+    },
+  };
+}
+
+test("real A/B dogfood paired capture compiles four external-probe arms into auditable trace capture", () => {
+  const dogfoodInput = pairedDogfoodInput();
+  const dogfoodRequirements = validateRealAbDogfoodPairedCapture(dogfoodInput);
+  const capture = compileRealAbDogfoodPairedCapture(dogfoodInput);
+  const captureRequirements = validateRealAbTraceCapture(capture);
+  const report = runRealAbValidationSuite(compileRealAbTraceCapture(capture));
+
+  assert.equal(dogfoodRequirements.every((requirement) => requirement.status === "pass"), true);
+  assert.equal(captureRequirements.every((requirement) => requirement.status === "pass"), true);
+  assert.equal(capture.capture_version, "aionis_real_ab_trace_capture_v1");
+  assert.equal(capture.tasks[0].runs.aionis_assisted.events.at(-1)?.kind, "external_probe");
+  assert.equal(report.gate.status, "pass");
+  assert.equal(report.summary.treatment_after_exit_correctness_rate, 1);
+});
+
+test("real A/B dogfood paired capture rejects arms without captured agent actions", () => {
+  const dogfoodInput = pairedDogfoodInput();
+  dogfoodInput.arms.aionis_assisted.agent_events_by_probe_id.external_probe_service_after_exit = [];
+
+  const dogfoodRequirements = validateRealAbDogfoodPairedCapture(dogfoodInput);
+
+  assert.ok(dogfoodRequirements.some((requirement) =>
+    requirement.id === "dogfood_capture:external_probe_service_after_exit:aionis_assisted:agent_action_events"
+    && requirement.status === "fail"
   ));
 });
