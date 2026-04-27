@@ -26,6 +26,10 @@ import {
   type RealAbLiveEvidenceLoadedInputs,
   type RealAbLiveEvidenceManifest,
 } from "../lib/aionis-real-ab-live-evidence-assembler.ts";
+import {
+  buildRealAbLiveEvidenceBundleFiles,
+  buildRealAbLiveEvidenceManifestTemplate,
+} from "../lib/aionis-real-ab-live-evidence-bundle.ts";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
@@ -577,4 +581,99 @@ test("real A/B live evidence CLI assembles separate arm files into a validation 
   assert.match(output, /Aionis Real A\/B Validation Report/);
   assert.match(output, /Gate: \*\*pass\*\*/);
   assert.match(output, /aionis_real_ab_live_evidence_fixture_v1/);
+});
+
+test("real A/B live evidence bundle templates create an incomplete collection scaffold", () => {
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence",
+    suite_kind: "pilot_real_trace",
+    generated_at: "2026-04-27T00:00:00.000Z",
+    task_ids: ["external_probe_service_after_exit"],
+  });
+  const files = buildRealAbLiveEvidenceBundleFiles({
+    suite_id: "first-live-evidence",
+    task_ids: ["external_probe_service_after_exit"],
+  });
+  const filePaths = new Set(files.map((file) => file.relative_path));
+
+  assert.equal(manifest.manifest_version, "aionis_real_ab_live_evidence_manifest_v1");
+  assert.equal(manifest.suite_kind, "pilot_real_trace");
+  assert.equal(manifest.arms.aionis_assisted.packet_source, "automatic_runtime");
+  assert.equal(manifest.arms.negative_control.authority_level, "observational");
+  assert.equal(filePaths.has("manifest.json"), true);
+  assert.equal(filePaths.has("baseline/agent-events.json"), true);
+  assert.equal(filePaths.has("baseline/dogfood-run.REQUIRED.md"), true);
+  assert.equal(filePaths.has("baseline/dogfood-run.json"), false);
+
+  const baselineEvents = files.find((file) => file.relative_path === "baseline/agent-events.json");
+  assert.ok(baselineEvents);
+  assert.deepEqual(JSON.parse(baselineEvents.content), {
+    events_by_probe_id: {
+      external_probe_service_after_exit: [],
+    },
+  });
+});
+
+test("real A/B live evidence init CLI writes scaffold without fake dogfood run JSON", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-live-evidence-init-"));
+
+  const output = execFileSync("npx", [
+    "tsx",
+    "scripts/aionis-real-ab-live-evidence-init.ts",
+    "--out-dir",
+    dir,
+    "--suite-id",
+    "first-live-evidence",
+    "--task-id",
+    "external_probe_service_after_exit",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+
+  const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")) as RealAbLiveEvidenceManifest;
+  const baselineEvents = JSON.parse(
+    fs.readFileSync(path.join(dir, "baseline", "agent-events.json"), "utf8"),
+  );
+
+  assert.match(output, /Initialized Aionis real A\/B live evidence bundle/);
+  assert.equal(manifest.arms.baseline.dogfood_run_path, "baseline/dogfood-run.json");
+  assert.equal(manifest.arms.baseline.agent_events_path, "baseline/agent-events.json");
+  assert.deepEqual(baselineEvents.events_by_probe_id.external_probe_service_after_exit, []);
+  assert.equal(fs.existsSync(path.join(dir, "baseline", "dogfood-run.REQUIRED.md")), true);
+  assert.equal(fs.existsSync(path.join(dir, "baseline", "dogfood-run.json")), false);
+});
+
+test("real A/B live evidence init CLI refuses to overwrite scaffold files by default", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-live-evidence-init-overwrite-"));
+  const args = [
+    "tsx",
+    "scripts/aionis-real-ab-live-evidence-init.ts",
+    "--out-dir",
+    dir,
+    "--suite-id",
+    "first-live-evidence",
+    "--task-id",
+    "external_probe_service_after_exit",
+  ];
+
+  execFileSync("npx", args, {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+
+  let failed = false;
+  try {
+    execFileSync("npx", args, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+  } catch (error) {
+    failed = true;
+    const stderr = String((error as { stderr?: unknown }).stderr ?? error);
+    assert.match(stderr, /Refusing to overwrite existing evidence bundle files/);
+  }
+
+  assert.equal(failed, true);
 });
