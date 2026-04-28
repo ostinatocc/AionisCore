@@ -1268,7 +1268,7 @@ async function runAiCodeCiRepairProbe(workspaceRoot?: string): Promise<RuntimeDo
       "repair must satisfy targeted CI or test evidence without broad unrelated edits",
       "test files are read-only acceptance evidence and must not be edited to manufacture success",
       ...(fixture.target_files.includes("src/pricing/discount-policy.mjs")
-        ? ["pricing repair may require following implementation dependencies instead of patching only the visible entrypoint"]
+        ? ["implementation dependencies that feed the targeted entrypoint must be traced before patching"]
         : []),
     ],
     evidenceRef: "external_probe:ai_code_ci_repair:targeted_pricing_test",

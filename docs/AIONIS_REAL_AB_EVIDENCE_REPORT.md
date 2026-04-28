@@ -45,6 +45,7 @@ These runs are directional pilot evidence, not broad product proof.
 | `ai-code-ci-20260428-194736` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-20260428-194736/validation-report.md` | pass |
 | `ai-code-ci-wrong-surface-20260428-204159` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-wrong-surface-20260428-204159/validation-report.md` | pass |
 | `ai-code-ci-isolated-hidden-20260428-210356` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-isolated-hidden-20260428-210356/validation-report.md` | pass |
+| `ai-code-ci-dependency-surface-20260428-214009` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-20260428-214009/validation-report.md` | pass |
 
 ## Initial Directional Results
 
@@ -131,6 +132,25 @@ This is the cleanest current commercial-family signal:
 
 The current defensible claim is cost compression under a verifier boundary, not correctness separation. The next proof needs a harder repair task where baseline or negative control shows retries, false confidence, wrong-file touches, or failure.
 
+## Commercial-Family Dependency Surface Result
+
+The `dependency_surface` variant tests whether the agent can trace a pricing failure from `discountedTotalCents` into `discount-policy.mjs` instead of only patching the visible entrypoint. This is a better proxy for real AI code repair because the correct work surface spans multiple implementation files while tests and package metadata remain immutable acceptance evidence.
+
+| Family / variant | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `ai_code_ci_repair / dependency_surface` | 16 | 12 | 13 | 11 | 0 | 0 | 196s | 90s | 36,765 | 27,705 |
+
+This is the strongest clean CI repair signal so far:
+
+- Aionis preserved verifier-backed correctness.
+- Aionis reduced action events by 25.0% versus baseline.
+- Aionis reduced elapsed time by 54.4% versus baseline.
+- Aionis reduced token use by 24.6% versus baseline.
+- Aionis used fewer tokens than negative control and positive control.
+- Baseline and negative control also passed, so this is still not correctness separation.
+
+The current defensible claim for this family is now stronger: compact Aionis Runtime contracts can compress a multi-file AI code repair task while preserving immutable-evidence verification. The remaining gap is correctness separation on cases where baseline or low-trust context actually fails, retries, touches wrong files, or becomes falsely confident.
+
 ## What This Proves
 
 Aionis can currently make defensible directional claims in these areas:
@@ -143,6 +163,7 @@ Aionis can currently make defensible directional claims in these areas:
 - It can turn external checks such as fresh-shell curl, clean-client install, and causal deploy verification into authority boundaries.
 - It can protect CI repair evidence against forged success by rejecting modified tests, package metadata, or fixture README files.
 - In one clean arm-isolated CI repair run, it can reduce token usage substantially while preserving verifier-backed correctness.
+- In one dependency-surface CI repair run, it can reduce actions, elapsed time, and token use while preserving verifier-backed correctness.
 
 ## What This Does Not Prove
 
@@ -153,6 +174,7 @@ Aionis should not currently claim:
 - Unique correctness advantage for AI code CI repair based on one easy pilot fixture.
 - Unique correctness advantage for the current `wrong_surface_trap` fixture, because baseline and negative control also passed.
 - Unique correctness advantage for the clean `hidden_edge_case` fixture, because baseline and negative control also passed.
+- Unique correctness advantage for the current `dependency_surface` fixture, because baseline and negative control also passed.
 - Broad product superiority across untested task families.
 - That richer Runtime packets are always better.
 - That agent-side self-verification is enough for authority.
@@ -210,6 +232,10 @@ Allowed hard-variant verifier claim:
 Allowed clean commercial-family cost claim:
 
 > In one clean arm-isolated AI code CI repair run, Aionis Runtime preserved verifier-backed correctness while reducing token usage versus baseline, but it did not prove unique correctness and it was slower in wall-clock time.
+
+Allowed dependency-surface cost claim:
+
+> In one dependency-surface AI code CI repair run, Aionis Runtime preserved verifier-backed correctness while reducing actions, elapsed time, and token usage versus baseline, but it did not yet prove unique correctness.
 
 Not allowed current claim:
 

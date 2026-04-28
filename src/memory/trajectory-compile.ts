@@ -367,6 +367,9 @@ function extractDependencyRequirements(args: {
     out.push("existing failing tests define the behavior contract for the repair");
     out.push("repair must satisfy targeted CI or test evidence without broad unrelated edits");
     out.push("test files are read-only acceptance evidence and must not be edited to manufacture success");
+    if (/\b(discount-policy|policy helper|helper module|dependency surface|implementation dependenc(?:y|ies))\b/i.test(corpus)) {
+      out.push("implementation dependencies that feed the targeted entrypoint must be traced before patching");
+    }
   }
   if (args.serviceConstraints.length > 0) {
     out.push("service launch must not depend on the agent shell remaining attached");
