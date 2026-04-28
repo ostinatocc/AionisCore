@@ -27,6 +27,15 @@ export type ExecutionAgentContractPacketEscalationReason = z.infer<
 export const ExecutionAgentContractPacketV1Schema = z.object({
   packet_version: z.literal("execution_agent_contract_packet_v1"),
   mode: ExecutionAgentContractPacketModeSchema,
+  action_discipline: z.object({
+    execution_mode: z.enum(["contract_locked", "exploratory_allowed"]),
+    first_action: z.string().trim().min(1),
+    max_pre_edit_confirmation_steps: z.number().int().nonnegative().nullable(),
+    allowed_work_surface: StringList,
+    required_validation: StringList,
+    prohibited_actions: StringList,
+    stop_conditions: StringList,
+  }).strict(),
   contract: z.object({
     contract_trust: z.enum(["authoritative", "advisory", "observational"]).nullable(),
     task_family: z.string().trim().min(1).nullable(),
@@ -117,6 +126,43 @@ function compactInsufficiencyReasons(contract: ExecutionContractV1): ExecutionAg
   return reasons;
 }
 
+function buildActionDiscipline(contract: ExecutionContractV1): ExecutionAgentContractPacketV1["action_discipline"] {
+  const compactComplete =
+    contract.target_files.length > 0
+    && Boolean(contract.next_action)
+    && contract.outcome.acceptance_checks.length > 0;
+  const contractLocked = contract.contract_trust === "authoritative" && compactComplete;
+  const acceptanceEvidenceFiles = contract.target_files.filter((file) =>
+    /(^|\/)(tests?|spec|__tests__)\//i.test(file) || /\.(test|spec)\.[cm]?[jt]sx?$/i.test(file)
+  );
+
+  return {
+    execution_mode: contractLocked ? "contract_locked" : "exploratory_allowed",
+    first_action: contractLocked
+      ? "inspect_declared_target_files_before_broad_discovery"
+      : "fill_missing_contract_fields_before_claiming_authority",
+    max_pre_edit_confirmation_steps: contractLocked ? 2 : null,
+    allowed_work_surface: uniqueStrings([
+      ...contract.target_files,
+      ...contract.outcome.acceptance_checks.map((check) => `validation:${check}`),
+    ], 32),
+    required_validation: contract.outcome.acceptance_checks,
+    prohibited_actions: uniqueStrings([
+      contractLocked ? "do_not_run_broad_repository_file_enumeration_before_declared_targets" : null,
+      contractLocked ? "do_not_read_general_skill_or_preference_files_before_declared_targets" : null,
+      contractLocked ? "do_not_expand_beyond_target_files_without_new_failing_evidence" : null,
+      contractLocked ? "do_not_repeat_successful_acceptance_checks_without_new_evidence" : null,
+      acceptanceEvidenceFiles.length > 0 ? `do_not_edit_acceptance_evidence:${acceptanceEvidenceFiles.join(",")}` : null,
+    ], 16),
+    stop_conditions: uniqueStrings([
+      contract.outcome.acceptance_checks.length > 0
+        ? "stop_after_required_validation_passes_and_report_evidence"
+        : null,
+      "do_not_run_external_harness_verifier_from_inside_agent_attempt",
+    ], 8),
+  };
+}
+
 export function buildExecutionAgentContractPacketV1(args: {
   contract: ExecutionContractV1 | z.input<typeof ExecutionContractV1Schema>;
   task_prompt?: string | null;
@@ -139,6 +185,7 @@ export function buildExecutionAgentContractPacketV1(args: {
   return ExecutionAgentContractPacketV1Schema.parse({
     packet_version: "execution_agent_contract_packet_v1",
     mode: effectiveMode,
+    action_discipline: buildActionDiscipline(contract),
     contract: {
       contract_trust: contract.contract_trust,
       task_family: contract.task_family,
@@ -189,6 +236,14 @@ export function renderExecutionAgentContractPacketMarkdown(packetInput: Executio
     `- acceptance_checks: ${formatList(packet.contract.acceptance_checks)}`,
     `- lifecycle_constraints: ${formatList(packet.contract.lifecycle_constraints)}`,
     `- authority_boundary: ${formatList(packet.contract.authority_boundary)}`,
+    "",
+    "Action discipline:",
+    `- execution_mode: ${packet.action_discipline.execution_mode}`,
+    `- first_action: ${packet.action_discipline.first_action}`,
+    `- max_pre_edit_confirmation_steps: ${packet.action_discipline.max_pre_edit_confirmation_steps ?? "<none>"}`,
+    `- allowed_work_surface: ${formatList(packet.action_discipline.allowed_work_surface)}`,
+    `- prohibited_actions: ${formatList(packet.action_discipline.prohibited_actions)}`,
+    `- stop_conditions: ${formatList(packet.action_discipline.stop_conditions)}`,
   ].filter((line): line is string => Boolean(line));
 
   if (packet.mode === "workflow_expanded" && packet.expanded) {

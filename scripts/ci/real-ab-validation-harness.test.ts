@@ -991,6 +991,11 @@ test("real A/B LLM runner contract-only prompt carries a compact execution contr
   assert.match(prompt, /acceptance_checks:/);
   assert.match(prompt, /must_survive_agent_exit/);
   assert.match(prompt, /authority_boundary:/);
+  assert.match(prompt, /Action discipline:/);
+  assert.match(prompt, /execution_mode: contract_locked/);
+  assert.match(prompt, /first_action: inspect_declared_target_files_before_broad_discovery/);
+  assert.match(prompt, /do_not_run_broad_repository_file_enumeration_before_declared_targets/);
+  assert.match(prompt, /do_not_read_general_skill_or_preference_files_before_declared_targets/);
   assert.match(prompt, /Verifier boundary:/);
   assert.match(prompt, /collection harness runs the full dogfood verifier/);
   assert.doesNotMatch(prompt, /Expected workflow:/);

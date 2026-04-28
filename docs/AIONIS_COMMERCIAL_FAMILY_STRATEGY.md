@@ -106,6 +106,8 @@ Current evidence status:
 - The repeat `dependency_surface` run preserved correctness and still reduced actions/time versus baseline, but used more tokens than baseline and negative control was cheaper. Treat token savings as mixed until more repeat trials prove stability.
 - Runtime now has a reusable `execution_agent_contract_packet_v1` projection with compact default output and automatic expanded-workflow escalation when compact contracts are insufficient or verification fails.
 - The first Runtime-level contract-packet repeat preserved correctness and reduced token use by 20.7% versus baseline, but increased action/tool events and elapsed time. This points to action-discipline hardening, not more packet text.
+- Runtime packet `action_discipline` now marks authoritative complete contracts as `contract_locked`, limiting first action, broad discovery, non-target expansion, repeat validation, and acceptance-evidence edits.
+- The first action-discipline repeat preserved correctness and reduced action/tool events by 38.5% versus baseline, but token use was slightly higher and elapsed time was worse. This proves action discipline can change behavior, but cost/latency still need repeat evidence.
 - The next CI repair proof must either repeat harder variants enough times to show stable cost/control advantage, or increase task difficulty further with larger dependency surfaces and less obvious implementation fixes.
 
 ### Metrics

@@ -138,6 +138,7 @@ Agent-facing execution contract packet:
 2. default mode is `contract_only`, exposing only task family, task prompt, target files, next action, acceptance checks, lifecycle constraints, and authority boundary
 3. `workflow_steps`, `pattern_hints`, selected tool, and provenance stay internal unless the packet escalates to `workflow_expanded`
 4. escalation is automatic when the compact contract is missing target files, next action, acceptance checks, unresolved blockers are present, or verification has failed
+5. `action_discipline` is included in the packet; authoritative complete contracts enter `contract_locked` mode with a declared first action, allowed work surface, required validation, prohibited broad discovery, and stop conditions
 
 Recommended integrator read path:
 
