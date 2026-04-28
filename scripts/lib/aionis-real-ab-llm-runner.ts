@@ -7,6 +7,9 @@ import {
   type RealAbLiveEvidenceEventDraft,
 } from "./aionis-real-ab-live-evidence-event-recorder.ts";
 import {
+  buildRealAbLiveEvidenceArmRunPacket,
+} from "./aionis-real-ab-live-evidence-arm-run-packet.ts";
+import {
   realAbRequiredArms,
   type RealAbArm,
   type RealAbTraceEvent,
@@ -49,6 +52,99 @@ export type RealAbLlmArmAttemptResult = {
 };
 
 const OutputTailLimit = 8192;
+
+type ProbeTaskBrief = {
+  title: string;
+  task_family: string;
+  task_prompt: string;
+  target_files: string[];
+  acceptance_checks: string[];
+  workflow_steps: string[];
+};
+
+const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
+  external_probe_service_after_exit: {
+    title: "External probe service after-exit validation",
+    task_family: "service_publish_validate",
+    task_prompt: "Keep the Runtime dogfood service alive after the launcher exits and prove it from a fresh shell.",
+    target_files: ["scripts/fixtures/runtime-dogfood/service-after-exit-server.mjs"],
+    acceptance_checks: ["curl -fsS <fresh-shell-endpoint>/healthz"],
+    workflow_steps: [
+      "Inspect the service entrypoint and identify what must stay alive after the agent/launcher exits.",
+      "Launch the service detached, not as a foreground child tied to the current shell.",
+      "Probe the endpoint from a fresh shell after the launch command returns.",
+      "Record the actual action/tool events; do not convert a mere success claim into verifier evidence.",
+    ],
+  },
+  external_probe_publish_install: {
+    title: "External probe publish/install clean-client validation",
+    task_family: "package_publish_validate",
+    task_prompt: "Recover the local package index so clean clients can install vectorops from a fresh shell after worker exit.",
+    target_files: ["scripts/build_index.py", "src/vectorops/__init__.py"],
+    acceptance_checks: [
+      "curl -fsS <fresh-shell-endpoint>/simple/vectorops/",
+      "pip install --index-url <fresh-shell-endpoint>/simple vectorops==0.1.0",
+    ],
+    workflow_steps: [
+      "Inspect package artifact generation and simple-index metadata before changing files.",
+      "Build the local package index and serve it from a detached process.",
+      "Validate index visibility and clean-client install from a fresh shell.",
+      "Record actual package/index/server actions and distinguish them from verifier probes.",
+    ],
+  },
+  external_probe_deploy_hook_web: {
+    title: "External probe deploy/hook/web visible outcome",
+    task_family: "git_deploy_webserver",
+    task_prompt: "Repair the git deploy webserver hook so a pushed revision is visible through the served web endpoint.",
+    target_files: ["hooks/post-receive", "/var/www/main/index.html"],
+    acceptance_checks: ["curl -fsS <fresh-shell-endpoint>/index.html"],
+    workflow_steps: [
+      "Inspect the deploy hook path and the webserver publish root before changing files.",
+      "Ensure the hook updates the served web content from the deployed revision.",
+      "Validate served content through the web endpoint from a fresh shell.",
+      "Record actual hook/webserver actions; do not rely on git success as web visibility proof.",
+    ],
+  },
+  external_probe_interrupted_resume: {
+    title: "External probe interrupted resume validation",
+    task_family: "handoff_resume",
+    task_prompt: "Resume an interrupted export pipeline repair and validate only the narrow export path.",
+    target_files: ["src/exporter.mjs", "tests/exporter.test.mjs"],
+    acceptance_checks: ["npm test -- tests/exporter.test.mjs"],
+    workflow_steps: [
+      "Start from the narrow resumed slice instead of re-exploring the whole project.",
+      "Inspect the target implementation and targeted test.",
+      "Make the smallest behavior fix that satisfies the resumed acceptance check.",
+      "Run only the targeted validation and record the exact action/tool events.",
+    ],
+  },
+  external_probe_handoff_next_day: {
+    title: "External probe next-day handoff resume validation",
+    task_family: "handoff_resume",
+    task_prompt: "Resume yesterday's payment webhook repair from the stored handoff and run the narrow verification.",
+    target_files: ["src/webhook.mjs", "tests/webhook.test.mjs"],
+    acceptance_checks: ["npm test -- tests/webhook.test.mjs"],
+    workflow_steps: [
+      "Use the handoff target and acceptance check before broad exploration.",
+      "Inspect webhook behavior and its narrow test.",
+      "Apply the repair and run the targeted verification.",
+      "Record whether the first action followed the handoff or wasted steps on unrelated areas.",
+    ],
+  },
+  external_probe_agent_takeover: {
+    title: "External probe second agent takeover validation",
+    task_family: "agent_takeover",
+    task_prompt: "Agent B takes over the search indexer repair from Agent A and must validate the same narrow slice.",
+    target_files: ["src/search-indexer.mjs", "tests/search-indexer.test.mjs"],
+    acceptance_checks: ["npm test -- tests/search-indexer.test.mjs"],
+    workflow_steps: [
+      "Treat this as a takeover task: preserve the prior target and validation path.",
+      "Inspect only the indexer implementation and targeted test unless evidence forces expansion.",
+      "Repair the search indexer behavior and run the narrow validation.",
+      "Record actual takeover actions and any retries or wasted exploration.",
+    ],
+  },
+};
 
 function tail(value: string, limit = OutputTailLimit): string {
   return value.length <= limit ? value : value.slice(value.length - limit);
@@ -177,6 +273,15 @@ export function buildRealAbLlmArmPrompt(args: {
   if (args.manifest.task_ids && !args.manifest.task_ids.includes(args.probe_id)) {
     throw new Error(`probe ${args.probe_id} is not selected in manifest.task_ids`);
   }
+  const packet = buildRealAbLiveEvidenceArmRunPacket({
+    manifest: args.manifest,
+    manifest_path: args.manifest_path,
+    arm: args.arm,
+  });
+  const brief = probeTaskBriefs[args.probe_id];
+  if (!brief) {
+    throw new Error(`unsupported probe task brief: ${args.probe_id}`);
+  }
   return [
     "You are executing one arm of an Aionis real A/B live-evidence run.",
     "",
@@ -187,6 +292,7 @@ export function buildRealAbLlmArmPrompt(args: {
     `Authority level: ${armManifest.authority_level}`,
     `Packet source: ${armManifest.packet_source}`,
     `Manifest: ${path.resolve(args.manifest_path)}`,
+    `Agent events path: ${packet.agent_events_path}`,
     "",
     "Fairness requirements:",
     `- same_model=${args.manifest.fairness.same_model}`,
@@ -195,10 +301,32 @@ export function buildRealAbLlmArmPrompt(args: {
     `- same_environment_reset=${args.manifest.fairness.same_environment_reset}`,
     `- same_verifier=${args.manifest.fairness.same_verifier}`,
     "",
+    "Probe task:",
+    `- title: ${brief.title}`,
+    `- task_family: ${brief.task_family}`,
+    `- task_prompt: ${brief.task_prompt}`,
+    `- target_files: ${brief.target_files.join(", ")}`,
+    `- acceptance_checks: ${brief.acceptance_checks.join(" | ")}`,
+    "",
+    "Expected workflow:",
+    ...brief.workflow_steps.map((step, index) => `${index + 1}. ${step}`),
+    "",
+    "Harness verifier:",
+    "After the agent attempt, the collection harness can run this dogfood probe command to produce dogfood-run.json.",
+    "The agent may run narrower checks while working, but should not fake or pre-fill harness verifier evidence.",
+    packet.dogfood_command,
+    "",
+    "Recorder contract:",
+    packet.recorder_examples[args.probe_id] ?? "record action/tool events in agent-events.json for this probe",
+    "",
+    "Guardrails:",
+    ...packet.guardrails.map((guardrail) => `- ${guardrail}`),
+    "",
     "Output contract:",
     "Return only JSON with output_version=\"aionis_real_ab_llm_agent_output_v1\".",
     "Include the actual action/tool events you performed for this probe.",
     "Do not record the external verifier as an agent event unless the agent invoked it before the harness verifier.",
+    "Every event must be something that happened in this arm; do not infer events from the task brief.",
     "",
     "Minimal output shape:",
     "{",

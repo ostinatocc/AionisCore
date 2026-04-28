@@ -45,6 +45,7 @@ import {
 } from "../lib/aionis-real-ab-live-evidence-status.ts";
 import {
   applyRealAbLlmArmAttemptToAgentEvents,
+  buildRealAbLlmArmPrompt,
   parseRealAbLlmAgentOutput,
   runRealAbLlmArmAttempt,
 } from "../lib/aionis-real-ab-llm-runner.ts";
@@ -891,6 +892,28 @@ test("real A/B LLM runner executes a configured agent command and returns audita
   assert.match(attempt.prompt_sha256, /^[a-f0-9]{64}$/);
   assert.equal(updated.events_by_probe_id[probeId].length, 2);
   assert.match(updated.events_by_probe_id[probeId][0].text ?? "", /arm=aionis_assisted/);
+});
+
+test("real A/B LLM runner prompt carries executable probe task and verifier context", () => {
+  const probeId = "external_probe_service_after_exit";
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence-llm-prompt",
+    task_ids: [probeId],
+  });
+  const prompt = buildRealAbLlmArmPrompt({
+    manifest,
+    manifest_path: path.join(os.tmpdir(), "aionis-real-ab", "manifest.json"),
+    arm: "aionis_assisted",
+    probe_id: probeId,
+  });
+
+  assert.match(prompt, /Probe task:/);
+  assert.match(prompt, /Keep the Runtime dogfood service alive/);
+  assert.match(prompt, /scripts\/fixtures\/runtime-dogfood\/service-after-exit-server\.mjs/);
+  assert.match(prompt, /Harness verifier:/);
+  assert.match(prompt, /scripts\/lite-runtime-dogfood-external-probe\.ts/);
+  assert.match(prompt, /Recorder contract:/);
+  assert.match(prompt, /Return only JSON/);
 });
 
 test("real A/B LLM runner rejects outputs without real action or tool evidence", () => {
