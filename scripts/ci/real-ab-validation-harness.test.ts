@@ -927,7 +927,7 @@ test("real A/B LLM runner executes a configured agent command and returns audita
   assert.match(updated.events_by_probe_id[probeId][0].text ?? "", /arm=aionis_assisted/);
 });
 
-test("real A/B LLM runner prompt carries executable probe task and verifier context", () => {
+test("real A/B LLM runner contract-only prompt carries a compact execution contract", () => {
   const probeId = "external_probe_service_after_exit";
   const manifest = buildRealAbLiveEvidenceManifestTemplate({
     suite_id: "first-live-evidence-llm-prompt",
@@ -940,18 +940,47 @@ test("real A/B LLM runner prompt carries executable probe task and verifier cont
     probe_id: probeId,
   });
 
-  assert.match(prompt, /Probe task:/);
+  assert.match(prompt, /Packet mode: contract_only/);
+  assert.match(prompt, /Runtime contract:/);
   assert.match(prompt, /Keep the Runtime dogfood service alive/);
   assert.match(prompt, /scripts\/fixtures\/runtime-dogfood\/service-after-exit-server\.mjs/);
-  assert.match(prompt, /do not use launchctl/);
-  assert.match(prompt, /nohup <command>/);
-  assert.match(prompt, /Harness verifier:/);
-  assert.match(prompt, /scripts\/lite-runtime-dogfood-external-probe\.ts/);
+  assert.match(prompt, /next_action:/);
+  assert.match(prompt, /acceptance_checks:/);
+  assert.match(prompt, /must_survive_agent_exit/);
+  assert.match(prompt, /authority_boundary:/);
+  assert.match(prompt, /Verifier boundary:/);
+  assert.match(prompt, /collection harness runs the full dogfood verifier/);
+  assert.doesNotMatch(prompt, /Expected workflow:/);
+  assert.doesNotMatch(prompt, /Harness verifier:/);
+  assert.doesNotMatch(prompt, /scripts\/lite-runtime-dogfood-external-probe\.ts/);
   assert.match(prompt, /Evidence recording contract:/);
   assert.match(prompt, /Do not run `npm run ab:evidence:event`/);
   assert.doesNotMatch(prompt, /ab:evidence:event -- --manifest/);
   assert.match(prompt, /Return only JSON/);
   assert.match(prompt, /tool_call.*include the exact shell command/);
+});
+
+test("real A/B LLM runner expanded prompt preserves the full workflow and verifier command for debugging", () => {
+  const probeId = "external_probe_service_after_exit";
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence-llm-expanded-prompt",
+    task_ids: [probeId],
+  });
+  const prompt = buildRealAbLlmArmPrompt({
+    manifest,
+    manifest_path: path.join(os.tmpdir(), "aionis-real-ab", "manifest.json"),
+    arm: "aionis_assisted",
+    probe_id: probeId,
+    packet_mode: "workflow_expanded",
+  });
+
+  assert.match(prompt, /Packet mode: workflow_expanded/);
+  assert.match(prompt, /Probe task:/);
+  assert.match(prompt, /Expected workflow:/);
+  assert.match(prompt, /do not use launchctl/);
+  assert.match(prompt, /nohup <command>/);
+  assert.match(prompt, /Harness verifier:/);
+  assert.match(prompt, /scripts\/lite-runtime-dogfood-external-probe\.ts/);
 });
 
 test("real A/B LLM runner rejects outputs without real action or tool evidence", () => {
@@ -968,6 +997,40 @@ test("real A/B LLM runner rejects outputs without real action or tool evidence",
       ],
     }), "external_probe_service_after_exit"),
     /at least one action or tool_call event/,
+  );
+});
+
+test("real A/B LLM runner rejects agent-side dogfood harness verifier commands by default", async () => {
+  const probeId = "external_probe_service_after_exit";
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence-llm-agent-verifier-command",
+    task_ids: [probeId],
+  });
+  const output = {
+    output_version: "aionis_real_ab_llm_agent_output_v1",
+    probe_id: probeId,
+    events: [
+      {
+        kind: "tool_call",
+        command: "npx tsx scripts/lite-runtime-dogfood-external-probe.ts --slice service_after_exit --json",
+        correct: true,
+        wasted: false,
+      },
+    ],
+  };
+  const command = `${JSON.stringify(process.execPath)} -e ${JSON.stringify(`process.stdout.write(${JSON.stringify(JSON.stringify(output))});`)}`;
+
+  await assert.rejects(
+    () => runRealAbLlmArmAttempt({
+      manifest,
+      manifest_path: path.join(os.tmpdir(), "aionis-real-ab", "manifest.json"),
+      arm: "aionis_assisted",
+      probe_id: probeId,
+      command,
+      cwd: repoRoot,
+      timeout_ms: 10_000,
+    }),
+    /agent command invoked the A\/B harness verifier directly/,
   );
 });
 

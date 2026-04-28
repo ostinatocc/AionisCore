@@ -27,6 +27,8 @@ export type RealAbLlmAgentOutput = {
   notes?: string[];
 };
 
+export type RealAbLlmPacketMode = "contract_only" | "workflow_expanded";
+
 export type RealAbLlmCommandResult = {
   exit_code: number | null;
   timed_out: boolean;
@@ -58,7 +60,10 @@ type ProbeTaskBrief = {
   task_family: string;
   task_prompt: string;
   target_files: string[];
+  next_action: string;
   acceptance_checks: string[];
+  lifecycle_constraints: string[];
+  authority_boundary: string[];
   workflow_steps: string[];
 };
 
@@ -68,7 +73,17 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
     task_family: "service_publish_validate",
     task_prompt: "Keep the Runtime dogfood service alive after the launcher exits and prove it from a fresh shell.",
     target_files: ["scripts/fixtures/runtime-dogfood/service-after-exit-server.mjs"],
+    next_action: "Inspect the service entrypoint, launch it detached from the current shell, then validate /healthz from a fresh shell.",
     acceptance_checks: ["curl -fsS <fresh-shell-endpoint>/healthz"],
+    lifecycle_constraints: [
+      "must_survive_agent_exit",
+      "revalidate_from_fresh_shell",
+      "detach_then_probe",
+    ],
+    authority_boundary: [
+      "A success claim is not authoritative without external fresh-shell evidence.",
+      "The collection harness, not the agent, writes dogfood-run.json.",
+    ],
     workflow_steps: [
       "Inspect the service entrypoint and identify what must stay alive after the agent/launcher exits.",
       "Launch the service detached, not as a foreground child tied to the current shell.",
@@ -82,9 +97,19 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
     task_family: "package_publish_validate",
     task_prompt: "Recover the local package index so clean clients can install vectorops from a fresh shell after worker exit.",
     target_files: ["scripts/build_index.py", "src/vectorops/__init__.py"],
+    next_action: "Build the local simple index, serve it from a detached process, then validate index visibility and clean-client install from a fresh shell.",
     acceptance_checks: [
       "curl -fsS <fresh-shell-endpoint>/simple/vectorops/",
       "pip install --index-url <fresh-shell-endpoint>/simple vectorops==0.1.0",
+    ],
+    lifecycle_constraints: [
+      "external_visibility_required",
+      "revalidate_from_fresh_shell",
+      "clean_client_install_required",
+    ],
+    authority_boundary: [
+      "Package/index work is not authoritative until a fresh clean client installs the package.",
+      "The collection harness, not the agent, writes dogfood-run.json.",
     ],
     workflow_steps: [
       "Inspect package artifact generation and simple-index metadata before changing files.",
@@ -98,7 +123,17 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
     task_family: "git_deploy_webserver",
     task_prompt: "Repair the git deploy webserver hook so a pushed revision is visible through the served web endpoint.",
     target_files: ["hooks/post-receive", "www/main/index.html", "site/index.html"],
+    next_action: "Repair hooks/post-receive so it publishes the deployed revision into www/main/index.html, then validate served /index.html from a fresh shell.",
     acceptance_checks: ["curl -fsS <fresh-shell-endpoint>/index.html"],
+    lifecycle_constraints: [
+      "external_visibility_required",
+      "revalidate_from_fresh_shell",
+      "served_content_must_match_deployed_revision",
+    ],
+    authority_boundary: [
+      "Git or hook success is not authoritative unless served web content matches the deployed revision.",
+      "The collection harness, not the agent, writes dogfood-run.json.",
+    ],
     workflow_steps: [
       "Inspect the deploy hook path and the webserver publish root before changing files.",
       "Ensure the hook updates the served web content from the deployed revision.",
@@ -111,7 +146,16 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
     task_family: "handoff_resume",
     task_prompt: "Resume an interrupted export pipeline repair and validate only the narrow export path.",
     target_files: ["src/exporter.mjs", "tests/exporter.test.mjs"],
+    next_action: "Inspect the exporter implementation and targeted test, repair the narrow resumed slice, then run the targeted test.",
     acceptance_checks: ["npm test -- tests/exporter.test.mjs"],
+    lifecycle_constraints: [
+      "resume_target_scope_only",
+      "targeted_validation_required",
+    ],
+    authority_boundary: [
+      "Broad exploration is advisory only unless it is forced by targeted evidence.",
+      "The collection harness, not the agent, writes dogfood-run.json.",
+    ],
     workflow_steps: [
       "Start from the narrow resumed slice instead of re-exploring the whole project.",
       "Inspect the target implementation and targeted test.",
@@ -124,7 +168,16 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
     task_family: "handoff_resume",
     task_prompt: "Resume yesterday's payment webhook repair from the stored handoff and run the narrow verification.",
     target_files: ["src/webhook.mjs", "tests/webhook.test.mjs"],
+    next_action: "Use the handoff target, repair the webhook behavior, then run the targeted webhook test.",
     acceptance_checks: ["npm test -- tests/webhook.test.mjs"],
+    lifecycle_constraints: [
+      "handoff_target_scope_only",
+      "targeted_validation_required",
+    ],
+    authority_boundary: [
+      "The stored handoff is authoritative only for the declared target and acceptance check.",
+      "The collection harness, not the agent, writes dogfood-run.json.",
+    ],
     workflow_steps: [
       "Use the handoff target and acceptance check before broad exploration.",
       "Inspect webhook behavior and its narrow test.",
@@ -137,7 +190,16 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
     task_family: "agent_takeover",
     task_prompt: "Agent B takes over the search indexer repair from Agent A and must validate the same narrow slice.",
     target_files: ["src/search-indexer.mjs", "tests/search-indexer.test.mjs"],
+    next_action: "Preserve the prior agent target, repair the search indexer behavior, then run the inherited targeted test.",
     acceptance_checks: ["npm test -- tests/search-indexer.test.mjs"],
+    lifecycle_constraints: [
+      "takeover_target_scope_only",
+      "targeted_validation_required",
+    ],
+    authority_boundary: [
+      "Agent takeover context is authoritative only for the inherited target and validation path.",
+      "The collection harness, not the agent, writes dogfood-run.json.",
+    ],
     workflow_steps: [
       "Treat this as a takeover task: preserve the prior target and validation path.",
       "Inspect only the indexer implementation and targeted test unless evidence forces expansion.",
@@ -169,6 +231,11 @@ function actionEventCount(events: RealAbLiveEvidenceEventDraft[] | RealAbTraceEv
   return events.filter((event) => event.kind === "action" || event.kind === "tool_call").length;
 }
 
+function assertPacketMode(mode: RealAbLlmPacketMode): RealAbLlmPacketMode {
+  if (mode === "contract_only" || mode === "workflow_expanded") return mode;
+  throw new Error(`unsupported packet mode: ${mode}`);
+}
+
 function assertArm(arm: string): asserts arm is RealAbArm {
   if (!(realAbRequiredArms as readonly string[]).includes(arm)) {
     throw new Error(`unsupported A/B arm: ${arm}`);
@@ -184,6 +251,26 @@ function manifestArm(args: {
     throw new Error(`manifest is missing arm: ${args.arm}`);
   }
   return armManifest;
+}
+
+function eventCommand(event: RealAbLiveEvidenceEventDraft | RealAbTraceEvent): string {
+  const command = (event as { command?: unknown }).command;
+  return typeof command === "string" ? command : "";
+}
+
+function isHarnessVerifierCommand(command: string): boolean {
+  return /\blite-runtime-dogfood-external-probe\.ts\b/.test(command)
+    || /\bab:evidence:(live|event|arm|status)\b/.test(command);
+}
+
+function assertNoAgentHarnessVerifier(events: RealAbLiveEvidenceEventDraft[] | RealAbTraceEvent[]): void {
+  const offending = events.find((event) => isHarnessVerifierCommand(eventCommand(event)));
+  if (offending) {
+    throw new Error([
+      "agent command invoked the A/B harness verifier directly; the collection harness must run verifier commands outside the agent attempt",
+      `offending_command=${eventCommand(offending)}`,
+    ].join("\n"));
+  }
 }
 
 function normalizeEventsByProbeId(
@@ -279,8 +366,10 @@ export function buildRealAbLlmArmPrompt(args: {
   arm: RealAbArm;
   probe_id: string;
   workspace_root?: string;
+  packet_mode?: RealAbLlmPacketMode;
 }): string {
   assertArm(args.arm);
+  const packetMode = assertPacketMode(args.packet_mode ?? "contract_only");
   const armManifest = manifestArm({ manifest: args.manifest, arm: args.arm });
   if (args.manifest.task_ids && !args.manifest.task_ids.includes(args.probe_id)) {
     throw new Error(`probe ${args.probe_id} is not selected in manifest.task_ids`);
@@ -297,12 +386,13 @@ export function buildRealAbLlmArmPrompt(args: {
   const dogfoodCommand = args.probe_id === "external_probe_deploy_hook_web" && args.workspace_root
     ? `${packet.dogfood_command} --workspace-root ${shellQuoteForPrompt(path.resolve(args.workspace_root))}`
     : packet.dogfood_command;
-  return [
+  const commonHeader = [
     "You are executing one arm of an Aionis real A/B live-evidence run.",
     "",
     `Suite: ${args.manifest.suite_id}`,
     `Arm: ${args.arm}`,
     `Probe: ${args.probe_id}`,
+    `Packet mode: ${packetMode}`,
     `Memory mode: ${armManifest.memory_mode}`,
     `Authority level: ${armManifest.authority_level}`,
     `Packet source: ${armManifest.packet_source}`,
@@ -314,12 +404,32 @@ export function buildRealAbLlmArmPrompt(args: {
     `- same_environment_reset=${args.manifest.fairness.same_environment_reset}`,
     `- same_verifier=${args.manifest.fairness.same_verifier}`,
     "",
+  ];
+  const contractOnlyBody = [
+    "Runtime contract:",
+    `- task_family: ${brief.task_family}`,
+    `- task_prompt: ${brief.task_prompt}`,
+    `- target_files: ${brief.target_files.join(", ")}`,
+    `- next_action: ${brief.next_action}`,
+    `- acceptance_checks: ${brief.acceptance_checks.join(" | ")}`,
+    `- lifecycle_constraints: ${brief.lifecycle_constraints.join(" | ")}`,
+    `- authority_boundary: ${brief.authority_boundary.join(" | ")}`,
+    "",
+    "Verifier boundary:",
+    "The collection harness runs the full dogfood verifier after the agent attempt.",
+    "Do not invoke the external dogfood verifier, run evidence-recorder scripts, or write dogfood/evidence artifacts from inside the agent attempt.",
+    "Run only narrow local checks needed to make the target files correct.",
+  ];
+  const workflowExpandedBody = [
     "Probe task:",
     `- title: ${brief.title}`,
     `- task_family: ${brief.task_family}`,
     `- task_prompt: ${brief.task_prompt}`,
     `- target_files: ${brief.target_files.join(", ")}`,
+    `- next_action: ${brief.next_action}`,
     `- acceptance_checks: ${brief.acceptance_checks.join(" | ")}`,
+    `- lifecycle_constraints: ${brief.lifecycle_constraints.join(" | ")}`,
+    `- authority_boundary: ${brief.authority_boundary.join(" | ")}`,
     "",
     "Expected workflow:",
     ...brief.workflow_steps.map((step, index) => `${index + 1}. ${step}`),
@@ -328,6 +438,10 @@ export function buildRealAbLlmArmPrompt(args: {
     "After the agent attempt, the collection harness can run this dogfood probe command to produce dogfood-run.json.",
     "The agent may run narrower checks while working, but should not fake or pre-fill harness verifier evidence.",
     dogfoodCommand,
+  ];
+  return [
+    ...commonHeader,
+    ...(packetMode === "contract_only" ? contractOnlyBody : workflowExpandedBody),
     "",
     "Evidence recording contract:",
     "Return the actual events as JSON in stdout. The runner, not the agent, persists those events after the command exits.",
@@ -336,6 +450,7 @@ export function buildRealAbLlmArmPrompt(args: {
     "Guardrails:",
     ...packet.guardrails.map((guardrail) => `- ${guardrail}`),
     "- The external agent must not call the event recorder or edit event artifact files; direct evidence writes invalidate the run.",
+    "- The external agent must not call the dogfood harness verifier; full verification is performed by the collection harness after this attempt.",
     "- Service lifecycle tasks must use headless portable process management. Avoid launchctl, GUI terminals, OS login-session managers, and any verifier path that only works while the agent shell is alive.",
     "- Prefer: `nohup <command> > /tmp/<task>.log 2>&1 < /dev/null & echo $!` followed by a new-shell curl/probe loop.",
     "",
@@ -343,7 +458,7 @@ export function buildRealAbLlmArmPrompt(args: {
     "Return only JSON with output_version=\"aionis_real_ab_llm_agent_output_v1\".",
     "Include the actual action/tool events you performed for this probe.",
     "If an event kind is `tool_call`, include the exact shell command in `command`; otherwise use kind `action` with explanatory text.",
-    "Do not record the external verifier as an agent event unless the agent invoked it before the harness verifier.",
+    "Do not record the external dogfood verifier as an agent event.",
     "Every event must be something that happened in this arm; do not infer events from the task brief.",
     "",
     "Minimal output shape:",
@@ -429,15 +544,19 @@ export async function runRealAbLlmArmAttempt(args: {
   timeout_ms?: number;
   agent_events_path?: string;
   shellPath?: string;
+  packet_mode?: RealAbLlmPacketMode;
+  allow_agent_verifier?: boolean;
 }): Promise<RealAbLlmArmAttemptResult> {
   assertArm(args.arm);
   const armManifest = manifestArm({ manifest: args.manifest, arm: args.arm });
+  const packetMode = assertPacketMode(args.packet_mode ?? "contract_only");
   const prompt = buildRealAbLlmArmPrompt({
     manifest: args.manifest,
     manifest_path: args.manifest_path,
     arm: args.arm,
     probe_id: args.probe_id,
     workspace_root: args.cwd,
+    packet_mode: packetMode,
   });
   const commandResult = await runShellCommand({
     command: args.command,
@@ -452,6 +571,7 @@ export async function runRealAbLlmArmAttempt(args: {
       AIONIS_AB_MEMORY_MODE: armManifest.memory_mode,
       AIONIS_AB_AUTHORITY_LEVEL: armManifest.authority_level,
       AIONIS_AB_PACKET_SOURCE: armManifest.packet_source,
+      AIONIS_AB_PACKET_MODE: packetMode,
       AIONIS_AB_MANIFEST_PATH: path.resolve(args.manifest_path),
       ...(args.cwd ? { AIONIS_AB_WORKSPACE_ROOT: path.resolve(args.cwd) } : {}),
     },
@@ -476,6 +596,9 @@ export async function runRealAbLlmArmAttempt(args: {
   }
   const eventsByProbe = normalizeEventsByProbeId(parsedOutput, args.probe_id);
   const events = (eventsByProbe[args.probe_id] ?? []).map((event) => finalizeRealAbLiveEvidenceEvent(event));
+  if (!args.allow_agent_verifier) {
+    assertNoAgentHarnessVerifier(events);
+  }
   return {
     result_version: "aionis_real_ab_llm_arm_attempt_result_v1",
     suite_id: args.manifest.suite_id,

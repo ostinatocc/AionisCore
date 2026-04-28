@@ -4,6 +4,7 @@ import {
   applyRealAbLlmArmAttemptToAgentEvents,
   buildRealAbLlmArmPrompt,
   runRealAbLlmArmAttempt,
+  type RealAbLlmPacketMode,
 } from "./lib/aionis-real-ab-llm-runner.ts";
 import {
   realAbRequiredArms,
@@ -24,6 +25,8 @@ type CliOptions = {
   cwd: string | null;
   timeoutMs: number;
   outJson: string | null;
+  packetMode: RealAbLlmPacketMode;
+  allowAgentVerifier: boolean;
   dryRun: boolean;
 };
 
@@ -42,13 +45,15 @@ Flags:
   --cwd <path>            Optional command working directory. Defaults to current repo/process cwd.
   --timeout-ms <n>        Command timeout. Defaults to 300000.
   --out-json <path>       Optional run result JSON path.
+  --packet-mode <mode>    contract_only or workflow_expanded. Defaults to contract_only.
+  --allow-agent-verifier  Allow agent events to include the external verifier command. Intended only for debugging.
   --dry-run               Print the generated agent prompt and resolved paths without running.
   --help                  Show this help.
 
 The command receives these environment variables:
   AIONIS_AB_PROMPT, AIONIS_AB_ARM, AIONIS_AB_PROBE_ID, AIONIS_AB_SUITE_ID,
   AIONIS_AB_MEMORY_MODE, AIONIS_AB_AUTHORITY_LEVEL, AIONIS_AB_PACKET_SOURCE,
-  AIONIS_AB_MANIFEST_PATH
+  AIONIS_AB_PACKET_MODE, AIONIS_AB_MANIFEST_PATH
 
 The command must print JSON only:
   {"output_version":"aionis_real_ab_llm_agent_output_v1","probe_id":"...","events":[{"kind":"action","text":"..."}]}
@@ -80,6 +85,13 @@ function parseNonNegativeNumber(value: string, flag: string): number {
   return parsed;
 }
 
+function parsePacketMode(value: string): RealAbLlmPacketMode {
+  if (value === "contract_only" || value === "workflow_expanded") {
+    return value;
+  }
+  throw new Error("--packet-mode must be one of: contract_only, workflow_expanded");
+}
+
 function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
     manifestPath: null,
@@ -90,6 +102,8 @@ function parseArgs(argv: string[]): CliOptions {
     cwd: null,
     timeoutMs: 300_000,
     outJson: null,
+    packetMode: "contract_only",
+    allowAgentVerifier: false,
     dryRun: false,
   };
 
@@ -127,6 +141,13 @@ function parseArgs(argv: string[]): CliOptions {
       case "--out-json":
         options.outJson = readValue(argv, index, arg);
         index += 1;
+        break;
+      case "--packet-mode":
+        options.packetMode = parsePacketMode(readValue(argv, index, arg));
+        index += 1;
+        break;
+      case "--allow-agent-verifier":
+        options.allowAgentVerifier = true;
         break;
       case "--dry-run":
         options.dryRun = true;
@@ -211,6 +232,7 @@ if (options.dryRun) {
     arm,
     probe_id: probeId,
     workspace_root: options.cwd ? path.resolve(options.cwd) : process.cwd(),
+    packet_mode: options.packetMode,
   });
   process.stdout.write(`${JSON.stringify({
     dry_run: true,
@@ -219,6 +241,7 @@ if (options.dryRun) {
     probe_id: probeId,
     events_path: eventsPath,
     cwd: options.cwd ? path.resolve(options.cwd) : process.cwd(),
+    packet_mode: options.packetMode,
     prompt,
   }, null, 2)}\n`);
 } else {
@@ -232,6 +255,8 @@ if (options.dryRun) {
     cwd: options.cwd ? path.resolve(options.cwd) : process.cwd(),
     timeout_ms: options.timeoutMs,
     agent_events_path: eventsPath,
+    packet_mode: options.packetMode,
+    allow_agent_verifier: options.allowAgentVerifier,
   });
   const afterEventsContent = readFileIfExists(eventsPath);
   if (beforeEventsContent !== afterEventsContent) {
