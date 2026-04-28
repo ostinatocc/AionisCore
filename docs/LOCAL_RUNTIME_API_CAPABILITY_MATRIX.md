@@ -132,6 +132,13 @@ Planner-packet contract:
 8. `planning_summary` and `assembly_summary` can now expose `action_retrieval_uncertainty` and `action_retrieval_gate`
 9. when `return_layered_context=true`, `planning_context` and `context_assemble` can also expose `operator_projection.action_retrieval_gate` and `operator_projection.action_hints[]`
 
+Agent-facing execution contract packet:
+
+1. `execution_agent_contract_packet_v1` is the compact agent-facing projection of `execution_contract_v1`
+2. default mode is `contract_only`, exposing only task family, task prompt, target files, next action, acceptance checks, lifecycle constraints, and authority boundary
+3. `workflow_steps`, `pattern_hints`, selected tool, and provenance stay internal unless the packet escalates to `workflow_expanded`
+4. escalation is automatic when the compact contract is missing target files, next action, acceptance checks, unresolved blockers are present, or verification has failed
+
 Recommended integrator read path:
 
 1. prefer `planner_packet.sections.*` for full workflow/pattern/rehydration collections

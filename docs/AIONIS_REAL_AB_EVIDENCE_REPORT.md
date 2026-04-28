@@ -208,6 +208,8 @@ The `ai_code_ci_repair` pilot adds a second kind of product signal: Aionis can a
 Completed:
 
 - Added `contract_only` packet mode.
+- Added reusable `execution_agent_contract_packet_v1` Runtime projection so compact agent-facing packets are produced from execution contracts instead of benchmark-local prompt assembly.
+- Added automatic escalation from `contract_only` to expanded workflow packets when the compact contract is missing target files, next action, acceptance checks, unresolved blockers are present, or verification has failed.
 - Kept full workflow, replay, and pattern memory internal by default.
 - Kept harness verifiers outside the agent default workflow.
 - Repeated the same three families after packet compression.
@@ -219,12 +221,12 @@ Completed:
 
 Remaining:
 
-- Add an automatic escalation path from `contract_only` to expanded workflow packets only when the compact contract is insufficient or verification fails.
+- Dogfood the automatic escalation path in live trials and verify it expands only after compact-contract insufficiency or verifier failure.
 - Run at least two more paired trials per family before making stronger cost or reliability claims.
 - Extend causal workspace verification beyond deploy/webserver where feasible.
 - Run the remaining harder `ai_code_ci_repair` variants as paired LLM A/B trials before treating the commercial-family signal as stable.
 - Rerun more commercial-family trials after arm-prompt isolation before making stable clean A/B claims.
-- Run the new `dependency_surface` variant as the next paired LLM A/B correctness-separation candidate.
+- Add larger dependency-surface variants that are more likely to separate correctness rather than only cost/control.
 
 ## Claim Policy
 

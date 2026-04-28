@@ -24,6 +24,14 @@ import type {
   RealAbLiveEvidenceAgentEventsFile,
   RealAbLiveEvidenceManifest,
 } from "./aionis-real-ab-live-evidence-assembler.ts";
+import {
+  buildExecutionAgentContractPacketV1,
+  renderExecutionAgentContractPacketMarkdown,
+} from "../../src/memory/execution-agent-contract-packet.ts";
+import {
+  buildExecutionContractFromProjection,
+} from "../../src/memory/execution-contract.ts";
+import { type ServiceLifecycleConstraintV1 } from "../../src/execution/types.ts";
 
 export type RealAbLlmAgentOutput = {
   output_version: "aionis_real_ab_llm_agent_output_v1";
@@ -291,6 +299,52 @@ function formatCommandTail(label: string, value: string): string {
   return `${label}:\n${trimmed || "<empty>"}`;
 }
 
+function serviceLifecycleConstraintFromBriefLabel(label: string): ServiceLifecycleConstraintV1 {
+  return {
+    version: 1,
+    service_kind: "generic",
+    label,
+    launch_reference: null,
+    endpoint: null,
+    must_survive_agent_exit: label === "must_survive_agent_exit",
+    revalidate_from_fresh_shell: label === "revalidate_from_fresh_shell",
+    detach_then_probe: label === "detach_then_probe",
+    health_checks: [],
+    teardown_notes: [],
+  };
+}
+
+function renderRuntimeContractOnlyBrief(brief: ProbeTaskBrief): string[] {
+  const contract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    task_family: brief.task_family,
+    target_files: brief.target_files,
+    next_action: brief.next_action,
+    workflow_steps: brief.workflow_steps,
+    service_lifecycle_constraints: brief.lifecycle_constraints.map(serviceLifecycleConstraintFromBriefLabel),
+    acceptance_checks: brief.acceptance_checks,
+    must_hold_after_exit: brief.lifecycle_constraints.filter((constraint) =>
+      constraint === "must_survive_agent_exit" || constraint === "revalidate_from_fresh_shell"
+    ),
+    external_visibility_requirements: brief.lifecycle_constraints.filter((constraint) =>
+      constraint.includes("external_visibility") || constraint.includes("served_content")
+    ),
+    provenance: {
+      source_kind: "manual_context",
+      source_summary_version: "real_ab_probe_brief_v1",
+      source_anchor: brief.title,
+      evidence_refs: [],
+      notes: ["rendered_by_runtime_execution_agent_contract_packet"],
+    },
+  });
+  const packet = buildExecutionAgentContractPacketV1({
+    contract,
+    task_prompt: brief.task_prompt,
+    requested_mode: "contract_only",
+  });
+  return renderExecutionAgentContractPacketMarkdown(packet);
+}
+
 function armSpecificTaskBody(args: {
   arm: RealAbArm;
   packetMode: RealAbLlmPacketMode;
@@ -346,14 +400,7 @@ function armSpecificTaskBody(args: {
   }
   if (packetMode === "contract_only") {
     return [
-      "Runtime contract:",
-      `- task_family: ${brief.task_family}`,
-      `- task_prompt: ${brief.task_prompt}`,
-      `- target_files: ${brief.target_files.join(", ")}`,
-      `- next_action: ${brief.next_action}`,
-      `- acceptance_checks: ${brief.acceptance_checks.join(" | ")}`,
-      `- lifecycle_constraints: ${brief.lifecycle_constraints.join(" | ")}`,
-      `- authority_boundary: ${brief.authority_boundary.join(" | ")}`,
+      ...renderRuntimeContractOnlyBrief(brief),
       "",
       "Verifier boundary:",
       "The collection harness runs the full dogfood verifier after the agent attempt.",
