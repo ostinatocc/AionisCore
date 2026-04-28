@@ -164,12 +164,19 @@ function probeIsExternalVisibility(probe: RuntimeDogfoodExternalProbeScenarioRun
     || probe.task_spec.expectations.after_exit_required;
 }
 
+function verifierCommandSignatureForProbe(probe: RuntimeDogfoodExternalProbeScenarioRun): string {
+  const slice = probe.diagnostics.slice || "external_probe";
+  return `runtime_dogfood:${probe.id}:${slice}:fresh_shell`;
+}
+
 function verifierEventForProbe(probe: RuntimeDogfoodExternalProbeScenarioRun): RealAbTraceEvent {
   const externalVisibility = probeIsExternalVisibility(probe);
+  const actualCommand = probe.diagnostics.command;
+  const probeOutput = probe.diagnostics.stdout_tail || probe.diagnostics.stderr_tail || probe.fresh_shell_probe_output;
   return {
     kind: externalVisibility ? "external_probe" : "verification",
-    command: probe.diagnostics.command,
-    text: probe.diagnostics.stdout_tail || probe.diagnostics.stderr_tail || probe.fresh_shell_probe_output,
+    command: verifierCommandSignatureForProbe(probe),
+    text: actualCommand ? `${actualCommand}\n${probeOutput}`.trim() : probeOutput,
     success: probe.fresh_shell_probe_passed,
     verifier: true,
     after_exit: probe.task_spec.expectations.after_exit_required,
@@ -204,7 +211,7 @@ function compileTask(input: RealAbDogfoodPairedCaptureInput, probeId: string): R
     fairness: input.fairness,
     verifier: {
       kind: externalVisibility ? "external_probe" : "command",
-      command: aionisProbe.diagnostics.command,
+      command: verifierCommandSignatureForProbe(aionisProbe),
       after_exit_required: afterExitRequired,
       external_visibility_required: externalVisibility,
     },

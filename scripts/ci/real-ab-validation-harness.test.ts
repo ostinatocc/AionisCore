@@ -505,6 +505,39 @@ test("real A/B dogfood paired capture compiles four external-probe arms into aud
   assert.equal(report.summary.treatment_after_exit_correctness_rate, 1);
 });
 
+test("real A/B dogfood paired capture normalizes dynamic external probe commands across arms", () => {
+  const probeId = "external_probe_service_after_exit";
+  const dogfoodInput = pairedDogfoodInput();
+  const commands = {
+    baseline: "curl -fsS http://127.0.0.1:4101/healthz",
+    aionis_assisted: "curl -fsS http://127.0.0.1:4102/healthz",
+    negative_control: "curl -fsS http://127.0.0.1:4103/healthz",
+    positive_control: "curl -fsS http://127.0.0.1:4104/healthz",
+  } as const;
+
+  for (const arm of ["baseline", "aionis_assisted", "negative_control", "positive_control"] as const) {
+    dogfoodInput.arms[arm].dogfood_run = dogfoodRun({
+      runId: `dogfood-${arm}`,
+      probeId,
+      success: true,
+      command: commands[arm],
+    });
+  }
+
+  const capture = compileRealAbDogfoodPairedCapture(dogfoodInput);
+  const report = runRealAbValidationSuite(compileRealAbTraceCapture(capture));
+  const task = capture.tasks[0];
+  const expectedCommand = `runtime_dogfood:${probeId}:service_after_exit:fresh_shell`;
+
+  assert.equal(task.verifier.command, expectedCommand);
+  for (const arm of ["baseline", "aionis_assisted", "negative_control", "positive_control"] as const) {
+    const verifier = task.runs[arm].events.find((event) => event.kind === "external_probe");
+    assert.equal(verifier?.command, expectedCommand);
+    assert.match(verifier?.text ?? "", new RegExp(commands[arm].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.equal(report.gate.status, "pass");
+});
+
 test("real A/B dogfood paired capture rejects arms without captured agent actions", () => {
   const dogfoodInput = pairedDogfoodInput();
   dogfoodInput.arms.aionis_assisted.agent_events_by_probe_id.external_probe_service_after_exit = [];
