@@ -2,7 +2,7 @@
 
 Date: 2026-04-28
 
-This report summarizes the first three real LLM-backed A/B evidence runs for Aionis Runtime. The goal is not to claim broad product superiority. The goal is to state what the current evidence can and cannot prove, then define the next Runtime hardening steps.
+This report summarizes the first real LLM-backed A/B evidence runs for Aionis Runtime and the follow-up `contract_only` reruns. The goal is not to claim broad product superiority. The goal is to state what the current evidence can and cannot prove, then define the next Runtime hardening steps.
 
 ## Evidence Boundary
 
@@ -16,13 +16,23 @@ These runs are directional pilot evidence, not broad product proof.
 
 ## Suites
 
+### Initial Rich-Packet Runs
+
 | Suite | Task family | Report | Gate |
 | --- | --- | --- | --- |
 | `llm-smoke-20260428-112048` | `service_publish_validate` | `.artifacts/real-ab/llm-smoke-20260428-112048/validation-report.md` | pass |
 | `publish-install-20260428-123831` | `package_publish_validate` | `.artifacts/real-ab/publish-install-20260428-123831/validation-report.md` | pass |
 | `deploy-web-20260428-140245` | `git_deploy_webserver` | `.artifacts/real-ab/deploy-web-20260428-140245/validation-report.md` | pass |
 
-## Directional Results
+### Contract-Only Reruns
+
+| Suite | Task family | Report | Gate |
+| --- | --- | --- | --- |
+| `contract-service-20260428-165728` | `service_publish_validate` | `.artifacts/real-ab/contract-service-20260428-165728/validation-report.md` | pass |
+| `contract-publish-20260428-172722` | `package_publish_validate` | `.artifacts/real-ab/contract-publish-20260428-172722/validation-report.md` | pass |
+| `contract-deploy-20260428-180029` | `git_deploy_webserver` | `.artifacts/real-ab/contract-deploy-20260428-180029/validation-report.md` | pass |
+
+## Initial Directional Results
 
 | Family | Baseline completion | Aionis completion | Baseline first-correct | Aionis first-correct | Negative control authoritative count | Positive control sanity |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -39,6 +49,24 @@ These runs are directional pilot evidence, not broad product proof.
 | `git_deploy_webserver` | 18 | 21 | 1 | 0 | 190s | 459s | n/a | 134,120 |
 
 The current evidence shows reliability advantages more clearly than cost advantages. Aionis reduced self-marked wasted steps in all three families and improved first-correct behavior in deploy/webserver. It did not consistently reduce event count, elapsed time, or tokens.
+
+## Contract-Only Rerun Results
+
+| Family | Baseline completion | Aionis completion | Baseline first-correct | Aionis first-correct | Negative control authoritative count | Positive control sanity |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `service_publish_validate` | 100% | 100% | 100% | 100% | 0 | 100% |
+| `package_publish_validate` | 100% | 100% | 100% | 100% | 0 | 100% |
+| `git_deploy_webserver` | 100% | 100% | 100% | 100% | 0 | 100% |
+
+| Family | Baseline events | Aionis events | Baseline wasted | Aionis wasted | Baseline incorrect events | Aionis incorrect events | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `service_publish_validate` | 12 | 14 | 2 | 0 | 2 | 2 | 234s | 182s | 54,468 | 59,648 |
+| `package_publish_validate` | 18 | 13 | 0 | 0 | 2 | 2 | 479s | 416s | 125,189 | 98,369 |
+| `git_deploy_webserver` | 19 | 12 | 3 | 0 | 3 | 0 | 214s | 154s | 68,343 | 53,434 |
+
+The `contract_only` rerun preserved correctness across all three tested families and improved elapsed time in all three. It also reduced event count and token usage in publish/install and deploy/webserver. Service lifecycle still used slightly more tokens for Aionis than baseline, but completed faster and removed self-marked wasted steps.
+
+The strongest compact-packet signal is `git_deploy_webserver`: Aionis used fewer events, fewer tokens, less time, zero wasted steps, and zero incorrect events while still passing the causal workspace verifier.
 
 ## What This Proves
 
@@ -69,15 +97,22 @@ Aionis should be positioned as a reliability and continuity Runtime first:
 - It carries task-family execution contracts across attempts.
 - It can help agents start from the right work surface instead of re-discovering the task.
 
-It should not be positioned primarily as a token-saving layer until compact packet modes are validated.
+It should not be positioned primarily as a token-saving layer yet, but the `contract_only` reruns now show credible cost-compression potential in publish/install and deploy/webserver.
 
-## Runtime Hardening Priorities
+## Runtime Hardening Status
 
-1. Add a `contract_only` packet mode.
-2. Keep full workflow, replay, and pattern memory internal by default.
-3. Expand workflow memory only when the contract is insufficient or verification fails.
-4. Keep harness verifiers outside the agent default workflow.
-5. Repeat the same three families after packet compression to check whether token and duration regressions improve.
+Completed:
+
+- Added `contract_only` packet mode.
+- Kept full workflow, replay, and pattern memory internal by default.
+- Kept harness verifiers outside the agent default workflow.
+- Repeated the same three families after packet compression.
+
+Remaining:
+
+- Add an automatic escalation path from `contract_only` to expanded workflow packets only when the compact contract is insufficient or verification fails.
+- Run at least two more paired trials per family before making stronger cost or reliability claims.
+- Extend causal workspace verification beyond deploy/webserver where feasible.
 
 ## Claim Policy
 
@@ -91,10 +126,14 @@ Not allowed current claim:
 
 ## Next Evidence Step
 
-After implementing `contract_only` packet mode and verifier guardrails, rerun:
+Run at least two more paired trials for:
 
 - `external_probe_service_after_exit`
 - `external_probe_publish_install`
 - `external_probe_deploy_hook_web`
 
-Each family should run at least two more paired trials before making stronger product claims.
+Then add the next continuity-heavy families:
+
+- interrupted resume
+- next-day handoff
+- second-agent takeover
