@@ -36,6 +36,12 @@ These runs are directional pilot evidence, not broad product proof.
 | `contract-publish-20260428-172722` | `package_publish_validate` | `.artifacts/real-ab/contract-publish-20260428-172722/validation-report.md` | pass |
 | `contract-deploy-20260428-180029` | `git_deploy_webserver` | `.artifacts/real-ab/contract-deploy-20260428-180029/validation-report.md` | pass |
 
+### Commercial-Family Pilot Runs
+
+| Suite | Task family | Report | Gate |
+| --- | --- | --- | --- |
+| `ai-code-ci-20260428-194736` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-20260428-194736/validation-report.md` | pass |
+
 ## Initial Directional Results
 
 | Family | Baseline completion | Aionis completion | Baseline first-correct | Aionis first-correct | Negative control authoritative count | Positive control sanity |
@@ -72,11 +78,24 @@ The `contract_only` rerun preserved correctness across all three tested families
 
 The strongest compact-packet signal is `git_deploy_webserver`: Aionis used fewer events, fewer tokens, less time, zero wasted steps, and zero incorrect events while still passing the causal workspace verifier.
 
+## Commercial-Family Pilot Result
+
+The first commercial-family slice is `ai_code_ci_repair`: repair an almost-right AI-generated patch so the targeted CI test passes without broad unrelated edits. This maps to a high-frequency coding workflow where the value is not only solving the task, but narrowing the work surface, avoiding irrelevant repo exploration, and requiring verifier-backed success.
+
+| Family | Baseline events | Aionis events | Baseline wasted | Aionis wasted | Baseline incorrect events | Aionis incorrect events | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `ai_code_ci_repair` | 15 | 8 | 4 | 0 | 4 | 0 | 200s | 126s | 57,179 | 47,894 |
+
+In this pilot, Aionis preserved correctness while reducing action events by 46.7%, elapsed time by 37.1%, and token use by 16.2% compared with baseline. The gate passed, completion was 100% for both arms, first-correct action was 100% for both arms, and false-confidence rate was 0% for both arms.
+
+Control interpretation matters: the negative control also passed with 9 events, 98s, and 45,960 tokens. That means this specific fixture is not hard enough to prove unique Aionis correctness. It does support a narrower claim: compact Aionis contracts can reduce wasted steps and preserve verifier-backed correctness in an AI code CI repair family. Stronger commercial proof requires repeated trials and harder variants with misleading patches, hidden edge cases, or larger dependency surfaces.
+
 ## What This Proves
 
 Aionis can currently make defensible directional claims in these areas:
 
 - It can preserve correctness across service lifecycle, publish/install, and deploy/webserver families.
+- It can preserve correctness and reduce wasted action in the first AI code CI repair pilot.
 - It can prevent irrelevant or low-trust context from becoming authoritative, as shown by negative-control authoritative count `0`.
 - It can improve first correct action when the task depends on execution continuity and external visibility.
 - It can force the distinction between an agent success claim and verifier-backed success.
@@ -88,6 +107,7 @@ Aionis should not currently claim:
 
 - Universal token savings.
 - Universal runtime speedup.
+- Unique correctness advantage for AI code CI repair based on one easy pilot fixture.
 - Broad product superiority across untested task families.
 - That richer Runtime packets are always better.
 - That agent-side self-verification is enough for authority.
@@ -103,6 +123,8 @@ Aionis should be positioned as a reliability and continuity Runtime first:
 
 It should not be positioned primarily as a token-saving layer yet, but the `contract_only` reruns now show credible cost-compression potential in publish/install and deploy/webserver.
 
+The `ai_code_ci_repair` pilot adds a second kind of product signal: Aionis can act as a compact execution-contract layer for AI coding repair loops, where the measurable advantage is fewer irrelevant actions and lower token cost while still requiring targeted CI evidence.
+
 ## Runtime Hardening Status
 
 Completed:
@@ -117,12 +139,17 @@ Remaining:
 - Add an automatic escalation path from `contract_only` to expanded workflow packets only when the compact contract is insufficient or verification fails.
 - Run at least two more paired trials per family before making stronger cost or reliability claims.
 - Extend causal workspace verification beyond deploy/webserver where feasible.
+- Add harder `ai_code_ci_repair` variants before treating the commercial-family signal as stable.
 
 ## Claim Policy
 
 Allowed current claim:
 
 > Aionis Runtime has directional live A/B evidence that execution contracts and trust gates can improve correctness, first-action quality, and false-confidence control in service lifecycle, package publish/install, and deploy/webserver task families.
+
+Allowed commercial-family pilot claim:
+
+> Aionis Runtime has one live paired A/B pilot showing that compact execution contracts can reduce wasted steps, elapsed time, and token use in an AI code CI repair workflow while preserving verifier-backed correctness.
 
 Not allowed current claim:
 
