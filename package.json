@@ -33,6 +33,7 @@
     "ab:evidence:event": "npx tsx scripts/aionis-real-ab-live-evidence-event.ts",
     "ab:evidence:arm": "npx tsx scripts/aionis-real-ab-live-evidence-arm-run.ts",
     "ab:evidence:status": "npx tsx scripts/aionis-real-ab-live-evidence-status.ts",
+    "ab:llm:run": "npx tsx scripts/aionis-real-ab-llm-runner.ts",
     "core:build:runtime-host": "test -f src/runtime-entry.ts",
     "core:build:aionis-doc": "npm --prefix packages/aionis-doc run build",
     "core:build:runtime-core": "npm --prefix packages/runtime-core run build",

@@ -43,6 +43,11 @@ import {
   buildRealAbLiveEvidenceStatusReport,
   renderRealAbLiveEvidenceStatusMarkdown,
 } from "../lib/aionis-real-ab-live-evidence-status.ts";
+import {
+  applyRealAbLlmArmAttemptToAgentEvents,
+  parseRealAbLlmAgentOutput,
+  runRealAbLlmArmAttempt,
+} from "../lib/aionis-real-ab-llm-runner.ts";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
@@ -820,6 +825,133 @@ test("real A/B live evidence event CLI records events through manifest and arm s
   assert.equal(events.events_by_probe_id.external_probe_service_after_exit.length, 1);
   assert.equal(events.events_by_probe_id.external_probe_service_after_exit[0].correct, true);
   assert.equal(events.events_by_probe_id.external_probe_service_after_exit[0].wasted, false);
+});
+
+function writeMockRealAbLlmAgent(dir: string): string {
+  const scriptPath = path.join(dir, "mock-real-ab-llm-agent.mjs");
+  fs.writeFileSync(scriptPath, `
+const output = {
+  output_version: "aionis_real_ab_llm_agent_output_v1",
+  probe_id: process.env.AIONIS_AB_PROBE_ID,
+  events: [
+    {
+      kind: "action",
+      text: \`arm=\${process.env.AIONIS_AB_ARM}; prompt_len=\${(process.env.AIONIS_AB_PROMPT ?? "").length}\`,
+      correct: true,
+      wasted: false
+    },
+    {
+      kind: "tool_call",
+      command: "nohup node scripts/health-server.mjs --port 4199 >/tmp/health.log 2>&1 &",
+      touched_files: ["scripts/health-server.mjs"],
+      correct: true,
+      wasted: false
+    }
+  ]
+};
+process.stdout.write(JSON.stringify(output));
+`);
+  return scriptPath;
+}
+
+test("real A/B LLM runner executes a configured agent command and returns auditable events", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-live-evidence-llm-runner-"));
+  const probeId = "external_probe_service_after_exit";
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence-llm",
+    task_ids: [probeId],
+  });
+  const manifestPath = path.join(dir, "manifest.json");
+  const eventsPath = path.join(dir, manifest.arms.aionis_assisted.agent_events_path);
+  const mockAgentPath = writeMockRealAbLlmAgent(dir);
+  fs.mkdirSync(path.dirname(eventsPath), { recursive: true });
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const attempt = await runRealAbLlmArmAttempt({
+    manifest,
+    manifest_path: manifestPath,
+    arm: "aionis_assisted",
+    probe_id: probeId,
+    command: `${JSON.stringify(process.execPath)} ${JSON.stringify(mockAgentPath)}`,
+    cwd: repoRoot,
+    timeout_ms: 10_000,
+    agent_events_path: eventsPath,
+  });
+  const updated = applyRealAbLlmArmAttemptToAgentEvents({
+    events_file: { events_by_probe_id: { [probeId]: [] } },
+    attempt,
+  });
+
+  assert.equal(attempt.result_version, "aionis_real_ab_llm_arm_attempt_result_v1");
+  assert.equal(attempt.success, true);
+  assert.equal(attempt.arm, "aionis_assisted");
+  assert.equal(attempt.parsed_event_count, 2);
+  assert.equal(attempt.action_event_count, 2);
+  assert.equal(attempt.command_result.exit_code, 0);
+  assert.match(attempt.prompt_sha256, /^[a-f0-9]{64}$/);
+  assert.equal(updated.events_by_probe_id[probeId].length, 2);
+  assert.match(updated.events_by_probe_id[probeId][0].text ?? "", /arm=aionis_assisted/);
+});
+
+test("real A/B LLM runner rejects outputs without real action or tool evidence", () => {
+  assert.throws(
+    () => parseRealAbLlmAgentOutput(JSON.stringify({
+      output_version: "aionis_real_ab_llm_agent_output_v1",
+      probe_id: "external_probe_service_after_exit",
+      events: [
+        {
+          kind: "agent_claim",
+          text: "I completed the task.",
+          claimed_success: true,
+        },
+      ],
+    }), "external_probe_service_after_exit"),
+    /at least one action or tool_call event/,
+  );
+});
+
+test("real A/B LLM runner CLI writes structured events into the selected arm event file", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-live-evidence-llm-runner-cli-"));
+  const probeId = "external_probe_service_after_exit";
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence-llm-cli",
+    task_ids: [probeId],
+  });
+  const manifestPath = path.join(dir, "manifest.json");
+  const eventsPath = path.join(dir, manifest.arms.baseline.agent_events_path);
+  const resultPath = path.join(dir, "baseline", "llm-run-result.json");
+  const mockAgentPath = writeMockRealAbLlmAgent(dir);
+  fs.mkdirSync(path.dirname(eventsPath), { recursive: true });
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  fs.writeFileSync(eventsPath, `${JSON.stringify({ events_by_probe_id: { [probeId]: [] } }, null, 2)}\n`);
+
+  const output = execFileSync("npx", [
+    "tsx",
+    "scripts/aionis-real-ab-llm-runner.ts",
+    "--manifest",
+    manifestPath,
+    "--arm",
+    "baseline",
+    "--probe",
+    probeId,
+    "--command",
+    `${JSON.stringify(process.execPath)} ${JSON.stringify(mockAgentPath)}`,
+    "--events",
+    eventsPath,
+    "--out-json",
+    resultPath,
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  const events = JSON.parse(fs.readFileSync(eventsPath, "utf8")) as RealAbLiveEvidenceAgentEventsFile;
+  const result = JSON.parse(fs.readFileSync(resultPath, "utf8"));
+
+  assert.match(output, /aionis_real_ab_llm_arm_attempt_result_v1/);
+  assert.equal(events.events_by_probe_id[probeId].length, 2);
+  assert.equal(events.events_by_probe_id[probeId][1].kind, "tool_call");
+  assert.equal(result.success, true);
+  assert.equal(result.agent_events_patch.events_by_probe_id[probeId].length, 2);
 });
 
 test("real A/B live evidence arm run packet maps probes to dogfood command and recorder examples", () => {
