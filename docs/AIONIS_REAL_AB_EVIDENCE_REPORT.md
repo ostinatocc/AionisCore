@@ -46,6 +46,7 @@ These runs are directional pilot evidence, not broad product proof.
 | `ai-code-ci-wrong-surface-20260428-204159` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-wrong-surface-20260428-204159/validation-report.md` | pass |
 | `ai-code-ci-isolated-hidden-20260428-210356` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-isolated-hidden-20260428-210356/validation-report.md` | pass |
 | `ai-code-ci-dependency-surface-20260428-214009` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-20260428-214009/validation-report.md` | pass |
+| `ai-code-ci-dependency-surface-repeat-20260428-220043` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-repeat-20260428-220043/validation-report.md` | pass |
 
 ## Initial Directional Results
 
@@ -139,8 +140,9 @@ The `dependency_surface` variant tests whether the agent can trace a pricing fai
 | Family / variant | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ai_code_ci_repair / dependency_surface` | 16 | 12 | 13 | 11 | 0 | 0 | 196s | 90s | 36,765 | 27,705 |
+| `ai_code_ci_repair / dependency_surface repeat` | 13 | 12 | 9 | 10 | 0 | 0 | 110s | 93s | 51,738 | 75,520 |
 
-This is the strongest clean CI repair signal so far:
+The first dependency-surface run was the strongest clean CI repair signal so far:
 
 - Aionis preserved verifier-backed correctness.
 - Aionis reduced action events by 25.0% versus baseline.
@@ -149,7 +151,15 @@ This is the strongest clean CI repair signal so far:
 - Aionis used fewer tokens than negative control and positive control.
 - Baseline and negative control also passed, so this is still not correctness separation.
 
-The current defensible claim for this family is now stronger: compact Aionis Runtime contracts can compress a multi-file AI code repair task while preserving immutable-evidence verification. The remaining gap is correctness separation on cases where baseline or low-trust context actually fails, retries, touches wrong files, or becomes falsely confident.
+The repeat run kept part of the signal but weakened the token claim:
+
+- Aionis preserved verifier-backed correctness again.
+- Aionis reduced action events by 7.7% versus baseline.
+- Aionis reduced elapsed time by 15.1% versus baseline.
+- Aionis used 46.0% more tokens than baseline.
+- Negative control was cheaper and faster than Aionis in this repeat.
+
+The current defensible claim for this family is narrower: compact Aionis Runtime contracts can preserve correctness and may reduce actions/time on multi-file repair tasks, but token savings are not yet stable and correctness separation is not proven. The remaining gap is cases where baseline or low-trust context actually fails, retries, touches wrong files, or becomes falsely confident.
 
 ## What This Proves
 
@@ -163,13 +173,14 @@ Aionis can currently make defensible directional claims in these areas:
 - It can turn external checks such as fresh-shell curl, clean-client install, and causal deploy verification into authority boundaries.
 - It can protect CI repair evidence against forged success by rejecting modified tests, package metadata, or fixture README files.
 - In one clean arm-isolated CI repair run, it can reduce token usage substantially while preserving verifier-backed correctness.
-- In one dependency-surface CI repair run, it can reduce actions, elapsed time, and token use while preserving verifier-backed correctness.
+- In dependency-surface CI repair runs, it can preserve verifier-backed correctness and has shown action/time compression, but token savings are mixed.
 
 ## What This Does Not Prove
 
 Aionis should not currently claim:
 
 - Universal token savings.
+- Stable token savings for `dependency_surface` CI repair based on current repeat evidence.
 - Universal runtime speedup.
 - Unique correctness advantage for AI code CI repair based on one easy pilot fixture.
 - Unique correctness advantage for the current `wrong_surface_trap` fixture, because baseline and negative control also passed.

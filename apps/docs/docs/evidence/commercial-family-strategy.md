@@ -83,6 +83,7 @@ Current evidence status:
 - The first clean arm-isolated `hidden_edge_case` run preserved correctness and reduced token use by 79.8% versus baseline, but took 85s longer. Baseline and negative control also passed, so this is a cost-compression signal, not a correctness-separation signal.
 - The new `dependency_surface` variant is the next correctness-separation candidate because it forces dependency tracing instead of a one-file percent fix.
 - The first `dependency_surface` run preserved correctness while reducing actions by 25.0%, elapsed time by 54.4%, and token use by 24.6% versus baseline. Baseline and negative control also passed, so this is a stronger compression signal, not correctness separation yet.
+- The repeat `dependency_surface` run preserved correctness and still reduced actions/time versus baseline, but used more tokens than baseline and negative control was cheaper. Treat token savings as mixed until more repeat trials prove stability.
 - The next CI repair proof must either repeat harder variants enough times to show stable cost/control advantage, or increase task difficulty further with larger dependency surfaces and less obvious implementation fixes.
 
 Metrics:
