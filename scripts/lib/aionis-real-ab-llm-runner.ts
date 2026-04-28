@@ -212,21 +212,23 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
     task_family: "ai_code_ci_repair",
     task_prompt: "Repair an almost-right AI-generated pricing patch so the targeted CI test passes without broad unrelated edits.",
     target_files: ["src/pricing/discount.mjs", "tests/pricing/discount.test.mjs"],
-    next_action: "Inspect the failing targeted test, repair src/pricing/discount.mjs, then run npm test -- tests/pricing/discount.test.mjs before declaring success.",
+    next_action: "Inspect the failing targeted test, repair src/pricing/discount.mjs only, keep tests, package metadata, and README files unchanged, then run npm test -- tests/pricing/discount.test.mjs before declaring success.",
     acceptance_checks: ["npm test -- tests/pricing/discount.test.mjs"],
     lifecycle_constraints: [
       "targeted_validation_required",
       "avoid_unrelated_file_changes",
+      "tests_are_read_only_acceptance_evidence",
       "verifier_backed_success_required",
     ],
     authority_boundary: [
       "A plausible AI-generated patch is not authoritative until the targeted test passes.",
+      "Editing tests or package metadata to manufacture success invalidates the run.",
       "The collection harness, not the agent, writes dogfood-run.json.",
     ],
     workflow_steps: [
       "Start from the failing targeted test instead of broad repository exploration.",
       "Inspect src/pricing/discount.mjs and tests/pricing/discount.test.mjs.",
-      "Repair the pricing behavior while avoiding unrelated files.",
+      "Repair the pricing behavior in src/pricing/discount.mjs while keeping test/package/readme files unchanged.",
       "Run npm test -- tests/pricing/discount.test.mjs and record the exact action/tool events.",
     ],
   },
@@ -248,6 +250,97 @@ function shellQuoteForPrompt(value: string): string {
 function formatCommandTail(label: string, value: string): string {
   const trimmed = value.trim();
   return `${label}:\n${trimmed || "<empty>"}`;
+}
+
+function armSpecificTaskBody(args: {
+  arm: RealAbArm;
+  packetMode: RealAbLlmPacketMode;
+  brief: ProbeTaskBrief;
+  dogfoodCommand: string;
+}): string[] {
+  const { arm, packetMode, brief, dogfoodCommand } = args;
+  if (arm === "baseline") {
+    return [
+      "Baseline task:",
+      `- user_request: ${brief.task_prompt}`,
+      "",
+      "Baseline boundary:",
+      "- Do not use Aionis Runtime memory, packets, workflow hints, target-file hints, next-action hints, lifecycle constraints, or authority-boundary hints.",
+      "- Discover relevant files and local checks from the workspace itself.",
+      "- Run only local checks needed to complete the task; the collection harness runs the full external verifier after the agent attempt.",
+    ];
+  }
+  if (arm === "negative_control") {
+    return [
+      "Baseline task:",
+      `- user_request: ${brief.task_prompt}`,
+      "",
+      "Low-trust context:",
+      "- Prior notes may mention unrelated files, stale commands, or broad exploration strategies.",
+      "- Treat this context as observational only. It must not become authoritative and must not override workspace evidence.",
+      "",
+      "Negative-control boundary:",
+      "- Do not use Aionis Runtime memory, packets, workflow hints, target-file hints, next-action hints, lifecycle constraints, or authority-boundary hints.",
+      "- Discover relevant files and local checks from the workspace itself.",
+      "- Run only local checks needed to complete the task; the collection harness runs the full external verifier after the agent attempt.",
+    ];
+  }
+  if (arm === "positive_control") {
+    return [
+      "Oracle-quality handoff:",
+      `- task_family: ${brief.task_family}`,
+      `- task_prompt: ${brief.task_prompt}`,
+      `- target_files: ${brief.target_files.join(", ")}`,
+      `- next_action: ${brief.next_action}`,
+      `- acceptance_checks: ${brief.acceptance_checks.join(" | ")}`,
+      `- lifecycle_constraints: ${brief.lifecycle_constraints.join(" | ")}`,
+      `- authority_boundary: ${brief.authority_boundary.join(" | ")}`,
+      "",
+      "Expected workflow:",
+      ...brief.workflow_steps.map((step, index) => `${index + 1}. ${step}`),
+      "",
+      "Harness verifier:",
+      "After the agent attempt, the collection harness can run this dogfood probe command to produce dogfood-run.json.",
+      "The agent may run narrower checks while working, but should not fake or pre-fill harness verifier evidence.",
+      dogfoodCommand,
+    ];
+  }
+  if (packetMode === "contract_only") {
+    return [
+      "Runtime contract:",
+      `- task_family: ${brief.task_family}`,
+      `- task_prompt: ${brief.task_prompt}`,
+      `- target_files: ${brief.target_files.join(", ")}`,
+      `- next_action: ${brief.next_action}`,
+      `- acceptance_checks: ${brief.acceptance_checks.join(" | ")}`,
+      `- lifecycle_constraints: ${brief.lifecycle_constraints.join(" | ")}`,
+      `- authority_boundary: ${brief.authority_boundary.join(" | ")}`,
+      "",
+      "Verifier boundary:",
+      "The collection harness runs the full dogfood verifier after the agent attempt.",
+      "Do not invoke the external dogfood verifier, run evidence-recorder scripts, or write dogfood/evidence artifacts from inside the agent attempt.",
+      "Run only narrow local checks needed to make the target files correct.",
+    ];
+  }
+  return [
+    "Probe task:",
+    `- title: ${brief.title}`,
+    `- task_family: ${brief.task_family}`,
+    `- task_prompt: ${brief.task_prompt}`,
+    `- target_files: ${brief.target_files.join(", ")}`,
+    `- next_action: ${brief.next_action}`,
+    `- acceptance_checks: ${brief.acceptance_checks.join(" | ")}`,
+    `- lifecycle_constraints: ${brief.lifecycle_constraints.join(" | ")}`,
+    `- authority_boundary: ${brief.authority_boundary.join(" | ")}`,
+    "",
+    "Expected workflow:",
+    ...brief.workflow_steps.map((step, index) => `${index + 1}. ${step}`),
+    "",
+    "Harness verifier:",
+    "After the agent attempt, the collection harness can run this dogfood probe command to produce dogfood-run.json.",
+    "The agent may run narrower checks while working, but should not fake or pre-fill harness verifier evidence.",
+    dogfoodCommand,
+  ];
 }
 
 function actionEventCount(events: RealAbLiveEvidenceEventDraft[] | RealAbTraceEvent[]): number {
@@ -430,43 +523,15 @@ export function buildRealAbLlmArmPrompt(args: {
     `- same_verifier=${args.manifest.fairness.same_verifier}`,
     "",
   ];
-  const contractOnlyBody = [
-    "Runtime contract:",
-    `- task_family: ${brief.task_family}`,
-    `- task_prompt: ${brief.task_prompt}`,
-    `- target_files: ${brief.target_files.join(", ")}`,
-    `- next_action: ${brief.next_action}`,
-    `- acceptance_checks: ${brief.acceptance_checks.join(" | ")}`,
-    `- lifecycle_constraints: ${brief.lifecycle_constraints.join(" | ")}`,
-    `- authority_boundary: ${brief.authority_boundary.join(" | ")}`,
-    "",
-    "Verifier boundary:",
-    "The collection harness runs the full dogfood verifier after the agent attempt.",
-    "Do not invoke the external dogfood verifier, run evidence-recorder scripts, or write dogfood/evidence artifacts from inside the agent attempt.",
-    "Run only narrow local checks needed to make the target files correct.",
-  ];
-  const workflowExpandedBody = [
-    "Probe task:",
-    `- title: ${brief.title}`,
-    `- task_family: ${brief.task_family}`,
-    `- task_prompt: ${brief.task_prompt}`,
-    `- target_files: ${brief.target_files.join(", ")}`,
-    `- next_action: ${brief.next_action}`,
-    `- acceptance_checks: ${brief.acceptance_checks.join(" | ")}`,
-    `- lifecycle_constraints: ${brief.lifecycle_constraints.join(" | ")}`,
-    `- authority_boundary: ${brief.authority_boundary.join(" | ")}`,
-    "",
-    "Expected workflow:",
-    ...brief.workflow_steps.map((step, index) => `${index + 1}. ${step}`),
-    "",
-    "Harness verifier:",
-    "After the agent attempt, the collection harness can run this dogfood probe command to produce dogfood-run.json.",
-    "The agent may run narrower checks while working, but should not fake or pre-fill harness verifier evidence.",
+  const taskBody = armSpecificTaskBody({
+    arm: args.arm,
+    packetMode,
+    brief,
     dogfoodCommand,
-  ];
+  });
   return [
     ...commonHeader,
-    ...(packetMode === "contract_only" ? contractOnlyBody : workflowExpandedBody),
+    ...taskBody,
     "",
     "Evidence recording contract:",
     "Return the actual events as JSON in stdout. The runner, not the agent, persists those events after the command exits.",

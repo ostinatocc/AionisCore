@@ -4,6 +4,7 @@ import {
   type RealAbAuthorityLevel,
   type RealAbFairnessContract,
   type RealAbGateRequirement,
+  type RealAbArmMetrics,
   type RealAbMemoryMode,
   type RealAbSuiteInput,
   type RealAbSuiteKind,
@@ -22,6 +23,7 @@ export type RealAbLiveEvidenceArmManifest = {
   packet_source: "none" | "automatic_runtime" | "irrelevant_low_trust" | "oracle_handoff";
   dogfood_run_path: string;
   agent_events_path: string;
+  llm_result_path?: string;
   notes?: string[];
 };
 
@@ -43,9 +45,21 @@ export type RealAbLiveEvidenceAgentEventsFile = {
 export type RealAbLiveEvidenceLoadedArm = {
   dogfood_run: RuntimeDogfoodExternalProbeRun;
   agent_events: RealAbLiveEvidenceAgentEventsFile | Record<string, RealAbTraceEvent[]>;
+  llm_result?: RealAbLiveEvidenceLlmArmAttemptResult;
 };
 
 export type RealAbLiveEvidenceLoadedInputs = Record<RealAbArm, RealAbLiveEvidenceLoadedArm>;
+
+export type RealAbLiveEvidenceLlmArmAttemptResult = {
+  result_version?: string;
+  probe_id?: string;
+  success?: boolean;
+  command_result?: {
+    duration_ms?: number;
+    stdout_tail?: string;
+    stderr_tail?: string;
+  };
+};
 
 function assemblerRequirement(args: Omit<RealAbGateRequirement, "status"> & { ok: boolean }): RealAbGateRequirement {
   return {
@@ -69,6 +83,40 @@ function normalizeAgentEvents(
 
 function actionEventCount(events: RealAbTraceEvent[]): number {
   return events.filter((event) => event.kind === "action" || event.kind === "tool_call").length;
+}
+
+function parseTokenUsage(text: string): number | null {
+  const normalized = text.replace(/\r/g, "");
+  const patterns = [
+    /tokens used\s*\n\s*([0-9][0-9,]*)/i,
+    /tokens[_\s-]*(?:to[_\s-]*success|used)?[^0-9]{0,20}([0-9][0-9,]*)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (!match?.[1]) continue;
+    const parsed = Number.parseInt(match[1].replace(/,/g, ""), 10);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function llmOutcomeByProbeId(
+  result: RealAbLiveEvidenceLlmArmAttemptResult | undefined,
+): Record<string, Partial<RealAbArmMetrics>> | undefined {
+  if (!result?.probe_id) return undefined;
+  const outcome: Partial<RealAbArmMetrics> = {};
+  const duration = result.command_result?.duration_ms;
+  if (typeof duration === "number" && Number.isFinite(duration) && duration >= 0) {
+    outcome.time_to_success_ms = duration;
+  }
+  const tokenUsage = parseTokenUsage([
+    result.command_result?.stdout_tail ?? "",
+    result.command_result?.stderr_tail ?? "",
+  ].join("\n"));
+  if (typeof tokenUsage === "number") {
+    outcome.tokens_to_success = tokenUsage;
+  }
+  return Object.keys(outcome).length > 0 ? { [result.probe_id]: outcome } : undefined;
 }
 
 export function validateRealAbLiveEvidenceAssemblerInputs(args: {
@@ -180,6 +228,7 @@ function assembleArm(
     packet_source: manifest.packet_source,
     dogfood_run: loaded.dogfood_run,
     agent_events_by_probe_id: normalizeAgentEvents(loaded.agent_events),
+    outcomes_by_probe_id: llmOutcomeByProbeId(loaded.llm_result),
     notes: manifest.notes,
   };
 }

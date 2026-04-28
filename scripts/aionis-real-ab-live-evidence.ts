@@ -5,6 +5,7 @@ import {
   validateRealAbLiveEvidenceAssemblerInputs,
   type RealAbLiveEvidenceAgentEventsFile,
   type RealAbLiveEvidenceLoadedInputs,
+  type RealAbLiveEvidenceLlmArmAttemptResult,
   type RealAbLiveEvidenceManifest,
 } from "./lib/aionis-real-ab-live-evidence-assembler.ts";
 import {
@@ -103,10 +104,35 @@ function resolveFromManifestDir(manifestPath: string, targetPath: string): strin
   return path.resolve(path.dirname(manifestPath), targetPath);
 }
 
+function optionalLlmResultPath(args: {
+  manifestPath: string;
+  dogfoodRunPath: string;
+  agentEventsPath: string;
+  llmResultPath?: string;
+}): string | null {
+  if (args.llmResultPath) {
+    return resolveFromManifestDir(args.manifestPath, args.llmResultPath);
+  }
+  const inferred = path.join(path.dirname(
+    resolveFromManifestDir(args.manifestPath, args.agentEventsPath),
+  ), "llm-runner-result.json");
+  if (fs.existsSync(inferred)) return inferred;
+  const dogfoodSibling = path.join(path.dirname(
+    resolveFromManifestDir(args.manifestPath, args.dogfoodRunPath),
+  ), "llm-runner-result.json");
+  return fs.existsSync(dogfoodSibling) ? dogfoodSibling : null;
+}
+
 function loadInputs(manifestPath: string, manifest: RealAbLiveEvidenceManifest): RealAbLiveEvidenceLoadedInputs {
   const loaded = {} as RealAbLiveEvidenceLoadedInputs;
   for (const arm of realAbRequiredArms) {
     const armManifest = manifest.arms[arm];
+    const llmResultPath = optionalLlmResultPath({
+      manifestPath,
+      dogfoodRunPath: armManifest.dogfood_run_path,
+      agentEventsPath: armManifest.agent_events_path,
+      llmResultPath: armManifest.llm_result_path,
+    });
     loaded[arm as RealAbArm] = {
       dogfood_run: readJson<RuntimeDogfoodExternalProbeRun>(
         resolveFromManifestDir(manifestPath, armManifest.dogfood_run_path),
@@ -114,6 +140,9 @@ function loadInputs(manifestPath: string, manifest: RealAbLiveEvidenceManifest):
       agent_events: readJson<RealAbLiveEvidenceAgentEventsFile | Record<string, RealAbTraceEvent[]>>(
         resolveFromManifestDir(manifestPath, armManifest.agent_events_path),
       ),
+      ...(llmResultPath
+        ? { llm_result: readJson<RealAbLiveEvidenceLlmArmAttemptResult>(llmResultPath) }
+        : {}),
     };
   }
   return loaded;

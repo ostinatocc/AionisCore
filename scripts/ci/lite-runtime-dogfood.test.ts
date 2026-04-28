@@ -362,7 +362,7 @@ test("deploy hook external probe can validate the actual arm workspace causally"
 test("AI code CI repair external probe can validate the actual arm workspace causally", async () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-dogfood-ai-code-workspace-"));
   try {
-    prepareAiCodeCiRepairWorkspace(workspace, { force: true });
+    prepareAiCodeCiRepairWorkspace(workspace, { force: true, variant: "hidden_edge_case" });
 
     const failedRun = await runRuntimeDogfoodExternalProbe({
       slices: ["ai_code_ci_repair"],
@@ -376,6 +376,7 @@ test("AI code CI repair external probe can validate the actual arm workspace cau
       failedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
       false,
     );
+    assert.equal(failedRun.probes[0]?.diagnostics.command_count, 2);
 
     fs.writeFileSync(
       path.join(workspace, "src", "pricing", "discount.mjs"),
@@ -407,7 +408,79 @@ test("AI code CI repair external probe can validate the actual arm workspace cau
       passedRun.dogfood_result.scenarios[0]?.metrics.stable_promotion_allowed,
       true,
     );
+    assert.equal(passedRun.probes[0]?.diagnostics.command_count, 2);
   } finally {
     fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test("AI code CI repair variants reject test-file success fakery", async () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-dogfood-ai-code-immutable-"));
+  try {
+    prepareAiCodeCiRepairWorkspace(workspace, { force: true, variant: "wrong_surface_trap" });
+    fs.writeFileSync(
+      path.join(workspace, "tests", "pricing", "discount.test.mjs"),
+      [
+        "import test from 'node:test';",
+        "import assert from 'node:assert/strict';",
+        "",
+        "test('fake success by weakening acceptance evidence', () => {",
+        "  assert.equal(1, 1);",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const run = await runRuntimeDogfoodExternalProbe({
+      slices: ["ai_code_ci_repair"],
+      workspaceRoot: workspace,
+    });
+
+    assert.equal(run.fresh_shell_probe_passed, false);
+    assert.match(run.probes[0]?.diagnostics.stderr_tail ?? "", /immutable fixture files changed/);
+    assert.equal(
+      run.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      false,
+    );
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test("AI code CI repair fixture variants share the same implementation-side repair", async () => {
+  for (const variant of ["percentage_rounding", "misleading_ai_patch", "hidden_edge_case", "wrong_surface_trap"] as const) {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), `aionis-dogfood-ai-code-${variant}-`));
+    try {
+      prepareAiCodeCiRepairWorkspace(workspace, { force: true, variant });
+      fs.writeFileSync(
+        path.join(workspace, "src", "pricing", "discount.mjs"),
+        [
+          "export function discountedTotalCents(order) {",
+          "  const subtotalCents = Number(order.subtotalCents);",
+          "  const discountPercent = Number(order.discountPercent ?? 0);",
+          "  if (!Number.isFinite(subtotalCents) || !Number.isFinite(discountPercent)) {",
+          "    throw new TypeError('invalid discount input');",
+          "  }",
+          "  const discountCents = Math.round(subtotalCents * discountPercent / 100);",
+          "  return Math.max(0, subtotalCents - discountCents);",
+          "}",
+          "",
+        ].join("\n"),
+      );
+
+      const run = await runRuntimeDogfoodExternalProbe({
+        slices: ["ai_code_ci_repair"],
+        workspaceRoot: workspace,
+      });
+
+      assert.equal(run.fresh_shell_probe_passed, true, variant);
+      assert.equal(
+        run.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+        true,
+        variant,
+      );
+    } finally {
+      fs.rmSync(workspace, { recursive: true, force: true });
+    }
   }
 });

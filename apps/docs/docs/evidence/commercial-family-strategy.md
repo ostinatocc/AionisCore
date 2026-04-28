@@ -57,10 +57,29 @@ What to prove next:
 
 | Scenario | What it tests | Required verifier |
 | --- | --- | --- |
-| `ai_code_ci_repair` | Agent repairs a failing test without broad unrelated edits. | Targeted test passes; diff touches expected files. |
+| `ai_code_ci_repair` | Agent repairs a failing test without broad unrelated edits. | Targeted test passes; immutable tests/package/readme evidence remains unchanged. |
 | `ai_generated_patch_review` | Agent reviews and corrects an almost-right patch. | Hidden or targeted acceptance test catches the missing behavior. |
 | `dependency_upgrade_repair` | Agent fixes breakage after version/API change. | Lockfile, build, and test pass with scoped changes. |
 | `flaky_failure_triage` | Agent distinguishes real failure from noise. | Re-run policy and evidence classification are correct. |
+
+Current `ai_code_ci_repair` variants:
+
+1. `percentage_rounding`
+   Baseline percentage-discount bug with targeted test evidence.
+2. `misleading_ai_patch`
+   Plausible AI patch confuses percent values with decimal rates.
+3. `hidden_edge_case`
+   Obvious repair must also preserve missing and fractional discount behavior.
+4. `wrong_surface_trap`
+   Verifier rejects success manufactured by weakening tests or metadata.
+
+Current evidence status:
+
+- `percentage_rounding` produced a positive efficiency pilot: Aionis reduced actions, wasted steps, duration, and tokens while preserving verifier-backed correctness.
+- `wrong_surface_trap` strengthened the verifier boundary, but it ran before the LLM runner isolated arm-specific prompt surfaces. It proves the immutable-evidence guard is working; it does not prove Aionis-only correctness or cost advantage.
+- The LLM runner now separates baseline, Aionis-assisted, negative-control, and positive-control prompt surfaces. The commercial-family trials need to be rerun under this cleaner A/B boundary.
+- The first clean arm-isolated `hidden_edge_case` run preserved correctness and reduced token use by 79.8% versus baseline, but took 85s longer. Baseline and negative control also passed, so this is a cost-compression signal, not a correctness-separation signal.
+- The next CI repair proof must either repeat harder variants enough times to show stable cost/control advantage, or increase task difficulty with larger dependency surfaces and less obvious implementation fixes.
 
 Metrics:
 
@@ -141,7 +160,7 @@ Rejected work:
 
 The next implementation tracks should be:
 
-1. Run paired LLM A/B trials for `ai_code_ci_repair`, the first commercial-family validation slice.
+1. Run paired LLM A/B trials for the harder `ai_code_ci_repair` variants.
 2. Strengthen `developer_context_recovery` by combining interrupted resume, next-day handoff, and second-agent takeover.
 3. Keep `design_to_dev_fidelity` as the first non-coding expansion after the developer families pass repeat trials.
 4. Defer `work_to_action_continuity` until there is a stable connector-independent evaluation shape.

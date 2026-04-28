@@ -366,6 +366,7 @@ function extractDependencyRequirements(args: {
   if (args.taskFamily === "ai_code_ci_repair") {
     out.push("existing failing tests define the behavior contract for the repair");
     out.push("repair must satisfy targeted CI or test evidence without broad unrelated edits");
+    out.push("test files are read-only acceptance evidence and must not be edited to manufacture success");
   }
   if (args.serviceConstraints.length > 0) {
     out.push("service launch must not depend on the agent shell remaining attached");
@@ -490,6 +491,7 @@ function extractPatternHints(args: {
   if (args.taskFamily === "ai_code_ci_repair") {
     out.push("inspect_failing_test_before_patch");
     out.push("avoid_unrelated_file_changes");
+    out.push("keep_tests_read_only_unless_task_explicitly_requests_test_changes");
     out.push("rerun_targeted_test_before_success");
   }
   if (args.taskFamily === "git_deploy_webserver") out.push("validate_hook_or_publish_path_before_declaring_success");

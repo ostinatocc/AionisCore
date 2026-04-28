@@ -4,6 +4,7 @@ import {
   type RealAbAuthorityLevel,
   type RealAbFairnessContract,
   type RealAbGateRequirement,
+  type RealAbArmMetrics,
   type RealAbMemoryMode,
   type RealAbSuiteInput,
   type RealAbSuiteKind,
@@ -22,6 +23,7 @@ export type RealAbDogfoodArmRunInput = {
   packet_source: "none" | "automatic_runtime" | "irrelevant_low_trust" | "oracle_handoff";
   dogfood_run: RuntimeDogfoodExternalProbeRun;
   agent_events_by_probe_id: Record<string, RealAbTraceEvent[]>;
+  outcomes_by_probe_id?: Record<string, Partial<RealAbArmMetrics>>;
   notes?: string[];
 };
 
@@ -241,6 +243,7 @@ function compileArm(input: RealAbDogfoodPairedCaptureInput, arm: RealAbArm, prob
     authority_level: armInput.authority_level,
     packet_source: armInput.packet_source,
     events: traceEventsForProbe({ arm, armInput, probe }),
+    ...(armInput.outcomes_by_probe_id?.[probeId] ? { outcome: armInput.outcomes_by_probe_id[probeId] } : {}),
     notes: armInput.notes,
   };
 }

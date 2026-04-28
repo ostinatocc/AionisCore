@@ -113,6 +113,8 @@ Interpretation:
 
 Each slice creates a temporary local fixture, launches or validates through a fresh shell, records execution evidence, and feeds the resulting task spec back through the same dogfood contract path. Workspace-backed slices such as deploy/hook/web and AI code CI repair can also validate the actual arm workspace causally after an agent attempt. The live runner must not add task-specific Runtime routes or bypass the Contract Compiler and Trust Gate.
 
+The AI code CI repair slice supports fixture variants for `percentage_rounding`, `misleading_ai_patch`, `hidden_edge_case`, and `wrong_surface_trap`. Workspace-backed verification runs the targeted test and also rejects success manufactured by editing immutable acceptance evidence such as tests, package metadata, or the fixture README.
+
 ## Live Probe Diagnostics
 
 The external-probe run payload includes `diagnostics[]`, one entry per slice. Each diagnostic records:
@@ -137,6 +139,17 @@ The external-probe run payload includes `diagnostics[]`, one entry per slice. Ea
    The ordered command-level diagnostics for multi-step slices such as service launch plus fresh-shell probe.
 
 CI uploads `artifacts/runtime-dogfood/` for every Lite CI run. The primary files are `external-run.json`, `external-report.json`, `external-readiness-gate.json`, `external-report.md`, and `external-tasks.json`.
+
+Real A/B validation reports also include cost and control signals when LLM runner artifacts are present. The report automatically carries action counts, wasted/incorrect events, duration, token usage, token/time deltas, and negative-control interpretation from the paired trace bundle.
+
+The LLM runner must keep A/B prompt surfaces isolated by arm:
+
+1. `baseline` receives a normal task request and must discover files/checks from the workspace.
+2. `aionis_assisted` receives the compact Runtime contract with target files, next action, acceptance checks, lifecycle constraints, and authority boundary.
+3. `negative_control` receives only observational low-trust context, which must not become authoritative.
+4. `positive_control` receives an oracle-quality handoff to prove the task is recoverable.
+
+If baseline receives Aionis contract fields such as `target_files`, `next_action`, lifecycle constraints, or authority boundaries, the run can still be useful as verifier evidence, but it must not be treated as clean A/B comparison evidence.
 
 ## Product Status
 

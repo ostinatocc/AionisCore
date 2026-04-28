@@ -127,6 +127,9 @@ test("real A/B markdown report exposes gate status and proof boundary", () => {
   assert.match(markdown, /Gate: \*\*pass\*\*/);
   assert.match(markdown, /does not prove Aionis product value/);
   assert.match(markdown, /coding_resume_ci_failure/);
+  assert.match(markdown, /Cost And Control Signals/);
+  assert.match(markdown, /Control Interpretation/);
+  assert.match(markdown, /Baseline tokens/);
 });
 
 test("real A/B harness derives metrics from real agent run traces", () => {
@@ -639,6 +642,45 @@ test("real A/B live evidence assembler builds paired dogfood capture from separa
   assert.equal(report.gate.status, "pass");
 });
 
+test("real A/B live evidence assembler carries LLM runner resource outcomes into reports", () => {
+  const manifest = liveEvidenceManifest();
+  const loaded = loadedLiveEvidence();
+  loaded.baseline.llm_result = {
+    result_version: "aionis_real_ab_llm_arm_attempt_result_v1",
+    probe_id: "external_probe_service_after_exit",
+    success: true,
+    command_result: {
+      duration_ms: 200_000,
+      stderr_tail: "tokens used\n57,179\n",
+    },
+  };
+  loaded.aionis_assisted.llm_result = {
+    result_version: "aionis_real_ab_llm_arm_attempt_result_v1",
+    probe_id: "external_probe_service_after_exit",
+    success: true,
+    command_result: {
+      duration_ms: 125_000,
+      stderr_tail: "tokens used\n47,894\n",
+    },
+  };
+
+  const paired = assembleRealAbDogfoodPairedCaptureFromLiveEvidence({ manifest, loaded });
+  const capture = compileRealAbDogfoodPairedCapture(paired);
+  const report = runRealAbValidationSuite(compileRealAbTraceCapture(capture));
+  const markdown = renderRealAbMarkdownReport(report);
+
+  assert.equal(capture.tasks[0].runs.baseline.outcome?.time_to_success_ms, 200_000);
+  assert.equal(capture.tasks[0].runs.baseline.outcome?.tokens_to_success, 57179);
+  assert.equal(capture.tasks[0].runs.aionis_assisted.outcome?.time_to_success_ms, 125_000);
+  assert.equal(capture.tasks[0].runs.aionis_assisted.outcome?.tokens_to_success, 47894);
+  assert.equal(report.tasks[0].deltas.time_to_success_delta_ms, -75_000);
+  assert.equal(report.tasks[0].deltas.tokens_to_success_delta, -9285);
+  assert.match(markdown, /57,179/);
+  assert.match(markdown, /47,894/);
+  assert.match(markdown, /-9,285/);
+  assert.match(markdown, /-75s/);
+});
+
 test("real A/B live evidence assembler rejects loaded arm artifacts without probe events", () => {
   const manifest = liveEvidenceManifest();
   const loaded = loadedLiveEvidence();
@@ -958,6 +1000,75 @@ test("real A/B LLM runner contract-only prompt carries a compact execution contr
   assert.doesNotMatch(prompt, /ab:evidence:event -- --manifest/);
   assert.match(prompt, /Return only JSON/);
   assert.match(prompt, /tool_call.*include the exact shell command/);
+});
+
+test("real A/B LLM runner baseline prompt does not receive Aionis contract fields", () => {
+  const probeId = "external_probe_service_after_exit";
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence-llm-baseline-prompt",
+    task_ids: [probeId],
+  });
+  const prompt = buildRealAbLlmArmPrompt({
+    manifest,
+    manifest_path: path.join(os.tmpdir(), "aionis-real-ab", "manifest.json"),
+    arm: "baseline",
+    probe_id: probeId,
+  });
+
+  assert.match(prompt, /Baseline task:/);
+  assert.match(prompt, /Keep the Runtime dogfood service alive/);
+  assert.match(prompt, /Do not use Aionis Runtime memory/);
+  assert.match(prompt, /Discover relevant files and local checks from the workspace itself/);
+  assert.doesNotMatch(prompt, /Runtime contract:/);
+  assert.doesNotMatch(prompt, /target_files:/);
+  assert.doesNotMatch(prompt, /next_action:/);
+  assert.doesNotMatch(prompt, /acceptance_checks:/);
+  assert.doesNotMatch(prompt, /lifecycle_constraints:/);
+  assert.doesNotMatch(prompt, /authority_boundary:/);
+  assert.doesNotMatch(prompt, /scripts\/fixtures\/runtime-dogfood\/service-after-exit-server\.mjs/);
+});
+
+test("real A/B LLM runner negative control prompt keeps low-trust context non-authoritative", () => {
+  const probeId = "external_probe_ai_code_ci_repair";
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence-llm-negative-prompt",
+    task_ids: [probeId],
+  });
+  const prompt = buildRealAbLlmArmPrompt({
+    manifest,
+    manifest_path: path.join(os.tmpdir(), "aionis-real-ab", "manifest.json"),
+    arm: "negative_control",
+    probe_id: probeId,
+  });
+
+  assert.match(prompt, /Low-trust context:/);
+  assert.match(prompt, /observational only/);
+  assert.match(prompt, /must not become authoritative/);
+  assert.doesNotMatch(prompt, /Runtime contract:/);
+  assert.doesNotMatch(prompt, /target_files:/);
+  assert.doesNotMatch(prompt, /src\/pricing\/discount\.mjs/);
+  assert.doesNotMatch(prompt, /tests_are_read_only_acceptance_evidence/);
+});
+
+test("real A/B LLM runner positive control prompt receives oracle handoff", () => {
+  const probeId = "external_probe_ai_code_ci_repair";
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence-llm-positive-prompt",
+    task_ids: [probeId],
+  });
+  const prompt = buildRealAbLlmArmPrompt({
+    manifest,
+    manifest_path: path.join(os.tmpdir(), "aionis-real-ab", "manifest.json"),
+    arm: "positive_control",
+    probe_id: probeId,
+  });
+
+  assert.match(prompt, /Oracle-quality handoff:/);
+  assert.match(prompt, /target_files:/);
+  assert.match(prompt, /src\/pricing\/discount\.mjs/);
+  assert.match(prompt, /acceptance_checks:/);
+  assert.match(prompt, /tests_are_read_only_acceptance_evidence/);
+  assert.match(prompt, /Expected workflow:/);
 });
 
 test("real A/B LLM runner expanded prompt preserves the full workflow and verifier command for debugging", () => {

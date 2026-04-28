@@ -842,6 +842,81 @@ function signed(value: number | null): string {
   return value > 0 ? `+${value}` : `${value}`;
 }
 
+function signedFormatted(value: number | null, formatter: (entry: number) => string): string {
+  if (value === null) return "n/a";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatter(value)}`;
+}
+
+function count(value: number | undefined): string {
+  return typeof value === "number" ? String(value) : "n/a";
+}
+
+function durationMs(value: number | null | undefined): string {
+  if (typeof value !== "number") return "n/a";
+  return `${Math.round(value / 1000)}s`;
+}
+
+function tokenCount(value: number | null | undefined): string {
+  if (typeof value !== "number") return "n/a";
+  return value.toLocaleString("en-US");
+}
+
+function incorrectEventCount(arm: RealAbResolvedArmObservation): number | null {
+  if (!arm.trace) return null;
+  return arm.trace.events.filter((event) => event.correct === false).length;
+}
+
+function controlInterpretation(task: RealAbTaskResult): string {
+  const negative = task.arms.negative_control;
+  const baseline = task.arms.baseline;
+  const treatment = task.arms.aionis_assisted;
+  const negativeActions = negative.trace_summary?.action_event_count ?? null;
+  const baselineActions = baseline.trace_summary?.action_event_count ?? null;
+  const treatmentActions = treatment.trace_summary?.action_event_count ?? null;
+  if (negative.metrics.completion && negative.authority_level !== "authoritative") {
+    const negativeCheaperThanBaseline = typeof negativeActions === "number" && typeof baselineActions === "number"
+      ? negativeActions <= baselineActions
+      : false;
+    return negativeCheaperThanBaseline
+      ? `\`${task.id}\`: negative control also passed without authority and used no more actions than baseline; treat this as an efficiency signal unless harder variants show correctness separation.`
+      : `\`${task.id}\`: negative control also passed without authority; Aionis correctness is not unique on this task, so emphasize verifier-backed scope control and cost/waste deltas.`;
+  }
+  if (treatment.metrics.completion && !negative.metrics.completion) {
+    return `\`${task.id}\`: Aionis passed while negative control failed; this supports a stronger context-quality or authority-boundary claim for this task.`;
+  }
+  if (typeof treatmentActions === "number" && typeof baselineActions === "number" && treatmentActions < baselineActions) {
+    return `\`${task.id}\`: Aionis used fewer actions than baseline; value signal is execution compression with the same verifier boundary.`;
+  }
+  return `\`${task.id}\`: controls do not isolate a strong Aionis-only advantage; use this task as directional evidence only.`;
+}
+
+function costSignalRow(task: RealAbTaskResult): string {
+  const baseline = task.arms.baseline;
+  const treatment = task.arms.aionis_assisted;
+  const negative = task.arms.negative_control;
+  const positive = task.arms.positive_control;
+  const cells = [
+    task.id,
+    task.task_family,
+    count(baseline.trace_summary?.action_event_count),
+    count(treatment.trace_summary?.action_event_count),
+    count(negative.trace_summary?.action_event_count),
+    count(positive.trace_summary?.action_event_count),
+    count(baseline.metrics.wasted_steps),
+    count(treatment.metrics.wasted_steps),
+    count(incorrectEventCount(baseline) ?? undefined),
+    count(incorrectEventCount(treatment) ?? undefined),
+    durationMs(baseline.metrics.time_to_success_ms),
+    durationMs(treatment.metrics.time_to_success_ms),
+    tokenCount(baseline.metrics.tokens_to_success),
+    tokenCount(treatment.metrics.tokens_to_success),
+    signedFormatted(task.deltas.tokens_to_success_delta, tokenCount),
+    signedFormatted(task.deltas.time_to_success_delta_ms, durationMs),
+  ];
+  return `| ${cells.join(" | ")} |`;
+}
+
 export function renderRealAbMarkdownReport(report: RealAbReport): string {
   const lines = [
     `# Aionis Real A/B Validation Report`,
@@ -871,6 +946,16 @@ export function renderRealAbMarkdownReport(report: RealAbReport): string {
     ...report.tasks.map((task) =>
       `| ${task.id} | ${task.task_family} | ${task.status} | ${signed(task.deltas.first_correct_action_delta)} | ${signed(task.deltas.wasted_step_delta)} | ${signed(task.deltas.false_confidence_delta)} |`
     ),
+    "",
+    "## Cost And Control Signals",
+    "",
+    `| Task | Family | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline incorrect | Aionis incorrect | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens | Token delta | Time delta |`,
+    `| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |`,
+    ...report.tasks.map(costSignalRow),
+    "",
+    "## Control Interpretation",
+    "",
+    ...report.tasks.map((task) => `- ${controlInterpretation(task)}`),
     "",
   ];
 

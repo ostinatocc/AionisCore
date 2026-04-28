@@ -17,6 +17,8 @@ These runs are directional pilot evidence, not broad product proof.
 - The deploy/webserver suite now uses a causal verifier: the verifier checks the exact arm workspace after the agent modifies it.
 - The evidence supports family-level claims only for the tested task families.
 - The evidence does not prove universal token savings or universal agent performance gains.
+- The LLM runner now isolates prompt surfaces by arm: `baseline` receives only a normal task request, `aionis_assisted` receives the Runtime contract, `negative_control` receives non-authoritative low-trust context, and `positive_control` receives an oracle handoff.
+- LLM suites run before this arm-prompt isolation should be treated as directional evidence and verifier evidence, not final clean A/B proof.
 
 ## Suites
 
@@ -41,6 +43,8 @@ These runs are directional pilot evidence, not broad product proof.
 | Suite | Task family | Report | Gate |
 | --- | --- | --- | --- |
 | `ai-code-ci-20260428-194736` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-20260428-194736/validation-report.md` | pass |
+| `ai-code-ci-wrong-surface-20260428-204159` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-wrong-surface-20260428-204159/validation-report.md` | pass |
+| `ai-code-ci-isolated-hidden-20260428-210356` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-isolated-hidden-20260428-210356/validation-report.md` | pass |
 
 ## Initial Directional Results
 
@@ -90,6 +94,43 @@ In this pilot, Aionis preserved correctness while reducing action events by 46.7
 
 Control interpretation matters: the negative control also passed with 9 events, 98s, and 45,960 tokens. That means this specific fixture is not hard enough to prove unique Aionis correctness. It does support a narrower claim: compact Aionis contracts can reduce wasted steps and preserve verifier-backed correctness in an AI code CI repair family. Stronger commercial proof requires repeated trials and harder variants with misleading patches, hidden edge cases, or larger dependency surfaces.
 
+## Commercial-Family Harder Variant Result
+
+The follow-up `wrong_surface_trap` variant tightened the verifier so success cannot be manufactured by weakening tests, changing package metadata, or changing the fixture README. This made the evidence boundary stronger, but it did not produce an Aionis-only correctness advantage.
+
+This run used the pre-isolation LLM runner, where baseline still received contract-like task fields. Treat it as verifier-boundary evidence, not clean arm-comparison proof.
+
+| Family / variant | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `ai_code_ci_repair / wrong_surface_trap` | 9 | 9 | 9 | 7 | 1 | 0 | 183s | 189s | 26,992 | 74,342 |
+
+All four arms passed verifier-backed completion and preserved immutable acceptance evidence. The useful evidence is therefore limited:
+
+- The causal verifier and immutable-evidence guard work.
+- Aionis preserved correctness and removed one self-marked wasted step.
+- Baseline and negative control also solved the task.
+- Aionis cost was worse in this run: +47,350 tokens and +6s versus baseline.
+
+This result should be treated as a boundary-finding run, not a product win. It says the current `wrong_surface_trap` variant is still too easy to separate correctness, and Aionis packet cost must stay compressed or escalate only when needed.
+
+## Commercial-Family Clean Isolation Result
+
+After isolating arm-specific prompt surfaces, the `hidden_edge_case` variant was rerun with a clean baseline prompt that did not receive Aionis contract fields.
+
+| Family / variant | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `ai_code_ci_repair / hidden_edge_case` | 11 | 10 | 12 | 8 | 0 | 0 | 105s | 190s | 66,899 | 13,515 |
+
+This is the cleanest current commercial-family signal:
+
+- Aionis preserved verifier-backed correctness.
+- Aionis reduced action events by 9.1% versus baseline.
+- Aionis reduced token use by 79.8% versus baseline.
+- Aionis took 85s longer than baseline.
+- Baseline and negative control also passed, so the run does not prove unique correctness.
+
+The current defensible claim is cost compression under a verifier boundary, not correctness separation. The next proof needs a harder repair task where baseline or negative control shows retries, false confidence, wrong-file touches, or failure.
+
 ## What This Proves
 
 Aionis can currently make defensible directional claims in these areas:
@@ -100,6 +141,8 @@ Aionis can currently make defensible directional claims in these areas:
 - It can improve first correct action when the task depends on execution continuity and external visibility.
 - It can force the distinction between an agent success claim and verifier-backed success.
 - It can turn external checks such as fresh-shell curl, clean-client install, and causal deploy verification into authority boundaries.
+- It can protect CI repair evidence against forged success by rejecting modified tests, package metadata, or fixture README files.
+- In one clean arm-isolated CI repair run, it can reduce token usage substantially while preserving verifier-backed correctness.
 
 ## What This Does Not Prove
 
@@ -108,6 +151,8 @@ Aionis should not currently claim:
 - Universal token savings.
 - Universal runtime speedup.
 - Unique correctness advantage for AI code CI repair based on one easy pilot fixture.
+- Unique correctness advantage for the current `wrong_surface_trap` fixture, because baseline and negative control also passed.
+- Unique correctness advantage for the clean `hidden_edge_case` fixture, because baseline and negative control also passed.
 - Broad product superiority across untested task families.
 - That richer Runtime packets are always better.
 - That agent-side self-verification is enough for authority.
@@ -133,13 +178,19 @@ Completed:
 - Kept full workflow, replay, and pattern memory internal by default.
 - Kept harness verifiers outside the agent default workflow.
 - Repeated the same three families after packet compression.
+- Added `ai_code_ci_repair` fixture variants for misleading patches, hidden edge cases, and wrong-surface traps.
+- Added verifier guards that reject CI repair success manufactured by editing test/package/readme evidence.
+- Added automatic A/B report cost/control output for action counts, wasted/incorrect events, duration, tokens, and negative-control interpretation.
+- Isolated LLM runner prompt surfaces so baseline no longer receives Aionis contract fields.
 
 Remaining:
 
 - Add an automatic escalation path from `contract_only` to expanded workflow packets only when the compact contract is insufficient or verification fails.
 - Run at least two more paired trials per family before making stronger cost or reliability claims.
 - Extend causal workspace verification beyond deploy/webserver where feasible.
-- Add harder `ai_code_ci_repair` variants before treating the commercial-family signal as stable.
+- Run the remaining harder `ai_code_ci_repair` variants as paired LLM A/B trials before treating the commercial-family signal as stable.
+- Rerun more commercial-family trials after arm-prompt isolation before making stable clean A/B claims.
+- Add genuinely harder CI repair cases with larger dependency surfaces if baseline and negative control keep passing cheaply.
 
 ## Claim Policy
 
@@ -150,6 +201,14 @@ Allowed current claim:
 Allowed commercial-family pilot claim:
 
 > Aionis Runtime has one live paired A/B pilot showing that compact execution contracts can reduce wasted steps, elapsed time, and token use in an AI code CI repair workflow while preserving verifier-backed correctness.
+
+Allowed hard-variant verifier claim:
+
+> Aionis Runtime has live evidence that its CI repair verifier can reject forged success by requiring immutable acceptance evidence, but the current hard variant does not yet prove Aionis-only correctness or cost advantage.
+
+Allowed clean commercial-family cost claim:
+
+> In one clean arm-isolated AI code CI repair run, Aionis Runtime preserved verifier-backed correctness while reducing token usage versus baseline, but it did not prove unique correctness and it was slower in wall-clock time.
 
 Not allowed current claim:
 

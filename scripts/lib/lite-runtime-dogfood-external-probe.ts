@@ -11,6 +11,11 @@ import {
   type RuntimeDogfoodTaskSpec,
 } from "./lite-runtime-dogfood.ts";
 import { buildRuntimeVerifierExecutionEvidenceV1 } from "../../src/execution/index.ts";
+import {
+  aiCodeCiRepairFixture,
+  aiCodeCiRepairVariants,
+  type AiCodeCiRepairVariant,
+} from "../aionis-real-ab-prepare-workspace.ts";
 
 export type RuntimeDogfoodExternalProbeSlice =
   | "service_after_exit"
@@ -94,6 +99,8 @@ type LiveWorkspaceProbeResult = {
   probe: CommandResult;
   cwd: string;
   command: string;
+  commands?: RuntimeDogfoodExternalProbeCommandDiagnostic[];
+  variant?: AiCodeCiRepairVariant;
 };
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -680,6 +687,103 @@ async function runLiveWorkspaceProbe(args: {
   }
 }
 
+function commandResultFromGuard(args: {
+  success: boolean;
+  stdout?: string;
+  stderr?: string;
+  durationMs?: number;
+}): CommandResult {
+  return {
+    code: args.success ? 0 : 1,
+    stdout: args.stdout ?? "",
+    stderr: args.stderr ?? "",
+    durationMs: args.durationMs ?? 0,
+  };
+}
+
+function readAiCodeCiFixtureVariant(workspaceRoot: string): AiCodeCiRepairVariant {
+  const metadataPath = path.join(workspaceRoot, ".aionis", "ai-code-ci-fixture.json");
+  if (!fs.existsSync(metadataPath)) return "percentage_rounding";
+  try {
+    const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8")) as { variant?: unknown };
+    const variant = metadata.variant;
+    if (typeof variant === "string" && (aiCodeCiRepairVariants as readonly string[]).includes(variant)) {
+      return variant as AiCodeCiRepairVariant;
+    }
+  } catch {
+    return "percentage_rounding";
+  }
+  return "percentage_rounding";
+}
+
+function verifyAiCodeCiImmutableFiles(args: {
+  workspaceRoot: string;
+  variant: AiCodeCiRepairVariant;
+}): CommandResult {
+  const startedAt = Date.now();
+  const fixture = aiCodeCiRepairFixture(args.variant);
+  const mismatches: string[] = [];
+  for (const relativePath of fixture.immutable_files) {
+    const expected = fixture.files[relativePath];
+    const actualPath = path.join(args.workspaceRoot, relativePath);
+    const actual = fs.existsSync(actualPath) ? fs.readFileSync(actualPath, "utf8") : null;
+    if (actual !== expected) {
+      mismatches.push(relativePath);
+    }
+  }
+  if (mismatches.length > 0) {
+    return commandResultFromGuard({
+      success: false,
+      stderr: `immutable fixture files changed: ${mismatches.join(", ")}`,
+      durationMs: Date.now() - startedAt,
+    });
+  }
+  return commandResultFromGuard({
+    success: true,
+    stdout: `immutable fixture files unchanged for ${args.variant}`,
+    durationMs: Date.now() - startedAt,
+  });
+}
+
+async function runAiCodeCiWorkspaceProbe(args: {
+  workspaceRoot: string;
+  validationCommand: string;
+}): Promise<LiveWorkspaceProbeResult> {
+  const variant = readAiCodeCiFixtureVariant(args.workspaceRoot);
+  const targetedTest = await probeFreshShellCommand(args.validationCommand, 15000, args.workspaceRoot);
+  const targetedTestDiagnostic = buildCommandDiagnostic({
+    command: args.validationCommand,
+    cwd: args.workspaceRoot,
+    result: targetedTest,
+    failureClass: "live_command_probe_failed",
+  });
+  const immutableGuard = verifyAiCodeCiImmutableFiles({
+    workspaceRoot: args.workspaceRoot,
+    variant,
+  });
+  const immutableGuardDiagnostic = buildCommandDiagnostic({
+    command: "verify immutable fixture files were not edited",
+    cwd: args.workspaceRoot,
+    result: immutableGuard,
+    failureClass: "live_command_probe_failed",
+  });
+  const success = targetedTest.code === 0 && immutableGuard.code === 0;
+  return {
+    probe: success
+      ? targetedTest
+      : {
+          code: 1,
+          stdout: [targetedTest.stdout, immutableGuard.stdout].filter(Boolean).join("\n"),
+          stderr: [targetedTest.stderr, immutableGuard.stderr].filter(Boolean).join("\n"),
+          durationMs: targetedTest.durationMs + immutableGuard.durationMs,
+        },
+    cwd: args.workspaceRoot,
+    command: args.validationCommand,
+    commands: [targetedTestDiagnostic, immutableGuardDiagnostic],
+    variant,
+  };
+}
+
 async function runServiceAfterExitProbe(port?: number): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
   const selectedPort = port ?? await findOpenPort();
   const endpoint = `http://127.0.0.1:${selectedPort}`;
@@ -1123,16 +1227,15 @@ async function runAiCodeCiRepairProbe(workspaceRoot?: string): Promise<RuntimeDo
   const validationCommand = "npm test -- tests/pricing/discount.test.mjs";
   const resolvedWorkspaceRoot = workspaceRoot ? path.resolve(workspaceRoot) : null;
   const liveProbe = resolvedWorkspaceRoot
-    ? {
-        probe: await probeFreshShellCommand(validationCommand, 15000, resolvedWorkspaceRoot),
-        cwd: resolvedWorkspaceRoot,
-        command: validationCommand,
-      }
+    ? await runAiCodeCiWorkspaceProbe({
+        workspaceRoot: resolvedWorkspaceRoot,
+        validationCommand,
+      })
     : await runLiveWorkspaceProbe({
         tempPrefix: "aionis-runtime-dogfood-ai-code-ci-",
         validationCommand,
         files: {
-          "package.json": JSON.stringify({ scripts: { test: "node --test" } }, null, 2),
+          ...aiCodeCiRepairFixture("percentage_rounding").files,
           "src/pricing/discount.mjs": [
             "export function discountedTotalCents(order) {",
             "  const subtotalCents = Number(order.subtotalCents);",
@@ -1145,37 +1248,24 @@ async function runAiCodeCiRepairProbe(workspaceRoot?: string): Promise<RuntimeDo
             "}",
             "",
           ].join("\n"),
-          "tests/pricing/discount.test.mjs": [
-            "import test from 'node:test';",
-            "import assert from 'node:assert/strict';",
-            "import { discountedTotalCents } from '../../src/pricing/discount.mjs';",
-            "",
-            "test('applies percentage discounts in cents', () => {",
-            "  assert.equal(discountedTotalCents({ subtotalCents: 10000, discountPercent: 15 }), 8500);",
-            "  assert.equal(discountedTotalCents({ subtotalCents: 999, discountPercent: 10 }), 899);",
-            "});",
-            "",
-            "test('does not return negative totals for oversized discounts', () => {",
-            "  assert.equal(discountedTotalCents({ subtotalCents: 1250, discountPercent: 150 }), 0);",
-            "});",
-            "",
-          ].join("\n"),
         },
       });
   const probe = liveProbe.probe;
+  const variant = liveProbe.variant ?? "percentage_rounding";
   const taskSpec = buildLiveCommandTaskSpec({
     id: "external_probe_ai_code_ci_repair",
     title: "External probe AI code CI/test repair",
-    queryText: "Repair an almost-right AI-generated pricing patch so the targeted CI test passes without broad unrelated edits.",
-    trajectoryTitle: "AI-generated pricing patch targeted CI repair",
+    queryText: `Repair an almost-right AI-generated pricing patch (${variant}) so the targeted CI test passes without broad unrelated edits.`,
+    trajectoryTitle: `AI-generated pricing patch targeted CI repair (${variant})`,
     taskFamily: "ai_code_ci_repair",
     targetFiles: ["src/pricing/discount.mjs", "tests/pricing/discount.test.mjs"],
     validationCommand,
-    nextAction: `Inspect tests/pricing/discount.test.mjs, repair src/pricing/discount.mjs, avoid unrelated edits, and rerun ${validationCommand} before declaring success.`,
+    nextAction: `Inspect tests/pricing/discount.test.mjs, repair src/pricing/discount.mjs only, keep tests, package metadata, and README files unchanged, and rerun ${validationCommand} before declaring success.`,
     successInvariants: ["all_acceptance_checks_pass", "targeted_ci_repair_passes"],
     dependencyRequirements: [
       "existing failing tests define the behavior contract for the repair",
       "repair must satisfy targeted CI or test evidence without broad unrelated edits",
+      "test files are read-only acceptance evidence and must not be edited to manufacture success",
     ],
     evidenceRef: "external_probe:ai_code_ci_repair:targeted_pricing_test",
     probe,
@@ -1190,7 +1280,7 @@ async function runAiCodeCiRepairProbe(workspaceRoot?: string): Promise<RuntimeDo
     slice: "ai_code_ci_repair",
     scenarioId: taskSpec.id,
     primary: commandDiagnostic,
-    commands: [commandDiagnostic],
+    commands: liveProbe.commands ?? [commandDiagnostic],
   });
   return {
     id: taskSpec.id,
