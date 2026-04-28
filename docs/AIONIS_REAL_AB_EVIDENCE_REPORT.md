@@ -47,6 +47,7 @@ These runs are directional pilot evidence, not broad product proof.
 | `ai-code-ci-isolated-hidden-20260428-210356` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-isolated-hidden-20260428-210356/validation-report.md` | pass |
 | `ai-code-ci-dependency-surface-20260428-214009` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-20260428-214009/validation-report.md` | pass |
 | `ai-code-ci-dependency-surface-repeat-20260428-220043` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-repeat-20260428-220043/validation-report.md` | pass |
+| `ai-code-ci-dependency-surface-contract-packet-20260428-224137` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-contract-packet-20260428-224137/validation-report.md` | pass |
 
 ## Initial Directional Results
 
@@ -141,6 +142,7 @@ The `dependency_surface` variant tests whether the agent can trace a pricing fai
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ai_code_ci_repair / dependency_surface` | 16 | 12 | 13 | 11 | 0 | 0 | 196s | 90s | 36,765 | 27,705 |
 | `ai_code_ci_repair / dependency_surface repeat` | 13 | 12 | 9 | 10 | 0 | 0 | 110s | 93s | 51,738 | 75,520 |
+| `ai_code_ci_repair / dependency_surface contract-packet` | 11 | 16 | 13 | 10 | 0 | 0 | 106s | 147s | 73,845 | 58,591 |
 
 The first dependency-surface run was the strongest clean CI repair signal so far:
 
@@ -159,7 +161,15 @@ The repeat run kept part of the signal but weakened the token claim:
 - Aionis used 46.0% more tokens than baseline.
 - Negative control was cheaper and faster than Aionis in this repeat.
 
-The current defensible claim for this family is narrower: compact Aionis Runtime contracts can preserve correctness and may reduce actions/time on multi-file repair tasks, but token savings are not yet stable and correctness separation is not proven. The remaining gap is cases where baseline or low-trust context actually fails, retries, touches wrong files, or becomes falsely confident.
+The Runtime-level contract-packet run changed the failure mode:
+
+- Aionis preserved verifier-backed correctness again.
+- Aionis used 20.7% fewer tokens than baseline.
+- Aionis used 45.5% more action/tool events than baseline.
+- Aionis took 38.7% longer than baseline.
+- Negative control also passed and was faster than Aionis.
+
+The current defensible claim for this family is narrower: compact Aionis Runtime contracts can preserve correctness and can reduce prompt/token cost, but they do not yet reliably reduce action count or elapsed time on this dependency-surface repair task. The remaining gap is action discipline: the contract needs to suppress redundant confirmation and keep the agent on the declared path, not only compress the text it receives.
 
 ## What This Proves
 
@@ -173,7 +183,7 @@ Aionis can currently make defensible directional claims in these areas:
 - It can turn external checks such as fresh-shell curl, clean-client install, and causal deploy verification into authority boundaries.
 - It can protect CI repair evidence against forged success by rejecting modified tests, package metadata, or fixture README files.
 - In one clean arm-isolated CI repair run, it can reduce token usage substantially while preserving verifier-backed correctness.
-- In dependency-surface CI repair runs, it can preserve verifier-backed correctness and has shown action/time compression, but token savings are mixed.
+- In dependency-surface CI repair runs, it can preserve verifier-backed correctness and has shown both token compression and action/time compression, but not consistently in the same run.
 
 ## What This Does Not Prove
 
