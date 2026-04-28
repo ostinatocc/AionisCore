@@ -914,7 +914,9 @@ test("real A/B LLM runner prompt carries executable probe task and verifier cont
   assert.match(prompt, /nohup <command>/);
   assert.match(prompt, /Harness verifier:/);
   assert.match(prompt, /scripts\/lite-runtime-dogfood-external-probe\.ts/);
-  assert.match(prompt, /Recorder contract:/);
+  assert.match(prompt, /Evidence recording contract:/);
+  assert.match(prompt, /Do not run `npm run ab:evidence:event`/);
+  assert.doesNotMatch(prompt, /ab:evidence:event -- --manifest/);
   assert.match(prompt, /Return only JSON/);
 });
 
@@ -977,6 +979,68 @@ test("real A/B LLM runner CLI writes structured events into the selected arm eve
   assert.equal(events.events_by_probe_id[probeId][1].kind, "tool_call");
   assert.equal(result.success, true);
   assert.equal(result.agent_events_patch.events_by_probe_id[probeId].length, 2);
+});
+
+test("real A/B LLM runner CLI rejects agent commands that mutate event artifacts directly", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-live-evidence-llm-runner-direct-write-"));
+  const probeId = "external_probe_service_after_exit";
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence-llm-direct-write",
+    task_ids: [probeId],
+  });
+  const manifestPath = path.join(dir, "manifest.json");
+  const eventsPath = path.join(dir, manifest.arms.aionis_assisted.agent_events_path);
+  const directWriterPath = path.join(dir, "direct-writer.mjs");
+  fs.mkdirSync(path.dirname(eventsPath), { recursive: true });
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  fs.writeFileSync(eventsPath, `${JSON.stringify({ events_by_probe_id: { [probeId]: [] } }, null, 2)}\n`);
+  fs.writeFileSync(directWriterPath, `
+import fs from "node:fs";
+const eventsPath = process.argv[2];
+const probeId = process.env.AIONIS_AB_PROBE_ID;
+fs.writeFileSync(eventsPath, JSON.stringify({
+  events_by_probe_id: {
+    [probeId]: [
+      { kind: "action", text: "direct artifact mutation", correct: false, wasted: true }
+    ]
+  }
+}, null, 2) + "\\n");
+process.stdout.write(JSON.stringify({
+  output_version: "aionis_real_ab_llm_agent_output_v1",
+  probe_id: probeId,
+  events: [
+    { kind: "action", text: "returned event", correct: true, wasted: false }
+  ]
+}));
+`);
+
+  let failed = false;
+  try {
+    execFileSync("npx", [
+      "tsx",
+      "scripts/aionis-real-ab-llm-runner.ts",
+      "--manifest",
+      manifestPath,
+      "--arm",
+      "aionis_assisted",
+      "--probe",
+      probeId,
+      "--command",
+      `${JSON.stringify(process.execPath)} ${JSON.stringify(directWriterPath)} ${JSON.stringify(eventsPath)}`,
+      "--events",
+      eventsPath,
+    ], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+  } catch (error) {
+    failed = true;
+    const stderr = String((error as { stderr?: unknown }).stderr ?? error);
+    assert.match(stderr, /mutated agent-events\.json directly/);
+  }
+
+  assert.equal(failed, true);
 });
 
 test("real A/B live evidence arm run packet maps probes to dogfood command and recorder examples", () => {

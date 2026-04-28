@@ -48,10 +48,12 @@ Flags:
 The command receives these environment variables:
   AIONIS_AB_PROMPT, AIONIS_AB_ARM, AIONIS_AB_PROBE_ID, AIONIS_AB_SUITE_ID,
   AIONIS_AB_MEMORY_MODE, AIONIS_AB_AUTHORITY_LEVEL, AIONIS_AB_PACKET_SOURCE,
-  AIONIS_AB_MANIFEST_PATH, AIONIS_AB_AGENT_EVENTS_PATH
+  AIONIS_AB_MANIFEST_PATH
 
 The command must print JSON only:
   {"output_version":"aionis_real_ab_llm_agent_output_v1","probe_id":"...","events":[{"kind":"action","text":"..."}]}
+
+The runner writes agent-events.json after parsing stdout. The agent command must not write the evidence bundle directly.
 `);
 }
 
@@ -186,6 +188,11 @@ function readEventsFile(eventsPath: string): RealAbLiveEvidenceAgentEventsFile |
   return readJson<RealAbLiveEvidenceAgentEventsFile | Record<string, RealAbTraceEvent[]>>(eventsPath);
 }
 
+function readFileIfExists(filePath: string): string | null {
+  if (!fs.existsSync(filePath)) return null;
+  return fs.readFileSync(filePath, "utf8");
+}
+
 const options = parseArgs(process.argv.slice(2));
 const manifestPath = path.resolve(options.manifestPath ?? "");
 const manifest = readJson<RealAbLiveEvidenceManifest>(manifestPath);
@@ -214,6 +221,7 @@ if (options.dryRun) {
     prompt,
   }, null, 2)}\n`);
 } else {
+  const beforeEventsContent = readFileIfExists(eventsPath);
   const attempt = await runRealAbLlmArmAttempt({
     manifest,
     manifest_path: manifestPath,
@@ -224,6 +232,10 @@ if (options.dryRun) {
     timeout_ms: options.timeoutMs,
     agent_events_path: eventsPath,
   });
+  const afterEventsContent = readFileIfExists(eventsPath);
+  if (beforeEventsContent !== afterEventsContent) {
+    throw new Error("agent command mutated agent-events.json directly; return JSON events only and let the runner persist evidence");
+  }
   const existingEvents = readEventsFile(eventsPath);
   const updatedEvents = applyRealAbLlmArmAttemptToAgentEvents({
     events_file: existingEvents,
