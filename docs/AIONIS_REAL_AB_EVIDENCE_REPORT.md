@@ -135,9 +135,12 @@ Run at least two more paired trials for:
 - `external_probe_service_after_exit`
 - `external_probe_publish_install`
 - `external_probe_deploy_hook_web`
+- `external_probe_ai_code_ci_repair`
 
 Then add the next continuity-heavy families:
 
 - interrupted resume
 - next-day handoff
 - second-agent takeover
+
+The `external_probe_ai_code_ci_repair` slice is the first commercial-family validation target. It should be run as a paired LLM A/B suite before making claims about AI code verification or CI/test repair.

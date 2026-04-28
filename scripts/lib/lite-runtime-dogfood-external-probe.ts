@@ -18,7 +18,8 @@ export type RuntimeDogfoodExternalProbeSlice =
   | "deploy_hook_web"
   | "interrupted_resume"
   | "handoff_next_day"
-  | "agent_takeover";
+  | "agent_takeover"
+  | "ai_code_ci_repair";
 
 export type RuntimeDogfoodExternalProbeFailureClass =
   | "none"
@@ -106,10 +107,21 @@ export const runtimeDogfoodExternalProbeSlices: readonly RuntimeDogfoodExternalP
   "interrupted_resume",
   "handoff_next_day",
   "agent_takeover",
+  "ai_code_ci_repair",
 ];
 const defaultSlices: RuntimeDogfoodExternalProbeSlice[] = [...runtimeDogfoodExternalProbeSlices];
 
 let cachedPython: string | null = null;
+
+function childProcessEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  // External probes may run from this repo's node:test suite. The verifier must
+  // be a fresh child process, not a recursive node:test child that skips files.
+  delete env.NODE_TEST_CONTEXT;
+  delete env.NODE_TEST_REPORTER;
+  delete env.NODE_TEST_REPORTER_DESTINATION;
+  return env;
+}
 
 function execFileResult(command: string, args: string[], options: ExecFileOptions = {}): Promise<CommandResult> {
   return new Promise((resolve) => {
@@ -117,6 +129,7 @@ function execFileResult(command: string, args: string[], options: ExecFileOption
     execFile(command, args, {
       cwd: options.cwd,
       timeout: options.timeoutMs ?? 5000,
+      env: childProcessEnv(),
     }, (error, stdout, stderr) => {
       const durationMs = Date.now() - startedAt;
       const errorCode = (error as NodeJS.ErrnoException | null)?.code;
@@ -445,7 +458,7 @@ function buildServiceTaskSpec(args: {
       authoritative_gate_allows: true,
       evidence_allows_authoritative: validationPassed,
       stable_promotion_allowed: validationPassed,
-      evidence_reasons_include: validationPassed ? [] : ["fresh_shell_probe_failed"],
+      evidence_reasons_include: validationPassed ? [] : ["validation_failed"],
     },
   };
 }
@@ -581,7 +594,7 @@ function buildDeployHookWebTaskSpec(args: {
       authoritative_gate_allows: true,
       evidence_allows_authoritative: validationPassed,
       stable_promotion_allowed: validationPassed,
-      evidence_reasons_include: validationPassed ? [] : ["fresh_shell_probe_failed"],
+      evidence_reasons_include: validationPassed ? [] : ["validation_failed"],
     },
   };
 }
@@ -1106,6 +1119,92 @@ async function runAgentTakeoverProbe(): Promise<RuntimeDogfoodExternalProbeScena
   };
 }
 
+async function runAiCodeCiRepairProbe(workspaceRoot?: string): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
+  const validationCommand = "npm test -- tests/pricing/discount.test.mjs";
+  const resolvedWorkspaceRoot = workspaceRoot ? path.resolve(workspaceRoot) : null;
+  const liveProbe = resolvedWorkspaceRoot
+    ? {
+        probe: await probeFreshShellCommand(validationCommand, 15000, resolvedWorkspaceRoot),
+        cwd: resolvedWorkspaceRoot,
+        command: validationCommand,
+      }
+    : await runLiveWorkspaceProbe({
+        tempPrefix: "aionis-runtime-dogfood-ai-code-ci-",
+        validationCommand,
+        files: {
+          "package.json": JSON.stringify({ scripts: { test: "node --test" } }, null, 2),
+          "src/pricing/discount.mjs": [
+            "export function discountedTotalCents(order) {",
+            "  const subtotalCents = Number(order.subtotalCents);",
+            "  const discountPercent = Number(order.discountPercent ?? 0);",
+            "  if (!Number.isFinite(subtotalCents) || !Number.isFinite(discountPercent)) {",
+            "    throw new TypeError('invalid discount input');",
+            "  }",
+            "  const discountCents = Math.round(subtotalCents * discountPercent / 100);",
+            "  return Math.max(0, subtotalCents - discountCents);",
+            "}",
+            "",
+          ].join("\n"),
+          "tests/pricing/discount.test.mjs": [
+            "import test from 'node:test';",
+            "import assert from 'node:assert/strict';",
+            "import { discountedTotalCents } from '../../src/pricing/discount.mjs';",
+            "",
+            "test('applies percentage discounts in cents', () => {",
+            "  assert.equal(discountedTotalCents({ subtotalCents: 10000, discountPercent: 15 }), 8500);",
+            "  assert.equal(discountedTotalCents({ subtotalCents: 999, discountPercent: 10 }), 899);",
+            "});",
+            "",
+            "test('does not return negative totals for oversized discounts', () => {",
+            "  assert.equal(discountedTotalCents({ subtotalCents: 1250, discountPercent: 150 }), 0);",
+            "});",
+            "",
+          ].join("\n"),
+        },
+      });
+  const probe = liveProbe.probe;
+  const taskSpec = buildLiveCommandTaskSpec({
+    id: "external_probe_ai_code_ci_repair",
+    title: "External probe AI code CI/test repair",
+    queryText: "Repair an almost-right AI-generated pricing patch so the targeted CI test passes without broad unrelated edits.",
+    trajectoryTitle: "AI-generated pricing patch targeted CI repair",
+    taskFamily: "ai_code_ci_repair",
+    targetFiles: ["src/pricing/discount.mjs", "tests/pricing/discount.test.mjs"],
+    validationCommand,
+    nextAction: `Inspect tests/pricing/discount.test.mjs, repair src/pricing/discount.mjs, avoid unrelated edits, and rerun ${validationCommand} before declaring success.`,
+    successInvariants: ["all_acceptance_checks_pass", "targeted_ci_repair_passes"],
+    dependencyRequirements: [
+      "existing failing tests define the behavior contract for the repair",
+      "repair must satisfy targeted CI or test evidence without broad unrelated edits",
+    ],
+    evidenceRef: "external_probe:ai_code_ci_repair:targeted_pricing_test",
+    probe,
+  });
+  const commandDiagnostic = buildCommandDiagnostic({
+    command: liveProbe.command,
+    cwd: liveProbe.cwd,
+    result: probe,
+    failureClass: "live_command_probe_failed",
+  });
+  const diagnostics = buildSliceDiagnostics({
+    slice: "ai_code_ci_repair",
+    scenarioId: taskSpec.id,
+    primary: commandDiagnostic,
+    commands: [commandDiagnostic],
+  });
+  return {
+    id: taskSpec.id,
+    task_family_hint: "ai_code_ci_repair",
+    endpoint: "",
+    service_pid: null,
+    launcher_exit_code: null,
+    fresh_shell_probe_passed: probe.code === 0,
+    fresh_shell_probe_output: probe.stdout.trim(),
+    diagnostics,
+    task_spec: taskSpec,
+  };
+}
+
 async function runProbeSlice(
   slice: RuntimeDogfoodExternalProbeSlice,
   port?: number,
@@ -1116,7 +1215,8 @@ async function runProbeSlice(
   if (slice === "deploy_hook_web") return await runDeployHookWebProbe(port, workspaceRoot);
   if (slice === "interrupted_resume") return await runInterruptedResumeProbe();
   if (slice === "handoff_next_day") return await runHandoffNextDayProbe();
-  return await runAgentTakeoverProbe();
+  if (slice === "agent_takeover") return await runAgentTakeoverProbe();
+  return await runAiCodeCiRepairProbe(workspaceRoot);
 }
 
 export async function runRuntimeDogfoodExternalProbe(options: ExternalProbeOptions = {}): Promise<RuntimeDogfoodExternalProbeRun> {

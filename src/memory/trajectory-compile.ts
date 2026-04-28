@@ -229,6 +229,10 @@ function inferTaskFamily(queryText: string, steps: NormalizedStep[], explicitTas
   const explicit = firstString(explicitTaskFamily);
   if (explicit) return explicit;
   const corpus = `${queryText}\n${steps.flatMap((step) => [...step.texts, ...step.commands]).join("\n")}`.toLowerCase();
+  if (
+    /\b(ai[- ]generated|almost[- ]right|ci failure|failing test|test failure|red test|patch review|unit test failure|targeted ci)\b/.test(corpus)
+    && /\b(repair|fix|debug|verify|test|pass)\b/.test(corpus)
+  ) return "ai_code_ci_repair";
   if ((/\bgit\b/.test(corpus) && /\b(webserver|hook|deploy|nginx|publish)\b/.test(corpus))) return "git_deploy_webserver";
   if ((/\b(pypi|pip install|package index|wheel|simple\/)\b/.test(corpus))) return "package_publish_validate";
   if ((/\b(sqlite|database|db|wal|integrity_check|truncate)\b/.test(corpus))) return "database_recovery";
@@ -359,6 +363,10 @@ function extractDependencyRequirements(args: {
   if (/\b(sqlite|database|db|wal|integrity_check)\b/i.test(corpus)) {
     out.push("database files and journal state must be consistent before declaring recovery complete");
   }
+  if (args.taskFamily === "ai_code_ci_repair") {
+    out.push("existing failing tests define the behavior contract for the repair");
+    out.push("repair must satisfy targeted CI or test evidence without broad unrelated edits");
+  }
   if (args.serviceConstraints.length > 0) {
     out.push("service launch must not depend on the agent shell remaining attached");
   }
@@ -411,6 +419,7 @@ function extractSuccessInvariants(args: {
   if (hasFreshShellSignal(corpus, args.acceptanceChecks, args.serviceConstraints)) out.push("fresh_shell_revalidation_passes");
   if (/\bpip\s+install\b/i.test(corpus)) out.push("clean_client_install_succeeds");
   if (args.taskFamily === "git_deploy_webserver") out.push("deployed_web_content_visible_from_served_endpoint");
+  if (args.taskFamily === "ai_code_ci_repair") out.push("targeted_ci_repair_passes");
   if (/\bintegrity_check\b|\bsqlite\b|\bdatabase\b|\bwal\b/i.test(corpus)) out.push("database_integrity_check_passes");
   for (const constraint of args.serviceConstraints) {
     if (constraint.endpoint) out.push(`service_endpoint_reachable:${constraint.endpoint}`);
@@ -477,6 +486,11 @@ function extractPatternHints(args: {
   if (args.serviceConstraints.length > 0) {
     out.push("detach_long_running_service_before_validation");
     out.push("revalidate_service_from_fresh_shell");
+  }
+  if (args.taskFamily === "ai_code_ci_repair") {
+    out.push("inspect_failing_test_before_patch");
+    out.push("avoid_unrelated_file_changes");
+    out.push("rerun_targeted_test_before_success");
   }
   if (args.taskFamily === "git_deploy_webserver") out.push("validate_hook_or_publish_path_before_declaring_success");
   if (args.taskFamily === "package_publish_validate") out.push("publish_then_install_from_clean_client_path");

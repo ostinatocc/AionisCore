@@ -29,7 +29,7 @@ function usage(): string {
     "Usage:",
     "  npx tsx scripts/lite-runtime-dogfood-external-probe.ts [--json|--report-json|--gate-json] [--require-live-readiness] [--list-slices] [--slice service_after_exit] [--port 43000] [--workspace-root /path/workspace] [--out-json /path/result.json] [--out-report-json /path/report.json] [--out-gate-json /path/gate.json] [--out-md /path/result.md] [--out-tasks-json /path/tasks.json]",
     "",
-    "Runs Runtime dogfood slices backed by live fresh-shell external probe evidence for service, publish/install, deploy/web, interrupted resume, handoff, and agent takeover task families.",
+    "Runs Runtime dogfood slices backed by live fresh-shell external probe evidence for service, publish/install, deploy/web, interrupted resume, handoff, agent takeover, and AI code CI repair task families.",
   ].join("\n");
 }
 

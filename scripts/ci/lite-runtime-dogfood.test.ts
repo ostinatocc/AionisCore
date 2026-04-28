@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { prepareDeployHookWebWorkspace } from "../aionis-real-ab-prepare-workspace.ts";
+import { prepareAiCodeCiRepairWorkspace, prepareDeployHookWebWorkspace } from "../aionis-real-ab-prepare-workspace.ts";
 import { runRuntimeDogfoodSuite, runtimeDogfoodTasksFromSpecs } from "../lib/lite-runtime-dogfood.ts";
 import {
   runRuntimeDogfoodExternalProbe,
@@ -219,11 +219,11 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.equal(run.run_version, "runtime_dogfood_external_probe_run_v1");
   assert.equal(run.launcher_exit_code, 0);
   assert.ok(run.service_pid);
-  assert.equal(run.probes.length, 6);
+  assert.equal(run.probes.length, 7);
   assert.equal(run.diagnostics.length, runtimeDogfoodExternalProbeSlices.length);
   assert.equal(run.fresh_shell_probe_passed, true);
   assert.equal(run.dogfood_result.overall_status, "pass");
-  assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 6);
+  assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 7);
   assert.equal(run.dogfood_result.proof_boundary.fixture_evidence_scenarios, 0);
   assert.equal(run.dogfood_result.summary.after_exit_correct_rate, 1);
   assert.equal(run.dogfood_result.report.product_status, "pass_live_evidence");
@@ -239,12 +239,14 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.task_resume_interrupted_export_pipeline?.rate, 1);
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.handoff_resume?.rate, 1);
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.agent_takeover?.rate, 1);
+  assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.ai_code_ci_repair?.rate, 1);
   assert.equal(run.dogfood_result.coverage.task_families.service_publish_validate, 1);
   assert.equal(run.dogfood_result.coverage.task_families.package_publish_validate, 1);
   assert.equal(run.dogfood_result.coverage.task_families.git_deploy_webserver, 1);
   assert.equal(run.dogfood_result.coverage.task_families.task_resume_interrupted_export_pipeline, 1);
   assert.equal(run.dogfood_result.coverage.task_families.handoff_resume, 1);
   assert.equal(run.dogfood_result.coverage.task_families.agent_takeover, 1);
+  assert.equal(run.dogfood_result.coverage.task_families.ai_code_ci_repair, 1);
 
   const scenarioIds = new Set(run.dogfood_result.scenarios.map((scenario) => scenario.id));
   const diagnosticSlices = new Set(run.diagnostics.map((diagnostic) => diagnostic.slice));
@@ -255,10 +257,12 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.ok(scenarioIds.has("external_probe_interrupted_resume"));
   assert.ok(scenarioIds.has("external_probe_handoff_next_day"));
   assert.ok(scenarioIds.has("external_probe_agent_takeover"));
+  assert.ok(scenarioIds.has("external_probe_ai_code_ci_repair"));
   const liveCommandProbes = [
     ["external_probe_interrupted_resume", "npm test -- tests/exporter.test.mjs"],
     ["external_probe_handoff_next_day", "npm test -- tests/payments/webhook.test.mjs"],
     ["external_probe_agent_takeover", "npm test -- tests/search/indexer.test.mjs"],
+    ["external_probe_ai_code_ci_repair", "npm test -- tests/pricing/discount.test.mjs"],
   ] as const;
   for (const [id, command] of liveCommandProbes) {
     const probe = run.probes.find((candidate) => candidate.id === id);
@@ -281,6 +285,7 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.match(run.fresh_shell_probe_output, /"ok":true/);
   assert.match(run.fresh_shell_probe_output, /Successfully installed vectorops-0\.1\.0/);
   assert.match(run.fresh_shell_probe_output, /deployed revision visible through live dogfood/);
+  assert.match(run.fresh_shell_probe_output, /applies percentage discounts in cents/);
 });
 
 test("runtime dogfood external probe can run one selected slice with diagnostics", async () => {
@@ -341,6 +346,59 @@ test("deploy hook external probe can validate the actual arm workspace causally"
     });
     assert.equal(passedRun.fresh_shell_probe_passed, true);
     assert.match(passedRun.fresh_shell_probe_output, /deployed revision visible through live dogfood/);
+    assert.equal(
+      passedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      true,
+    );
+    assert.equal(
+      passedRun.dogfood_result.scenarios[0]?.metrics.stable_promotion_allowed,
+      true,
+    );
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test("AI code CI repair external probe can validate the actual arm workspace causally", async () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-dogfood-ai-code-workspace-"));
+  try {
+    prepareAiCodeCiRepairWorkspace(workspace, { force: true });
+
+    const failedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["ai_code_ci_repair"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(failedRun.probes.length, 1);
+    assert.equal(failedRun.fresh_shell_probe_passed, false);
+    assert.equal(failedRun.probes[0]?.diagnostics.command, "npm test -- tests/pricing/discount.test.mjs");
+    assert.equal(failedRun.probes[0]?.diagnostics.cwd, workspace);
+    assert.equal(
+      failedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      false,
+    );
+
+    fs.writeFileSync(
+      path.join(workspace, "src", "pricing", "discount.mjs"),
+      [
+        "export function discountedTotalCents(order) {",
+        "  const subtotalCents = Number(order.subtotalCents);",
+        "  const discountPercent = Number(order.discountPercent ?? 0);",
+        "  if (!Number.isFinite(subtotalCents) || !Number.isFinite(discountPercent)) {",
+        "    throw new TypeError('invalid discount input');",
+        "  }",
+        "  const discountCents = Math.round(subtotalCents * discountPercent / 100);",
+        "  return Math.max(0, subtotalCents - discountCents);",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const passedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["ai_code_ci_repair"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(passedRun.fresh_shell_probe_passed, true);
+    assert.match(passedRun.fresh_shell_probe_output, /applies percentage discounts in cents/);
     assert.equal(
       passedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
       true,

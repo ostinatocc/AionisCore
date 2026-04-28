@@ -1,6 +1,6 @@
 # Runtime Dogfood Reporting
 
-Last reviewed: 2026-04-26
+Last reviewed: 2026-04-28
 
 Document status: living product dogfood reference
 
@@ -63,7 +63,7 @@ The report intentionally focuses on product behavior, not test implementation de
 8. `live_execution_coverage_rate`
    Measures how much of the report is backed by live `external_probe` execution.
 9. `live_execution_coverage_by_family`
-   Measures live `external_probe` coverage per Runtime task family, for example `service_publish_validate`, `package_publish_validate`, `git_deploy_webserver`, `task_resume_interrupted_export_pipeline`, `handoff_resume`, and `agent_takeover`.
+   Measures live `external_probe` coverage per Runtime task family, for example `service_publish_validate`, `package_publish_validate`, `git_deploy_webserver`, `task_resume_interrupted_export_pipeline`, `handoff_resume`, `agent_takeover`, and `ai_code_ci_repair`.
 10. `authority_decision_report`
     Explains why each authority decision was allowed, blocked, downgraded to advisory, or limited to inspect/rehydrate. This includes outcome contract gating, execution evidence gating, stable promotion, false-confidence blocking, candidate workflow reuse, and policy default materialization.
 
@@ -86,6 +86,7 @@ The required live task families are:
 4. `task_resume_interrupted_export_pipeline`
 5. `handoff_resume`
 6. `agent_takeover`
+7. `ai_code_ci_repair`
 
 Interpretation:
 
@@ -100,7 +101,7 @@ Interpretation:
 
 ## Live External Probe Slices
 
-`npm run dogfood:lite:runtime:external-probe` runs live probes for six real task families:
+`npm run dogfood:lite:runtime:external-probe` runs live probes for seven real task families:
 
 1. service after-exit fresh-shell validation
 2. publish/install clean-client validation
@@ -108,8 +109,9 @@ Interpretation:
 4. interrupted resume narrow-slice validation
 5. next-day handoff resume validation
 6. second-agent takeover validation
+7. AI code CI/test repair targeted validation
 
-Each slice creates a temporary local fixture, launches or validates through a fresh shell, records execution evidence, and feeds the resulting task spec back through the same dogfood contract path. The live runner must not add task-specific Runtime routes or bypass the Contract Compiler and Trust Gate.
+Each slice creates a temporary local fixture, launches or validates through a fresh shell, records execution evidence, and feeds the resulting task spec back through the same dogfood contract path. Workspace-backed slices such as deploy/hook/web and AI code CI repair can also validate the actual arm workspace causally after an agent attempt. The live runner must not add task-specific Runtime routes or bypass the Contract Compiler and Trust Gate.
 
 ## Live Probe Diagnostics
 

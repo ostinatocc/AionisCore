@@ -1,6 +1,6 @@
 # Runtime Host Integration Runbook
 
-Last reviewed: 2026-04-26
+Last reviewed: 2026-04-28
 
 Document status: living SDK integration reference
 
@@ -170,7 +170,7 @@ npm run dogfood:lite:runtime:external-probe -- --require-live-readiness --out-ga
 npm run dogfood:lite:runtime:external-probe -- --slice interrupted_resume --out-json artifacts/runtime-dogfood/interrupted-run.json
 ```
 
-The external-probe runner should cover service durability, publish/install visibility, deploy/web visibility, interrupted resume, next-day handoff, and agent takeover paths before a host claims broad Runtime readiness.
+The external-probe runner should cover service durability, publish/install visibility, deploy/web visibility, interrupted resume, next-day handoff, agent takeover, and AI code CI/test repair paths before a host claims broad Runtime readiness.
 For a machine-readable release decision, read `report.readiness_gate` or the standalone `external-readiness-gate.json`.
 `readiness_gate.regression_status=pass` only proves regression safety. A live host/product readiness claim requires
 `readiness_gate.live_product_status=pass`.

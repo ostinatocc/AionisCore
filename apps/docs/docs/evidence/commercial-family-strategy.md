@@ -141,7 +141,7 @@ Rejected work:
 
 The next implementation tracks should be:
 
-1. Add `ai_code_ci_repair` as the first commercial-family A/B slice.
+1. Run paired LLM A/B trials for `ai_code_ci_repair`, the first commercial-family validation slice.
 2. Strengthen `developer_context_recovery` by combining interrupted resume, next-day handoff, and second-agent takeover.
 3. Keep `design_to_dev_fidelity` as the first non-coding expansion after the developer families pass repeat trials.
 4. Defer `work_to_action_continuity` until there is a stable connector-independent evaluation shape.

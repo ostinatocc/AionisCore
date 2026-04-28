@@ -207,6 +207,29 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
       "Record actual takeover actions and any retries or wasted exploration.",
     ],
   },
+  external_probe_ai_code_ci_repair: {
+    title: "External probe AI code CI/test repair",
+    task_family: "ai_code_ci_repair",
+    task_prompt: "Repair an almost-right AI-generated pricing patch so the targeted CI test passes without broad unrelated edits.",
+    target_files: ["src/pricing/discount.mjs", "tests/pricing/discount.test.mjs"],
+    next_action: "Inspect the failing targeted test, repair src/pricing/discount.mjs, then run npm test -- tests/pricing/discount.test.mjs before declaring success.",
+    acceptance_checks: ["npm test -- tests/pricing/discount.test.mjs"],
+    lifecycle_constraints: [
+      "targeted_validation_required",
+      "avoid_unrelated_file_changes",
+      "verifier_backed_success_required",
+    ],
+    authority_boundary: [
+      "A plausible AI-generated patch is not authoritative until the targeted test passes.",
+      "The collection harness, not the agent, writes dogfood-run.json.",
+    ],
+    workflow_steps: [
+      "Start from the failing targeted test instead of broad repository exploration.",
+      "Inspect src/pricing/discount.mjs and tests/pricing/discount.test.mjs.",
+      "Repair the pricing behavior while avoiding unrelated files.",
+      "Run npm test -- tests/pricing/discount.test.mjs and record the exact action/tool events.",
+    ],
+  },
 };
 
 function tail(value: string, limit = OutputTailLimit): string {
@@ -383,7 +406,9 @@ export function buildRealAbLlmArmPrompt(args: {
   if (!brief) {
     throw new Error(`unsupported probe task brief: ${args.probe_id}`);
   }
-  const dogfoodCommand = args.probe_id === "external_probe_deploy_hook_web" && args.workspace_root
+  const supportsWorkspaceVerifier = args.probe_id === "external_probe_deploy_hook_web"
+    || args.probe_id === "external_probe_ai_code_ci_repair";
+  const dogfoodCommand = supportsWorkspaceVerifier && args.workspace_root
     ? `${packet.dogfood_command} --workspace-root ${shellQuoteForPrompt(path.resolve(args.workspace_root))}`
     : packet.dogfood_command;
   const commonHeader = [

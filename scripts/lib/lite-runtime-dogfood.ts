@@ -201,6 +201,7 @@ export const runtimeDogfoodRequiredLiveTaskFamilies = [
   "package_publish_validate",
   "service_publish_validate",
   "task_resume_interrupted_export_pipeline",
+  "ai_code_ci_repair",
 ] as const;
 
 export type RuntimeDogfoodReadinessRequirement = {

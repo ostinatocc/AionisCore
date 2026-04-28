@@ -41,6 +41,7 @@ const probeToSlice: Record<string, string> = {
   external_probe_interrupted_resume: "interrupted_resume",
   external_probe_handoff_next_day: "handoff_next_day",
   external_probe_agent_takeover: "agent_takeover",
+  external_probe_ai_code_ci_repair: "ai_code_ci_repair",
 };
 
 function shellQuote(value: string): string {
