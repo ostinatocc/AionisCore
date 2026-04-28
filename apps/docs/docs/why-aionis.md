@@ -182,6 +182,15 @@ The runtime is strongest when work is:
 
 That is why coding and ops are the strongest current fit, but the runtime model is broader than coding alone.
 
+The current commercial-family strategy is broader than the first proof scenarios:
+
+- AI code verification and CI/test repair
+- developer context recovery and task continuity
+- design-to-dev implementation fidelity
+- work-to-action continuity
+
+See [Commercial Family Strategy](./evidence/commercial-family-strategy.md) for the market-backed evidence plan.
+
 ## What this means in practice
 
 If you are building coding-agent infrastructure, the runtime gives you a clearer substrate for:

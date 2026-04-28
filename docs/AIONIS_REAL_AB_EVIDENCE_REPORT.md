@@ -2,6 +2,10 @@
 
 Date: 2026-04-28
 
+Last reviewed: 2026-04-28
+
+Document status: real A/B evidence report
+
 This report summarizes the first real LLM-backed A/B evidence runs for Aionis Runtime and the follow-up `contract_only` reruns. The goal is not to claim broad product superiority. The goal is to state what the current evidence can and cannot prove, then define the next Runtime hardening steps.
 
 ## Evidence Boundary

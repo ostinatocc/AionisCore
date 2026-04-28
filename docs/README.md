@@ -13,6 +13,7 @@ Use this index when you want the public documentation surface only.
 1. [../README.md](../README.md)
 2. [../apps/docs/index.md](../apps/docs/index.md)
 3. [SDK_QUICKSTART.md](SDK_QUICKSTART.md)
+4. [AIONIS_COMMERCIAL_FAMILY_STRATEGY.md](AIONIS_COMMERCIAL_FAMILY_STRATEGY.md)
 
 ## 2. Public Technical References
 
@@ -38,6 +39,7 @@ Use this index when you want the public documentation surface only.
 7. [../apps/docs/docs/evidence/proof-by-evidence.md](../apps/docs/docs/evidence/proof-by-evidence.md)
 8. [../apps/docs/docs/evidence/self-evolving-demos.md](../apps/docs/docs/evidence/self-evolving-demos.md)
 9. [../apps/docs/docs/evidence/validation-and-benchmarks.md](../apps/docs/docs/evidence/validation-and-benchmarks.md)
+10. [../apps/docs/docs/evidence/commercial-family-strategy.md](../apps/docs/docs/evidence/commercial-family-strategy.md)
 
 ## 4. Package And Example READMEs
 
