@@ -155,6 +155,11 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function formatCommandTail(label: string, value: string): string {
+  const trimmed = value.trim();
+  return `${label}:\n${trimmed || "<empty>"}`;
+}
+
 function actionEventCount(events: RealAbLiveEvidenceEventDraft[] | RealAbTraceEvent[]): number {
   return events.filter((event) => event.kind === "action" || event.kind === "tool_call").length;
 }
@@ -328,6 +333,7 @@ export function buildRealAbLlmArmPrompt(args: {
     "Output contract:",
     "Return only JSON with output_version=\"aionis_real_ab_llm_agent_output_v1\".",
     "Include the actual action/tool events you performed for this probe.",
+    "If an event kind is `tool_call`, include the exact shell command in `command`; otherwise use kind `action` with explanatory text.",
     "Do not record the external verifier as an agent event unless the agent invoked it before the harness verifier.",
     "Every event must be something that happened in this arm; do not infer events from the task brief.",
     "",
@@ -440,9 +446,23 @@ export async function runRealAbLlmArmAttempt(args: {
     },
   });
   if (commandResult.timed_out || commandResult.exit_code !== 0) {
-    throw new Error(`LLM command failed for ${args.arm}/${args.probe_id}: exit_code=${commandResult.exit_code ?? "null"}`);
+    throw new Error([
+      `LLM command failed for ${args.arm}/${args.probe_id}: exit_code=${commandResult.exit_code ?? "null"} timed_out=${commandResult.timed_out}`,
+      formatCommandTail("stdout_tail", commandResult.stdout_tail),
+      formatCommandTail("stderr_tail", commandResult.stderr_tail),
+    ].join("\n"));
   }
-  const parsedOutput = parseRealAbLlmAgentOutput(commandResult.stdout_full, args.probe_id);
+  let parsedOutput: RealAbLlmAgentOutput;
+  try {
+    parsedOutput = parseRealAbLlmAgentOutput(commandResult.stdout_full, args.probe_id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error([
+      `LLM command output was invalid for ${args.arm}/${args.probe_id}: ${message}`,
+      formatCommandTail("stdout_tail", tail(commandResult.stdout_full)),
+      formatCommandTail("stderr_tail", commandResult.stderr_tail),
+    ].join("\n"));
+  }
   const eventsByProbe = normalizeEventsByProbeId(parsedOutput, args.probe_id);
   const events = (eventsByProbe[args.probe_id] ?? []).map((event) => finalizeRealAbLiveEvidenceEvent(event));
   return {

@@ -918,6 +918,7 @@ test("real A/B LLM runner prompt carries executable probe task and verifier cont
   assert.match(prompt, /Do not run `npm run ab:evidence:event`/);
   assert.doesNotMatch(prompt, /ab:evidence:event -- --manifest/);
   assert.match(prompt, /Return only JSON/);
+  assert.match(prompt, /tool_call.*include the exact shell command/);
 });
 
 test("real A/B LLM runner rejects outputs without real action or tool evidence", () => {
@@ -934,6 +935,74 @@ test("real A/B LLM runner rejects outputs without real action or tool evidence",
       ],
     }), "external_probe_service_after_exit"),
     /at least one action or tool_call event/,
+  );
+});
+
+test("real A/B LLM runner reports command stderr when the configured agent command fails", async () => {
+  const probeId = "external_probe_service_after_exit";
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence-llm-command-failure",
+    task_ids: [probeId],
+  });
+  const command = `${JSON.stringify(process.execPath)} -e ${JSON.stringify("process.stderr.write('schema rejected by provider'); process.exit(1);")}`;
+
+  await assert.rejects(
+    () => runRealAbLlmArmAttempt({
+      manifest,
+      manifest_path: path.join(os.tmpdir(), "aionis-real-ab", "manifest.json"),
+      arm: "aionis_assisted",
+      probe_id: probeId,
+      command,
+      cwd: repoRoot,
+      timeout_ms: 10_000,
+    }),
+    (error) => {
+      const message = String((error as Error).message ?? error);
+      assert.match(message, /LLM command failed/);
+      assert.match(message, /stderr_tail:\nschema rejected by provider/);
+      return true;
+    },
+  );
+});
+
+test("real A/B LLM runner reports stdout tail when returned events violate the event contract", async () => {
+  const probeId = "external_probe_service_after_exit";
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "first-live-evidence-llm-invalid-event",
+    task_ids: [probeId],
+  });
+  const output = {
+    output_version: "aionis_real_ab_llm_agent_output_v1",
+    probe_id: probeId,
+    events: [
+      {
+        kind: "tool_call",
+        text: "started detached service but omitted command",
+        correct: true,
+        wasted: false,
+      },
+    ],
+  };
+  const command = `${JSON.stringify(process.execPath)} -e ${JSON.stringify(`process.stdout.write(${JSON.stringify(JSON.stringify(output))});`)}`;
+
+  await assert.rejects(
+    () => runRealAbLlmArmAttempt({
+      manifest,
+      manifest_path: path.join(os.tmpdir(), "aionis-real-ab", "manifest.json"),
+      arm: "aionis_assisted",
+      probe_id: probeId,
+      command,
+      cwd: repoRoot,
+      timeout_ms: 10_000,
+    }),
+    (error) => {
+      const message = String((error as Error).message ?? error);
+      assert.match(message, /LLM command output was invalid/);
+      assert.match(message, /tool_call events must include command/);
+      assert.match(message, /stdout_tail:/);
+      assert.match(message, /started detached service but omitted command/);
+      return true;
+    },
   );
 });
 
