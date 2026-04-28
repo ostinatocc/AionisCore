@@ -72,6 +72,7 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
     workflow_steps: [
       "Inspect the service entrypoint and identify what must stay alive after the agent/launcher exits.",
       "Launch the service detached, not as a foreground child tied to the current shell.",
+      "Use a headless portable detach pattern such as nohup/node with redirected stdio and backgrounding; do not use launchctl, osascript, open, Terminal.app, GUI apps, or login-session service managers.",
       "Probe the endpoint from a fresh shell after the launch command returns.",
       "Record the actual action/tool events; do not convert a mere success claim into verifier evidence.",
     ],
@@ -321,6 +322,8 @@ export function buildRealAbLlmArmPrompt(args: {
     "",
     "Guardrails:",
     ...packet.guardrails.map((guardrail) => `- ${guardrail}`),
+    "- Service lifecycle tasks must use headless portable process management. Avoid launchctl, GUI terminals, OS login-session managers, and any verifier path that only works while the agent shell is alive.",
+    "- Prefer: `nohup <command> > /tmp/<task>.log 2>&1 < /dev/null & echo $!` followed by a new-shell curl/probe loop.",
     "",
     "Output contract:",
     "Return only JSON with output_version=\"aionis_real_ab_llm_agent_output_v1\".",

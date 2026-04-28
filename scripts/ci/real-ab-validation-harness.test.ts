@@ -910,6 +910,8 @@ test("real A/B LLM runner prompt carries executable probe task and verifier cont
   assert.match(prompt, /Probe task:/);
   assert.match(prompt, /Keep the Runtime dogfood service alive/);
   assert.match(prompt, /scripts\/fixtures\/runtime-dogfood\/service-after-exit-server\.mjs/);
+  assert.match(prompt, /do not use launchctl/);
+  assert.match(prompt, /nohup <command>/);
   assert.match(prompt, /Harness verifier:/);
   assert.match(prompt, /scripts\/lite-runtime-dogfood-external-probe\.ts/);
   assert.match(prompt, /Recorder contract:/);
