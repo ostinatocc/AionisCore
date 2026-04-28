@@ -97,7 +97,7 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
     title: "External probe deploy/hook/web visible outcome",
     task_family: "git_deploy_webserver",
     task_prompt: "Repair the git deploy webserver hook so a pushed revision is visible through the served web endpoint.",
-    target_files: ["hooks/post-receive", "/var/www/main/index.html"],
+    target_files: ["hooks/post-receive", "www/main/index.html", "site/index.html"],
     acceptance_checks: ["curl -fsS <fresh-shell-endpoint>/index.html"],
     workflow_steps: [
       "Inspect the deploy hook path and the webserver publish root before changing files.",
@@ -153,6 +153,11 @@ function tail(value: string, limit = OutputTailLimit): string {
 
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function shellQuoteForPrompt(value: string): string {
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(value)) return value;
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function formatCommandTail(label: string, value: string): string {
@@ -273,6 +278,7 @@ export function buildRealAbLlmArmPrompt(args: {
   manifest_path: string;
   arm: RealAbArm;
   probe_id: string;
+  workspace_root?: string;
 }): string {
   assertArm(args.arm);
   const armManifest = manifestArm({ manifest: args.manifest, arm: args.arm });
@@ -288,6 +294,9 @@ export function buildRealAbLlmArmPrompt(args: {
   if (!brief) {
     throw new Error(`unsupported probe task brief: ${args.probe_id}`);
   }
+  const dogfoodCommand = args.probe_id === "external_probe_deploy_hook_web" && args.workspace_root
+    ? `${packet.dogfood_command} --workspace-root ${shellQuoteForPrompt(path.resolve(args.workspace_root))}`
+    : packet.dogfood_command;
   return [
     "You are executing one arm of an Aionis real A/B live-evidence run.",
     "",
@@ -318,7 +327,7 @@ export function buildRealAbLlmArmPrompt(args: {
     "Harness verifier:",
     "After the agent attempt, the collection harness can run this dogfood probe command to produce dogfood-run.json.",
     "The agent may run narrower checks while working, but should not fake or pre-fill harness verifier evidence.",
-    packet.dogfood_command,
+    dogfoodCommand,
     "",
     "Evidence recording contract:",
     "Return the actual events as JSON in stdout. The runner, not the agent, persists those events after the command exits.",
@@ -428,6 +437,7 @@ export async function runRealAbLlmArmAttempt(args: {
     manifest_path: args.manifest_path,
     arm: args.arm,
     probe_id: args.probe_id,
+    workspace_root: args.cwd,
   });
   const commandResult = await runShellCommand({
     command: args.command,
@@ -443,6 +453,7 @@ export async function runRealAbLlmArmAttempt(args: {
       AIONIS_AB_AUTHORITY_LEVEL: armManifest.authority_level,
       AIONIS_AB_PACKET_SOURCE: armManifest.packet_source,
       AIONIS_AB_MANIFEST_PATH: path.resolve(args.manifest_path),
+      ...(args.cwd ? { AIONIS_AB_WORKSPACE_ROOT: path.resolve(args.cwd) } : {}),
     },
   });
   if (commandResult.timed_out || commandResult.exit_code !== 0) {

@@ -74,6 +74,7 @@ export type RuntimeDogfoodExternalProbeRun = {
 type ExternalProbeOptions = {
   port?: number;
   slices?: RuntimeDogfoodExternalProbeSlice[];
+  workspaceRoot?: string;
 };
 
 type CommandResult = {
@@ -525,9 +526,13 @@ function buildDeployHookWebTaskSpec(args: {
   endpoint: string;
   probe: CommandResult;
   contentMatched: boolean;
+  targetFiles?: string[];
+  nextActionTarget?: string;
 }): RuntimeDogfoodTaskSpec {
   const validationPassed = args.probe.code === 0 && args.contentMatched;
   const webCheck = `curl -fsS ${args.endpoint}/index.html`;
+  const targetFiles = args.targetFiles ?? ["hooks/post-receive", "/var/www/main/index.html"];
+  const nextActionTarget = args.nextActionTarget ?? "/var/www/main/index.html";
   return {
     id: "external_probe_deploy_hook_web",
     title: "External probe deploy/hook/web visible outcome",
@@ -541,7 +546,7 @@ function buildDeployHookWebTaskSpec(args: {
         { role: "tool", tool_name: "bash", command: webCheck },
         {
           role: "assistant",
-          text: `Update hooks/post-receive and /var/www/main/index.html, push a fixture commit, and rerun ${webCheck} from a fresh shell until the served content matches the deployed revision.`,
+          text: `Update hooks/post-receive and ${nextActionTarget}, push a fixture commit, and rerun ${webCheck} from a fresh shell until the served content matches the deployed revision.`,
         },
       ],
     },
@@ -560,7 +565,7 @@ function buildDeployHookWebTaskSpec(args: {
       ],
     }),
     expectations: {
-      target_files_include: ["hooks/post-receive", "/var/www/main/index.html"],
+      target_files_include: targetFiles,
       acceptance_checks_match: [escapeRegex(webCheck)],
       next_action_match: ["hooks/post-receive", "fresh shell"],
       success_invariants_include: ["deployed_web_content_visible_from_served_endpoint", "fresh_shell_revalidation_passes"],
@@ -806,12 +811,15 @@ async function runPublishInstallProbe(port?: number): Promise<RuntimeDogfoodExte
   };
 }
 
-async function runDeployHookWebProbe(port?: number): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
+async function runDeployHookWebProbe(port?: number, workspaceRoot?: string): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
   const python = await resolvePython();
   const selectedPort = port ?? await findOpenPort();
   const endpoint = `http://127.0.0.1:${selectedPort}`;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-runtime-dogfood-deploy-"));
-  const webRoot = path.join(tempDir, "www", "main");
+  const resolvedWorkspaceRoot = workspaceRoot ? path.resolve(workspaceRoot) : null;
+  const webRoot = resolvedWorkspaceRoot
+    ? path.join(resolvedWorkspaceRoot, "www", "main")
+    : path.join(tempDir, "www", "main");
   const expectedContent = "deployed revision visible through live dogfood";
   let servicePid: number | null = null;
   let launcherExitCode: number | null = null;
@@ -820,8 +828,29 @@ async function runDeployHookWebProbe(port?: number): Promise<RuntimeDogfoodExter
   const webCommand = `curl -fsS ${shellQuote(`${endpoint}/index.html`)}`;
 
   try {
-    fs.mkdirSync(webRoot, { recursive: true });
-    fs.writeFileSync(path.join(webRoot, "index.html"), `${expectedContent}\n`);
+    if (resolvedWorkspaceRoot) {
+      const hookPath = path.join(resolvedWorkspaceRoot, "hooks", "post-receive");
+      const sourcePath = path.join(resolvedWorkspaceRoot, "site", "index.html");
+      if (!fs.existsSync(hookPath)) {
+        throw new Error(`deploy hook workspace is missing hooks/post-receive: ${hookPath}`);
+      }
+      if (!fs.existsSync(sourcePath)) {
+        throw new Error(`deploy hook workspace is missing site/index.html: ${sourcePath}`);
+      }
+      fs.mkdirSync(webRoot, { recursive: true });
+      fs.writeFileSync(path.join(webRoot, "index.html"), "stale revision visible before deploy hook\n");
+      const hookCommand = "sh hooks/post-receive";
+      const hookProbe = await probeFreshShellCommand(hookCommand, 15000, resolvedWorkspaceRoot);
+      commandDiagnostics.push(buildCommandDiagnostic({
+        command: hookCommand,
+        cwd: resolvedWorkspaceRoot,
+        result: hookProbe,
+        failureClass: hookProbe.code === 0 ? "none" : "live_command_probe_failed",
+      }));
+    } else {
+      fs.mkdirSync(webRoot, { recursive: true });
+      fs.writeFileSync(path.join(webRoot, "index.html"), `${expectedContent}\n`);
+    }
     const launched = await launchDetachedProcess({
       tempDir,
       command: python,
@@ -841,9 +870,20 @@ async function runDeployHookWebProbe(port?: number): Promise<RuntimeDogfoodExter
   }
 
   const contentMatched = probe.stdout.includes(expectedContent);
-  const taskSpec = buildDeployHookWebTaskSpec({ endpoint, probe, contentMatched });
+  const taskSpec = buildDeployHookWebTaskSpec({
+    endpoint,
+    probe,
+    contentMatched,
+    ...(resolvedWorkspaceRoot
+      ? {
+          targetFiles: ["hooks/post-receive", "www/main/index.html"],
+          nextActionTarget: "www/main/index.html",
+        }
+      : {}),
+  });
   const probeDiagnostic = buildCommandDiagnostic({
     command: webCommand,
+    cwd: resolvedWorkspaceRoot ?? undefined,
     result: probe,
     failureClass: "served_web_content_probe_failed",
   });
@@ -1066,10 +1106,14 @@ async function runAgentTakeoverProbe(): Promise<RuntimeDogfoodExternalProbeScena
   };
 }
 
-async function runProbeSlice(slice: RuntimeDogfoodExternalProbeSlice, port?: number): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
+async function runProbeSlice(
+  slice: RuntimeDogfoodExternalProbeSlice,
+  port?: number,
+  workspaceRoot?: string,
+): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
   if (slice === "service_after_exit") return await runServiceAfterExitProbe(port);
   if (slice === "publish_install") return await runPublishInstallProbe(port);
-  if (slice === "deploy_hook_web") return await runDeployHookWebProbe(port);
+  if (slice === "deploy_hook_web") return await runDeployHookWebProbe(port, workspaceRoot);
   if (slice === "interrupted_resume") return await runInterruptedResumeProbe();
   if (slice === "handoff_next_day") return await runHandoffNextDayProbe();
   return await runAgentTakeoverProbe();
@@ -1087,7 +1131,7 @@ export async function runRuntimeDogfoodExternalProbe(options: ExternalProbeOptio
   let portIndex = 0;
   for (const slice of slices) {
     const needsPort = slice === "service_after_exit" || slice === "publish_install" || slice === "deploy_hook_web";
-    probes.push(await runProbeSlice(slice, needsPort ? ports[portIndex++] : undefined));
+    probes.push(await runProbeSlice(slice, needsPort ? ports[portIndex++] : undefined, options.workspaceRoot));
   }
   const taskSpecs = probes.map((probe) => probe.task_spec);
   const dogfoodResult = runRuntimeDogfoodSuite(runtimeDogfoodTasksFromSpecs(taskSpecs));

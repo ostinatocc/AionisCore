@@ -21,12 +21,13 @@ type CliOptions = {
   outMarkdown: string | null;
   outTasksJson: string | null;
   port: number | null;
+  workspaceRoot: string | null;
 };
 
 function usage(): string {
   return [
     "Usage:",
-    "  npx tsx scripts/lite-runtime-dogfood-external-probe.ts [--json|--report-json|--gate-json] [--require-live-readiness] [--list-slices] [--slice service_after_exit] [--port 43000] [--out-json /path/result.json] [--out-report-json /path/report.json] [--out-gate-json /path/gate.json] [--out-md /path/result.md] [--out-tasks-json /path/tasks.json]",
+    "  npx tsx scripts/lite-runtime-dogfood-external-probe.ts [--json|--report-json|--gate-json] [--require-live-readiness] [--list-slices] [--slice service_after_exit] [--port 43000] [--workspace-root /path/workspace] [--out-json /path/result.json] [--out-report-json /path/report.json] [--out-gate-json /path/gate.json] [--out-md /path/result.md] [--out-tasks-json /path/tasks.json]",
     "",
     "Runs Runtime dogfood slices backed by live fresh-shell external probe evidence for service, publish/install, deploy/web, interrupted resume, handoff, and agent takeover task families.",
   ].join("\n");
@@ -55,6 +56,7 @@ function parseArgs(argv: string[]): CliOptions {
   let outMarkdown: string | null = null;
   let outTasksJson: string | null = null;
   let port: number | null = null;
+  let workspaceRoot: string | null = null;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--json") {
@@ -116,13 +118,19 @@ function parseArgs(argv: string[]): CliOptions {
       i += 1;
       continue;
     }
+    if (arg === "--workspace-root") {
+      workspaceRoot = argv[i + 1] ?? null;
+      if (!workspaceRoot) throw new Error("missing value for --workspace-root");
+      i += 1;
+      continue;
+    }
     if (arg === "-h" || arg === "--help") {
       console.log(usage());
       process.exit(0);
     }
     throw new Error(`unknown argument: ${arg}`);
   }
-  return { json, reportJson, gateJson, requireLiveReadiness, listSlices, slices, outJson, outReportJson, outGateJson, outMarkdown, outTasksJson, port };
+  return { json, reportJson, gateJson, requireLiveReadiness, listSlices, slices, outJson, outReportJson, outGateJson, outMarkdown, outTasksJson, port, workspaceRoot };
 }
 
 function ensureParent(filePath: string): void {
@@ -138,6 +146,7 @@ async function main(): Promise<void> {
   const run = await runRuntimeDogfoodExternalProbe({
     port: options.port ?? undefined,
     slices: options.slices.length > 0 ? options.slices : undefined,
+    workspaceRoot: options.workspaceRoot ?? undefined,
   });
   if (options.outJson) {
     ensureParent(options.outJson);

@@ -210,6 +210,7 @@ if (options.dryRun) {
     manifest_path: manifestPath,
     arm,
     probe_id: probeId,
+    workspace_root: options.cwd ? path.resolve(options.cwd) : process.cwd(),
   });
   process.stdout.write(`${JSON.stringify({
     dry_run: true,

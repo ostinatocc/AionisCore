@@ -1,5 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { prepareDeployHookWebWorkspace } from "../aionis-real-ab-prepare-workspace.ts";
 import { runRuntimeDogfoodSuite, runtimeDogfoodTasksFromSpecs } from "../lib/lite-runtime-dogfood.ts";
 import {
   runRuntimeDogfoodExternalProbe,
@@ -299,4 +303,53 @@ test("runtime dogfood external probe can run one selected slice with diagnostics
   assert.equal(run.diagnostics[0]?.failure_class, "none");
   assert.equal(run.diagnostics[0]?.command_count, 1);
   assert.equal(run.diagnostics[0]?.commands.length, 1);
+});
+
+test("deploy hook external probe can validate the actual arm workspace causally", async () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-dogfood-deploy-workspace-"));
+  try {
+    prepareDeployHookWebWorkspace(workspace, { force: true });
+
+    const failedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["deploy_hook_web"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(failedRun.probes.length, 1);
+    assert.equal(failedRun.fresh_shell_probe_passed, false);
+    assert.equal(failedRun.probes[0]?.diagnostics.commands[0]?.command, "sh hooks/post-receive");
+    assert.equal(failedRun.probes[0]?.diagnostics.commands[0]?.cwd, workspace);
+    assert.equal(
+      failedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      false,
+    );
+
+    fs.writeFileSync(
+      path.join(workspace, "hooks", "post-receive"),
+      [
+        "#!/usr/bin/env sh",
+        "set -eu",
+        "mkdir -p www/main",
+        "cp site/index.html www/main/index.html",
+        "",
+      ].join("\n"),
+    );
+    fs.chmodSync(path.join(workspace, "hooks", "post-receive"), 0o755);
+
+    const passedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["deploy_hook_web"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(passedRun.fresh_shell_probe_passed, true);
+    assert.match(passedRun.fresh_shell_probe_output, /deployed revision visible through live dogfood/);
+    assert.equal(
+      passedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      true,
+    );
+    assert.equal(
+      passedRun.dogfood_result.scenarios[0]?.metrics.stable_promotion_allowed,
+      true,
+    );
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
 });
