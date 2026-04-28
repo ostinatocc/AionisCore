@@ -129,6 +129,7 @@ test("real A/B markdown report exposes gate status and proof boundary", () => {
   assert.match(markdown, /does not prove Aionis product value/);
   assert.match(markdown, /coding_resume_ci_failure/);
   assert.match(markdown, /Cost And Control Signals/);
+  assert.match(markdown, /Discipline Compliance/);
   assert.match(markdown, /Control Interpretation/);
   assert.match(markdown, /Baseline tokens/);
 });
@@ -176,6 +177,63 @@ test("real A/B trace capture compiles auditable pilot traces into a validation s
   assert.equal(report.summary.total_tasks, 2);
   assert.equal(report.tasks[0].arms.aionis_assisted.metrics_source, "trace_derived");
   assert.equal(report.tasks[1].arms.aionis_assisted.metrics.after_exit_correct, true);
+});
+
+test("real A/B product evidence records clean locked action discipline", () => {
+  const capture = readTraceCapture();
+  capture.tasks[0].runs.aionis_assisted.authority_level = "authoritative";
+
+  const report = runRealAbValidationSuite(compileRealAbTraceCapture(capture));
+  const task = report.tasks.find((entry) => entry.id === "capture_coding_resume");
+  assert.ok(task);
+
+  const compliance = task.arms.aionis_assisted.trace_summary?.discipline_compliance;
+  assert.ok(compliance);
+  assert.equal(compliance.locked_contract_expected, true);
+  assert.equal(compliance.checked, true);
+  assert.equal(compliance.status, "pass");
+  assert.equal(compliance.severe_violation_count, 0);
+  assert.equal(report.gate.status, "pass");
+});
+
+test("real A/B product evidence rejects locked action discipline violations", () => {
+  const capture = readTraceCapture();
+  const run = capture.tasks[0].runs.aionis_assisted;
+  run.authority_level = "authoritative";
+  run.events.unshift(
+    {
+      kind: "tool_call",
+      command: "rg --files",
+      correct: false,
+      wasted: true,
+      tokens: 500,
+    },
+    {
+      kind: "tool_call",
+      command: "sed -n '1,120p' /Users/lucio/.agents/skills/code-1.0.4/SKILL.md",
+      correct: false,
+      wasted: true,
+      tokens: 500,
+    },
+  );
+
+  const report = runRealAbValidationSuite(compileRealAbTraceCapture(capture));
+  const task = report.tasks.find((entry) => entry.id === "capture_coding_resume");
+  assert.ok(task);
+
+  const compliance = task.arms.aionis_assisted.trace_summary?.discipline_compliance;
+  assert.ok(compliance);
+  assert.equal(compliance.status, "fail");
+  assert.ok(compliance.violations.some((violation) =>
+    violation.kind === "broad_discovery_before_targets"
+  ));
+  assert.ok(compliance.violations.some((violation) =>
+    violation.kind === "skill_or_preference_read_before_targets"
+  ));
+  assert.equal(report.gate.status, "fail");
+  assert.ok(report.gate.failed_requirements.some((requirement) =>
+    requirement.id === "capture_coding_resume:discipline:aionis_assisted:locked_contract"
+  ));
 });
 
 test("real A/B trace capture rejects runs without verifier evidence", () => {

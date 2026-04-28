@@ -81,6 +81,38 @@ export type RealAbTraceEvent = {
   tokens?: number;
 };
 
+export type RealAbDisciplineViolationKind =
+  | "broad_discovery_before_targets"
+  | "skill_or_preference_read_before_targets"
+  | "declared_target_never_touched"
+  | "non_target_expansion"
+  | "repeat_validation_after_pass"
+  | "acceptance_evidence_edit"
+  | "max_pre_edit_confirmation_steps_exceeded";
+
+export type RealAbDisciplineViolation = {
+  kind: RealAbDisciplineViolationKind;
+  severity: "severe";
+  event_index: number;
+  command?: string;
+  text?: string;
+  detail: string;
+};
+
+export type RealAbDisciplineCompliance = {
+  status: "pass" | "fail" | "not_applicable";
+  checked: boolean;
+  locked_contract_expected: boolean;
+  violation_count: number;
+  severe_violation_count: number;
+  violations: RealAbDisciplineViolation[];
+  first_target_event_index: number | null;
+  first_edit_event_index: number | null;
+  first_acceptance_pass_event_index: number | null;
+  pre_edit_confirmation_steps: number;
+  max_pre_edit_confirmation_steps: number | null;
+};
+
 export type RealAbRunTrace = {
   trace_version: "aionis_agent_run_trace_v1";
   run_id: string;
@@ -107,6 +139,7 @@ export type RealAbResolvedArmObservation = Omit<RealAbArmObservation, "metrics">
     event_count: number;
     action_event_count: number;
     verifier_event_count: number;
+    discipline_compliance: RealAbDisciplineCompliance;
   };
 };
 
@@ -342,6 +375,222 @@ function eventMatchesAcceptanceCheck(event: RealAbTraceEvent, task: RealAbTaskSp
   return checks.some((check) => text.includes(check));
 }
 
+function isLockedAionisTreatment(arm: RealAbArm, observation: RealAbArmObservation): boolean {
+  return arm === "aionis_assisted"
+    && observation.memory_mode === "aionis_auto"
+    && observation.authority_level === "authoritative"
+    && observation.packet_source === "automatic_runtime";
+}
+
+function lowerEventText(event: RealAbTraceEvent): string {
+  return eventText(event).toLowerCase();
+}
+
+function isBroadDiscoveryBeforeTarget(event: RealAbTraceEvent): boolean {
+  const text = lowerEventText(event);
+  return /\brg\s+--files\b/.test(text)
+    || /\bfind\s+(\.|\.\.|\/)/.test(text)
+    || /\bls\s+(-[a-z]*r[a-z]*|--recursive)\b/.test(text)
+    || /\btree\b/.test(text)
+    || /\bgrep\s+-r\b/.test(text)
+    || /\bfd\s+(\.|\*|\/)/.test(text);
+}
+
+function isSkillOrPreferenceReadBeforeTarget(event: RealAbTraceEvent): boolean {
+  const text = lowerEventText(event);
+  return text.includes("/.agents/skills/")
+    || text.includes("/.codex/skills/")
+    || text.includes("skill.md")
+    || text.includes("~/code/memory.md")
+    || text.includes("$home/code/memory.md")
+    || text.includes("/code/memory.md");
+}
+
+function isEditEvent(event: RealAbTraceEvent): boolean {
+  if (!isActionEvent(event)) return false;
+  const text = lowerEventText(event);
+  return text.includes("apply_patch")
+    || /\bpatch\b/.test(text)
+    || /\bedit(ed|ing)?\b/.test(text)
+    || /\bwrite\b/.test(text)
+    || /\bcreated?\b/.test(text)
+    || /\bmodified?\b/.test(text)
+    || /\bupdated?\b/.test(text)
+    || /\bcat\s*>/.test(text);
+}
+
+function acceptanceEvidenceFiles(task: RealAbTaskSpec): Set<string> {
+  const evidencePattern = /(^|\/)(tests?|__tests__)\/|(\.test\.|\.spec\.)|(^|\/)(package\.json|pyproject\.toml|requirements\.txt|readme[^/]*)$/i;
+  return new Set((task.expected_outcome.target_files ?? []).filter((file) => evidencePattern.test(file)));
+}
+
+function isAcceptanceEvidenceEdit(event: RealAbTraceEvent, task: RealAbTaskSpec): boolean {
+  if (!isEditEvent(event)) return false;
+  const evidenceFiles = acceptanceEvidenceFiles(task);
+  if (evidenceFiles.size === 0) return false;
+  return (event.touched_files ?? []).some((file) => evidenceFiles.has(file));
+}
+
+function isNonTargetExpansion(event: RealAbTraceEvent, task: RealAbTaskSpec): boolean {
+  if (!isActionEvent(event)) return false;
+  const targets = new Set(task.expected_outcome.target_files ?? []);
+  if (targets.size === 0) return false;
+  return (event.touched_files ?? []).some((file) => !targets.has(file));
+}
+
+function isAcceptancePassEvent(event: RealAbTraceEvent, task: RealAbTaskSpec): boolean {
+  if (!eventMatchesAcceptanceCheck(event, task)) return false;
+  if (event.success === true) return true;
+  const text = lowerEventText(event);
+  return /\b(pass|passed|success|succeeded)\b/.test(text);
+}
+
+function disciplineViolation(
+  kind: RealAbDisciplineViolationKind,
+  event: RealAbTraceEvent,
+  eventIndex: number,
+  detail: string,
+): RealAbDisciplineViolation {
+  return {
+    kind,
+    severity: "severe",
+    event_index: eventIndex,
+    command: event.command,
+    text: event.text,
+    detail,
+  };
+}
+
+function deriveDisciplineCompliance(
+  task: RealAbTaskSpec,
+  arm: RealAbArm,
+  observation: RealAbArmObservation,
+  trace: RealAbRunTrace,
+): RealAbDisciplineCompliance {
+  const lockedContractExpected = isLockedAionisTreatment(arm, observation);
+  const firstTargetEventIndex = trace.events.findIndex((event) =>
+    isActionEvent(event) && eventTouchesExpectedTarget(event, task)
+  );
+  const firstEditEventIndex = trace.events.findIndex(isEditEvent);
+  const maxPreEditConfirmationSteps = lockedContractExpected ? 2 : null;
+  const preEditConfirmationSteps = firstEditEventIndex >= 0
+    ? trace.events.slice(0, firstEditEventIndex).filter(isActionEvent).length
+    : 0;
+  let firstAcceptancePassEventIndex: number | null = null;
+  const violations: RealAbDisciplineViolation[] = [];
+
+  if (!lockedContractExpected) {
+    return {
+      status: "not_applicable",
+      checked: false,
+      locked_contract_expected: false,
+      violation_count: 0,
+      severe_violation_count: 0,
+      violations,
+      first_target_event_index: firstTargetEventIndex >= 0 ? firstTargetEventIndex : null,
+      first_edit_event_index: firstEditEventIndex >= 0 ? firstEditEventIndex : null,
+      first_acceptance_pass_event_index: null,
+      pre_edit_confirmation_steps: preEditConfirmationSteps,
+      max_pre_edit_confirmation_steps: null,
+    };
+  }
+
+  if (
+    maxPreEditConfirmationSteps !== null
+    && firstEditEventIndex >= 0
+    && preEditConfirmationSteps > maxPreEditConfirmationSteps
+  ) {
+    violations.push(disciplineViolation(
+      "max_pre_edit_confirmation_steps_exceeded",
+      trace.events[firstEditEventIndex],
+      firstEditEventIndex,
+      `contract-locked execution allows at most ${maxPreEditConfirmationSteps} pre-edit confirmation steps`,
+    ));
+  }
+
+  if ((task.expected_outcome.target_files ?? []).length > 0 && firstTargetEventIndex < 0) {
+    const firstActionEventIndex = trace.events.findIndex(isActionEvent);
+    const evidenceEvent = trace.events[firstActionEventIndex >= 0 ? firstActionEventIndex : 0] ?? {
+      kind: "action",
+      text: "no action events",
+    };
+    violations.push(disciplineViolation(
+      "declared_target_never_touched",
+      evidenceEvent,
+      firstActionEventIndex >= 0 ? firstActionEventIndex : 0,
+      "contract-locked execution must touch at least one declared target file",
+    ));
+  }
+
+  trace.events.forEach((event, index) => {
+    const beforeFirstTarget = firstTargetEventIndex < 0 || index < firstTargetEventIndex;
+
+    if (isActionEvent(event) && beforeFirstTarget && isBroadDiscoveryBeforeTarget(event)) {
+      violations.push(disciplineViolation(
+        "broad_discovery_before_targets",
+        event,
+        index,
+        "contract-locked execution must inspect declared target files before broad repository discovery",
+      ));
+    }
+
+    if (isActionEvent(event) && beforeFirstTarget && isSkillOrPreferenceReadBeforeTarget(event)) {
+      violations.push(disciplineViolation(
+        "skill_or_preference_read_before_targets",
+        event,
+        index,
+        "contract-locked execution must not read general skills or preference memory before declared targets",
+      ));
+    }
+
+    if (!beforeFirstTarget && isNonTargetExpansion(event, task)) {
+      violations.push(disciplineViolation(
+        "non_target_expansion",
+        event,
+        index,
+        "contract-locked execution expanded beyond declared target files without captured failing evidence",
+      ));
+    }
+
+    if (isAcceptanceEvidenceEdit(event, task)) {
+      violations.push(disciplineViolation(
+        "acceptance_evidence_edit",
+        event,
+        index,
+        "contract-locked execution must not edit acceptance evidence files",
+      ));
+    }
+
+    if (isAcceptancePassEvent(event, task)) {
+      if (firstAcceptancePassEventIndex === null) {
+        firstAcceptancePassEventIndex = index;
+      } else {
+        violations.push(disciplineViolation(
+          "repeat_validation_after_pass",
+          event,
+          index,
+          "contract-locked execution should stop after the required validation passes",
+        ));
+      }
+    }
+  });
+
+  const severeViolationCount = violations.filter((violation) => violation.severity === "severe").length;
+  return {
+    status: severeViolationCount === 0 ? "pass" : "fail",
+    checked: true,
+    locked_contract_expected: true,
+    violation_count: violations.length,
+    severe_violation_count: severeViolationCount,
+    violations,
+    first_target_event_index: firstTargetEventIndex >= 0 ? firstTargetEventIndex : null,
+    first_edit_event_index: firstEditEventIndex >= 0 ? firstEditEventIndex : null,
+    first_acceptance_pass_event_index: firstAcceptancePassEventIndex,
+    pre_edit_confirmation_steps: preEditConfirmationSteps,
+    max_pre_edit_confirmation_steps: maxPreEditConfirmationSteps,
+  };
+}
+
 function isEventCorrect(event: RealAbTraceEvent, task: RealAbTaskSpec): boolean {
   if (typeof event.correct === "boolean") return event.correct;
   return eventTouchesExpectedTarget(event, task) || eventMatchesAcceptanceCheck(event, task);
@@ -460,6 +709,7 @@ function resolveArmObservation(task: RealAbTaskSpec, arm: RealAbArm): RealAbReso
         event_count: observation.trace.events.length,
         action_event_count: actionEventCount,
         verifier_event_count: verifierEventCount,
+        discipline_compliance: deriveDisciplineCompliance(task, arm, observation, observation.trace),
       },
     };
   }
@@ -605,6 +855,35 @@ function validateLiveTraceEvidence(task: RealAbTaskSpec, suiteKind: RealAbSuiteK
   });
 }
 
+function validateActionDiscipline(
+  task: RealAbTaskSpec,
+  arms: Record<RealAbArm, RealAbResolvedArmObservation>,
+  suiteKind: RealAbSuiteKind,
+): RealAbGateRequirement[] {
+  if (suiteKind === "harness_calibration") {
+    return [];
+  }
+
+  const treatment = arms.aionis_assisted;
+  const compliance = treatment.trace_summary?.discipline_compliance;
+  const lockedContractExpected = treatment.memory_mode === "aionis_auto"
+    && treatment.authority_level === "authoritative"
+    && treatment.packet_source === "automatic_runtime";
+
+  return [
+    requirement({
+      id: `${task.id}:discipline:aionis_assisted:locked_contract`,
+      scope: "task",
+      ok: !lockedContractExpected || compliance?.status === "pass",
+      actual: compliance
+        ? `${compliance.status}:${compliance.severe_violation_count}`
+        : "not_checked",
+      expected: "pass",
+      message: "authoritative Aionis treatment must follow contract-locked action discipline",
+    }),
+  ];
+}
+
 function buildTaskResult(task: RealAbTaskSpec, suiteKind: RealAbSuiteKind): RealAbTaskResult {
   const arms = resolveTaskArms(task);
   const baseline = arms.baseline.metrics;
@@ -629,6 +908,7 @@ function buildTaskResult(task: RealAbTaskSpec, suiteKind: RealAbSuiteKind): Real
     ...validateFairness(task),
     ...validateArmSemantics(task),
     ...validateLiveTraceEvidence(task, suiteKind),
+    ...validateActionDiscipline(task, arms, suiteKind),
     requirement({
       id: `${task.id}:completion_not_worse`,
       scope: "task",
@@ -867,13 +1147,46 @@ function incorrectEventCount(arm: RealAbResolvedArmObservation): number | null {
   return arm.trace.events.filter((event) => event.correct === false).length;
 }
 
+function disciplineStatus(arm: RealAbResolvedArmObservation): string {
+  const compliance = arm.trace_summary?.discipline_compliance;
+  if (!compliance || compliance.status === "not_applicable") return "n/a";
+  return compliance.status === "pass"
+    ? `pass (${compliance.violation_count})`
+    : `fail (${compliance.severe_violation_count}/${compliance.violation_count})`;
+}
+
+function indexValue(value: number | null | undefined): string {
+  return typeof value === "number" ? String(value) : "n/a";
+}
+
+function disciplineRow(task: RealAbTaskResult): string {
+  const compliance = task.arms.aionis_assisted.trace_summary?.discipline_compliance;
+  const cells = [
+    task.id,
+    task.task_family,
+    disciplineStatus(task.arms.aionis_assisted),
+    count(compliance?.severe_violation_count),
+    indexValue(compliance?.first_target_event_index),
+    indexValue(compliance?.first_edit_event_index),
+    compliance?.max_pre_edit_confirmation_steps === null || !compliance
+      ? "n/a"
+      : `${compliance.pre_edit_confirmation_steps}/${compliance.max_pre_edit_confirmation_steps}`,
+    indexValue(compliance?.first_acceptance_pass_event_index),
+  ];
+  return `| ${cells.join(" | ")} |`;
+}
+
 function controlInterpretation(task: RealAbTaskResult): string {
   const negative = task.arms.negative_control;
   const baseline = task.arms.baseline;
   const treatment = task.arms.aionis_assisted;
+  const treatmentDiscipline = treatment.trace_summary?.discipline_compliance;
   const negativeActions = negative.trace_summary?.action_event_count ?? null;
   const baselineActions = baseline.trace_summary?.action_event_count ?? null;
   const treatmentActions = treatment.trace_summary?.action_event_count ?? null;
+  if (treatmentDiscipline?.status === "fail") {
+    return `\`${task.id}\`: Aionis completed the run but violated locked action discipline; treat this evidence as untrusted until Runtime enforces the contract boundary.`;
+  }
   if (negative.metrics.completion && negative.authority_level !== "authoritative") {
     const negativeCheaperThanBaseline = typeof negativeActions === "number" && typeof baselineActions === "number"
       ? negativeActions <= baselineActions
@@ -952,6 +1265,12 @@ export function renderRealAbMarkdownReport(report: RealAbReport): string {
     `| Task | Family | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline incorrect | Aionis incorrect | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens | Token delta | Time delta |`,
     `| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |`,
     ...report.tasks.map(costSignalRow),
+    "",
+    "## Discipline Compliance",
+    "",
+    `| Task | Family | Aionis discipline | Severe violations | First target event | First edit event | Pre-edit steps | First acceptance pass |`,
+    `| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |`,
+    ...report.tasks.map(disciplineRow),
     "",
     "## Control Interpretation",
     "",
