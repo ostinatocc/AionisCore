@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { prepareAiCodeCiRepairWorkspace, prepareDeployHookWebWorkspace } from "../aionis-real-ab-prepare-workspace.ts";
+import { aiCodeCiRepairVariants, prepareAiCodeCiRepairWorkspace, prepareDeployHookWebWorkspace } from "../aionis-real-ab-prepare-workspace.ts";
 import { runRuntimeDogfoodSuite, runtimeDogfoodTasksFromSpecs } from "../lib/lite-runtime-dogfood.ts";
 import {
   runRuntimeDogfoodExternalProbe,
@@ -447,7 +447,7 @@ test("AI code CI repair variants reject test-file success fakery", async () => {
   }
 });
 
-test("AI code CI repair fixture variants share the same implementation-side repair", async () => {
+test("AI code CI repair simple fixture variants share the same implementation-side repair", async () => {
   for (const variant of ["percentage_rounding", "misleading_ai_patch", "hidden_edge_case", "wrong_surface_trap"] as const) {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), `aionis-dogfood-ai-code-${variant}-`));
     try {
@@ -482,5 +482,60 @@ test("AI code CI repair fixture variants share the same implementation-side repa
     } finally {
       fs.rmSync(workspace, { recursive: true, force: true });
     }
+  }
+});
+
+test("AI code CI repair dependency-surface variant exposes helper target and requires dependency repair", async () => {
+  assert.ok((aiCodeCiRepairVariants as readonly string[]).includes("dependency_surface"));
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-dogfood-ai-code-dependency-"));
+  try {
+    prepareAiCodeCiRepairWorkspace(workspace, { force: true, variant: "dependency_surface" });
+
+    const failedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["ai_code_ci_repair"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(failedRun.fresh_shell_probe_passed, false);
+    assert.ok(
+      failedRun.probes[0]?.task_spec.expectations.target_files_include.includes("src/pricing/discount-policy.mjs"),
+    );
+    assert.match(failedRun.probes[0]?.task_spec.query_text ?? "", /dependency_surface/);
+    assert.equal(
+      failedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      false,
+    );
+
+    fs.writeFileSync(
+      path.join(workspace, "src", "pricing", "discount-policy.mjs"),
+      [
+        "export function normalizeDiscountPercent(input) {",
+        "  if (input == null) return 0;",
+        "  const discountPercent = Number(input);",
+        "  if (!Number.isFinite(discountPercent)) {",
+        "    throw new TypeError('invalid discount input');",
+        "  }",
+        "  return discountPercent;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const passedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["ai_code_ci_repair"],
+      workspaceRoot: workspace,
+    });
+
+    assert.equal(passedRun.fresh_shell_probe_passed, true);
+    assert.match(passedRun.fresh_shell_probe_output, /normalization helper preserves percent-point semantics/);
+    assert.equal(
+      passedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      true,
+    );
+    assert.equal(
+      passedRun.dogfood_result.scenarios[0]?.metrics.stable_promotion_allowed,
+      true,
+    );
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
   }
 });

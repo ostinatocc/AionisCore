@@ -49,6 +49,7 @@ import {
   parseRealAbLlmAgentOutput,
   runRealAbLlmArmAttempt,
 } from "../lib/aionis-real-ab-llm-runner.ts";
+import { prepareAiCodeCiRepairWorkspace } from "../aionis-real-ab-prepare-workspace.ts";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
@@ -1069,6 +1070,43 @@ test("real A/B LLM runner positive control prompt receives oracle handoff", () =
   assert.match(prompt, /acceptance_checks:/);
   assert.match(prompt, /tests_are_read_only_acceptance_evidence/);
   assert.match(prompt, /Expected workflow:/);
+});
+
+test("real A/B LLM runner Aionis prompt uses dependency-surface fixture metadata without leaking it to baseline", () => {
+  const probeId = "external_probe_ai_code_ci_repair";
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-real-ab-dependency-surface-"));
+  try {
+    prepareAiCodeCiRepairWorkspace(workspace, { force: true, variant: "dependency_surface" });
+    const manifest = buildRealAbLiveEvidenceManifestTemplate({
+      suite_id: "first-live-evidence-llm-dependency-surface-prompt",
+      task_ids: [probeId],
+    });
+    const manifestPath = path.join(os.tmpdir(), "aionis-real-ab", "manifest.json");
+    const aionisPrompt = buildRealAbLlmArmPrompt({
+      manifest,
+      manifest_path: manifestPath,
+      arm: "aionis_assisted",
+      probe_id: probeId,
+      workspace_root: workspace,
+    });
+    const baselinePrompt = buildRealAbLlmArmPrompt({
+      manifest,
+      manifest_path: manifestPath,
+      arm: "baseline",
+      probe_id: probeId,
+      workspace_root: workspace,
+    });
+
+    assert.match(aionisPrompt, /Runtime contract:/);
+    assert.match(aionisPrompt, /src\/pricing\/discount-policy\.mjs/);
+    assert.match(aionisPrompt, /trace discountedTotalCents/);
+    assert.match(baselinePrompt, /Baseline task:/);
+    assert.doesNotMatch(baselinePrompt, /target_files:/);
+    assert.doesNotMatch(baselinePrompt, /src\/pricing\/discount-policy\.mjs/);
+    assert.doesNotMatch(baselinePrompt, /trace discountedTotalCents/);
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
 });
 
 test("real A/B LLM runner expanded prompt preserves the full workflow and verifier command for debugging", () => {

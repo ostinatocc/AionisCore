@@ -1,6 +1,12 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
+import {
+  aiCodeCiRepairFixture,
+  aiCodeCiRepairVariants,
+  type AiCodeCiRepairVariant,
+} from "../aionis-real-ab-prepare-workspace.ts";
 import {
   appendRealAbLiveEvidenceAgentEvent,
   finalizeRealAbLiveEvidenceEvent,
@@ -233,6 +239,39 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
     ],
   },
 };
+
+function readAiCodeCiVariantFromWorkspace(workspaceRoot?: string): AiCodeCiRepairVariant | null {
+  if (!workspaceRoot) return null;
+  const metadataPath = path.join(path.resolve(workspaceRoot), ".aionis", "ai-code-ci-fixture.json");
+  if (!fs.existsSync(metadataPath)) return null;
+  try {
+    const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8")) as { variant?: unknown };
+    if (typeof metadata.variant === "string" && (aiCodeCiRepairVariants as readonly string[]).includes(metadata.variant)) {
+      return metadata.variant as AiCodeCiRepairVariant;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function briefForWorkspace(args: {
+  probeId: string;
+  brief: ProbeTaskBrief;
+  workspaceRoot?: string;
+}): ProbeTaskBrief {
+  if (args.probeId !== "external_probe_ai_code_ci_repair") return args.brief;
+  const variant = readAiCodeCiVariantFromWorkspace(args.workspaceRoot);
+  if (!variant) return args.brief;
+  const fixture = aiCodeCiRepairFixture(variant);
+  return {
+    ...args.brief,
+    target_files: fixture.target_files,
+    next_action: fixture.next_action,
+    acceptance_checks: fixture.acceptance_checks,
+    workflow_steps: fixture.workflow_steps,
+  };
+}
 
 function tail(value: string, limit = OutputTailLimit): string {
   return value.length <= limit ? value : value.slice(value.length - limit);
@@ -495,10 +534,15 @@ export function buildRealAbLlmArmPrompt(args: {
     manifest_path: args.manifest_path,
     arm: args.arm,
   });
-  const brief = probeTaskBriefs[args.probe_id];
-  if (!brief) {
+  const baseBrief = probeTaskBriefs[args.probe_id];
+  if (!baseBrief) {
     throw new Error(`unsupported probe task brief: ${args.probe_id}`);
   }
+  const brief = briefForWorkspace({
+    probeId: args.probe_id,
+    brief: baseBrief,
+    workspaceRoot: args.workspace_root,
+  });
   const supportsWorkspaceVerifier = args.probe_id === "external_probe_deploy_hook_web"
     || args.probe_id === "external_probe_ai_code_ci_repair";
   const dogfoodCommand = supportsWorkspaceVerifier && args.workspace_root

@@ -182,6 +182,7 @@ Completed:
 - Added verifier guards that reject CI repair success manufactured by editing test/package/readme evidence.
 - Added automatic A/B report cost/control output for action counts, wasted/incorrect events, duration, tokens, and negative-control interpretation.
 - Isolated LLM runner prompt surfaces so baseline no longer receives Aionis contract fields.
+- Added a `dependency_surface` CI repair fixture that requires tracing implementation behavior across pricing helper modules.
 
 Remaining:
 
@@ -190,7 +191,7 @@ Remaining:
 - Extend causal workspace verification beyond deploy/webserver where feasible.
 - Run the remaining harder `ai_code_ci_repair` variants as paired LLM A/B trials before treating the commercial-family signal as stable.
 - Rerun more commercial-family trials after arm-prompt isolation before making stable clean A/B claims.
-- Add genuinely harder CI repair cases with larger dependency surfaces if baseline and negative control keep passing cheaply.
+- Run the new `dependency_surface` variant as the next paired LLM A/B correctness-separation candidate.
 
 ## Claim Policy
 

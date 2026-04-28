@@ -1252,20 +1252,24 @@ async function runAiCodeCiRepairProbe(workspaceRoot?: string): Promise<RuntimeDo
       });
   const probe = liveProbe.probe;
   const variant = liveProbe.variant ?? "percentage_rounding";
+  const fixture = aiCodeCiRepairFixture(variant);
   const taskSpec = buildLiveCommandTaskSpec({
     id: "external_probe_ai_code_ci_repair",
     title: "External probe AI code CI/test repair",
     queryText: `Repair an almost-right AI-generated pricing patch (${variant}) so the targeted CI test passes without broad unrelated edits.`,
     trajectoryTitle: `AI-generated pricing patch targeted CI repair (${variant})`,
     taskFamily: "ai_code_ci_repair",
-    targetFiles: ["src/pricing/discount.mjs", "tests/pricing/discount.test.mjs"],
+    targetFiles: fixture.target_files,
     validationCommand,
-    nextAction: `Inspect tests/pricing/discount.test.mjs, repair src/pricing/discount.mjs only, keep tests, package metadata, and README files unchanged, and rerun ${validationCommand} before declaring success.`,
+    nextAction: fixture.next_action,
     successInvariants: ["all_acceptance_checks_pass", "targeted_ci_repair_passes"],
     dependencyRequirements: [
       "existing failing tests define the behavior contract for the repair",
       "repair must satisfy targeted CI or test evidence without broad unrelated edits",
       "test files are read-only acceptance evidence and must not be edited to manufacture success",
+      ...(fixture.target_files.includes("src/pricing/discount-policy.mjs")
+        ? ["pricing repair may require following implementation dependencies instead of patching only the visible entrypoint"]
+        : []),
     ],
     evidenceRef: "external_probe:ai_code_ci_repair:targeted_pricing_test",
     probe,

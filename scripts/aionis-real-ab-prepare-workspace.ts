@@ -15,6 +15,7 @@ export const aiCodeCiRepairVariants = [
   "misleading_ai_patch",
   "hidden_edge_case",
   "wrong_surface_trap",
+  "dependency_surface",
 ] as const;
 
 export type AiCodeCiRepairVariant = typeof aiCodeCiRepairVariants[number];
@@ -24,9 +25,15 @@ type AiCodeCiRepairFixture = {
   description: string;
   files: Record<string, string>;
   immutable_files: string[];
+  target_files: string[];
+  acceptance_checks: string[];
+  next_action: string;
+  workflow_steps: string[];
 };
 
 const aiCodeCiPackageJson = `${JSON.stringify({ scripts: { test: "node --test" } }, null, 2)}\n`;
+const aiCodeCiAcceptanceChecks = ["npm test -- tests/pricing/discount.test.mjs"];
+const aiCodeCiDefaultTargetFiles = ["src/pricing/discount.mjs", "tests/pricing/discount.test.mjs"];
 
 function aiCodeCiReadme(variant: AiCodeCiRepairVariant, description: string): string {
   return [
@@ -37,7 +44,7 @@ function aiCodeCiReadme(variant: AiCodeCiRepairVariant, description: string): st
     description,
     "",
     "Repair `src/pricing/discount.mjs` so `npm test -- tests/pricing/discount.test.mjs` passes.",
-    "The test is the acceptance boundary. Inspect tests, but do not edit test files or broad unrelated files.",
+    "The test is the acceptance boundary. Inspect tests, but do not edit test files, package metadata, fixture README, or broad unrelated files.",
     "",
   ].join("\n");
 }
@@ -61,18 +68,38 @@ function aiCodeCiTestFile(extraCases: string[]): string {
   ].join("\n");
 }
 
+function aiCodeCiDefaultNextAction(targetFile = "src/pricing/discount.mjs"): string {
+  return `Inspect tests/pricing/discount.test.mjs, repair ${targetFile}, keep tests, package metadata, and README files unchanged, and rerun npm test -- tests/pricing/discount.test.mjs before declaring success.`;
+}
+
+function aiCodeCiDefaultWorkflowSteps(targetFile = "src/pricing/discount.mjs"): string[] {
+  return [
+    "Start from the failing targeted test instead of broad repository exploration.",
+    `Inspect ${targetFile} and tests/pricing/discount.test.mjs.`,
+    `Repair pricing behavior in ${targetFile} while keeping test/package/readme files unchanged.`,
+    "Run npm test -- tests/pricing/discount.test.mjs and record the exact action/tool events.",
+  ];
+}
+
 export function aiCodeCiRepairFixture(variant: AiCodeCiRepairVariant = "percentage_rounding"): AiCodeCiRepairFixture {
   const immutableFiles = [
     "package.json",
     "tests/pricing/discount.test.mjs",
     "README.ai-code-ci-fixture.md",
   ];
+  const baseFixture = {
+    immutable_files: immutableFiles,
+    target_files: aiCodeCiDefaultTargetFiles,
+    acceptance_checks: aiCodeCiAcceptanceChecks,
+    next_action: aiCodeCiDefaultNextAction(),
+    workflow_steps: aiCodeCiDefaultWorkflowSteps(),
+  };
   if (variant === "misleading_ai_patch") {
     const description = "An AI-generated patch confused percent values with decimal rates. The implementation, not the tests, must be repaired.";
     return {
       variant,
       description,
-      immutable_files: immutableFiles,
+      ...baseFixture,
       files: {
         "package.json": aiCodeCiPackageJson,
         "src/pricing/discount.mjs": [
@@ -103,7 +130,7 @@ export function aiCodeCiRepairFixture(variant: AiCodeCiRepairVariant = "percenta
     return {
       variant,
       description,
-      immutable_files: immutableFiles,
+      ...baseFixture,
       files: {
         "package.json": aiCodeCiPackageJson,
         "src/pricing/discount.mjs": [
@@ -138,7 +165,7 @@ export function aiCodeCiRepairFixture(variant: AiCodeCiRepairVariant = "percenta
     return {
       variant,
       description,
-      immutable_files: immutableFiles,
+      ...baseFixture,
       files: {
         "package.json": aiCodeCiPackageJson,
         "src/pricing/discount.mjs": [
@@ -163,12 +190,100 @@ export function aiCodeCiRepairFixture(variant: AiCodeCiRepairVariant = "percenta
       },
     };
   }
+  if (variant === "dependency_surface") {
+    const description = "The visible discount function delegates percent normalization to a helper module. The correct repair must preserve final price behavior and helper semantics.";
+    return {
+      variant,
+      description,
+      ...baseFixture,
+      target_files: [
+        "src/pricing/discount.mjs",
+        "src/pricing/discount-policy.mjs",
+        "tests/pricing/discount.test.mjs",
+      ],
+      next_action: "Inspect tests/pricing/discount.test.mjs, trace discountedTotalCents through src/pricing/discount.mjs into src/pricing/discount-policy.mjs, repair the policy/discount implementation without editing tests/package/readme files, and rerun npm test -- tests/pricing/discount.test.mjs before declaring success.",
+      workflow_steps: [
+        "Start from the failing targeted test instead of broad repository exploration.",
+        "Inspect tests/pricing/discount.test.mjs, src/pricing/discount.mjs, and src/pricing/discount-policy.mjs as one dependency surface.",
+        "Preserve final price behavior and the normalization helper contract; do not weaken tests or package metadata.",
+        "Run npm test -- tests/pricing/discount.test.mjs and record the exact action/tool events.",
+      ],
+      files: {
+        "package.json": aiCodeCiPackageJson,
+        "src/pricing/discount.mjs": [
+          "import { normalizeDiscountPercent } from './discount-policy.mjs';",
+          "import { roundCents } from './rounding.mjs';",
+          "",
+          "export function discountedTotalCents(order) {",
+          "  const subtotalCents = Number(order.subtotalCents);",
+          "  const discountPercent = normalizeDiscountPercent(order.discountPercent);",
+          "  if (!Number.isFinite(subtotalCents)) {",
+          "    throw new TypeError('invalid subtotal input');",
+          "  }",
+          "  const discountCents = roundCents((subtotalCents * discountPercent) / 100);",
+          "  return Math.max(0, subtotalCents - discountCents);",
+          "}",
+          "",
+        ].join("\n"),
+        "src/pricing/discount-policy.mjs": [
+          "export function normalizeDiscountPercent(input) {",
+          "  if (input == null) return 0;",
+          "  const discountPercent = Number(input);",
+          "  if (!Number.isFinite(discountPercent)) {",
+          "    throw new TypeError('invalid discount input');",
+          "  }",
+          "  // Broken on purpose: this helper returns a decimal rate, but discount.mjs expects percent points.",
+          "  return discountPercent > 1 ? discountPercent / 100 : discountPercent;",
+          "}",
+          "",
+        ].join("\n"),
+        "src/pricing/rounding.mjs": [
+          "export function roundCents(value) {",
+          "  return Math.round(value);",
+          "}",
+          "",
+        ].join("\n"),
+        "tests/pricing/discount.test.mjs": [
+          "import test from 'node:test';",
+          "import assert from 'node:assert/strict';",
+          "import { discountedTotalCents } from '../../src/pricing/discount.mjs';",
+          "import { normalizeDiscountPercent } from '../../src/pricing/discount-policy.mjs';",
+          "",
+          "test('applies percentage discounts in cents through the pricing dependency surface', () => {",
+          "  assert.equal(discountedTotalCents({ subtotalCents: 10000, discountPercent: 15 }), 8500);",
+          "  assert.equal(discountedTotalCents({ subtotalCents: 999, discountPercent: 10 }), 899);",
+          "});",
+          "",
+          "test('does not return negative totals for oversized discounts', () => {",
+          "  assert.equal(discountedTotalCents({ subtotalCents: 1250, discountPercent: 150 }), 0);",
+          "});",
+          "",
+          "test('defaults missing discounts to zero', () => {",
+          "  assert.equal(discountedTotalCents({ subtotalCents: 2500 }), 2500);",
+          "});",
+          "",
+          "test('keeps fractional discount percentages stable', () => {",
+          "  assert.equal(discountedTotalCents({ subtotalCents: 1999, discountPercent: 12.5 }), 1749);",
+          "  assert.equal(discountedTotalCents({ subtotalCents: 3333, discountPercent: 33.3 }), 2223);",
+          "});",
+          "",
+          "test('normalization helper preserves percent-point semantics for callers', () => {",
+          "  assert.equal(normalizeDiscountPercent(15), 15);",
+          "  assert.equal(normalizeDiscountPercent('12.5'), 12.5);",
+          "  assert.equal(normalizeDiscountPercent(undefined), 0);",
+          "});",
+          "",
+        ].join("\n"),
+        "README.ai-code-ci-fixture.md": aiCodeCiReadme(variant, description),
+      },
+    };
+  }
 
   const description = "The implementation subtracts percentage points as cents instead of applying a percentage discount.";
   return {
     variant,
     description,
-    immutable_files: immutableFiles,
+    ...baseFixture,
     files: {
       "package.json": aiCodeCiPackageJson,
       "src/pricing/discount.mjs": [
@@ -201,7 +316,7 @@ function usage(): string {
   return [
     "Usage:",
     "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_deploy_hook_web --workspace /tmp/worktree [--force]",
-    "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_ai_code_ci_repair --workspace /tmp/worktree [--variant percentage_rounding|misleading_ai_patch|hidden_edge_case|wrong_surface_trap] [--force]",
+    `  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_ai_code_ci_repair --workspace /tmp/worktree [--variant ${aiCodeCiRepairVariants.join("|")}] [--force]`,
     "",
     "Seeds an arm workspace with the broken fixture needed for causal real A/B agent validation.",
   ].join("\n");
@@ -300,6 +415,10 @@ export function prepareAiCodeCiRepairWorkspace(
       fixture_version: "ai_code_ci_repair_fixture_v1",
       variant: fixture.variant,
       immutable_files: fixture.immutable_files,
+      target_files: fixture.target_files,
+      acceptance_checks: fixture.acceptance_checks,
+      next_action: fixture.next_action,
+      workflow_steps: fixture.workflow_steps,
     }, null, 2)}\n`,
     force,
   );

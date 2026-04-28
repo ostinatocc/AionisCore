@@ -92,6 +92,8 @@ Current `ai_code_ci_repair` variants:
    Obvious repair must also preserve missing and fractional discount behavior.
 4. `wrong_surface_trap`
    Verifier rejects success manufactured by weakening tests or metadata.
+5. `dependency_surface`
+   Failing behavior crosses `discount.mjs`, `discount-policy.mjs`, and helper semantics so Aionis must identify the real implementation surface, not just the visible entrypoint.
 
 Current evidence status:
 
@@ -99,7 +101,8 @@ Current evidence status:
 - `wrong_surface_trap` strengthened the verifier boundary, but it ran before the LLM runner isolated arm-specific prompt surfaces. It proves the immutable-evidence guard is working; it does not prove Aionis-only correctness or cost advantage.
 - The LLM runner now separates baseline, Aionis-assisted, negative-control, and positive-control prompt surfaces. The commercial-family trials need to be rerun under this cleaner A/B boundary.
 - The first clean arm-isolated `hidden_edge_case` run preserved correctness and reduced token use by 79.8% versus baseline, but took 85s longer. Baseline and negative control also passed, so this is a cost-compression signal, not a correctness-separation signal.
-- The next CI repair proof must either repeat harder variants enough times to show stable cost/control advantage, or increase task difficulty with larger dependency surfaces and less obvious implementation fixes.
+- The new `dependency_surface` variant is the next correctness-separation candidate because it forces dependency tracing instead of a one-file percent fix.
+- The next CI repair proof must either repeat harder variants enough times to show stable cost/control advantage, or increase task difficulty further with larger dependency surfaces and less obvious implementation fixes.
 
 ### Metrics
 
