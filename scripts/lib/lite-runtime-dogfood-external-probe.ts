@@ -14,6 +14,7 @@ import { buildRuntimeVerifierExecutionEvidenceV1 } from "../../src/execution/ind
 import {
   aiCodeCiRepairFixture,
   aiCodeCiRepairVariants,
+  publishInstallHardFixedPackageSource,
   type AiCodeCiRepairVariant,
 } from "../aionis-real-ab-prepare-workspace.ts";
 
@@ -21,6 +22,7 @@ export type RuntimeDogfoodExternalProbeSlice =
   | "service_after_exit"
   | "service_lifecycle_hard"
   | "publish_install"
+  | "publish_install_hard"
   | "deploy_hook_web"
   | "interrupted_resume"
   | "handoff_next_day"
@@ -29,9 +31,11 @@ export type RuntimeDogfoodExternalProbeSlice =
 
 export type RuntimeDogfoodExternalProbeFailureClass =
   | "none"
+  | "package_index_build_failed"
   | "service_launch_failed"
   | "fresh_shell_probe_failed"
   | "clean_client_install_failed"
+  | "clean_client_contract_failed"
   | "served_web_content_probe_failed"
   | "served_web_content_mismatch"
   | "live_command_probe_failed";
@@ -147,6 +151,7 @@ export const runtimeDogfoodExternalProbeSlices: readonly RuntimeDogfoodExternalP
   "service_after_exit",
   "service_lifecycle_hard",
   "publish_install",
+  "publish_install_hard",
   "deploy_hook_web",
   "interrupted_resume",
   "handoff_next_day",
@@ -549,8 +554,10 @@ function writeVectoropsWheel(args: {
   tempDir: string;
   python: string;
   wheelPath: string;
+  packageSource?: string;
 }): Promise<CommandResult> {
   const wheelScript = path.join(args.tempDir, "create-vectorops-wheel.py");
+  const packageSource = args.packageSource ?? "__version__ = '0.1.0'\ndef ping():\n    return 'vectorops-live'\n";
   fs.writeFileSync(
     wheelScript,
     [
@@ -558,9 +565,10 @@ function writeVectoropsWheel(args: {
       "import zipfile",
       "",
       "wheel_path = sys.argv[1]",
+      `package_source = ${JSON.stringify(packageSource)}`,
       "dist_info = 'vectorops-0.1.0.dist-info'",
       "files = [",
-      "    ('vectorops/__init__.py', \"__version__ = '0.1.0'\\ndef ping():\\n    return 'vectorops-live'\\n\"),",
+      "    ('vectorops/__init__.py', package_source),",
       "    (f'{dist_info}/METADATA', 'Metadata-Version: 2.1\\nName: vectorops\\nVersion: 0.1.0\\nSummary: Aionis Runtime dogfood package\\n'),",
       "    (f'{dist_info}/WHEEL', 'Wheel-Version: 1.0\\nGenerator: aionis-runtime-dogfood\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n'),",
       "]",
@@ -578,13 +586,19 @@ function writeVectoropsWheel(args: {
 async function prepareVectoropsIndex(args: {
   tempDir: string;
   python: string;
+  packageSource?: string;
 }): Promise<string> {
   const distDir = path.join(args.tempDir, "publish-index");
   const simpleDir = path.join(distDir, "simple", "vectorops");
   const wheelName = "vectorops-0.1.0-py3-none-any.whl";
   const wheelPath = path.join(distDir, wheelName);
   fs.mkdirSync(simpleDir, { recursive: true });
-  const wheel = await writeVectoropsWheel({ tempDir: args.tempDir, python: args.python, wheelPath });
+  const wheel = await writeVectoropsWheel({
+    tempDir: args.tempDir,
+    python: args.python,
+    wheelPath,
+    packageSource: args.packageSource,
+  });
   if (wheel.code !== 0) {
     throw new Error(`failed to create vectorops wheel: ${(wheel.stderr || wheel.stdout || "unknown").trim()}`);
   }
@@ -852,30 +866,47 @@ function buildPublishInstallTaskSpec(args: {
   probe: CommandResult;
   servicePid: number | null;
   launcherExitCode: number | null;
+  hardContract?: boolean;
 }): RuntimeDogfoodTaskSpec {
   const validationPassed = args.probe.code === 0;
+  const hardContract = args.hardContract ?? false;
   const indexCheck = `curl -fsS ${args.endpoint}/simple/vectorops/`;
   const installCheck = `pip install --index-url ${args.endpoint}/simple vectorops==0.1.0`;
+  const importCheck = "python -c \"import vectorops; assert vectorops.__version__ == '0.1.0'; assert vectorops.ping() == 'vectorops-live'; assert abs(vectorops.vector_norm([3, 4]) - 5.0) < 1e-9\"";
   return {
-    id: "external_probe_publish_install",
-    title: "External probe publish/install clean-client validation",
-    query_text: "Recover the local package index so clean clients can install vectorops from a fresh shell after worker exit.",
+    id: hardContract ? "external_probe_publish_install_hard" : "external_probe_publish_install",
+    title: hardContract
+      ? "External probe publish/install clean-client behavior contract"
+      : "External probe publish/install clean-client validation",
+    query_text: hardContract
+      ? "Recover the local package index and package payload so clean clients install vectorops and pass the installed API contract from a fresh shell after worker exit."
+      : "Recover the local package index so clean clients can install vectorops from a fresh shell after worker exit.",
     evidence_source: "external_probe",
     trajectory: {
-      title: "Vectorops live package publish validation",
+      title: hardContract
+        ? "Vectorops live package publish behavior validation"
+        : "Vectorops live package publish validation",
       task_family: "package_publish_validate",
       steps: [
-        { role: "assistant", text: "The package index must serve vectorops to a clean client after the worker exits." },
+        {
+          role: "assistant",
+          text: hardContract
+            ? "The package index must serve vectorops to a clean client, and the installed package behavior must match the declared API contract."
+            : "The package index must serve vectorops to a clean client after the worker exits.",
+        },
         {
           role: "tool",
           tool_name: "bash",
-          command: `python scripts/build_index.py && nohup python -m http.server ${new URL(args.endpoint).port} --directory dist >/tmp/aionis-runtime-dogfood-index.log 2>&1 &`,
+          command: "python scripts/build_index.py",
         },
         { role: "tool", tool_name: "bash", command: indexCheck },
         { role: "tool", tool_name: "bash", command: installCheck },
+        ...(hardContract ? [{ role: "tool" as const, tool_name: "bash", command: importCheck }] : []),
         {
           role: "assistant",
-          text: `Update scripts/build_index.py and src/vectorops/__init__.py, relaunch the index detached, then rerun ${indexCheck} and ${installCheck} from a fresh shell.`,
+          text: hardContract
+            ? `Update scripts/build_index.py and src/vectorops/__init__.py, rebuild the package artifacts and simple index, then rerun ${indexCheck}, ${installCheck}, and the installed vectorops API check from a fresh shell.`
+            : `Update scripts/build_index.py and src/vectorops/__init__.py, rebuild the package artifacts and simple index, then rerun ${indexCheck} and ${installCheck} from a fresh shell.`,
         },
       ],
     },
@@ -883,16 +914,20 @@ function buildPublishInstallTaskSpec(args: {
       repo_root: "/workspace/vectorops",
     },
     execution_evidence: runtimeVerifierEvidence({
-      verifierId: "publish_install_clean_client_probe",
-      command: installCheck,
+      verifierId: hardContract ? "publish_install_clean_client_contract_probe" : "publish_install_clean_client_probe",
+      command: hardContract ? "publish_install_clean_client_contract" : installCheck,
       probe: args.probe,
       success: validationPassed,
-      failureReason: validationFailureReason("clean_client_install_failed", args.probe),
+      failureReason: validationFailureReason(
+        hardContract ? "clean_client_contract_failed" : "clean_client_install_failed",
+        args.probe,
+      ),
       afterAgentExit: true,
       externalVisibilityRequired: true,
       evidenceRefs: [
         `external_probe:fresh_shell:${args.endpoint}/simple/vectorops/`,
         `external_probe:clean_client_install:${args.endpoint}/simple`,
+        ...(hardContract ? ["external_probe:clean_client_import_contract:vectorops"] : []),
         `launcher_exit_code:${args.launcherExitCode ?? "null"}`,
         `service_pid:${args.servicePid ?? "null"}`,
       ],
@@ -902,14 +937,26 @@ function buildPublishInstallTaskSpec(args: {
       acceptance_checks_match: [
         escapeRegex(indexCheck),
         `pip install .*--index-url ${escapeRegex(`${args.endpoint}/simple`)}.*vectorops==0\\.1\\.0`,
+        ...(hardContract ? ["vector_norm\\(\\[3, 4\\]\\)", "ping\\(\\).*vectorops-live"] : []),
       ],
       next_action_match: ["scripts/build_index\\.py", "fresh shell"],
-      success_invariants_include: ["clean_client_install_succeeds", "fresh_shell_revalidation_passes"],
-      dependency_requirements_match: ["package artifacts and index metadata", "intended package index"],
+      success_invariants_include: [
+        "clean_client_install_succeeds",
+        "fresh_shell_revalidation_passes",
+        ...(hardContract ? ["clean_client_import_contract_succeeds", "wheel_payload_matches_source_api"] : []),
+      ],
+      dependency_requirements_match: [
+        "package artifacts and index metadata",
+        "intended package index",
+        ...(hardContract ? ["installed package API behavior"] : []),
+      ],
       environment_assumptions_include: ["repo_root:/workspace/vectorops", "validation_can_run_from_fresh_shell"],
       must_hold_after_exit_include: ["task_result_remains_valid_after_agent_exit"],
-      external_visibility_requirements_match: ["package_install_visible_to_clean_client"],
-      service_lifecycle_required: true,
+      external_visibility_requirements_match: [
+        "package_install_visible_to_clean_client",
+        ...(hardContract ? ["installed_api_visible_to_clean_client"] : []),
+      ],
+      service_lifecycle_required: false,
       after_exit_required: true,
       authoritative_gate_allows: true,
       evidence_allows_authoritative: validationPassed,
@@ -1316,8 +1363,13 @@ async function runServiceLifecycleHardProbe(port?: number, workspaceRoot?: strin
   };
 }
 
-async function runPublishInstallProbe(port?: number, workspaceRoot?: string): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
+async function runPublishInstallProbe(
+  port?: number,
+  workspaceRoot?: string,
+  options: { hardContract?: boolean } = {},
+): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
   const python = await resolvePython();
+  const hardContract = options.hardContract ?? false;
   const selectedPort = port ?? await findOpenPort();
   const endpoint = `http://127.0.0.1:${selectedPort}`;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-runtime-dogfood-publish-"));
@@ -1331,7 +1383,11 @@ async function runPublishInstallProbe(port?: number, workspaceRoot?: string): Pr
     const prepared = resolvedWorkspaceRoot
       ? await buildVectoropsIndexFromWorkspace({ workspaceRoot: resolvedWorkspaceRoot, python })
       : {
-          distDir: await prepareVectoropsIndex({ tempDir, python }),
+          distDir: await prepareVectoropsIndex({
+            tempDir,
+            python,
+            packageSource: hardContract ? publishInstallHardFixedPackageSource() : undefined,
+          }),
           diagnostic: null,
         };
     if (prepared.diagnostic) {
@@ -1371,16 +1427,25 @@ async function runPublishInstallProbe(port?: number, workspaceRoot?: string): Pr
         const clientPython = process.platform === "win32"
           ? path.join(clientDir, "Scripts", "python.exe")
           : path.join(clientDir, "bin", "python");
+        const importCheck = hardContract
+          ? [
+              "import vectorops",
+              "assert vectorops.__version__ == '0.1.0'",
+              "assert vectorops.ping() == 'vectorops-live'",
+              "assert abs(vectorops.vector_norm([3, 4]) - 5.0) < 1e-9",
+              "print('vectorops hard contract ok')",
+            ].join("; ")
+          : "import vectorops; print(vectorops.__version__)";
         const installCommand = [
           `${shellQuote(python)} -m venv ${shellQuote(clientDir)}`,
           `${shellQuote(clientPython)} -m pip install --no-cache-dir --index-url ${shellQuote(`${endpoint}/simple`)} --trusted-host 127.0.0.1 vectorops==0.1.0`,
-          `${shellQuote(clientPython)} -c ${shellQuote("import vectorops; print(vectorops.__version__)")}`,
+          `${shellQuote(clientPython)} -c ${shellQuote(importCheck)}`,
         ].join(" && ");
         probe = await probeFreshShellCommand(installCommand, 60000);
         commandDiagnostics.push(buildCommandDiagnostic({
           command: installCommand,
           result: probe,
-          failureClass: "clean_client_install_failed",
+          failureClass: hardContract ? "clean_client_contract_failed" : "clean_client_install_failed",
         }));
       }
     }
@@ -1389,14 +1454,20 @@ async function runPublishInstallProbe(port?: number, workspaceRoot?: string): Pr
     removeTempDir(tempDir);
   }
 
-  const taskSpec = buildPublishInstallTaskSpec({ endpoint, probe, servicePid, launcherExitCode });
+  const taskSpec = buildPublishInstallTaskSpec({
+    endpoint,
+    probe,
+    servicePid,
+    launcherExitCode,
+    hardContract,
+  });
   const primaryDiagnostic = commandDiagnostics[commandDiagnostics.length - 1] ?? buildCommandDiagnostic({
     command: "publish/install external probe",
     result: probe,
-    failureClass: "clean_client_install_failed",
+    failureClass: hardContract ? "clean_client_contract_failed" : "clean_client_install_failed",
   });
   const diagnostics = buildSliceDiagnostics({
-    slice: "publish_install",
+    slice: hardContract ? "publish_install_hard" : "publish_install",
     scenarioId: taskSpec.id,
     primary: primaryDiagnostic,
     commands: commandDiagnostics,
@@ -1798,6 +1869,7 @@ async function runProbeSlice(
   if (slice === "service_after_exit") return await runServiceAfterExitProbe(port, workspaceRoot);
   if (slice === "service_lifecycle_hard") return await runServiceLifecycleHardProbe(port, workspaceRoot);
   if (slice === "publish_install") return await runPublishInstallProbe(port, workspaceRoot);
+  if (slice === "publish_install_hard") return await runPublishInstallProbe(port, workspaceRoot, { hardContract: true });
   if (slice === "deploy_hook_web") return await runDeployHookWebProbe(port, workspaceRoot);
   if (slice === "interrupted_resume") return await runInterruptedResumeProbe();
   if (slice === "handoff_next_day") return await runHandoffNextDayProbe();
@@ -1808,7 +1880,7 @@ async function runProbeSlice(
 export async function runRuntimeDogfoodExternalProbe(options: ExternalProbeOptions = {}): Promise<RuntimeDogfoodExternalProbeRun> {
   const slices = options.slices?.length ? options.slices : defaultSlices;
   const networkSliceCount = slices.filter((slice) =>
-    slice === "service_after_exit" || slice === "service_lifecycle_hard" || slice === "publish_install" || slice === "deploy_hook_web"
+    slice === "service_after_exit" || slice === "service_lifecycle_hard" || slice === "publish_install" || slice === "publish_install_hard" || slice === "deploy_hook_web"
   ).length;
   const ports = options.port
     ? [options.port, ...await findOpenPorts(Math.max(0, networkSliceCount - 1))]
@@ -1816,7 +1888,7 @@ export async function runRuntimeDogfoodExternalProbe(options: ExternalProbeOptio
   const probes: RuntimeDogfoodExternalProbeScenarioRun[] = [];
   let portIndex = 0;
   for (const slice of slices) {
-    const needsPort = slice === "service_after_exit" || slice === "service_lifecycle_hard" || slice === "publish_install" || slice === "deploy_hook_web";
+    const needsPort = slice === "service_after_exit" || slice === "service_lifecycle_hard" || slice === "publish_install" || slice === "publish_install_hard" || slice === "deploy_hook_web";
     const probe = await runProbeSlice(slice, needsPort ? ports[portIndex++] : undefined, options.workspaceRoot);
     probes.push(attachScenarioProvenance({ probe, workspaceRoot: options.workspaceRoot }));
   }

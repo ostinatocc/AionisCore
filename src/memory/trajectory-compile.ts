@@ -35,6 +35,7 @@ const VALIDATION_COMMAND_PATTERNS = [
   /\bcurl\b/i,
   /\bwget\b/i,
   /\bpip\s+install\b/i,
+  /\bpython(?:3)?\s+-c\b.*\bassert\b/i,
   /\bpython\s+-m\s+pytest\b/i,
   /\bgo\s+test\b/i,
   /\bcargo\s+test\b/i,
@@ -297,11 +298,22 @@ function extractServiceLifecycleConstraints(
   queryText: string,
   steps: NormalizedStep[],
   acceptanceChecks: string[],
+  taskFamily: string | null,
 ): ServiceLifecycleConstraintV1[] {
   const commands = steps.flatMap((step) => step.commands);
   const corpus = compileCorpus(queryText, steps);
   const urls = uniqueStrings(steps.flatMap((step) => step.urls), 16);
-  const serviceCommands = commands.filter((command) => SERVICE_COMMAND_PATTERNS.some((pattern) => pattern.test(command)));
+  const serviceCommands = commands.filter((command) => {
+    if (!SERVICE_COMMAND_PATTERNS.some((pattern) => pattern.test(command))) return false;
+    if (
+      taskFamily === "package_publish_validate"
+      && /\bpython(?:3)?\s+-m\s+http\.server\b/i.test(command)
+      && /\b(?:pip\s+install|package index|simple\/|wheel|clean client|clean-client)\b/i.test(corpus)
+    ) {
+      return false;
+    }
+    return true;
+  });
   const hasLaunchEvidence = serviceCommands.length > 0;
   if (!hasLaunchEvidence) return [];
   const launchReference = serviceCommands[0] ?? null;
@@ -355,6 +367,12 @@ function extractDependencyRequirements(args: {
   if (/\b(pip\s+install|pypi|package index|simple\/|wheel|pyproject\.toml)\b/i.test(corpus)) {
     out.push("package artifacts and index metadata must exist before clean-client install validation");
     out.push("install validation must use the intended package index, not ambient cached packages");
+  }
+  if (
+    args.taskFamily === "package_publish_validate"
+    && /\b(installed api|installed package behavior|package payload|vector_norm|clean-client api)\b/i.test(corpus)
+  ) {
+    out.push("installed package API behavior must match the clean-client contract");
   }
   if (/\b(git)\b/i.test(corpus) && /\b(webserver|hook|deploy|receive\.denycurrentbranch|post-receive|updateinstead|document root|\/var\/www)\b/i.test(corpus)) {
     out.push("git deploy or hook path must publish into the externally served document root");
@@ -422,6 +440,13 @@ function extractSuccessInvariants(args: {
   if (args.acceptanceChecks.length > 0) out.push("all_acceptance_checks_pass");
   if (hasFreshShellSignal(corpus, args.acceptanceChecks, args.serviceConstraints)) out.push("fresh_shell_revalidation_passes");
   if (/\bpip\s+install\b/i.test(corpus)) out.push("clean_client_install_succeeds");
+  if (
+    args.taskFamily === "package_publish_validate"
+    && /\b(installed api|installed package behavior|package payload|vector_norm|clean-client api)\b/i.test(corpus)
+  ) {
+    out.push("clean_client_import_contract_succeeds");
+    out.push("wheel_payload_matches_source_api");
+  }
   if (args.taskFamily === "git_deploy_webserver") out.push("deployed_web_content_visible_from_served_endpoint");
   if (args.taskFamily === "ai_code_ci_repair") out.push("targeted_ci_repair_passes");
   if (/\bintegrity_check\b|\bsqlite\b|\bdatabase\b|\bwal\b/i.test(corpus)) out.push("database_integrity_check_passes");
@@ -470,6 +495,12 @@ function extractExternalVisibilityRequirements(args: {
     out.push(...constraint.health_checks.map((check) => `health_check:${check}`));
   }
   if (/\bpip\s+install\b/i.test(corpus)) out.push("package_install_visible_to_clean_client");
+  if (
+    args.taskFamily === "package_publish_validate"
+    && /\b(installed api|installed package behavior|package payload|vector_norm|clean-client api)\b/i.test(corpus)
+  ) {
+    out.push("installed_api_visible_to_clean_client");
+  }
   if (args.taskFamily === "git_deploy_webserver") out.push("served_web_content_matches_deployed_revision");
   for (const check of args.acceptanceChecks) {
     if (/\bcurl\b|\bwget\b|\bnc\b/i.test(check)) out.push(`external_probe:${check}`);
@@ -505,10 +536,19 @@ function extractPatternHints(args: {
 
 function synthesizeNextAction(args: {
   steps: NormalizedStep[];
+  taskFamily: string | null;
   targetFiles: string[];
   acceptanceChecks: string[];
   serviceConstraints: ServiceLifecycleConstraintV1[];
 }): string | null {
+  if (args.taskFamily === "package_publish_validate") {
+    const target = args.targetFiles.slice(0, 2).join(" and ") || "the package index and package payload";
+    const includesApiContract = args.acceptanceChecks.some((check) => /\bpython(?:3)?\s+-c\b.*\bassert\b|\bvector_norm\b|\bping\(\)/i.test(check));
+    const validation = includesApiContract
+      ? "index visibility, clean-client install, and installed package API behavior"
+      : "index visibility and clean-client install";
+    return `Update ${target}, rebuild the package artifacts and simple index, then validate ${validation} from a fresh shell.`;
+  }
   for (const step of [...args.steps].reverse()) {
     for (const text of step.texts) {
       const lowered = text.toLowerCase();
@@ -561,10 +601,10 @@ export function buildTrajectoryCompileLite(body: unknown, defaults: {
     24,
   );
   const acceptanceChecks = extractAcceptanceChecks(steps, parsed.hints?.acceptance_checks ?? []);
-  const serviceConstraints = extractServiceLifecycleConstraints(parsed.query_text, steps, acceptanceChecks);
   const likelyTool = inferLikelyTool(steps);
   const workflowSteps = extractWorkflowSteps(steps);
   const taskFamily = inferTaskFamily(parsed.query_text, steps, parsed.trajectory.task_family ?? null);
+  const serviceConstraints = extractServiceLifecycleConstraints(parsed.query_text, steps, acceptanceChecks, taskFamily);
   const successInvariants = extractSuccessInvariants({
     queryText: parsed.query_text,
     steps,
@@ -614,6 +654,7 @@ export function buildTrajectoryCompileLite(body: unknown, defaults: {
   const noiseMarkers = extractNoiseMarkers(steps);
   const nextAction = synthesizeNextAction({
     steps,
+    taskFamily,
     targetFiles,
     acceptanceChecks,
     serviceConstraints,

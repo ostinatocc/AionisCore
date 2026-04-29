@@ -7,10 +7,12 @@ import {
   aiCodeCiRepairVariants,
   prepareAiCodeCiRepairWorkspace,
   prepareDeployHookWebWorkspace,
+  preparePublishInstallHardWorkspace,
   preparePublishInstallWorkspace,
   prepareServiceAfterExitWorkspace,
   prepareServiceLifecycleHardWorkspace,
   publishInstallFixedBuildScript,
+  publishInstallHardFixedPackageSource,
   serviceLifecycleHardFixedSource,
 } from "../aionis-real-ab-prepare-workspace.ts";
 import { runRuntimeDogfoodSuite, runtimeDogfoodTasksFromSpecs } from "../lib/lite-runtime-dogfood.ts";
@@ -30,7 +32,7 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.ok(result.proof_boundary.claim_scope.some((entry) => entry.includes("not a live external probe")));
   assert.equal(result.coverage.coverage_version, "runtime_dogfood_coverage_v1");
   assert.equal(result.coverage.after_exit_required_scenarios, 4);
-  assert.equal(result.coverage.service_lifecycle_required_scenarios, 4);
+  assert.equal(result.coverage.service_lifecycle_required_scenarios, 3);
   assert.equal(result.coverage.external_visibility_required_scenarios, 5);
   assert.equal(result.coverage.negative_control_scenarios, 2);
   assert.equal(result.coverage.task_families.service_publish_validate, 3);
@@ -228,11 +230,11 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.equal(run.run_version, "runtime_dogfood_external_probe_run_v1");
   assert.equal(run.launcher_exit_code, 0);
   assert.ok(run.service_pid);
-  assert.equal(run.probes.length, 8);
+  assert.equal(run.probes.length, 9);
   assert.equal(run.diagnostics.length, runtimeDogfoodExternalProbeSlices.length);
   assert.equal(run.fresh_shell_probe_passed, true);
   assert.equal(run.dogfood_result.overall_status, "pass");
-  assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 8);
+  assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 9);
   assert.equal(run.dogfood_result.proof_boundary.fixture_evidence_scenarios, 0);
   assert.equal(run.dogfood_result.summary.after_exit_correct_rate, 1);
   assert.equal(run.dogfood_result.report.product_status, "pass_live_evidence");
@@ -250,7 +252,7 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.agent_takeover?.rate, 1);
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.ai_code_ci_repair?.rate, 1);
   assert.equal(run.dogfood_result.coverage.task_families.service_publish_validate, 2);
-  assert.equal(run.dogfood_result.coverage.task_families.package_publish_validate, 1);
+  assert.equal(run.dogfood_result.coverage.task_families.package_publish_validate, 2);
   assert.equal(run.dogfood_result.coverage.task_families.git_deploy_webserver, 1);
   assert.equal(run.dogfood_result.coverage.task_families.task_resume_interrupted_export_pipeline, 1);
   assert.equal(run.dogfood_result.coverage.task_families.handoff_resume, 1);
@@ -263,6 +265,7 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.ok(scenarioIds.has("external_probe_service_after_exit"));
   assert.ok(scenarioIds.has("external_probe_service_lifecycle_hard"));
   assert.ok(scenarioIds.has("external_probe_publish_install"));
+  assert.ok(scenarioIds.has("external_probe_publish_install_hard"));
   assert.ok(scenarioIds.has("external_probe_deploy_hook_web"));
   assert.ok(scenarioIds.has("external_probe_interrupted_resume"));
   assert.ok(scenarioIds.has("external_probe_handoff_next_day"));
@@ -446,6 +449,68 @@ test("publish install external probe can validate the actual arm workspace causa
       true,
     );
     assert.equal(passedRun.probes[0]?.diagnostics.commands[0]?.cwd, workspace);
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test("hard publish install external probe requires clean-client package behavior", async () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-dogfood-publish-hard-workspace-"));
+  try {
+    preparePublishInstallHardWorkspace(workspace, { force: true });
+
+    const failedBuildRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["publish_install_hard"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(failedBuildRun.probes.length, 1);
+    assert.equal(failedBuildRun.fresh_shell_probe_passed, false);
+    assert.equal(failedBuildRun.probes[0]?.id, "external_probe_publish_install_hard");
+    assert.equal(failedBuildRun.probes[0]?.diagnostics.failure_class, "clean_client_contract_failed");
+
+    fs.writeFileSync(
+      path.join(workspace, "scripts", "build_index.py"),
+      publishInstallFixedBuildScript(),
+    );
+
+    const failedContractRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["publish_install_hard"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(failedContractRun.fresh_shell_probe_passed, false);
+    assert.equal(failedContractRun.probes[0]?.diagnostics.failure_class, "clean_client_contract_failed");
+    assert.match(
+      `${failedContractRun.probes[0]?.diagnostics.stdout_tail ?? ""}\n${failedContractRun.probes[0]?.diagnostics.stderr_tail ?? ""}`,
+      /vector_norm|AssertionError|AttributeError/,
+    );
+    assert.equal(
+      failedContractRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      false,
+    );
+
+    fs.writeFileSync(
+      path.join(workspace, "src", "vectorops", "__init__.py"),
+      publishInstallHardFixedPackageSource(),
+    );
+
+    const passedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["publish_install_hard"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(passedRun.fresh_shell_probe_passed, true);
+    assert.match(passedRun.fresh_shell_probe_output, /vectorops hard contract ok/);
+    assert.deepEqual(
+      passedRun.probes[0]?.task_spec.expectations.target_files_include,
+      ["scripts/build_index.py", "src/vectorops/__init__.py"],
+    );
+    assert.equal(
+      passedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      true,
+    );
+    assert.equal(
+      passedRun.dogfood_result.scenarios[0]?.metrics.stable_promotion_allowed,
+      true,
+    );
   } finally {
     fs.rmSync(workspace, { recursive: true, force: true });
   }

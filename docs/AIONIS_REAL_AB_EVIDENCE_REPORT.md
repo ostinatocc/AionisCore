@@ -22,6 +22,7 @@ These runs are directional pilot evidence, not broad product proof.
 - New clean suites should include `aionis_ab_fairness_manifest_v1`: frozen task ids, frozen verifier, frozen packet policy, required same model/effort/CLI/command/workspace hashes, and verifier workspace provenance.
 - External dogfood probe artifacts now carry `runtime_dogfood_external_probe_provenance_v1`, including the verified workspace root, target paths, verifier commands, and fresh-shell/after-exit boundary flags.
 - The hard service lifecycle verifier is available as `external_probe_service_lifecycle_hard`; it validates HTTP health, pid-file, live process, and lifecycle log evidence from a fresh shell after launcher exit.
+- The hard publish/install verifier is available as `external_probe_publish_install_hard`; it validates package index visibility, clean-client install, and installed package API behavior from a fresh shell after worker exit.
 - LLM suites run before this arm-prompt isolation should be treated as directional evidence and verifier evidence, not final clean A/B proof.
 
 ## Suites
@@ -59,6 +60,8 @@ These runs are directional pilot evidence, not broad product proof.
 | `deploy-web-causal-model-locked-20260429-160352` | `git_deploy_webserver` | `.artifacts/real-ab/deploy-web-causal-model-locked-20260429-160352/validation-report.md` | pass |
 | `service-causal-model-locked-20260429-164153` | `service_publish_validate` | `.artifacts/real-ab/service-causal-model-locked-20260429-164153/validation-report.md` | pass |
 | `service-hard-contract-equalcmd-20260429-194810` | `service_publish_validate` | `.artifacts/real-ab/service-hard-contract-equalcmd-20260429-194810/validation-report.md` | pass |
+| `service-hard-contract-repeat-20260429-202438` | `service_publish_validate` | `.artifacts/real-ab/service-hard-contract-repeat-20260429-202438/validation-report.md` | pass |
+| `publish-install-hard-contract-fix-20260429-221952` | `package_publish_validate` | `.artifacts/real-ab/publish-install-hard-contract-fix-20260429-221952/validation-report.md` | pass |
 
 ## Initial Directional Results
 
@@ -300,6 +303,40 @@ This is the strongest current service-family correctness-separation evidence:
 
 This run is materially stronger than the earlier easy service lifecycle result because negative control did not pass. The useful claim is still family-bounded: it supports hard lifecycle/outcome-contract value, not universal Aionis superiority.
 
+## Hard Service Lifecycle Repeat Result
+
+The `service-hard-contract-repeat-20260429-202438` suite repeated the same hard lifecycle slice under the same frozen fairness protocol: GPT-5.5, `xhigh`, Codex CLI `0.125.0`, same command hash across arms, same initial workspace hash, and external verifier provenance for each arm.
+
+| Family / variant | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `service_publish_validate / hard lifecycle / repeat` | 15 | 13 | 24 | 11 | 1 | 2 | 486s | 307s | 119,385 | 103,315 |
+
+This repeat confirmed the correctness-separation pattern:
+
+- Aionis passed the external fresh-shell verifier again.
+- Baseline failed again with `log_missing_start_marker`.
+- Negative control failed again with `log_missing_start_marker`.
+- Positive control passed, after a protocol-violating first attempt was rejected by the runner and the arm was reset to the same initial workspace before the accepted rerun.
+- Aionis reduced action events by 13.3%, elapsed time by 36.7%, and token use by 13.5% versus baseline.
+- Aionis had worse self-marked wasted steps than baseline in this repeat: `2` versus `1`.
+
+This moves hard service lifecycle from a single strong result to an initial repeated family signal. The stable claim is now correctness and verifier-boundary separation. Cost compression is present in the repeat, but weaker and not yet stable enough to be the lead claim.
+
+## Hard Publish/Install Contract-Fix Result
+
+The `publish-install-hard-contract-fix-20260429-221952` suite reran the hard package publish/install slice after narrowing package contracts so local HTTP index serving is treated as validation transport, not product-owned service lifecycle.
+
+| Family / variant | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `package_publish_validate / hard publish-install / contract fix` | 30 | 12 | 18 | 13 | 3 | 1 | 325s | 207s | 98,957 | 60,175 |
+
+This run passed the paired product gate:
+
+- All four arms passed the external verifier.
+- Aionis reduced action count by 60.0%, wasted steps by 66.7%, elapsed time by 36.4%, and token use by 39.2% versus baseline.
+- Negative control also passed, so this is an efficiency/control signal, not correctness separation.
+- The result validates the Runtime contract-boundary fix: package publish/install should carry clean-client and installed-API outcome constraints without injecting service lifecycle instructions.
+
 ## What This Proves
 
 Aionis can currently make defensible directional claims in these areas:
@@ -319,6 +356,8 @@ Aionis can currently make defensible directional claims in these areas:
 - In the model-locked deploy/webserver rerun, it can reduce action count and elapsed time under explicit GPT-5.5/xhigh Codex conditions while preserving verifier-backed served-content correctness.
 - In the model-locked service lifecycle rerun, it can reduce action count, elapsed time, token use, and wasted steps while preserving after-exit and fresh-shell correctness.
 - In the hard service lifecycle equal-command rerun, it can produce a correctness separation against both baseline and negative control while reducing actions, elapsed time, and tokens under explicit GPT-5.5/xhigh Codex conditions.
+- In the hard service lifecycle repeat, it reproduced correctness separation against both baseline and negative control under the same frozen fairness protocol.
+- In the hard publish/install contract-fix run, it preserved verifier-backed clean-client correctness while reducing actions, wasted steps, elapsed time, and token use versus baseline.
 
 ## What This Does Not Prove
 
@@ -329,10 +368,12 @@ Aionis should not currently claim:
 - Stable wall-clock speedup for publish/install based on the model-locked causal rerun.
 - Stable wasted-step reduction for deploy/webserver based on the model-locked causal rerun.
 - Unique correctness advantage for the easier service lifecycle fixture, because negative control also passed with very few actions.
-- Broad service-task superiority from one hard lifecycle run.
+- Broad service-task superiority from two hard lifecycle runs.
+- Stable hard-lifecycle wasted-step reduction, because the repeat had more self-marked wasted steps for Aionis than baseline.
 - Stable token savings for `dependency_surface` CI repair based on current repeat evidence.
 - Universal runtime speedup.
 - Unique correctness advantage for AI code CI repair based on one easy pilot fixture.
+- Unique correctness advantage for hard publish/install, because baseline and negative control also passed after the contract-boundary fix.
 - Unique correctness advantage for the current `wrong_surface_trap` fixture, because baseline and negative control also passed.
 - Unique correctness advantage for the clean `hidden_edge_case` fixture, because baseline and negative control also passed.
 - Unique correctness advantage for the current `dependency_surface` fixture, because baseline and negative control also passed.
@@ -376,6 +417,8 @@ Completed:
 - Added `aionis_ab_fairness_manifest_v1` templates and assembler guards so future clean suites fail when arms do not share model/effort/CLI/version/command hash/initial workspace hash or when verifier workspace provenance is missing.
 - Added external probe provenance to dogfood run JSON so verifier artifacts state which workspace root and target paths were actually validated.
 - Added `external_probe_service_lifecycle_hard`, a harder service lifecycle slice that requires the service to preserve durable lifecycle evidence beyond a health endpoint: pid file, lifecycle log, live PID, and fresh-shell HTTP validation.
+- Added `external_probe_publish_install_hard`, a harder package publish/install slice that requires a clean client to install the served wheel and pass the installed `vectorops` API contract, not just observe an index entry.
+- Extended the Contract Compiler so package publish/install contracts can recognize assertion-based `python -c` checks and extract installed API behavior as success invariants, dependency requirements, and external visibility requirements.
 - Kept full workflow, replay, and pattern memory internal by default.
 - Kept harness verifiers outside the agent default workflow.
 - Repeated the same three families after packet compression.
@@ -386,6 +429,9 @@ Completed:
 - Added a `dependency_surface` CI repair fixture that requires tracing implementation behavior across pricing helper modules.
 - Tightened `external_probe_service_lifecycle_hard` so the Runtime contract and verifier require the verifier-launched process itself to remain the service PID, with matching pid-file JSON, health JSON, lifecycle marker, and fresh-shell evidence.
 - Ran `service-hard-contract-equalcmd-20260429-194810`; the gate passed with Aionis passing external verification, baseline failing on missing lifecycle marker, negative control failing on PID mismatch, and positive control passing.
+- Ran `service-hard-contract-repeat-20260429-202438`; the gate passed with Aionis and positive control passing while baseline and negative control failed on missing lifecycle marker.
+- Narrowed package publish/install contracts so fresh-shell clean-client validation remains authoritative while local HTTP index serving does not become service lifecycle guidance.
+- Ran `publish-install-hard-contract-fix-20260429-221952`; the gate passed with all arms externally correct and Aionis materially reducing action count, wasted steps, elapsed time, and tokens versus baseline.
 
 Remaining:
 
@@ -397,7 +443,7 @@ Remaining:
 - Rerun more commercial-family trials after arm-prompt isolation before making stable clean A/B claims.
 - Add larger dependency-surface variants that are more likely to separate correctness rather than only cost/control.
 - Rerun AI code CI repair with explicit model/effort/CLI/workspace-hash evidence before treating cross-family cost claims as stable.
-- Repeat the hard lifecycle equal-command run at least once before treating correctness separation as stable service-family proof.
+- Repeat `external_probe_publish_install_hard` at least once more before treating package-family cost reduction as stable.
 - Treat any new clean A/B suite without `aionis_ab_fairness_manifest_v1` and verifier provenance as directional evidence only.
 
 ## Claim Policy
@@ -436,7 +482,11 @@ Allowed model-locked service lifecycle claim:
 
 Allowed hard service lifecycle claim:
 
-> In one explicit GPT-5.5/xhigh Codex hard service lifecycle run with the same command hash and same initial workspace hash across arms, Aionis Runtime passed verifier-backed after-exit/fresh-shell lifecycle validation while baseline failed on missing lifecycle evidence and negative control failed on PID mismatch, with lower action count, elapsed time, and token usage than baseline.
+> In two explicit GPT-5.5/xhigh Codex hard service lifecycle runs with the same command hash and same initial workspace hash across arms, Aionis Runtime passed verifier-backed after-exit/fresh-shell lifecycle validation while baseline and negative control failed, with lower action count, elapsed time, and token usage than baseline in both runs.
+
+Allowed hard publish/install claim:
+
+> In one explicit GPT-5.5/xhigh Codex hard package publish/install run with the same command hash and same initial workspace hash across arms, Aionis Runtime preserved verifier-backed clean-client installed-API correctness while reducing action count, wasted steps, elapsed time, and token usage versus baseline. This is an efficiency/control signal, not a correctness-separation claim.
 
 Not allowed current claim:
 
@@ -449,6 +499,7 @@ Run at least two more paired trials for the current families, but only under the
 - `external_probe_service_after_exit`
 - `external_probe_service_lifecycle_hard`
 - `external_probe_publish_install`
+- `external_probe_publish_install_hard`
 - `external_probe_deploy_hook_web`
 - `external_probe_ai_code_ci_repair`
 

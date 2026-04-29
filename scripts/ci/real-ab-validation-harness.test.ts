@@ -1322,6 +1322,32 @@ test("real A/B LLM runner publish/install oracle prompt routes verifier to the a
   assert.match(prompt, /The agent may run narrower checks while working/);
 });
 
+test("real A/B LLM runner hard publish/install prompt carries installed API contract", () => {
+  const probeId = "external_probe_publish_install_hard";
+  const workspace = path.join(os.tmpdir(), "aionis-real-ab-publish-hard-workspace");
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "publish-install-hard-workspace-prompt",
+    task_ids: [probeId],
+  });
+  const prompt = buildRealAbLlmArmPrompt({
+    manifest,
+    manifest_path: path.join(os.tmpdir(), "aionis-real-ab", "manifest.json"),
+    arm: "aionis_assisted",
+    probe_id: probeId,
+    workspace_root: workspace,
+  });
+
+  assert.match(prompt, /package_publish_validate/);
+  assert.match(prompt, /scripts\/build_index\.py/);
+  assert.match(prompt, /src\/vectorops\/__init__\.py/);
+  assert.match(prompt, /vector_norm/);
+  assert.match(prompt, /installed_api_contract_required/);
+  assert.match(prompt, /contract_locked/);
+  assert.doesNotMatch(prompt, /Harness verifier:/);
+  assert.doesNotMatch(prompt, /Service lifecycle tasks must use headless portable process management/);
+  assert.doesNotMatch(prompt, /nohup <command>/);
+});
+
 test("real A/B LLM runner baseline prompt does not receive Aionis contract fields", () => {
   const probeId = "external_probe_service_after_exit";
   const manifest = buildRealAbLiveEvidenceManifestTemplate({

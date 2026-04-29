@@ -179,7 +179,7 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
     task_family: "package_publish_validate",
     task_prompt: "Recover the local package index so clean clients can install vectorops from a fresh shell after worker exit.",
     target_files: ["scripts/build_index.py", "src/vectorops/__init__.py"],
-    next_action: "Build the local simple index, serve it from a detached process, then validate index visibility and clean-client install from a fresh shell.",
+    next_action: "Fix the package artifact and simple-index outputs, rebuild the local index, then validate index visibility and clean-client install from a fresh shell.",
     acceptance_checks: [
       "curl -fsS <fresh-shell-endpoint>/simple/vectorops/",
       "pip install --index-url <fresh-shell-endpoint>/simple vectorops==0.1.0",
@@ -191,13 +191,44 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
     ],
     authority_boundary: [
       "Package/index work is not authoritative until a fresh clean client installs the package.",
+      "A local HTTP server used during validation is transport for the package index, not the product-owned runtime service.",
       "The collection harness, not the agent, writes dogfood-run.json.",
     ],
     workflow_steps: [
       "Inspect package artifact generation and simple-index metadata before changing files.",
-      "Build the local package index and serve it from a detached process.",
+      "Build the local package index and package artifact.",
       "Validate index visibility and clean-client install from a fresh shell.",
-      "Record actual package/index/server actions and distinguish them from verifier probes.",
+      "Record actual package/index/install actions and distinguish them from verifier probes.",
+    ],
+  },
+  external_probe_publish_install_hard: {
+    title: "External probe publish/install clean-client behavior contract",
+    task_family: "package_publish_validate",
+    task_prompt: "Recover the local package index and package payload so clean clients install vectorops and pass the installed API contract from a fresh shell after worker exit.",
+    target_files: ["scripts/build_index.py", "src/vectorops/__init__.py"],
+    next_action: "Fix the package artifact, payload, and simple-index outputs, rebuild the local index, then validate index visibility, clean-client install, and installed vectorops API behavior from a fresh shell.",
+    acceptance_checks: [
+      "curl -fsS <fresh-shell-endpoint>/simple/vectorops/",
+      "pip install --index-url <fresh-shell-endpoint>/simple vectorops==0.1.0",
+      "python -c \"import vectorops; assert vectorops.__version__ == '0.1.0'; assert vectorops.ping() == 'vectorops-live'; assert abs(vectorops.vector_norm([3, 4]) - 5.0) < 1e-9\"",
+    ],
+    lifecycle_constraints: [
+      "external_visibility_required",
+      "revalidate_from_fresh_shell",
+      "clean_client_install_required",
+      "installed_api_contract_required",
+    ],
+    authority_boundary: [
+      "Package/index work is not authoritative until a fresh clean client installs the package and the installed API contract passes.",
+      "A local source import is not enough; validation must happen from the installed wheel in a clean environment.",
+      "A local HTTP server used during validation is transport for the package index, not the product-owned runtime service.",
+      "The collection harness, not the agent, writes dogfood-run.json.",
+    ],
+    workflow_steps: [
+      "Inspect package artifact generation, simple-index metadata, and package source before changing files.",
+      "Build a wheel that includes the intended vectorops payload and metadata for vectorops==0.1.0.",
+      "Validate index visibility, clean-client install, and installed API behavior from a fresh shell.",
+      "Record actual package/index/install/API actions and distinguish them from verifier probes.",
     ],
   },
   external_probe_deploy_hook_web: {
@@ -440,6 +471,42 @@ function serviceLifecycleConstraintFromBriefLabel(label: string): ServiceLifecyc
   };
 }
 
+function serviceLifecycleConstraintsFromBrief(brief: ProbeTaskBrief): ServiceLifecycleConstraintV1[] {
+  if (brief.task_family !== "service_publish_validate") return [];
+  return brief.lifecycle_constraints
+    .filter((label) =>
+      label === "must_survive_agent_exit"
+      || label === "revalidate_from_fresh_shell"
+      || label === "detach_then_probe"
+    )
+    .map(serviceLifecycleConstraintFromBriefLabel);
+}
+
+function mustHoldAfterExitFromBrief(brief: ProbeTaskBrief): string[] {
+  const out: string[] = [];
+  const promptRequiresAfterExit = /\bafter\b.*\b(?:agent|worker|launcher|session).*?\bexit/i.test(brief.task_prompt)
+    || brief.lifecycle_constraints.includes("must_survive_agent_exit");
+  if (promptRequiresAfterExit) out.push("task_result_remains_valid_after_agent_exit");
+  if (promptRequiresAfterExit && brief.lifecycle_constraints.includes("revalidate_from_fresh_shell")) {
+    out.push("fresh_shell_revalidation_still_passes_after_agent_exit");
+  }
+  return out;
+}
+
+function externalVisibilityRequirementsFromBrief(brief: ProbeTaskBrief): string[] {
+  const out = brief.lifecycle_constraints.filter((constraint) =>
+    constraint.includes("external_visibility") || constraint.includes("served_content")
+  );
+  if (brief.task_family === "package_publish_validate") {
+    out.push("package_install_visible_to_clean_client");
+    if (brief.lifecycle_constraints.includes("installed_api_contract_required")) {
+      out.push("installed_api_contract_required");
+      out.push("installed_api_visible_to_clean_client");
+    }
+  }
+  return [...new Set(out)];
+}
+
 function renderRuntimeContractOnlyBrief(brief: ProbeTaskBrief): string[] {
   const contract = buildExecutionContractFromProjection({
     contract_trust: "authoritative",
@@ -447,14 +514,10 @@ function renderRuntimeContractOnlyBrief(brief: ProbeTaskBrief): string[] {
     target_files: brief.target_files,
     next_action: brief.next_action,
     workflow_steps: brief.workflow_steps,
-    service_lifecycle_constraints: brief.lifecycle_constraints.map(serviceLifecycleConstraintFromBriefLabel),
+    service_lifecycle_constraints: serviceLifecycleConstraintsFromBrief(brief),
     acceptance_checks: brief.acceptance_checks,
-    must_hold_after_exit: brief.lifecycle_constraints.filter((constraint) =>
-      constraint === "must_survive_agent_exit" || constraint === "revalidate_from_fresh_shell"
-    ),
-    external_visibility_requirements: brief.lifecycle_constraints.filter((constraint) =>
-      constraint.includes("external_visibility") || constraint.includes("served_content")
-    ),
+    must_hold_after_exit: mustHoldAfterExitFromBrief(brief),
+    external_visibility_requirements: externalVisibilityRequirementsFromBrief(brief),
     provenance: {
       source_kind: "manual_context",
       source_summary_version: "real_ab_probe_brief_v1",
@@ -717,6 +780,7 @@ export function buildRealAbLlmArmPrompt(args: {
     workspaceRoot: args.workspace_root,
   });
   const supportsWorkspaceVerifier = args.probe_id === "external_probe_publish_install"
+    || args.probe_id === "external_probe_publish_install_hard"
     || args.probe_id === "external_probe_deploy_hook_web"
     || args.probe_id === "external_probe_ai_code_ci_repair";
   const dogfoodCommand = supportsWorkspaceVerifier && args.workspace_root
@@ -747,6 +811,12 @@ export function buildRealAbLlmArmPrompt(args: {
     brief,
     dogfoodCommand,
   });
+  const serviceLifecycleGuardrails = serviceLifecycleConstraintsFromBrief(brief).length > 0
+    ? [
+        "- Service lifecycle tasks must use headless portable process management. Avoid launchctl, GUI terminals, OS login-session managers, and any verifier path that only works while the agent shell is alive.",
+        "- Prefer: `nohup <command> > /tmp/<task>.log 2>&1 < /dev/null & echo $!` followed by a new-shell curl/probe loop.",
+      ]
+    : [];
   return [
     ...commonHeader,
     ...taskBody,
@@ -759,8 +829,7 @@ export function buildRealAbLlmArmPrompt(args: {
     ...packet.guardrails.map((guardrail) => `- ${guardrail}`),
     "- The external agent must not call the event recorder or edit event artifact files; direct evidence writes invalidate the run.",
     "- The external agent must not call the dogfood harness verifier; full verification is performed by the collection harness after this attempt.",
-    "- Service lifecycle tasks must use headless portable process management. Avoid launchctl, GUI terminals, OS login-session managers, and any verifier path that only works while the agent shell is alive.",
-    "- Prefer: `nohup <command> > /tmp/<task>.log 2>&1 < /dev/null & echo $!` followed by a new-shell curl/probe loop.",
+    ...serviceLifecycleGuardrails,
     "",
     "Output contract:",
     "Return only JSON with output_version=\"aionis_real_ab_llm_agent_output_v1\".",

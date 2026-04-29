@@ -84,6 +84,15 @@ const publishInstallPackageSource = [
   "    return 'vectorops-live'",
   "",
 ].join("\n");
+const publishInstallHardPackageSource = [
+  "__version__ = '0.1.0'",
+  "",
+  "def ping():",
+  "    return 'vectorops-stub'",
+  "",
+  "# Broken on purpose: clean clients require vector_norm([3, 4]) == 5.0.",
+  "",
+].join("\n");
 
 export function serviceLifecycleHardFixedSource(): string {
   return [
@@ -454,6 +463,7 @@ function usage(): string {
     "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_service_after_exit --workspace /tmp/worktree [--force]",
     "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_service_lifecycle_hard --workspace /tmp/worktree [--force]",
     "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_publish_install --workspace /tmp/worktree [--force]",
+    "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_publish_install_hard --workspace /tmp/worktree [--force]",
     "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_deploy_hook_web --workspace /tmp/worktree [--force]",
     `  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_ai_code_ci_repair --workspace /tmp/worktree [--variant ${aiCodeCiRepairVariants.join("|")}] [--force]`,
     "",
@@ -580,6 +590,19 @@ export function publishInstallFixedBuildScript(): string {
   ].join("\n");
 }
 
+export function publishInstallHardFixedPackageSource(): string {
+  return [
+    "__version__ = '0.1.0'",
+    "",
+    "def ping():",
+    "    return 'vectorops-live'",
+    "",
+    "def vector_norm(values):",
+    "    return sum(float(value) ** 2 for value in values) ** 0.5",
+    "",
+  ].join("\n");
+}
+
 export function preparePublishInstallWorkspace(workspace: string, options: { force?: boolean } = {}): void {
   const root = path.resolve(workspace);
   const force = options.force ?? false;
@@ -606,6 +629,39 @@ export function preparePublishInstallWorkspace(workspace: string, options: { for
       "",
       "Repair `scripts/build_index.py` so it builds `vectorops-0.1.0-py3-none-any.whl` and a PEP 503-compatible simple index.",
       "`src/vectorops/__init__.py` is the package payload. The verifier runs the build script, serves `dist`, then installs `vectorops==0.1.0` from a clean client.",
+      "",
+    ].join("\n"),
+    force,
+  );
+}
+
+export function preparePublishInstallHardWorkspace(workspace: string, options: { force?: boolean } = {}): void {
+  const root = path.resolve(workspace);
+  const force = options.force ?? false;
+  writeFile(
+    path.join(root, "scripts", "build_index.py"),
+    [
+      "from pathlib import Path",
+      "",
+      "ROOT = Path(__file__).resolve().parents[1]",
+      "simple = ROOT / 'dist' / 'simple' / 'vectorops'",
+      "simple.mkdir(parents=True, exist_ok=True)",
+      "# Broken on purpose: this publishes an index entry without a real wheel artifact.",
+      "(simple / 'index.html').write_text('<html><body><a href=\"../../missing-vectorops-0.1.0.whl\">vectorops</a></body></html>\\n')",
+      "print(simple / 'index.html')",
+      "",
+    ].join("\n"),
+    force,
+  );
+  writeFile(path.join(root, "src", "vectorops", "__init__.py"), publishInstallHardPackageSource, force);
+  writeFile(
+    path.join(root, "README.publish-install-hard-fixture.md"),
+    [
+      "# Publish Install Hard Fixture",
+      "",
+      "Repair `scripts/build_index.py` so it builds `vectorops-0.1.0-py3-none-any.whl` and a PEP 503-compatible simple index.",
+      "Repair `src/vectorops/__init__.py` so a clean client can import `vectorops`, read `__version__ == '0.1.0'`, call `ping() == 'vectorops-live'`, and get `vector_norm([3, 4]) == 5.0`.",
+      "The verifier runs the build script, serves `dist`, installs `vectorops==0.1.0` into a clean virtualenv, then validates the installed package behavior from a fresh shell.",
       "",
     ].join("\n"),
     force,
@@ -684,6 +740,11 @@ function main(): void {
   }
   if (options.probe === "external_probe_publish_install") {
     preparePublishInstallWorkspace(options.workspace ?? "", { force: options.force });
+    console.log(`Prepared ${options.probe} fixture in ${path.resolve(options.workspace ?? "")}`);
+    return;
+  }
+  if (options.probe === "external_probe_publish_install_hard") {
+    preparePublishInstallHardWorkspace(options.workspace ?? "", { force: options.force });
     console.log(`Prepared ${options.probe} fixture in ${path.resolve(options.workspace ?? "")}`);
     return;
   }

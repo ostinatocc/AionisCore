@@ -468,10 +468,10 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         task_family: "package_publish_validate",
         steps: [
           { role: "assistant", text: "The package index builds, but clean clients cannot install vectorops after the worker exits." },
-          { role: "tool", tool_name: "bash", command: "python scripts/build_index.py && nohup python -m http.server 8080 --directory dist/simple >/tmp/index.log 2>&1 &" },
+          { role: "tool", tool_name: "bash", command: "python scripts/build_index.py" },
           { role: "tool", tool_name: "bash", command: "curl -fsS http://localhost:8080/simple/vectorops/" },
           { role: "tool", tool_name: "bash", command: "pip install --index-url http://localhost:8080/simple vectorops==0.1.0" },
-          { role: "assistant", text: "Update scripts/build_index.py and src/vectorops/__init__.py, then relaunch the index in detached mode and rerun curl plus pip install from a fresh shell." },
+          { role: "assistant", text: "Update scripts/build_index.py and src/vectorops/__init__.py, rebuild the package artifacts and simple index, then rerun curl plus pip install from a fresh shell." },
         ],
       },
       hints: {
@@ -486,7 +486,7 @@ export function runtimeDogfoodTasks(): RuntimeDogfoodTask[] {
         environment_assumptions_include: ["repo_root:/workspace/vectorops", "validation_can_run_from_fresh_shell"],
         must_hold_after_exit_include: ["task_result_remains_valid_after_agent_exit"],
         external_visibility_requirements_match: [/package_install_visible_to_clean_client/],
-        service_lifecycle_required: true,
+        service_lifecycle_required: false,
         after_exit_required: true,
         authoritative_gate_allows: true,
         evidence_allows_authoritative: true,
