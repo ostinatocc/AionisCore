@@ -58,6 +58,7 @@ These runs are directional pilot evidence, not broad product proof.
 | `publish-install-causal-model-locked-20260429-150631` | `package_publish_validate` | `.artifacts/real-ab/publish-install-causal-model-locked-20260429-150631/validation-report.md` | pass |
 | `deploy-web-causal-model-locked-20260429-160352` | `git_deploy_webserver` | `.artifacts/real-ab/deploy-web-causal-model-locked-20260429-160352/validation-report.md` | pass |
 | `service-causal-model-locked-20260429-164153` | `service_publish_validate` | `.artifacts/real-ab/service-causal-model-locked-20260429-164153/validation-report.md` | pass |
+| `service-hard-contract-equalcmd-20260429-194810` | `service_publish_validate` | `.artifacts/real-ab/service-hard-contract-equalcmd-20260429-194810/validation-report.md` | pass |
 
 ## Initial Directional Results
 
@@ -280,6 +281,25 @@ This model-locked rerun passed the product evidence gate:
 
 This is now the cleanest service lifecycle evidence because it validates the actual arm workspace, proves after-exit/fresh-shell correctness, and records model/CLI/workspace hashes. It strengthens the service family claim: Aionis can turn lifecycle constraints into a shorter, verifier-backed execution path. It also shows this fixture is too easy for correctness separation because a low-trust control can pass with very few actions.
 
+## Hard Service Lifecycle Contract Result
+
+The `service-hard-contract-equalcmd-20260429-194810` suite reran the harder lifecycle slice after locking the arm command string. Every arm used the same `codex exec --model gpt-5.5` command, the same `model_reasoning_effort="xhigh"`, the same CLI version, the same command hash, and the same initial workspace hash. The verifier required the verifier-launched process itself to remain the service process, then revalidated health JSON, pid-file JSON, live PID, and lifecycle log evidence from a fresh shell.
+
+| Family / variant | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `service_publish_validate / hard lifecycle / equal command` | 27 | 5 | 16 | 15 | 2 | 1 | 281s | 147s | 112,367 | 31,043 |
+
+This is the strongest current service-family correctness-separation evidence:
+
+- Aionis passed the external fresh-shell verifier.
+- Baseline failed with `log_missing_start_marker`: it repaired health and pid behavior, but missed required durable lifecycle evidence.
+- Negative control failed with `health_pid_mismatch`: it self-spawned a child worker, so the HTTP service PID did not match the verifier-launched process.
+- Positive control passed, proving the task is recoverable under the verifier.
+- Aionis reduced action events by 81.5%, elapsed time by 47.7%, and token use by 72.4% versus baseline.
+- Aionis followed locked action discipline with zero severe violations.
+
+This run is materially stronger than the earlier easy service lifecycle result because negative control did not pass. The useful claim is still family-bounded: it supports hard lifecycle/outcome-contract value, not universal Aionis superiority.
+
 ## What This Proves
 
 Aionis can currently make defensible directional claims in these areas:
@@ -298,6 +318,7 @@ Aionis can currently make defensible directional claims in these areas:
 - In the model-locked causal publish/install rerun, it can reduce action count, wasted steps, and token use under explicit GPT-5.5/xhigh Codex conditions while preserving verifier-backed clean-client install correctness.
 - In the model-locked deploy/webserver rerun, it can reduce action count and elapsed time under explicit GPT-5.5/xhigh Codex conditions while preserving verifier-backed served-content correctness.
 - In the model-locked service lifecycle rerun, it can reduce action count, elapsed time, token use, and wasted steps while preserving after-exit and fresh-shell correctness.
+- In the hard service lifecycle equal-command rerun, it can produce a correctness separation against both baseline and negative control while reducing actions, elapsed time, and tokens under explicit GPT-5.5/xhigh Codex conditions.
 
 ## What This Does Not Prove
 
@@ -307,7 +328,8 @@ Aionis should not currently claim:
 - Stable token savings across all task families.
 - Stable wall-clock speedup for publish/install based on the model-locked causal rerun.
 - Stable wasted-step reduction for deploy/webserver based on the model-locked causal rerun.
-- Unique correctness advantage for the current service lifecycle fixture, because negative control also passed with very few actions.
+- Unique correctness advantage for the easier service lifecycle fixture, because negative control also passed with very few actions.
+- Broad service-task superiority from one hard lifecycle run.
 - Stable token savings for `dependency_surface` CI repair based on current repeat evidence.
 - Universal runtime speedup.
 - Unique correctness advantage for AI code CI repair based on one easy pilot fixture.
@@ -327,7 +349,7 @@ Aionis should be positioned as a reliability and continuity Runtime first:
 - It carries task-family execution contracts across attempts.
 - It can help agents start from the right work surface instead of re-discovering the task.
 
-It should not be positioned primarily as a token-saving layer yet, but the `contract_only` reruns and model-locked causal reruns now show credible cost-compression potential in service lifecycle, publish/install, deploy/webserver, and selected CI repair tasks.
+It should not be positioned primarily as a token-saving layer yet, but the `contract_only` reruns, model-locked causal reruns, and hard lifecycle equal-command rerun now show credible cost-compression potential in service lifecycle, publish/install, deploy/webserver, and selected CI repair tasks.
 
 The `ai_code_ci_repair` pilot adds a second kind of product signal: Aionis can act as a compact execution-contract layer for AI coding repair loops, where the measurable advantage is fewer irrelevant actions and lower token cost while still requiring targeted CI evidence.
 
@@ -362,6 +384,8 @@ Completed:
 - Added automatic A/B report cost/control output for action counts, wasted/incorrect events, duration, tokens, and negative-control interpretation.
 - Isolated LLM runner prompt surfaces so baseline no longer receives Aionis contract fields.
 - Added a `dependency_surface` CI repair fixture that requires tracing implementation behavior across pricing helper modules.
+- Tightened `external_probe_service_lifecycle_hard` so the Runtime contract and verifier require the verifier-launched process itself to remain the service PID, with matching pid-file JSON, health JSON, lifecycle marker, and fresh-shell evidence.
+- Ran `service-hard-contract-equalcmd-20260429-194810`; the gate passed with Aionis passing external verification, baseline failing on missing lifecycle marker, negative control failing on PID mismatch, and positive control passing.
 
 Remaining:
 
@@ -373,6 +397,7 @@ Remaining:
 - Rerun more commercial-family trials after arm-prompt isolation before making stable clean A/B claims.
 - Add larger dependency-surface variants that are more likely to separate correctness rather than only cost/control.
 - Rerun AI code CI repair with explicit model/effort/CLI/workspace-hash evidence before treating cross-family cost claims as stable.
+- Repeat the hard lifecycle equal-command run at least once before treating correctness separation as stable service-family proof.
 - Treat any new clean A/B suite without `aionis_ab_fairness_manifest_v1` and verifier provenance as directional evidence only.
 
 ## Claim Policy
@@ -408,6 +433,10 @@ Allowed model-locked deploy/webserver claim:
 Allowed model-locked service lifecycle claim:
 
 > In one explicit GPT-5.5/xhigh Codex causal service lifecycle run, Aionis Runtime preserved after-exit and fresh-shell correctness while reducing action count, elapsed time, token usage, and wasted steps versus baseline, but it did not prove unique correctness because the negative control also passed.
+
+Allowed hard service lifecycle claim:
+
+> In one explicit GPT-5.5/xhigh Codex hard service lifecycle run with the same command hash and same initial workspace hash across arms, Aionis Runtime passed verifier-backed after-exit/fresh-shell lifecycle validation while baseline failed on missing lifecycle evidence and negative control failed on PID mismatch, with lower action count, elapsed time, and token usage than baseline.
 
 Not allowed current claim:
 

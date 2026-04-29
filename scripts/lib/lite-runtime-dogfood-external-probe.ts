@@ -712,13 +712,13 @@ function buildServiceLifecycleHardTaskSpec(args: {
   return {
     id: "external_probe_service_lifecycle_hard",
     title: "External probe hard service lifecycle validation",
-    query_text: "Repair the service so it survives launcher exit and proves lifecycle state through HTTP, pid-file, live PID, and log evidence from a fresh shell.",
+    query_text: "Repair the service entrypoint so the verifier-launched process itself survives launcher exit and proves lifecycle state through HTTP, pid-file JSON, live PID, and log evidence from a fresh shell.",
     evidence_source: "external_probe",
     trajectory: {
       title: "Runtime dogfood hard detached service lifecycle validation",
       task_family: "service_publish_validate",
       steps: [
-        { role: "assistant", text: "The service must survive launcher exit and expose durable lifecycle evidence, not just a transient health response." },
+        { role: "assistant", text: "The verifier-launched process must be the long-lived HTTP service process and expose durable lifecycle evidence, not just a transient health response." },
         {
           role: "tool",
           tool_name: "bash",
@@ -727,7 +727,7 @@ function buildServiceLifecycleHardTaskSpec(args: {
         { role: "tool", tool_name: "bash", command: evidenceCommand },
         {
           role: "assistant",
-          text: `Update ${serviceLifecycleHardRelativePath}, launch it detached, then verify ${healthCheck}, pid file, live process, and lifecycle log from a fresh shell after the launcher exits.`,
+          text: `Update ${serviceLifecycleHardRelativePath}, keep the launched process as the service PID, then verify ${healthCheck}, JSON pid file, live process, and lifecycle log from a fresh shell after the launcher exits.`,
         },
       ],
     },
@@ -740,13 +740,19 @@ function buildServiceLifecycleHardTaskSpec(args: {
         "--pid-file",
         "--log-file",
         "--expected-pid",
+        "pid file JSON: { pid: <expected-pid>, port: <service-port> }",
+        "health JSON: { ok: true, pid: <expected-pid>, port: <service-port> }",
+        "log contains literal service_lifecycle_hard_started",
       ],
       success_invariants: [
         "fresh_shell_revalidation_passes",
         "pid_file_matches_live_process",
+        "health_pid_matches_verifier_expected_pid",
+        "pid_file_port_matches_health_port",
         "lifecycle_log_contains_start_marker",
       ],
       dependency_requirements: [
+        "service entrypoint must not self-spawn a worker with a different PID from the verifier-launched process",
         "service launch must not depend on the agent shell",
         "pid file and lifecycle log must be durable after launcher exit",
       ],
@@ -761,11 +767,13 @@ function buildServiceLifecycleHardTaskSpec(args: {
         "task_result_remains_valid_after_agent_exit",
         "fresh_shell_revalidation_still_passes_after_agent_exit",
         "service_pid_remains_alive_after_launcher_exit",
+        "verifier_expected_pid_is_the_health_pid",
       ],
       external_visibility_requirements: [
         `endpoint_reachable:${healthCheck}`,
         "pid_file_visible_to_fresh_shell",
         "lifecycle_log_visible_to_fresh_shell",
+        "pid_file_json_visible_to_fresh_shell",
       ],
     },
     execution_evidence: runtimeVerifierEvidence({
@@ -793,14 +801,20 @@ function buildServiceLifecycleHardTaskSpec(args: {
         "--pid-file",
         "--log-file",
         "--expected-pid",
+        "pid file JSON",
+        "health JSON",
+        "service_lifecycle_hard_started",
       ],
       next_action_match: [escapeRegex(serviceLifecycleHardRelativePath), "pid file", "lifecycle log", "fresh shell"],
       success_invariants_include: [
         "fresh_shell_revalidation_passes",
         "pid_file_matches_live_process",
+        "health_pid_matches_verifier_expected_pid",
+        "pid_file_port_matches_health_port",
         "lifecycle_log_contains_start_marker",
       ],
       dependency_requirements_match: [
+        "service entrypoint must not self-spawn a worker with a different PID from the verifier-launched process",
         "service launch must not depend on the agent shell",
         "pid file and lifecycle log must be durable after launcher exit",
       ],
@@ -815,11 +829,13 @@ function buildServiceLifecycleHardTaskSpec(args: {
         "task_result_remains_valid_after_agent_exit",
         "fresh_shell_revalidation_still_passes_after_agent_exit",
         "service_pid_remains_alive_after_launcher_exit",
+        "verifier_expected_pid_is_the_health_pid",
       ],
       external_visibility_requirements_match: [
         escapeRegex(`endpoint_reachable:${healthCheck}`),
         "pid_file_visible_to_fresh_shell",
         "lifecycle_log_visible_to_fresh_shell",
+        "pid_file_json_visible_to_fresh_shell",
       ],
       service_lifecycle_required: true,
       after_exit_required: true,
