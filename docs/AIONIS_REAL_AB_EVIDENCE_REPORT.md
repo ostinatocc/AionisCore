@@ -6,7 +6,7 @@ Last reviewed: 2026-04-29
 
 Document status: real A/B evidence report
 
-This report summarizes the first real LLM-backed A/B evidence runs for Aionis Runtime, the follow-up `contract_only` reruns, and the first action-discipline revalidation. The goal is not to claim broad product superiority. The goal is to state what the current evidence can and cannot prove, then define the next Runtime hardening steps.
+This report summarizes the first real LLM-backed A/B evidence runs for Aionis Runtime, the follow-up `contract_only` reruns, the first action-discipline revalidation, and the causal publish/install revalidation. The goal is not to claim broad product superiority. The goal is to state what the current evidence can and cannot prove, then define the next Runtime hardening steps.
 
 ## Evidence Boundary
 
@@ -14,7 +14,7 @@ These runs are directional pilot evidence, not broad product proof.
 
 - Each suite used four arms: `baseline`, `aionis_assisted`, `negative_control`, and `positive_control`.
 - Each suite used live agent traces plus external dogfood verifier artifacts.
-- The deploy/webserver suite now uses a causal verifier: the verifier checks the exact arm workspace after the agent modifies it.
+- The deploy/webserver, publish/install, and AI code CI repair slices now support causal verifier mode: the verifier checks the exact arm workspace after the agent modifies it.
 - The evidence supports family-level claims only for the tested task families.
 - The evidence does not prove universal token savings or universal agent performance gains.
 - The LLM runner now isolates prompt surfaces by arm: `baseline` receives only a normal task request, `aionis_assisted` receives the Runtime contract, `negative_control` receives non-authoritative low-trust context, and `positive_control` receives an oracle handoff.
@@ -50,6 +50,7 @@ These runs are directional pilot evidence, not broad product proof.
 | `ai-code-ci-dependency-surface-contract-packet-20260428-224137` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-contract-packet-20260428-224137/validation-report.md` | pass |
 | `ai-code-ci-dependency-surface-action-discipline-20260428-232156` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-action-discipline-20260428-232156/validation-report.md` | pass |
 | `ai-code-ci-dependency-surface-action-discipline-20260428-232156` discipline-gate revalidation | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-action-discipline-20260428-232156/validation-report.discipline-gate.md` | pass |
+| `publish-install-causal-20260429-114214` | `package_publish_validate` | `.artifacts/real-ab/publish-install-causal-20260429-114214/validation-report.md` | pass |
 
 ## Initial Directional Results
 
@@ -193,6 +194,25 @@ This matters because the older pass only proved verifier-backed completion. The 
 
 The current defensible claim for this family is narrower: compact Aionis Runtime contracts plus action discipline can preserve correctness, reduce action count, and keep authoritative execution inside a measurable contract boundary, but token and elapsed-time savings are still not stable on this dependency-surface repair task. The remaining gap is execution latency and cost variance after the agent follows the declared path.
 
+## Causal Publish/Install Revalidation
+
+The `publish-install-causal-20260429-114214` suite reran package publish/install with a stricter causal verifier. Unlike the older publish/install evidence, the verifier rebuilt and served the exact arm workspace after the agent attempt, then validated from a fresh shell using a clean client install.
+
+| Family | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `package_publish_validate / causal workspace` | 31 | 27 | 25 | 14 | 1 | 1 | 862s | 607s | 127,603 | 57,053 |
+
+This run passed the product evidence gate after the gate was corrected to measure real efficiency through action count, token, or time reduction instead of only self-marked wasted steps:
+
+- Aionis preserved verifier-backed correctness and after-exit/fresh-shell clean-client install correctness.
+- Aionis reduced action events by 12.9% versus baseline.
+- Aionis reduced token use by 55.3% versus baseline.
+- Aionis reduced elapsed time by 29.5% versus baseline.
+- Aionis followed locked action discipline: first target event `0`, first edit event `4`, pre-edit budget `4/4`, severe violations `0`.
+- Negative control also passed and used fewer actions than baseline, so this run is an efficiency and verifier-boundary signal, not unique correctness separation.
+
+The first assembly failed before the gate correction because the discipline gate used a fixed `max_pre_edit_confirmation_steps=2`. That was too crude for outcome-contract tasks where the correct workflow is target-file inspection plus targeted failure reproduction before editing. The Runtime now derives the pre-edit budget from the outcome contract: target-file count, required acceptance checks, and lifecycle/external-visibility constraints.
+
 ## What This Proves
 
 Aionis can currently make defensible directional claims in these areas:
@@ -207,12 +227,14 @@ Aionis can currently make defensible directional claims in these areas:
 - It can now audit contract-locked action discipline in A/B reports, including first target touch, pre-edit confirmation count, repeated agent validation after pass, non-target expansion, and acceptance-evidence edits.
 - In one clean arm-isolated CI repair run, it can reduce token usage substantially while preserving verifier-backed correctness.
 - In dependency-surface CI repair runs, it can preserve verifier-backed correctness and has shown token compression and action-count compression, but not consistently in the same run and not yet with stable elapsed-time improvement.
+- In the causal publish/install rerun, it can reduce action count, elapsed time, and token use while preserving verifier-backed clean-client install correctness.
 
 ## What This Does Not Prove
 
 Aionis should not currently claim:
 
 - Universal token savings.
+- Stable token savings across all task families.
 - Stable token savings for `dependency_surface` CI repair based on current repeat evidence.
 - Universal runtime speedup.
 - Unique correctness advantage for AI code CI repair based on one easy pilot fixture.
@@ -232,7 +254,7 @@ Aionis should be positioned as a reliability and continuity Runtime first:
 - It carries task-family execution contracts across attempts.
 - It can help agents start from the right work surface instead of re-discovering the task.
 
-It should not be positioned primarily as a token-saving layer yet, but the `contract_only` reruns now show credible cost-compression potential in publish/install and deploy/webserver.
+It should not be positioned primarily as a token-saving layer yet, but the `contract_only` reruns and causal publish/install revalidation now show credible cost-compression potential in publish/install, deploy/webserver, and selected CI repair tasks.
 
 The `ai_code_ci_repair` pilot adds a second kind of product signal: Aionis can act as a compact execution-contract layer for AI coding repair loops, where the measurable advantage is fewer irrelevant actions and lower token cost while still requiring targeted CI evidence.
 
@@ -245,7 +267,11 @@ Completed:
 - Added automatic escalation from `contract_only` to expanded workflow packets when the compact contract is missing target files, next action, acceptance checks, unresolved blockers are present, or verification has failed.
 - Added `action_discipline` to the Runtime agent contract packet so authoritative complete contracts can lock the first action, allowed work surface, required validation, prohibited broad discovery, and stop conditions.
 - Added A/B `discipline_compliance` reporting and a product/pilot gate so authoritative Aionis treatment evidence fails when the agent violates locked action discipline.
+- Changed the locked-contract pre-edit budget from a fixed constant to an outcome-contract-derived budget so service/external-visibility tasks can inspect target files and reproduce the declared failure before editing.
+- Changed the A/B efficiency gate so product evidence can pass on action-count, token, or time reduction even when self-marked wasted-step counts do not move.
 - Revalidated the latest dependency-surface action-discipline trace under the new gate; the gate passed with zero severe discipline violations.
+- Added causal workspace verification for publish/install: the verifier now builds `scripts/build_index.py` inside the actual arm workspace and then performs fresh-shell clean-client install validation.
+- Ran `publish-install-causal-20260429-114214`; the gate passed with 55.3% token reduction and 29.5% time reduction versus baseline.
 - Kept full workflow, replay, and pattern memory internal by default.
 - Kept harness verifiers outside the agent default workflow.
 - Repeated the same three families after packet compression.
@@ -260,7 +286,7 @@ Remaining:
 - Dogfood the automatic escalation path in live trials and verify it expands only after compact-contract insufficiency or verifier failure.
 - Repeat action-discipline trials with the new `discipline_compliance` gate enabled and add stricter latency/cost analysis to separate model sampling latency from Runtime packet quality.
 - Run at least two more paired trials per family before making stronger cost or reliability claims.
-- Extend causal workspace verification beyond deploy/webserver where feasible.
+- Extend causal workspace verification beyond deploy/webserver, publish/install, and AI code CI repair where feasible.
 - Run the remaining harder `ai_code_ci_repair` variants as paired LLM A/B trials before treating the commercial-family signal as stable.
 - Rerun more commercial-family trials after arm-prompt isolation before making stable clean A/B claims.
 - Add larger dependency-surface variants that are more likely to separate correctness rather than only cost/control.

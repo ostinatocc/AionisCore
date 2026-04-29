@@ -10,6 +10,13 @@ type CliOptions = {
 };
 
 const deployExpectedContent = "deployed revision visible through live dogfood";
+const publishInstallPackageSource = [
+  "__version__ = '0.1.0'",
+  "",
+  "def ping():",
+  "    return 'vectorops-live'",
+  "",
+].join("\n");
 export const aiCodeCiRepairVariants = [
   "percentage_rounding",
   "misleading_ai_patch",
@@ -315,6 +322,7 @@ function parseAiCodeCiRepairVariant(value: string | null): AiCodeCiRepairVariant
 function usage(): string {
   return [
     "Usage:",
+    "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_publish_install --workspace /tmp/worktree [--force]",
     "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_deploy_hook_web --workspace /tmp/worktree [--force]",
     `  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_ai_code_ci_repair --workspace /tmp/worktree [--variant ${aiCodeCiRepairVariants.join("|")}] [--force]`,
     "",
@@ -364,6 +372,71 @@ function writeFile(filePath: string, content: string, force: boolean): void {
   }
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content);
+}
+
+export function publishInstallFixedBuildScript(): string {
+  return [
+    "from pathlib import Path",
+    "import shutil",
+    "import zipfile",
+    "",
+    "ROOT = Path(__file__).resolve().parents[1]",
+    "DIST = ROOT / 'dist'",
+    "SIMPLE = DIST / 'simple' / 'vectorops'",
+    "WHEEL_NAME = 'vectorops-0.1.0-py3-none-any.whl'",
+    "DIST_INFO = 'vectorops-0.1.0.dist-info'",
+    "",
+    "shutil.rmtree(DIST, ignore_errors=True)",
+    "SIMPLE.mkdir(parents=True, exist_ok=True)",
+    "package_source = (ROOT / 'src' / 'vectorops' / '__init__.py').read_text()",
+    "wheel_path = DIST / WHEEL_NAME",
+    "files = [",
+    "    ('vectorops/__init__.py', package_source),",
+    "    (f'{DIST_INFO}/METADATA', 'Metadata-Version: 2.1\\nName: vectorops\\nVersion: 0.1.0\\nSummary: Aionis Runtime dogfood package\\n'),",
+    "    (f'{DIST_INFO}/WHEEL', 'Wheel-Version: 1.0\\nGenerator: aionis-runtime-dogfood\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n'),",
+    "]",
+    "record_lines = [f'{name},,' for name, _ in files]",
+    "record_lines.append(f'{DIST_INFO}/RECORD,,')",
+    "with zipfile.ZipFile(wheel_path, 'w', zipfile.ZIP_DEFLATED) as archive:",
+    "    for name, content in files:",
+    "        archive.writestr(name, content)",
+    "    archive.writestr(f'{DIST_INFO}/RECORD', '\\n'.join(record_lines) + '\\n')",
+    "(SIMPLE / 'index.html').write_text(f'<html><body><a href=\"../../{WHEEL_NAME}\">{WHEEL_NAME}</a></body></html>\\n')",
+    "print(wheel_path)",
+    "",
+  ].join("\n");
+}
+
+export function preparePublishInstallWorkspace(workspace: string, options: { force?: boolean } = {}): void {
+  const root = path.resolve(workspace);
+  const force = options.force ?? false;
+  writeFile(
+    path.join(root, "scripts", "build_index.py"),
+    [
+      "from pathlib import Path",
+      "",
+      "ROOT = Path(__file__).resolve().parents[1]",
+      "simple = ROOT / 'dist' / 'simple' / 'vectorops'",
+      "simple.mkdir(parents=True, exist_ok=True)",
+      "# Broken on purpose: this simple-index points at a wheel that is never built.",
+      "(simple / 'index.html').write_text('<html><body><a href=\"../../missing-vectorops-0.1.0.whl\">vectorops</a></body></html>\\n')",
+      "print(simple / 'index.html')",
+      "",
+    ].join("\n"),
+    force,
+  );
+  writeFile(path.join(root, "src", "vectorops", "__init__.py"), publishInstallPackageSource, force);
+  writeFile(
+    path.join(root, "README.publish-install-fixture.md"),
+    [
+      "# Publish Install Fixture",
+      "",
+      "Repair `scripts/build_index.py` so it builds `vectorops-0.1.0-py3-none-any.whl` and a PEP 503-compatible simple index.",
+      "`src/vectorops/__init__.py` is the package payload. The verifier runs the build script, serves `dist`, then installs `vectorops==0.1.0` from a clean client.",
+      "",
+    ].join("\n"),
+    force,
+  );
 }
 
 export function prepareDeployHookWebWorkspace(workspace: string, options: { force?: boolean } = {}): void {
@@ -426,6 +499,11 @@ export function prepareAiCodeCiRepairWorkspace(
 
 function main(): void {
   const options = parseArgs(process.argv.slice(2));
+  if (options.probe === "external_probe_publish_install") {
+    preparePublishInstallWorkspace(options.workspace ?? "", { force: options.force });
+    console.log(`Prepared ${options.probe} fixture in ${path.resolve(options.workspace ?? "")}`);
+    return;
+  }
   if (options.probe === "external_probe_deploy_hook_web") {
     prepareDeployHookWebWorkspace(options.workspace ?? "", { force: options.force });
     console.log(`Prepared ${options.probe} fixture in ${path.resolve(options.workspace ?? "")}`);

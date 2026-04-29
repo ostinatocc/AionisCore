@@ -111,7 +111,9 @@ Interpretation:
 6. second-agent takeover validation
 7. AI code CI/test repair targeted validation
 
-Each slice creates a temporary local fixture, launches or validates through a fresh shell, records execution evidence, and feeds the resulting task spec back through the same dogfood contract path. Workspace-backed slices such as deploy/hook/web and AI code CI repair can also validate the actual arm workspace causally after an agent attempt. The live runner must not add task-specific Runtime routes or bypass the Contract Compiler and Trust Gate.
+Each slice creates a temporary local fixture, launches or validates through a fresh shell, records execution evidence, and feeds the resulting task spec back through the same dogfood contract path. Workspace-backed slices such as publish/install, deploy/hook/web, and AI code CI repair can also validate the actual arm workspace causally after an agent attempt. The live runner must not add task-specific Runtime routes or bypass the Contract Compiler and Trust Gate.
+
+For publish/install, workspace-backed verification runs the arm workspace's `scripts/build_index.py`, serves the resulting `dist` directory from a detached process, checks the simple index from a fresh shell, then installs `vectorops==0.1.0` in a clean virtual environment. This prevents a synthetic fixture from masking whether the agent actually repaired the workspace.
 
 The AI code CI repair slice supports fixture variants for `percentage_rounding`, `misleading_ai_patch`, `hidden_edge_case`, `wrong_surface_trap`, and `dependency_surface`. Workspace-backed verification runs the targeted test and also rejects success manufactured by editing immutable acceptance evidence such as tests, package metadata, or the fixture README. The `dependency_surface` variant records variant-specific target files and workflow steps so the Aionis arm can receive a precise Runtime contract while baseline still receives only the normal task request.
 

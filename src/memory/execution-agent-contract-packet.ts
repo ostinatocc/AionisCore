@@ -126,6 +126,24 @@ function compactInsufficiencyReasons(contract: ExecutionContractV1): ExecutionAg
   return reasons;
 }
 
+function hasLifecycleOrExternalValidation(contract: ExecutionContractV1): boolean {
+  return contract.service_lifecycle_constraints.some((constraint) =>
+    constraint.must_survive_agent_exit
+    || constraint.revalidate_from_fresh_shell
+    || constraint.detach_then_probe
+    || Boolean(constraint.endpoint)
+  )
+    || contract.outcome.must_hold_after_exit.length > 0
+    || contract.outcome.external_visibility_requirements.length > 0;
+}
+
+function maxPreEditConfirmationSteps(contract: ExecutionContractV1): number {
+  const targetInspectionBudget = Math.max(1, Math.min(contract.target_files.length, 3));
+  const acceptanceProbeBudget = contract.outcome.acceptance_checks.length > 0 ? 1 : 0;
+  const lifecycleProbeBudget = hasLifecycleOrExternalValidation(contract) ? 1 : 0;
+  return Math.max(2, Math.min(6, targetInspectionBudget + acceptanceProbeBudget + lifecycleProbeBudget));
+}
+
 function buildActionDiscipline(contract: ExecutionContractV1): ExecutionAgentContractPacketV1["action_discipline"] {
   const compactComplete =
     contract.target_files.length > 0
@@ -141,7 +159,7 @@ function buildActionDiscipline(contract: ExecutionContractV1): ExecutionAgentCon
     first_action: contractLocked
       ? "inspect_declared_target_files_before_broad_discovery"
       : "fill_missing_contract_fields_before_claiming_authority",
-    max_pre_edit_confirmation_steps: contractLocked ? 2 : null,
+    max_pre_edit_confirmation_steps: contractLocked ? maxPreEditConfirmationSteps(contract) : null,
     allowed_work_surface: uniqueStrings([
       ...contract.target_files,
       ...contract.outcome.acceptance_checks.map((check) => `validation:${check}`),

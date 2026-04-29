@@ -590,7 +590,8 @@ export function buildRealAbLlmArmPrompt(args: {
     brief: baseBrief,
     workspaceRoot: args.workspace_root,
   });
-  const supportsWorkspaceVerifier = args.probe_id === "external_probe_deploy_hook_web"
+  const supportsWorkspaceVerifier = args.probe_id === "external_probe_publish_install"
+    || args.probe_id === "external_probe_deploy_hook_web"
     || args.probe_id === "external_probe_ai_code_ci_repair";
   const dogfoodCommand = supportsWorkspaceVerifier && args.workspace_root
     ? `${packet.dogfood_command} --workspace-root ${shellQuoteForPrompt(path.resolve(args.workspace_root))}`

@@ -205,6 +205,56 @@ test("real A/B product evidence records clean locked action discipline", () => {
   assert.equal(report.gate.status, "pass");
 });
 
+test("real A/B product discipline budget allows targeted failure reproduction before edit", () => {
+  const capture = readTraceCapture();
+  const run = capture.tasks[0].runs.aionis_assisted;
+  run.authority_level = "authoritative";
+  run.events = [
+    {
+      kind: "tool_call",
+      command: "sed -n '1,180p' src/exporter.ts",
+      text: "Inspected declared implementation target.",
+      correct: true,
+    },
+    {
+      kind: "tool_call",
+      command: "sed -n '1,180p' tests/exporter.test.mjs",
+      text: "Inspected declared acceptance target.",
+      correct: true,
+    },
+    {
+      kind: "tool_call",
+      command: "npm test -- tests/exporter.test.mjs",
+      text: "Reproduced the targeted failure before editing.",
+      success: false,
+      correct: true,
+    },
+    {
+      kind: "tool_call",
+      command: "apply_patch src/exporter.ts",
+      text: "Patched the declared implementation target.",
+      correct: true,
+    },
+    {
+      kind: "verification",
+      command: "npm test -- tests/exporter.test.mjs",
+      success: true,
+      verifier: true,
+    },
+  ];
+
+  const report = runRealAbValidationSuite(compileRealAbTraceCapture(capture));
+  const task = report.tasks.find((entry) => entry.id === "capture_coding_resume");
+  assert.ok(task);
+
+  const compliance = task.arms.aionis_assisted.trace_summary?.discipline_compliance;
+  assert.ok(compliance);
+  assert.equal(compliance.status, "pass");
+  assert.equal(compliance.pre_edit_confirmation_steps, 3);
+  assert.equal(compliance.max_pre_edit_confirmation_steps, 3);
+  assert.equal(compliance.severe_violation_count, 0);
+});
+
 test("real A/B product evidence rejects locked action discipline violations", () => {
   const capture = readTraceCapture();
   const run = capture.tasks[0].runs.aionis_assisted;
@@ -743,10 +793,14 @@ test("real A/B live evidence assembler carries LLM runner resource outcomes into
   assert.equal(capture.tasks[0].runs.aionis_assisted.outcome?.tokens_to_success, 47894);
   assert.equal(report.tasks[0].deltas.time_to_success_delta_ms, -75_000);
   assert.equal(report.tasks[0].deltas.tokens_to_success_delta, -9285);
+  assert.ok((report.summary.token_reduction_pct ?? 0) > 10);
+  assert.ok((report.summary.time_reduction_pct ?? 0) > 10);
   assert.match(markdown, /57,179/);
   assert.match(markdown, /47,894/);
   assert.match(markdown, /-9,285/);
   assert.match(markdown, /-75s/);
+  assert.match(markdown, /Token reduction:/);
+  assert.match(markdown, /Time reduction:/);
 });
 
 test("real A/B live evidence assembler rejects loaded arm artifacts without probe events", () => {
@@ -1073,6 +1127,29 @@ test("real A/B LLM runner contract-only prompt carries a compact execution contr
   assert.doesNotMatch(prompt, /ab:evidence:event -- --manifest/);
   assert.match(prompt, /Return only JSON/);
   assert.match(prompt, /tool_call.*include the exact shell command/);
+});
+
+test("real A/B LLM runner publish/install oracle prompt routes verifier to the arm workspace", () => {
+  const probeId = "external_probe_publish_install";
+  const workspace = path.join(os.tmpdir(), "aionis-real-ab-publish-workspace");
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "publish-install-workspace-prompt",
+    task_ids: [probeId],
+  });
+  const prompt = buildRealAbLlmArmPrompt({
+    manifest,
+    manifest_path: path.join(os.tmpdir(), "aionis-real-ab", "manifest.json"),
+    arm: "positive_control",
+    probe_id: probeId,
+    workspace_root: workspace,
+  });
+
+  assert.match(prompt, /package_publish_validate/);
+  assert.match(prompt, /scripts\/build_index\.py/);
+  assert.match(prompt, /src\/vectorops\/__init__\.py/);
+  assert.match(prompt, /Harness verifier:/);
+  assert.match(prompt, /--workspace-root/);
+  assert.match(prompt, /The agent may run narrower checks while working/);
 });
 
 test("real A/B LLM runner baseline prompt does not receive Aionis contract fields", () => {

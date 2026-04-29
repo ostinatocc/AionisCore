@@ -400,6 +400,40 @@ async function prepareVectoropsIndex(args: {
   return distDir;
 }
 
+async function buildVectoropsIndexFromWorkspace(args: {
+  workspaceRoot: string;
+  python: string;
+}): Promise<{ distDir: string; diagnostic: RuntimeDogfoodExternalProbeCommandDiagnostic }> {
+  const workspaceRoot = path.resolve(args.workspaceRoot);
+  const scriptPath = path.join(workspaceRoot, "scripts", "build_index.py");
+  const packagePath = path.join(workspaceRoot, "src", "vectorops", "__init__.py");
+  const command = `${args.python} scripts/build_index.py`;
+  let result: CommandResult;
+  if (!fs.existsSync(scriptPath) || !fs.existsSync(packagePath)) {
+    result = {
+      code: 1,
+      stdout: "",
+      stderr: [
+        !fs.existsSync(scriptPath) ? `missing ${path.relative(workspaceRoot, scriptPath)}` : null,
+        !fs.existsSync(packagePath) ? `missing ${path.relative(workspaceRoot, packagePath)}` : null,
+      ].filter(Boolean).join("\n"),
+      durationMs: 0,
+    };
+  } else {
+    result = await execFileResult(args.python, [scriptPath], { cwd: workspaceRoot, timeoutMs: 15000 });
+  }
+  return {
+    distDir: path.join(workspaceRoot, "dist"),
+    diagnostic: buildCommandDiagnostic({
+      command,
+      cwd: workspaceRoot,
+      result,
+      failureClass: "package_index_build_failed",
+    }),
+  };
+}
+
+
 function buildServiceTaskSpec(args: {
   endpoint: string;
   probe: CommandResult;
@@ -843,55 +877,73 @@ async function runServiceAfterExitProbe(port?: number): Promise<RuntimeDogfoodEx
   };
 }
 
-async function runPublishInstallProbe(port?: number): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
+async function runPublishInstallProbe(port?: number, workspaceRoot?: string): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
   const python = await resolvePython();
   const selectedPort = port ?? await findOpenPort();
   const endpoint = `http://127.0.0.1:${selectedPort}`;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-runtime-dogfood-publish-"));
+  const resolvedWorkspaceRoot = workspaceRoot ? path.resolve(workspaceRoot) : null;
   let servicePid: number | null = null;
   let launcherExitCode: number | null = null;
   let probe: CommandResult = { code: 1, stdout: "", stderr: "probe_not_run", durationMs: 0 };
   const commandDiagnostics: RuntimeDogfoodExternalProbeCommandDiagnostic[] = [];
 
   try {
-    const distDir = await prepareVectoropsIndex({ tempDir, python });
-    const launched = await launchDetachedProcess({
-      tempDir,
-      command: python,
-      commandArgs: ["-m", "http.server", String(selectedPort), "--bind", "127.0.0.1", "--directory", distDir],
-    });
-    servicePid = launched.pid;
-    launcherExitCode = launched.launcherExitCode;
-    commandDiagnostics.push(buildCommandDiagnostic({
-      command: launched.launcherCommand,
-      result: launched.launcherResult,
-      failureClass: "service_launch_failed",
-    }));
-    const indexCheck = `curl -fsS ${shellQuote(`${endpoint}/simple/vectorops/`)}`;
-    const ready = await waitForFreshShellCommand(indexCheck, 15000);
-    commandDiagnostics.push(buildCommandDiagnostic({
-      command: indexCheck,
-      result: ready,
-      failureClass: "fresh_shell_probe_failed",
-    }));
-    if (ready.code !== 0) {
-      probe = ready;
+    const prepared = resolvedWorkspaceRoot
+      ? await buildVectoropsIndexFromWorkspace({ workspaceRoot: resolvedWorkspaceRoot, python })
+      : {
+          distDir: await prepareVectoropsIndex({ tempDir, python }),
+          diagnostic: null,
+        };
+    if (prepared.diagnostic) {
+      commandDiagnostics.push(prepared.diagnostic);
+    }
+    if (prepared.diagnostic && prepared.diagnostic.exit_code !== 0) {
+      probe = {
+        code: prepared.diagnostic.exit_code,
+        stdout: prepared.diagnostic.stdout_tail,
+        stderr: prepared.diagnostic.stderr_tail,
+        durationMs: prepared.diagnostic.duration_ms,
+      };
     } else {
-      const clientDir = path.join(tempDir, "clean-client");
-      const clientPython = process.platform === "win32"
-        ? path.join(clientDir, "Scripts", "python.exe")
-        : path.join(clientDir, "bin", "python");
-      const installCommand = [
-        `${shellQuote(python)} -m venv ${shellQuote(clientDir)}`,
-        `${shellQuote(clientPython)} -m pip install --no-cache-dir --index-url ${shellQuote(`${endpoint}/simple`)} --trusted-host 127.0.0.1 vectorops==0.1.0`,
-        `${shellQuote(clientPython)} -c ${shellQuote("import vectorops; print(vectorops.__version__)")}`,
-      ].join(" && ");
-      probe = await probeFreshShellCommand(installCommand, 60000);
+      const launched = await launchDetachedProcess({
+        tempDir,
+        command: python,
+        commandArgs: ["-m", "http.server", String(selectedPort), "--bind", "127.0.0.1", "--directory", prepared.distDir],
+      });
+      servicePid = launched.pid;
+      launcherExitCode = launched.launcherExitCode;
       commandDiagnostics.push(buildCommandDiagnostic({
-        command: installCommand,
-        result: probe,
-        failureClass: "clean_client_install_failed",
+        command: launched.launcherCommand,
+        result: launched.launcherResult,
+        failureClass: "service_launch_failed",
       }));
+      const indexCheck = `curl -fsS ${shellQuote(`${endpoint}/simple/vectorops/`)}`;
+      const ready = await waitForFreshShellCommand(indexCheck, 15000);
+      commandDiagnostics.push(buildCommandDiagnostic({
+        command: indexCheck,
+        result: ready,
+        failureClass: "fresh_shell_probe_failed",
+      }));
+      if (ready.code !== 0) {
+        probe = ready;
+      } else {
+        const clientDir = path.join(tempDir, "clean-client");
+        const clientPython = process.platform === "win32"
+          ? path.join(clientDir, "Scripts", "python.exe")
+          : path.join(clientDir, "bin", "python");
+        const installCommand = [
+          `${shellQuote(python)} -m venv ${shellQuote(clientDir)}`,
+          `${shellQuote(clientPython)} -m pip install --no-cache-dir --index-url ${shellQuote(`${endpoint}/simple`)} --trusted-host 127.0.0.1 vectorops==0.1.0`,
+          `${shellQuote(clientPython)} -c ${shellQuote("import vectorops; print(vectorops.__version__)")}`,
+        ].join(" && ");
+        probe = await probeFreshShellCommand(installCommand, 60000);
+        commandDiagnostics.push(buildCommandDiagnostic({
+          command: installCommand,
+          result: probe,
+          failureClass: "clean_client_install_failed",
+        }));
+      }
     }
   } finally {
     killService(servicePid);
@@ -1305,7 +1357,7 @@ async function runProbeSlice(
   workspaceRoot?: string,
 ): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
   if (slice === "service_after_exit") return await runServiceAfterExitProbe(port);
-  if (slice === "publish_install") return await runPublishInstallProbe(port);
+  if (slice === "publish_install") return await runPublishInstallProbe(port, workspaceRoot);
   if (slice === "deploy_hook_web") return await runDeployHookWebProbe(port, workspaceRoot);
   if (slice === "interrupted_resume") return await runInterruptedResumeProbe();
   if (slice === "handoff_next_day") return await runHandoffNextDayProbe();

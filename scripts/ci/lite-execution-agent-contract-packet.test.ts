@@ -61,7 +61,7 @@ test("execution agent contract packet defaults to compact contract-only output",
   assert.ok(packet.contract.authority_boundary.includes("after_exit_claim_requires_fresh_shell_revalidation"));
   assert.equal(packet.action_discipline.execution_mode, "contract_locked");
   assert.equal(packet.action_discipline.first_action, "inspect_declared_target_files_before_broad_discovery");
-  assert.equal(packet.action_discipline.max_pre_edit_confirmation_steps, 2);
+  assert.equal(packet.action_discipline.max_pre_edit_confirmation_steps, 3);
   assert.ok(packet.action_discipline.prohibited_actions.includes("do_not_run_broad_repository_file_enumeration_before_declared_targets"));
   assert.ok(packet.action_discipline.prohibited_actions.includes("do_not_read_general_skill_or_preference_files_before_declared_targets"));
   assert.ok(packet.action_discipline.stop_conditions.includes("stop_after_required_validation_passes_and_report_evidence"));
@@ -143,6 +143,7 @@ test("execution agent contract packet marks acceptance evidence read-only under 
   const packet = buildExecutionAgentContractPacketV1({ contract });
 
   assert.equal(packet.action_discipline.execution_mode, "contract_locked");
+  assert.equal(packet.action_discipline.max_pre_edit_confirmation_steps, 3);
   assert.ok(packet.action_discipline.prohibited_actions.includes(
     "do_not_edit_acceptance_evidence:tests/pricing/discount.test.mjs",
   ));

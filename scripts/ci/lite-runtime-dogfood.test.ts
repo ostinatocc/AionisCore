@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { aiCodeCiRepairVariants, prepareAiCodeCiRepairWorkspace, prepareDeployHookWebWorkspace } from "../aionis-real-ab-prepare-workspace.ts";
+import {
+  aiCodeCiRepairVariants,
+  prepareAiCodeCiRepairWorkspace,
+  prepareDeployHookWebWorkspace,
+  preparePublishInstallWorkspace,
+  publishInstallFixedBuildScript,
+} from "../aionis-real-ab-prepare-workspace.ts";
 import { runRuntimeDogfoodSuite, runtimeDogfoodTasksFromSpecs } from "../lib/lite-runtime-dogfood.ts";
 import {
   runRuntimeDogfoodExternalProbe,
@@ -308,6 +314,49 @@ test("runtime dogfood external probe can run one selected slice with diagnostics
   assert.equal(run.diagnostics[0]?.failure_class, "none");
   assert.equal(run.diagnostics[0]?.command_count, 1);
   assert.equal(run.diagnostics[0]?.commands.length, 1);
+});
+
+test("publish install external probe can validate the actual arm workspace causally", async () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-dogfood-publish-workspace-"));
+  try {
+    preparePublishInstallWorkspace(workspace, { force: true });
+
+    const failedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["publish_install"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(failedRun.probes.length, 1);
+    assert.equal(failedRun.fresh_shell_probe_passed, false);
+    assert.match(failedRun.probes[0]?.diagnostics.commands[0]?.command ?? "", /scripts\/build_index\.py/);
+    assert.equal(failedRun.probes[0]?.diagnostics.commands[0]?.cwd, workspace);
+    assert.equal(
+      failedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      false,
+    );
+
+    fs.writeFileSync(
+      path.join(workspace, "scripts", "build_index.py"),
+      publishInstallFixedBuildScript(),
+    );
+
+    const passedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["publish_install"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(passedRun.fresh_shell_probe_passed, true);
+    assert.match(passedRun.fresh_shell_probe_output, /Successfully installed vectorops-0\.1\.0/);
+    assert.equal(
+      passedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      true,
+    );
+    assert.equal(
+      passedRun.dogfood_result.scenarios[0]?.metrics.stable_promotion_allowed,
+      true,
+    );
+    assert.equal(passedRun.probes[0]?.diagnostics.commands[0]?.cwd, workspace);
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
 });
 
 test("deploy hook external probe can validate the actual arm workspace causally", async () => {

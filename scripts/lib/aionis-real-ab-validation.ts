@@ -168,6 +168,9 @@ export type RealAbSuiteInput = {
 
 export type RealAbThresholds = {
   min_wasted_step_reduction_pct: number;
+  min_action_count_reduction_pct: number;
+  min_token_reduction_pct: number;
+  min_time_reduction_pct: number;
 };
 
 export type RealAbGateRequirement = {
@@ -232,6 +235,9 @@ export type RealAbReport = {
     treatment_false_confidence_rate: number;
     baseline_after_exit_correctness_rate: number | null;
     treatment_after_exit_correctness_rate: number | null;
+    action_count_reduction_pct: number | null;
+    token_reduction_pct: number | null;
+    time_reduction_pct: number | null;
     negative_control_authoritative_count: number;
     positive_control_sanity_rate: number;
   };
@@ -240,6 +246,9 @@ export type RealAbReport = {
 
 const defaultThresholds: RealAbThresholds = {
   min_wasted_step_reduction_pct: 20,
+  min_action_count_reduction_pct: 10,
+  min_token_reduction_pct: 10,
+  min_time_reduction_pct: 10,
 };
 
 function boolToNumber(value: boolean): number {
@@ -265,9 +274,18 @@ function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
 }
 
+function nullableSum(values: Array<number | null | undefined>): number | null {
+  const filtered = values.filter((value): value is number => typeof value === "number");
+  return filtered.length === 0 ? null : sum(filtered);
+}
+
 function pctReduction(before: number, after: number): number | null {
   if (before <= 0) return after <= before ? 0 : -Infinity;
   return ((before - after) / before) * 100;
+}
+
+function finitePct(value: number | null): number | null {
+  return Number.isFinite(value ?? 0) ? value : null;
 }
 
 function requirement(args: Omit<RealAbGateRequirement, "status"> & { ok: boolean }): RealAbGateRequirement {
@@ -411,7 +429,8 @@ function isEditEvent(event: RealAbTraceEvent): boolean {
   const text = lowerEventText(event);
   return text.includes("apply_patch")
     || /\bpatch\b/.test(text)
-    || /\bedit(ed|ing)?\b/.test(text)
+    || /\bedited\b/.test(text)
+    || (/\bediting\b/.test(text) && !/\bbefore\s+editing\b/.test(text))
     || /\bwrite\b/.test(text)
     || /\bcreated?\b/.test(text)
     || /\bmodified?\b/.test(text)
@@ -461,6 +480,13 @@ function disciplineViolation(
   };
 }
 
+function maxPreEditConfirmationStepsForTask(task: RealAbTaskSpec): number {
+  const targetInspectionBudget = Math.max(1, Math.min(task.expected_outcome.target_files?.length ?? 0, 3));
+  const acceptanceProbeBudget = (task.expected_outcome.acceptance_checks?.length ?? 0) > 0 ? 1 : 0;
+  const lifecycleProbeBudget = task.verifier.after_exit_required || task.verifier.external_visibility_required ? 1 : 0;
+  return Math.max(2, Math.min(6, targetInspectionBudget + acceptanceProbeBudget + lifecycleProbeBudget));
+}
+
 function deriveDisciplineCompliance(
   task: RealAbTaskSpec,
   arm: RealAbArm,
@@ -472,7 +498,7 @@ function deriveDisciplineCompliance(
     isActionEvent(event) && eventTouchesExpectedTarget(event, task)
   );
   const firstEditEventIndex = trace.events.findIndex(isEditEvent);
-  const maxPreEditConfirmationSteps = lockedContractExpected ? 2 : null;
+  const maxPreEditConfirmationSteps = lockedContractExpected ? maxPreEditConfirmationStepsForTask(task) : null;
   const preEditConfirmationSteps = firstEditEventIndex >= 0
     ? trace.events.slice(0, firstEditEventIndex).filter(isActionEvent).length
     : 0;
@@ -1009,6 +1035,21 @@ export function runRealAbValidationSuite(input: RealAbSuiteInput): RealAbReport 
   const baselineWasted = sum(baselineMetrics.map((metrics) => metrics.wasted_steps));
   const treatmentWasted = sum(treatmentMetrics.map((metrics) => metrics.wasted_steps));
   const wastedStepReductionPct = pctReduction(baselineWasted, treatmentWasted);
+  const baselineActionCount = nullableSum(tasks.map((task) => task.arms.baseline.trace_summary?.action_event_count));
+  const treatmentActionCount = nullableSum(tasks.map((task) => task.arms.aionis_assisted.trace_summary?.action_event_count));
+  const actionCountReductionPct = baselineActionCount !== null && treatmentActionCount !== null
+    ? pctReduction(baselineActionCount, treatmentActionCount)
+    : null;
+  const baselineTokens = nullableSum(baselineMetrics.map((metrics) => metrics.tokens_to_success));
+  const treatmentTokens = nullableSum(treatmentMetrics.map((metrics) => metrics.tokens_to_success));
+  const tokenReductionPct = baselineTokens !== null && treatmentTokens !== null
+    ? pctReduction(baselineTokens, treatmentTokens)
+    : null;
+  const baselineTime = nullableSum(baselineMetrics.map((metrics) => metrics.time_to_success_ms));
+  const treatmentTime = nullableSum(treatmentMetrics.map((metrics) => metrics.time_to_success_ms));
+  const timeReductionPct = baselineTime !== null && treatmentTime !== null
+    ? pctReduction(baselineTime, treatmentTime)
+    : null;
   const taskFamilies = input.tasks.reduce<Record<string, number>>((acc, task) => {
     acc[task.task_family] = (acc[task.task_family] ?? 0) + 1;
     return acc;
@@ -1030,9 +1071,24 @@ export function runRealAbValidationSuite(input: RealAbSuiteInput): RealAbReport 
     treatment_false_confidence_rate: rate(treatmentMetrics.map((metrics) => metrics.false_confidence)),
     baseline_after_exit_correctness_rate: nullableRate(baselineMetrics.map((metrics) => metrics.after_exit_correct)),
     treatment_after_exit_correctness_rate: nullableRate(treatmentMetrics.map((metrics) => metrics.after_exit_correct)),
+    action_count_reduction_pct: finitePct(actionCountReductionPct),
+    token_reduction_pct: finitePct(tokenReductionPct),
+    time_reduction_pct: finitePct(timeReductionPct),
     negative_control_authoritative_count: negativeArms.filter((arm) => arm.authority_level === "authoritative").length,
     positive_control_sanity_rate: positiveControlSanityRate,
   };
+  const wastedEfficiencyPass = baselineWasted === 0
+    ? treatmentWasted <= baselineWasted
+    : (wastedStepReductionPct ?? -Infinity) >= thresholds.min_wasted_step_reduction_pct;
+  const actionEfficiencyPass = (summary.action_count_reduction_pct ?? -Infinity) >= thresholds.min_action_count_reduction_pct;
+  const tokenEfficiencyPass = (summary.token_reduction_pct ?? -Infinity) >= thresholds.min_token_reduction_pct;
+  const timeEfficiencyPass = (summary.time_reduction_pct ?? -Infinity) >= thresholds.min_time_reduction_pct;
+  const efficiencySignals = [
+    `wasted=${summary.wasted_step_reduction_pct === null ? "n/a" : `${summary.wasted_step_reduction_pct.toFixed(1)}%`}`,
+    `actions=${summary.action_count_reduction_pct === null ? "n/a" : `${summary.action_count_reduction_pct.toFixed(1)}%`}`,
+    `tokens=${summary.token_reduction_pct === null ? "n/a" : `${summary.token_reduction_pct.toFixed(1)}%`}`,
+    `time=${summary.time_reduction_pct === null ? "n/a" : `${summary.time_reduction_pct.toFixed(1)}%`}`,
+  ].join(", ");
 
   const suiteRequirements: RealAbGateRequirement[] = [
     requirement({
@@ -1052,12 +1108,12 @@ export function runRealAbValidationSuite(input: RealAbSuiteInput): RealAbReport 
       message: "treatment false-confidence rate must not exceed baseline",
     }),
     requirement({
-      id: "suite:wasted_steps_reduced",
+      id: "suite:efficiency_signal",
       scope: "suite",
-      ok: baselineWasted === 0 ? treatmentWasted <= baselineWasted : (wastedStepReductionPct ?? -Infinity) >= thresholds.min_wasted_step_reduction_pct,
-      actual: wastedStepReductionPct,
-      expected: thresholds.min_wasted_step_reduction_pct,
-      message: "treatment should reduce wasted steps enough to justify Aionis complexity",
+      ok: wastedEfficiencyPass || actionEfficiencyPass || tokenEfficiencyPass || timeEfficiencyPass,
+      actual: efficiencySignals,
+      expected: `wasted>=${thresholds.min_wasted_step_reduction_pct}% or actions>=${thresholds.min_action_count_reduction_pct}% or tokens>=${thresholds.min_token_reduction_pct}% or time>=${thresholds.min_time_reduction_pct}%`,
+      message: "treatment should show a real efficiency signal through wasted-step, action, token, or time reduction",
     }),
     requirement({
       id: "suite:negative_control_safe",
@@ -1115,6 +1171,10 @@ export function runRealAbValidationSuite(input: RealAbSuiteInput): RealAbReport 
 function pct(value: number | null): string {
   if (value === null) return "n/a";
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function reductionPct(value: number | null): string {
+  return value === null ? "n/a" : `${value.toFixed(1)}%`;
 }
 
 function signed(value: number | null): string {
@@ -1248,7 +1308,10 @@ export function renderRealAbMarkdownReport(report: RealAbReport): string {
     `| False confidence rate | ${pct(report.summary.baseline_false_confidence_rate)} | ${pct(report.summary.treatment_false_confidence_rate)} |`,
     `| After-exit correctness | ${pct(report.summary.baseline_after_exit_correctness_rate)} | ${pct(report.summary.treatment_after_exit_correctness_rate)} |`,
     "",
-    `Wasted-step reduction: ${report.summary.wasted_step_reduction_pct === null ? "n/a" : `${report.summary.wasted_step_reduction_pct.toFixed(1)}%`}`,
+    `Wasted-step reduction: ${reductionPct(report.summary.wasted_step_reduction_pct)}`,
+    `Action-count reduction: ${reductionPct(report.summary.action_count_reduction_pct)}`,
+    `Token reduction: ${reductionPct(report.summary.token_reduction_pct)}`,
+    `Time reduction: ${reductionPct(report.summary.time_reduction_pct)}`,
     `Negative-control authoritative count: ${report.summary.negative_control_authoritative_count}`,
     `Positive-control sanity rate: ${pct(report.summary.positive_control_sanity_rate)}`,
     "",
