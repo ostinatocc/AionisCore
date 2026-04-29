@@ -10,6 +10,43 @@ type CliOptions = {
 };
 
 const deployExpectedContent = "deployed revision visible through live dogfood";
+const serviceAfterExitSource = [
+  'import http from "node:http";',
+  "",
+  "function argValue(flag) {",
+  "  const index = process.argv.indexOf(flag);",
+  "  return index >= 0 ? process.argv[index + 1] : null;",
+  "}",
+  "",
+  'const port = Number.parseInt(argValue("--port") ?? "0", 10);',
+  "if (!Number.isInteger(port) || port <= 0) {",
+  '  console.error("usage: node service-after-exit-server.mjs --port <port>");',
+  "  process.exit(2);",
+  "}",
+  "",
+  "const server = http.createServer((request, response) => {",
+  '  if (request.url === "/healthz") {',
+  '    response.writeHead(200, { "content-type": "application/json" });',
+  "    response.end(JSON.stringify({ ok: true, pid: process.pid }));",
+  "    return;",
+  "  }",
+  '  response.writeHead(404, { "content-type": "text/plain" });',
+  '  response.end("not found\\n");',
+  "});",
+  "",
+  'server.listen(port, "127.0.0.1", () => {',
+  "  process.stdout.write(`service-after-exit-server listening on 127.0.0.1:${port}\\n`);",
+  "});",
+  "",
+  "function shutdown() {",
+  "  server.close(() => process.exit(0));",
+  "  setTimeout(() => process.exit(0), 1000).unref();",
+  "}",
+  "",
+  'process.on("SIGTERM", shutdown);',
+  'process.on("SIGINT", shutdown);',
+  "",
+].join("\n");
 const publishInstallPackageSource = [
   "__version__ = '0.1.0'",
   "",
@@ -322,6 +359,7 @@ function parseAiCodeCiRepairVariant(value: string | null): AiCodeCiRepairVariant
 function usage(): string {
   return [
     "Usage:",
+    "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_service_after_exit --workspace /tmp/worktree [--force]",
     "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_publish_install --workspace /tmp/worktree [--force]",
     "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_deploy_hook_web --workspace /tmp/worktree [--force]",
     `  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_ai_code_ci_repair --workspace /tmp/worktree [--variant ${aiCodeCiRepairVariants.join("|")}] [--force]`,
@@ -372,6 +410,27 @@ function writeFile(filePath: string, content: string, force: boolean): void {
   }
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content);
+}
+
+export function prepareServiceAfterExitWorkspace(workspace: string, options: { force?: boolean } = {}): void {
+  const root = path.resolve(workspace);
+  const force = options.force ?? false;
+  writeFile(
+    path.join(root, "scripts", "fixtures", "runtime-dogfood", "service-after-exit-server.mjs"),
+    serviceAfterExitSource,
+    force,
+  );
+  writeFile(
+    path.join(root, "README.service-after-exit-fixture.md"),
+    [
+      "# Service After Exit Fixture",
+      "",
+      "Launch `scripts/fixtures/runtime-dogfood/service-after-exit-server.mjs` as a detached service.",
+      "The verifier starts the workspace copy, waits for the launcher to exit, then probes `/healthz` from a fresh shell.",
+      "",
+    ].join("\n"),
+    force,
+  );
 }
 
 export function publishInstallFixedBuildScript(): string {
@@ -499,6 +558,11 @@ export function prepareAiCodeCiRepairWorkspace(
 
 function main(): void {
   const options = parseArgs(process.argv.slice(2));
+  if (options.probe === "external_probe_service_after_exit") {
+    prepareServiceAfterExitWorkspace(options.workspace ?? "", { force: options.force });
+    console.log(`Prepared ${options.probe} fixture in ${path.resolve(options.workspace ?? "")}`);
+    return;
+  }
   if (options.probe === "external_probe_publish_install") {
     preparePublishInstallWorkspace(options.workspace ?? "", { force: options.force });
     console.log(`Prepared ${options.probe} fixture in ${path.resolve(options.workspace ?? "")}`);

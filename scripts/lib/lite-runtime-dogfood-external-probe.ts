@@ -106,7 +106,7 @@ type LiveWorkspaceProbeResult = {
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
 const serviceRelativePath = "scripts/fixtures/runtime-dogfood/service-after-exit-server.mjs";
-const servicePath = path.join(repoRoot, serviceRelativePath);
+const repoServicePath = path.join(repoRoot, serviceRelativePath);
 export const runtimeDogfoodExternalProbeSlices: readonly RuntimeDogfoodExternalProbeSlice[] = [
   "service_after_exit",
   "publish_install",
@@ -818,9 +818,13 @@ async function runAiCodeCiWorkspaceProbe(args: {
   };
 }
 
-async function runServiceAfterExitProbe(port?: number): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
+async function runServiceAfterExitProbe(port?: number, workspaceRoot?: string): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
   const selectedPort = port ?? await findOpenPort();
   const endpoint = `http://127.0.0.1:${selectedPort}`;
+  const resolvedWorkspaceRoot = workspaceRoot ? path.resolve(workspaceRoot) : null;
+  const servicePath = resolvedWorkspaceRoot
+    ? path.join(resolvedWorkspaceRoot, serviceRelativePath)
+    : repoServicePath;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-runtime-dogfood-service-"));
   let servicePid: number | null = null;
   let launcherExitCode: number | null = null;
@@ -1356,7 +1360,7 @@ async function runProbeSlice(
   port?: number,
   workspaceRoot?: string,
 ): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
-  if (slice === "service_after_exit") return await runServiceAfterExitProbe(port);
+  if (slice === "service_after_exit") return await runServiceAfterExitProbe(port, workspaceRoot);
   if (slice === "publish_install") return await runPublishInstallProbe(port, workspaceRoot);
   if (slice === "deploy_hook_web") return await runDeployHookWebProbe(port, workspaceRoot);
   if (slice === "interrupted_resume") return await runInterruptedResumeProbe();

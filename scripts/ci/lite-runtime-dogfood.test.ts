@@ -8,6 +8,7 @@ import {
   prepareAiCodeCiRepairWorkspace,
   prepareDeployHookWebWorkspace,
   preparePublishInstallWorkspace,
+  prepareServiceAfterExitWorkspace,
   publishInstallFixedBuildScript,
 } from "../aionis-real-ab-prepare-workspace.ts";
 import { runRuntimeDogfoodSuite, runtimeDogfoodTasksFromSpecs } from "../lib/lite-runtime-dogfood.ts";
@@ -314,6 +315,44 @@ test("runtime dogfood external probe can run one selected slice with diagnostics
   assert.equal(run.diagnostics[0]?.failure_class, "none");
   assert.equal(run.diagnostics[0]?.command_count, 1);
   assert.equal(run.diagnostics[0]?.commands.length, 1);
+});
+
+test("service after-exit external probe can validate the actual arm workspace causally", async () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-dogfood-service-workspace-"));
+  const servicePath = path.join(workspace, "scripts", "fixtures", "runtime-dogfood", "service-after-exit-server.mjs");
+  try {
+    prepareServiceAfterExitWorkspace(workspace, { force: true });
+    fs.writeFileSync(servicePath, "process.exit(13);\n");
+
+    const failedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["service_after_exit"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(failedRun.probes.length, 1);
+    assert.equal(failedRun.fresh_shell_probe_passed, false);
+    assert.equal(
+      failedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      false,
+    );
+
+    prepareServiceAfterExitWorkspace(workspace, { force: true });
+    const passedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["service_after_exit"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(passedRun.fresh_shell_probe_passed, true);
+    assert.match(passedRun.fresh_shell_probe_output, /"ok":true/);
+    assert.deepEqual(
+      passedRun.probes[0]?.task_spec.expectations.target_files_include,
+      ["scripts/fixtures/runtime-dogfood/service-after-exit-server.mjs"],
+    );
+    assert.equal(
+      passedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      true,
+    );
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
 });
 
 test("publish install external probe can validate the actual arm workspace causally", async () => {
