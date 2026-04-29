@@ -19,6 +19,8 @@ These runs are directional pilot evidence, not broad product proof.
 - The evidence does not prove universal token savings or universal agent performance gains.
 - The LLM runner now isolates prompt surfaces by arm: `baseline` receives only a normal task request, `aionis_assisted` receives the Runtime contract, `negative_control` receives non-authoritative low-trust context, and `positive_control` receives an oracle handoff.
 - The LLM runner now records explicit run-environment evidence: requested model, reasoning effort, agent CLI, CLI version, command hash, and workspace before/after hashes.
+- New clean suites should include `aionis_ab_fairness_manifest_v1`: frozen task ids, frozen verifier, frozen packet policy, required same model/effort/CLI/command/workspace hashes, and verifier workspace provenance.
+- External dogfood probe artifacts now carry `runtime_dogfood_external_probe_provenance_v1`, including the verified workspace root, target paths, verifier commands, and fresh-shell/after-exit boundary flags.
 - LLM suites run before this arm-prompt isolation should be treated as directional evidence and verifier evidence, not final clean A/B proof.
 
 ## Suites
@@ -348,6 +350,8 @@ Completed:
 - Ran `deploy-web-causal-model-locked-20260429-160352`; the gate passed with 40.7% action-count reduction and 43.3% time reduction versus explicit GPT-5.5/xhigh Codex baseline.
 - Added causal workspace verification for service after-exit: the verifier now launches `scripts/fixtures/runtime-dogfood/service-after-exit-server.mjs` from the actual arm workspace and probes `/healthz` from a fresh shell after launcher exit.
 - Ran `service-causal-model-locked-20260429-164153`; the gate passed with 70.4% action-count reduction, 46.4% token reduction, and 45.8% time reduction versus explicit GPT-5.5/xhigh Codex baseline.
+- Added `aionis_ab_fairness_manifest_v1` templates and assembler guards so future clean suites fail when arms do not share model/effort/CLI/version/command hash/initial workspace hash or when verifier workspace provenance is missing.
+- Added external probe provenance to dogfood run JSON so verifier artifacts state which workspace root and target paths were actually validated.
 - Kept full workflow, replay, and pattern memory internal by default.
 - Kept harness verifiers outside the agent default workflow.
 - Repeated the same three families after packet compression.
@@ -367,6 +371,7 @@ Remaining:
 - Rerun more commercial-family trials after arm-prompt isolation before making stable clean A/B claims.
 - Add larger dependency-surface variants that are more likely to separate correctness rather than only cost/control.
 - Rerun AI code CI repair with explicit model/effort/CLI/workspace-hash evidence before treating cross-family cost claims as stable.
+- Treat any new clean A/B suite without `aionis_ab_fairness_manifest_v1` and verifier provenance as directional evidence only.
 
 ## Claim Policy
 
@@ -408,12 +413,14 @@ Not allowed current claim:
 
 ## Next Evidence Step
 
-Run at least two more paired trials for:
+Run at least two more paired trials for the current families, but only under the frozen fairness protocol:
 
 - `external_probe_service_after_exit`
 - `external_probe_publish_install`
 - `external_probe_deploy_hook_web`
 - `external_probe_ai_code_ci_repair`
+
+Each new clean suite should be initialized with `aionis_ab_fairness_manifest_v1`, run with explicit model/effort/CLI metadata, and assembled only after the verifier records the actual arm workspace provenance.
 
 Then add the next continuity-heavy families:
 

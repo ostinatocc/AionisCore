@@ -12,6 +12,10 @@ type CliOptions = {
   suiteKind: Exclude<RealAbSuiteKind, "harness_calibration">;
   taskIds: string[];
   generatedAt: string | null;
+  model: string | null;
+  reasoningEffort: string | null;
+  agentCli: string | null;
+  packetPolicy: RealAbLiveEvidenceBundleOptions["packet_policy"];
   force: boolean;
 };
 
@@ -28,6 +32,10 @@ Flags:
   --task-id <id>          Dogfood probe id to require. Can be repeated or comma-separated.
   --task-ids <ids>        Comma-separated dogfood probe ids.
   --generated-at <iso>    Optional manifest timestamp.
+  --model <name>          Optional frozen model name for fairness guard, for example gpt-5.5.
+  --reasoning-effort <n>  Optional frozen reasoning effort for fairness guard, for example xhigh.
+  --agent-cli <name>      Optional frozen agent CLI for fairness guard, for example codex.
+  --packet-policy <mode>  contract_only or workflow_expanded. Defaults to contract_only.
   --force                 Overwrite existing generated template files.
   --help                  Show this help.
 
@@ -64,6 +72,10 @@ function parseArgs(argv: string[]): CliOptions {
     suiteKind: "pilot_real_trace",
     taskIds: [],
     generatedAt: null,
+    model: null,
+    reasoningEffort: null,
+    agentCli: null,
+    packetPolicy: "contract_only",
     force: false,
   };
 
@@ -91,6 +103,27 @@ function parseArgs(argv: string[]): CliOptions {
         options.generatedAt = readValue(argv, index, arg);
         index += 1;
         break;
+      case "--model":
+        options.model = readValue(argv, index, arg);
+        index += 1;
+        break;
+      case "--reasoning-effort":
+        options.reasoningEffort = readValue(argv, index, arg);
+        index += 1;
+        break;
+      case "--agent-cli":
+        options.agentCli = readValue(argv, index, arg);
+        index += 1;
+        break;
+      case "--packet-policy": {
+        const value = readValue(argv, index, arg);
+        if (value !== "contract_only" && value !== "workflow_expanded") {
+          throw new Error("--packet-policy must be contract_only or workflow_expanded");
+        }
+        options.packetPolicy = value;
+        index += 1;
+        break;
+      }
       case "--force":
         options.force = true;
         break;
@@ -124,6 +157,10 @@ function writeBundle(options: CliOptions) {
     suite_kind: options.suiteKind,
     task_ids: options.taskIds,
     ...(options.generatedAt ? { generated_at: options.generatedAt } : {}),
+    ...(options.model ? { model: options.model } : {}),
+    ...(options.reasoningEffort ? { reasoning_effort: options.reasoningEffort } : {}),
+    ...(options.agentCli ? { agent_cli: options.agentCli } : {}),
+    ...(options.packetPolicy ? { packet_policy: options.packetPolicy } : {}),
   };
   const files = buildRealAbLiveEvidenceBundleFiles(bundleOptions);
   const targets = files.map((file) => ({

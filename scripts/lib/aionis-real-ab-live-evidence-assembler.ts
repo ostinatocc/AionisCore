@@ -28,6 +28,46 @@ export type RealAbLiveEvidenceArmManifest = {
   notes?: string[];
 };
 
+export type RealAbFairnessManifestV1 = {
+  manifest_version: "aionis_ab_fairness_manifest_v1";
+  frozen_at?: string;
+  task_ids: string[];
+  frozen: {
+    task_spec: true;
+    verifier: true;
+    packet_policy: true;
+    initial_workspace: true;
+  };
+  run_environment: {
+    model: string | null;
+    reasoning_effort: string | null;
+    agent_cli: string | null;
+  };
+  verifier: {
+    version: string;
+    same_verifier: true;
+    require_workspace_provenance: true;
+    require_fresh_shell: true;
+  };
+  packet_policy: {
+    mode: "contract_only" | "workflow_expanded";
+    baseline_packet_source: "none";
+    aionis_packet_source: "automatic_runtime";
+    negative_packet_source: "irrelevant_low_trust";
+    positive_packet_source: "oracle_handoff";
+    forbid_aionis_only_manual_hints: true;
+  };
+  arm_equivalence: {
+    same_model: true;
+    same_reasoning_effort: true;
+    same_agent_cli: true;
+    same_agent_cli_version: true;
+    same_command_hash: true;
+    same_initial_workspace_hash: true;
+    same_verifier_workspace: true;
+  };
+};
+
 export type RealAbLiveEvidenceManifest = {
   manifest_version: "aionis_real_ab_live_evidence_manifest_v1";
   suite_id: string;
@@ -35,6 +75,7 @@ export type RealAbLiveEvidenceManifest = {
   generated_at?: string;
   thresholds?: RealAbSuiteInput["thresholds"];
   fairness: RealAbFairnessContract;
+  fairness_manifest?: RealAbFairnessManifestV1;
   task_ids?: string[];
   arms: Record<RealAbArm, RealAbLiveEvidenceArmManifest>;
 };
@@ -85,6 +126,244 @@ function normalizeAgentEvents(
 
 function actionEventCount(events: RealAbTraceEvent[]): number {
   return events.filter((event) => event.kind === "action" || event.kind === "tool_call").length;
+}
+
+function unique(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => typeof value === "string" && value.length > 0))];
+}
+
+function sameStringSet(left: string[] | undefined, right: string[] | undefined): boolean {
+  const leftSet = new Set(left ?? []);
+  const rightSet = new Set(right ?? []);
+  if (leftSet.size !== rightSet.size) return false;
+  return [...leftSet].every((entry) => rightSet.has(entry));
+}
+
+function maybeSame(values: Array<string | null | undefined>): boolean {
+  const present = unique(values);
+  return present.length <= 1;
+}
+
+function armPacketSourceFromFairnessManifest(
+  manifest: RealAbFairnessManifestV1,
+  arm: RealAbArm,
+): RealAbLiveEvidenceArmManifest["packet_source"] {
+  if (arm === "baseline") return manifest.packet_policy.baseline_packet_source;
+  if (arm === "aionis_assisted") return manifest.packet_policy.aionis_packet_source;
+  if (arm === "negative_control") return manifest.packet_policy.negative_packet_source;
+  return manifest.packet_policy.positive_packet_source;
+}
+
+function notesContainManualAionisHint(notes: string[] | undefined): boolean {
+  const text = (notes ?? []).join("\n").toLowerCase();
+  return /manual[_ -]?(target_files|acceptance_checks|next_action|workflow|hint)/.test(text)
+    || /benchmark[_ -]?adapter/.test(text)
+    || /hard[- ]?coded answer/.test(text);
+}
+
+function dogfoodRunProvenance(run: RuntimeDogfoodExternalProbeRun | undefined): {
+  provenance_version?: unknown;
+  workspace_root_resolved?: unknown;
+} | null {
+  if (!run) return null;
+  return (run as {
+    provenance?: {
+      provenance_version?: unknown;
+      workspace_root_resolved?: unknown;
+    };
+  }).provenance ?? null;
+}
+
+function dogfoodProbeProvenance(run: RuntimeDogfoodExternalProbeRun | undefined): Array<{
+  provenance_version?: unknown;
+  workspace_root_resolved?: unknown;
+  fresh_shell?: unknown;
+}> {
+  if (!run) return [];
+  return (run.probes ?? []).map((probe) =>
+    (probe as {
+      provenance?: {
+        provenance_version?: unknown;
+        workspace_root_resolved?: unknown;
+        fresh_shell?: unknown;
+      };
+    }).provenance ?? {}
+  );
+}
+
+function validateFairnessManifest(args: {
+  manifest: RealAbLiveEvidenceManifest;
+  loaded: Partial<RealAbLiveEvidenceLoadedInputs>;
+}): RealAbGateRequirement[] {
+  const fairnessManifest = args.manifest.fairness_manifest;
+  if (!fairnessManifest) return [];
+
+  const environments = realAbRequiredArms.map((arm) => args.loaded[arm]?.llm_result?.run_environment);
+  const runProvenance = realAbRequiredArms.map((arm) => dogfoodRunProvenance(args.loaded[arm]?.dogfood_run));
+  const probeProvenance = realAbRequiredArms.flatMap((arm) =>
+    args.loaded[arm]?.dogfood_run
+      ? dogfoodProbeProvenance(args.loaded[arm].dogfood_run)
+      : []
+  );
+
+  const requirements: RealAbGateRequirement[] = [
+    assemblerRequirement({
+      id: "live_evidence:fairness_manifest:version",
+      scope: "suite",
+      ok: fairnessManifest.manifest_version === "aionis_ab_fairness_manifest_v1",
+      actual: fairnessManifest.manifest_version,
+      expected: "aionis_ab_fairness_manifest_v1",
+      message: "fairness manifest must use the supported frozen A/B protocol contract",
+    }),
+    assemblerRequirement({
+      id: "live_evidence:fairness_manifest:task_ids",
+      scope: "suite",
+      ok: sameStringSet(fairnessManifest.task_ids, args.manifest.task_ids),
+      actual: fairnessManifest.task_ids.join(","),
+      expected: (args.manifest.task_ids ?? []).join(","),
+      message: "fairness manifest must freeze the same selected task ids as the live evidence manifest",
+    }),
+    ...Object.entries(fairnessManifest.frozen).map(([key, value]) =>
+      assemblerRequirement({
+        id: `live_evidence:fairness_manifest:frozen:${key}`,
+        scope: "suite",
+        ok: value === true,
+        actual: value,
+        expected: true,
+        message: `fairness manifest must freeze ${key} before arm runs`,
+      })
+    ),
+    assemblerRequirement({
+      id: "live_evidence:fairness_manifest:run_environment:present",
+      scope: "suite",
+      ok: environments.every(Boolean),
+      actual: environments.filter(Boolean).length,
+      expected: realAbRequiredArms.length,
+      message: "fairness-locked evidence must include LLM run-environment metadata for every arm",
+    }),
+    assemblerRequirement({
+      id: "live_evidence:fairness_manifest:run_environment:model",
+      scope: "suite",
+      ok: environments.every((environment) =>
+        !environment
+          ? false
+          : fairnessManifest.run_environment.model
+            ? environment.model === fairnessManifest.run_environment.model
+            : maybeSame(environments.map((entry) => entry?.model))
+      ),
+      actual: unique(environments.map((entry) => entry?.model)).join(",") || null,
+      expected: fairnessManifest.run_environment.model ?? "same_model_across_arms",
+      message: "fairness-locked evidence requires the same model across all arms",
+    }),
+    assemblerRequirement({
+      id: "live_evidence:fairness_manifest:run_environment:reasoning_effort",
+      scope: "suite",
+      ok: environments.every((environment) =>
+        !environment
+          ? false
+          : fairnessManifest.run_environment.reasoning_effort
+            ? environment.reasoning_effort === fairnessManifest.run_environment.reasoning_effort
+            : maybeSame(environments.map((entry) => entry?.reasoning_effort))
+      ),
+      actual: unique(environments.map((entry) => entry?.reasoning_effort)).join(",") || null,
+      expected: fairnessManifest.run_environment.reasoning_effort ?? "same_reasoning_effort_across_arms",
+      message: "fairness-locked evidence requires the same reasoning effort across all arms",
+    }),
+    assemblerRequirement({
+      id: "live_evidence:fairness_manifest:run_environment:agent_cli",
+      scope: "suite",
+      ok: environments.every((environment) =>
+        !environment
+          ? false
+          : fairnessManifest.run_environment.agent_cli
+            ? environment.agent_cli === fairnessManifest.run_environment.agent_cli
+            : maybeSame(environments.map((entry) => entry?.agent_cli))
+      ),
+      actual: unique(environments.map((entry) => entry?.agent_cli)).join(",") || null,
+      expected: fairnessManifest.run_environment.agent_cli ?? "same_agent_cli_across_arms",
+      message: "fairness-locked evidence requires the same agent CLI across all arms",
+    }),
+    assemblerRequirement({
+      id: "live_evidence:fairness_manifest:run_environment:agent_cli_version",
+      scope: "suite",
+      ok: maybeSame(environments.map((entry) => entry?.agent_cli_version)) && environments.every(Boolean),
+      actual: unique(environments.map((entry) => entry?.agent_cli_version)).join(",") || null,
+      expected: "same_agent_cli_version_across_arms",
+      message: "fairness-locked evidence requires the same agent CLI version across all arms",
+    }),
+    assemblerRequirement({
+      id: "live_evidence:fairness_manifest:run_environment:command_hash",
+      scope: "suite",
+      ok: maybeSame(environments.map((entry) => entry?.command_sha256)) && environments.every(Boolean),
+      actual: unique(environments.map((entry) => entry?.command_sha256)).join(",") || null,
+      expected: "same_command_hash_across_arms",
+      message: "fairness-locked evidence requires the same command hash across all arms",
+    }),
+    assemblerRequirement({
+      id: "live_evidence:fairness_manifest:run_environment:initial_workspace_hash",
+      scope: "suite",
+      ok: maybeSame(environments.map((entry) => entry?.workspace_before?.hash)) && environments.every(Boolean),
+      actual: unique(environments.map((entry) => entry?.workspace_before?.hash)).join(",") || null,
+      expected: "same_initial_workspace_hash_across_arms",
+      message: "fairness-locked evidence requires identical initial workspace content hashes across all arms",
+    }),
+    assemblerRequirement({
+      id: "live_evidence:fairness_manifest:verifier_provenance",
+      scope: "suite",
+      ok: runProvenance.every((provenance) =>
+        provenance?.provenance_version === "runtime_dogfood_external_probe_provenance_v1"
+      ),
+      actual: runProvenance.filter((provenance) =>
+        provenance?.provenance_version === "runtime_dogfood_external_probe_provenance_v1"
+      ).length,
+      expected: realAbRequiredArms.length,
+      message: "fairness-locked evidence requires verifier provenance for every arm dogfood run",
+    }),
+    assemblerRequirement({
+      id: "live_evidence:fairness_manifest:verifier_workspace",
+      scope: "suite",
+      ok: fairnessManifest.arm_equivalence.same_verifier_workspace
+        ? runProvenance.every((provenance) => typeof provenance?.workspace_root_resolved === "string")
+        : true,
+      actual: runProvenance.filter((provenance) => typeof provenance?.workspace_root_resolved === "string").length,
+      expected: realAbRequiredArms.length,
+      message: "fairness-locked causal evidence must record the verified workspace root for every arm",
+    }),
+    assemblerRequirement({
+      id: "live_evidence:fairness_manifest:probe_provenance:fresh_shell",
+      scope: "suite",
+      ok: probeProvenance.length > 0 && probeProvenance.every((provenance) =>
+        provenance.provenance_version === "runtime_dogfood_external_probe_provenance_v1"
+        && provenance.fresh_shell === true
+      ),
+      actual: probeProvenance.filter((provenance) => provenance.fresh_shell === true).length,
+      expected: "fresh_shell_probe_provenance_for_every_probe",
+      message: "fairness-locked evidence must prove each verifier probe ran from a fresh shell boundary",
+    }),
+  ];
+
+  for (const arm of realAbRequiredArms) {
+    const armManifest = args.manifest.arms?.[arm];
+    requirements.push(assemblerRequirement({
+      id: `live_evidence:fairness_manifest:packet_source:${arm}`,
+      scope: "suite",
+      ok: armManifest?.packet_source === armPacketSourceFromFairnessManifest(fairnessManifest, arm),
+      actual: armManifest?.packet_source ?? null,
+      expected: armPacketSourceFromFairnessManifest(fairnessManifest, arm),
+      message: `${arm} packet source must match the frozen packet policy`,
+    }));
+  }
+
+  requirements.push(assemblerRequirement({
+    id: "live_evidence:fairness_manifest:no_aionis_only_manual_hints",
+    scope: "suite",
+    ok: !notesContainManualAionisHint(args.manifest.arms?.aionis_assisted?.notes),
+    actual: notesContainManualAionisHint(args.manifest.arms?.aionis_assisted?.notes),
+    expected: false,
+    message: "Aionis arm must not receive manual target/workflow hints outside automatic Runtime packet source",
+  }));
+
+  return requirements;
 }
 
 function parseTokenUsage(text: string): number | null {
@@ -152,6 +431,7 @@ export function validateRealAbLiveEvidenceAssemblerInputs(args: {
         message: `live evidence requires ${key}`,
       })
     ),
+    ...validateFairnessManifest(args),
   ];
 
   for (const arm of realAbRequiredArms) {

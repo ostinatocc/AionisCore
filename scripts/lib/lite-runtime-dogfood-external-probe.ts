@@ -52,6 +52,37 @@ export type RuntimeDogfoodExternalProbeSliceDiagnostic = RuntimeDogfoodExternalP
   commands: RuntimeDogfoodExternalProbeCommandDiagnostic[];
 };
 
+export type RuntimeDogfoodExternalProbeProvenance = {
+  provenance_version: "runtime_dogfood_external_probe_provenance_v1";
+  verifier_process_cwd: string;
+  repo_root: string;
+  workspace_root_input: string | null;
+  workspace_root_resolved: string | null;
+  workspace_root_exists: boolean;
+  slices: RuntimeDogfoodExternalProbeSlice[];
+};
+
+export type RuntimeDogfoodExternalProbeScenarioProvenance = {
+  provenance_version: "runtime_dogfood_external_probe_provenance_v1";
+  slice: RuntimeDogfoodExternalProbeSlice;
+  scenario_id: string;
+  verifier_process_cwd: string;
+  repo_root: string;
+  workspace_root_input: string | null;
+  workspace_root_resolved: string | null;
+  workspace_root_exists: boolean;
+  endpoint: string;
+  target_files: string[];
+  target_paths: string[];
+  verifier_commands: Array<{
+    command: string;
+    cwd: string;
+  }>;
+  fresh_shell: boolean;
+  after_agent_exit: boolean;
+  external_visibility_required: boolean;
+};
+
 export type RuntimeDogfoodExternalProbeScenarioRun = {
   id: string;
   task_family_hint: string;
@@ -62,10 +93,12 @@ export type RuntimeDogfoodExternalProbeScenarioRun = {
   fresh_shell_probe_output: string;
   diagnostics: RuntimeDogfoodExternalProbeSliceDiagnostic;
   task_spec: RuntimeDogfoodTaskSpec;
+  provenance?: RuntimeDogfoodExternalProbeScenarioProvenance;
 };
 
 export type RuntimeDogfoodExternalProbeRun = {
   run_version: "runtime_dogfood_external_probe_run_v1";
+  provenance: RuntimeDogfoodExternalProbeProvenance;
   endpoint: string;
   service_pid: number | null;
   launcher_exit_code: number | null;
@@ -306,6 +339,57 @@ function buildSliceDiagnostics(args: {
     scenario_id: args.scenarioId,
     command_count: commands.length,
     commands,
+  };
+}
+
+function buildRunProvenance(args: {
+  slices: RuntimeDogfoodExternalProbeSlice[];
+  workspaceRoot?: string;
+}): RuntimeDogfoodExternalProbeProvenance {
+  const workspaceRoot = args.workspaceRoot ?? null;
+  const resolved = workspaceRoot ? path.resolve(workspaceRoot) : null;
+  return {
+    provenance_version: "runtime_dogfood_external_probe_provenance_v1",
+    verifier_process_cwd: process.cwd(),
+    repo_root: repoRoot,
+    workspace_root_input: workspaceRoot,
+    workspace_root_resolved: resolved,
+    workspace_root_exists: resolved ? fs.existsSync(resolved) : false,
+    slices: args.slices,
+  };
+}
+
+function attachScenarioProvenance(args: {
+  probe: RuntimeDogfoodExternalProbeScenarioRun;
+  workspaceRoot?: string;
+}): RuntimeDogfoodExternalProbeScenarioRun {
+  const workspaceRoot = args.workspaceRoot ?? null;
+  const resolved = workspaceRoot ? path.resolve(workspaceRoot) : null;
+  const targetFiles = args.probe.task_spec.expectations.target_files_include ?? [];
+  return {
+    ...args.probe,
+    provenance: {
+      provenance_version: "runtime_dogfood_external_probe_provenance_v1",
+      slice: args.probe.diagnostics.slice,
+      scenario_id: args.probe.id,
+      verifier_process_cwd: process.cwd(),
+      repo_root: repoRoot,
+      workspace_root_input: workspaceRoot,
+      workspace_root_resolved: resolved,
+      workspace_root_exists: resolved ? fs.existsSync(resolved) : false,
+      endpoint: args.probe.endpoint,
+      target_files: targetFiles,
+      target_paths: resolved ? targetFiles.map((file) => path.join(resolved, file)) : targetFiles,
+      verifier_commands: args.probe.diagnostics.commands.map((command) => ({
+        command: command.command,
+        cwd: command.cwd,
+      })),
+      fresh_shell: true,
+      after_agent_exit: args.probe.task_spec.expectations.after_exit_required === true,
+      external_visibility_required: args.probe.task_spec.expectations.service_lifecycle_required === true
+        || args.probe.task_spec.expectations.after_exit_required === true
+        || (args.probe.task_spec.expectations.external_visibility_requirements_match ?? []).length > 0,
+    },
   };
 }
 
@@ -1381,7 +1465,8 @@ export async function runRuntimeDogfoodExternalProbe(options: ExternalProbeOptio
   let portIndex = 0;
   for (const slice of slices) {
     const needsPort = slice === "service_after_exit" || slice === "publish_install" || slice === "deploy_hook_web";
-    probes.push(await runProbeSlice(slice, needsPort ? ports[portIndex++] : undefined, options.workspaceRoot));
+    const probe = await runProbeSlice(slice, needsPort ? ports[portIndex++] : undefined, options.workspaceRoot);
+    probes.push(attachScenarioProvenance({ probe, workspaceRoot: options.workspaceRoot }));
   }
   const taskSpecs = probes.map((probe) => probe.task_spec);
   const dogfoodResult = runRuntimeDogfoodSuite(runtimeDogfoodTasksFromSpecs(taskSpecs));
@@ -1389,6 +1474,7 @@ export async function runRuntimeDogfoodExternalProbe(options: ExternalProbeOptio
   const diagnostics = probes.map((probe) => probe.diagnostics);
   return {
     run_version: "runtime_dogfood_external_probe_run_v1",
+    provenance: buildRunProvenance({ slices, workspaceRoot: options.workspaceRoot }),
     endpoint: primary?.endpoint ?? "",
     service_pid: primary?.service_pid ?? null,
     launcher_exit_code: primary?.launcher_exit_code ?? null,

@@ -6,6 +6,7 @@ import {
   type RealAbSuiteKind,
 } from "./aionis-real-ab-validation.ts";
 import type {
+  RealAbFairnessManifestV1,
   RealAbLiveEvidenceAgentEventsFile,
   RealAbLiveEvidenceArmManifest,
   RealAbLiveEvidenceManifest,
@@ -16,6 +17,11 @@ export type RealAbLiveEvidenceBundleOptions = {
   suite_kind?: Exclude<RealAbSuiteKind, "harness_calibration">;
   task_ids: string[];
   generated_at?: string;
+  model?: string | null;
+  reasoning_effort?: string | null;
+  agent_cli?: string | null;
+  packet_policy?: RealAbFairnessManifestV1["packet_policy"]["mode"];
+  verifier_version?: string;
 };
 
 export type RealAbLiveEvidenceBundleFile = {
@@ -105,6 +111,51 @@ function armManifest(args: {
   };
 }
 
+export function buildRealAbFairnessManifestV1(
+  options: RealAbLiveEvidenceBundleOptions,
+): RealAbFairnessManifestV1 {
+  const taskIds = normalizeTaskIds(options.task_ids);
+  return {
+    manifest_version: "aionis_ab_fairness_manifest_v1",
+    ...(options.generated_at ? { frozen_at: options.generated_at } : {}),
+    task_ids: taskIds,
+    frozen: {
+      task_spec: true,
+      verifier: true,
+      packet_policy: true,
+      initial_workspace: true,
+    },
+    run_environment: {
+      model: options.model ?? null,
+      reasoning_effort: options.reasoning_effort ?? null,
+      agent_cli: options.agent_cli ?? null,
+    },
+    verifier: {
+      version: options.verifier_version ?? "runtime_dogfood_external_probe_run_v1",
+      same_verifier: true,
+      require_workspace_provenance: true,
+      require_fresh_shell: true,
+    },
+    packet_policy: {
+      mode: options.packet_policy ?? "contract_only",
+      baseline_packet_source: "none",
+      aionis_packet_source: "automatic_runtime",
+      negative_packet_source: "irrelevant_low_trust",
+      positive_packet_source: "oracle_handoff",
+      forbid_aionis_only_manual_hints: true,
+    },
+    arm_equivalence: {
+      same_model: true,
+      same_reasoning_effort: true,
+      same_agent_cli: true,
+      same_agent_cli_version: true,
+      same_command_hash: true,
+      same_initial_workspace_hash: true,
+      same_verifier_workspace: true,
+    },
+  };
+}
+
 export function buildRealAbLiveEvidenceManifestTemplate(
   options: RealAbLiveEvidenceBundleOptions,
 ): RealAbLiveEvidenceManifest {
@@ -127,6 +178,10 @@ export function buildRealAbLiveEvidenceManifestTemplate(
       same_environment_reset: true,
       same_verifier: true,
     },
+    fairness_manifest: buildRealAbFairnessManifestV1({
+      ...options,
+      task_ids: taskIds,
+    }),
     task_ids: taskIds,
     arms: {
       baseline: armManifest({ arm: "baseline", suiteId: options.suite_id }),

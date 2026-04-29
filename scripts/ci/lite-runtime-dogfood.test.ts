@@ -341,6 +341,12 @@ test("service after-exit external probe can validate the actual arm workspace ca
       workspaceRoot: workspace,
     });
     assert.equal(passedRun.fresh_shell_probe_passed, true);
+    assert.equal(passedRun.provenance.provenance_version, "runtime_dogfood_external_probe_provenance_v1");
+    assert.equal(passedRun.provenance.workspace_root_resolved, workspace);
+    assert.equal(passedRun.probes[0]?.provenance?.workspace_root_resolved, workspace);
+    assert.deepEqual(passedRun.probes[0]?.provenance?.target_paths, [servicePath]);
+    assert.equal(passedRun.probes[0]?.provenance?.fresh_shell, true);
+    assert.equal(passedRun.probes[0]?.provenance?.after_agent_exit, true);
     assert.match(passedRun.fresh_shell_probe_output, /"ok":true/);
     assert.deepEqual(
       passedRun.probes[0]?.task_spec.expectations.target_files_include,

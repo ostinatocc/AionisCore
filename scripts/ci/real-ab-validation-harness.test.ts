@@ -28,6 +28,7 @@ import {
   type RealAbLiveEvidenceManifest,
 } from "../lib/aionis-real-ab-live-evidence-assembler.ts";
 import {
+  buildRealAbFairnessManifestV1,
   buildRealAbLiveEvidenceBundleFiles,
   buildRealAbLiveEvidenceManifestTemplate,
 } from "../lib/aionis-real-ab-live-evidence-bundle.ts";
@@ -744,6 +745,69 @@ function loadedLiveEvidence(): RealAbLiveEvidenceLoadedInputs {
   };
 }
 
+function addFairnessLockedLlmResults(
+  loaded: RealAbLiveEvidenceLoadedInputs,
+  overrides: Partial<Record<keyof RealAbLiveEvidenceLoadedInputs, { model?: string }>> = {},
+) {
+  const commandHash = "a".repeat(64);
+  const workspaceHash = "b".repeat(64);
+  for (const arm of ["baseline", "aionis_assisted", "negative_control", "positive_control"] as const) {
+    loaded[arm].llm_result = {
+      result_version: "aionis_real_ab_llm_arm_attempt_result_v1",
+      probe_id: "external_probe_service_after_exit",
+      success: true,
+      run_environment: {
+        model: overrides[arm]?.model ?? "gpt-5.5",
+        reasoning_effort: "xhigh",
+        agent_cli: "codex",
+        agent_cli_version: "codex-cli 0.125.0",
+        command_sha256: commandHash,
+        workspace_before: { hash: workspaceHash },
+        workspace_after: { hash: `${arm}-after` },
+      },
+      command_result: {
+        duration_ms: 1000,
+        stderr_tail: "tokens used\n1,000\n",
+      },
+    };
+  }
+}
+
+function addVerifierProvenance(loaded: RealAbLiveEvidenceLoadedInputs) {
+  for (const arm of ["baseline", "aionis_assisted", "negative_control", "positive_control"] as const) {
+    const workspaceRoot = path.join(os.tmpdir(), `aionis-fairness-${arm}`);
+    loaded[arm].dogfood_run.provenance = {
+      provenance_version: "runtime_dogfood_external_probe_provenance_v1",
+      verifier_process_cwd: repoRoot,
+      repo_root: repoRoot,
+      workspace_root_input: workspaceRoot,
+      workspace_root_resolved: workspaceRoot,
+      workspace_root_exists: true,
+      slices: ["service_after_exit"],
+    };
+    loaded[arm].dogfood_run.probes = loaded[arm].dogfood_run.probes.map((probe) => ({
+      ...probe,
+      provenance: {
+        provenance_version: "runtime_dogfood_external_probe_provenance_v1",
+        slice: "service_after_exit",
+        scenario_id: probe.id,
+        verifier_process_cwd: repoRoot,
+        repo_root: repoRoot,
+        workspace_root_input: workspaceRoot,
+        workspace_root_resolved: workspaceRoot,
+        workspace_root_exists: true,
+        endpoint: probe.endpoint,
+        target_files: ["scripts/health-server.mjs"],
+        target_paths: [path.join(workspaceRoot, "scripts/health-server.mjs")],
+        verifier_commands: [{ command: "curl -fsS http://127.0.0.1:4199/healthz", cwd: repoRoot }],
+        fresh_shell: true,
+        after_agent_exit: true,
+        external_visibility_required: true,
+      },
+    }));
+  }
+}
+
 test("real A/B live evidence assembler builds paired dogfood capture from separate arm artifacts", () => {
   const manifest = liveEvidenceManifest();
   const loaded = loadedLiveEvidence();
@@ -826,6 +890,75 @@ test("real A/B live evidence assembler carries LLM runner resource outcomes into
   assert.match(markdown, /aaaaaaaaaaaa\.\.\./);
 });
 
+test("real A/B fairness manifest accepts model-locked causal arm evidence", () => {
+  const manifest = liveEvidenceManifest();
+  manifest.fairness_manifest = buildRealAbFairnessManifestV1({
+    suite_id: manifest.suite_id,
+    suite_kind: manifest.suite_kind,
+    task_ids: manifest.task_ids ?? [],
+    generated_at: manifest.generated_at,
+    model: "gpt-5.5",
+    reasoning_effort: "xhigh",
+    agent_cli: "codex",
+  });
+  const loaded = loadedLiveEvidence();
+  addFairnessLockedLlmResults(loaded);
+  addVerifierProvenance(loaded);
+
+  const assemblerRequirements = validateRealAbLiveEvidenceAssemblerInputs({ manifest, loaded });
+
+  assert.equal(assemblerRequirements.every((requirement) => requirement.status === "pass"), true);
+  assert.ok(assemblerRequirements.some((requirement) =>
+    requirement.id === "live_evidence:fairness_manifest:verifier_workspace"
+    && requirement.status === "pass"
+  ));
+});
+
+test("real A/B fairness manifest fails when one arm uses a different model", () => {
+  const manifest = liveEvidenceManifest();
+  manifest.fairness_manifest = buildRealAbFairnessManifestV1({
+    suite_id: manifest.suite_id,
+    suite_kind: manifest.suite_kind,
+    task_ids: manifest.task_ids ?? [],
+    model: "gpt-5.5",
+    reasoning_effort: "xhigh",
+    agent_cli: "codex",
+  });
+  const loaded = loadedLiveEvidence();
+  addFairnessLockedLlmResults(loaded, {
+    aionis_assisted: { model: "gpt-5.4" },
+  });
+  addVerifierProvenance(loaded);
+
+  const assemblerRequirements = validateRealAbLiveEvidenceAssemblerInputs({ manifest, loaded });
+
+  assert.ok(assemblerRequirements.some((requirement) =>
+    requirement.id === "live_evidence:fairness_manifest:run_environment:model"
+    && requirement.status === "fail"
+  ));
+});
+
+test("real A/B fairness manifest fails without verifier workspace provenance", () => {
+  const manifest = liveEvidenceManifest();
+  manifest.fairness_manifest = buildRealAbFairnessManifestV1({
+    suite_id: manifest.suite_id,
+    suite_kind: manifest.suite_kind,
+    task_ids: manifest.task_ids ?? [],
+    model: "gpt-5.5",
+    reasoning_effort: "xhigh",
+    agent_cli: "codex",
+  });
+  const loaded = loadedLiveEvidence();
+  addFairnessLockedLlmResults(loaded);
+
+  const assemblerRequirements = validateRealAbLiveEvidenceAssemblerInputs({ manifest, loaded });
+
+  assert.ok(assemblerRequirements.some((requirement) =>
+    requirement.id === "live_evidence:fairness_manifest:verifier_provenance"
+    && requirement.status === "fail"
+  ));
+});
+
 test("real A/B live evidence assembler rejects loaded arm artifacts without probe events", () => {
   const manifest = liveEvidenceManifest();
   const loaded = loadedLiveEvidence();
@@ -884,6 +1017,8 @@ test("real A/B live evidence bundle templates create an incomplete collection sc
   const filePaths = new Set(files.map((file) => file.relative_path));
 
   assert.equal(manifest.manifest_version, "aionis_real_ab_live_evidence_manifest_v1");
+  assert.equal(manifest.fairness_manifest?.manifest_version, "aionis_ab_fairness_manifest_v1");
+  assert.equal(manifest.fairness_manifest?.packet_policy.mode, "contract_only");
   assert.equal(manifest.suite_kind, "pilot_real_trace");
   assert.equal(manifest.arms.aionis_assisted.packet_source, "automatic_runtime");
   assert.equal(manifest.arms.negative_control.authority_level, "observational");
