@@ -47,6 +47,36 @@ const serviceAfterExitSource = [
   'process.on("SIGINT", shutdown);',
   "",
 ].join("\n");
+const serviceLifecycleHardRelativePath = "scripts/fixtures/runtime-dogfood/service-lifecycle-hard-server.mjs";
+const serviceLifecycleHardBrokenSource = [
+  'import http from "node:http";',
+  "",
+  "function argValue(flag) {",
+  "  const index = process.argv.indexOf(flag);",
+  "  return index >= 0 ? process.argv[index + 1] : null;",
+  "}",
+  "",
+  'const port = Number.parseInt(argValue("--port") ?? "0", 10);',
+  "if (!Number.isInteger(port) || port <= 0) {",
+  '  console.error("usage: node service-lifecycle-hard-server.mjs --port <port> --pid-file <path> --log-file <path>");',
+  "  process.exit(2);",
+  "}",
+  "",
+  "const server = http.createServer((request, response) => {",
+  '  if (request.url === "/healthz") {',
+  '    response.writeHead(200, { "content-type": "application/json" });',
+  '    response.end(JSON.stringify({ ok: true, pid: process.pid, mode: "broken_missing_lifecycle_artifacts" }));',
+  "    return;",
+  "  }",
+  '  response.writeHead(404, { "content-type": "text/plain" });',
+  '  response.end("not found\\n");',
+  "});",
+  "",
+  'server.listen(port, "127.0.0.1", () => {',
+  "  process.stdout.write(`service-lifecycle-hard-server listening on 127.0.0.1:${port}\\n`);",
+  "});",
+  "",
+].join("\n");
 const publishInstallPackageSource = [
   "__version__ = '0.1.0'",
   "",
@@ -54,6 +84,68 @@ const publishInstallPackageSource = [
   "    return 'vectorops-live'",
   "",
 ].join("\n");
+
+export function serviceLifecycleHardFixedSource(): string {
+  return [
+    'import fs from "node:fs";',
+    'import http from "node:http";',
+    'import path from "node:path";',
+    "",
+    "function argValue(flag) {",
+    "  const index = process.argv.indexOf(flag);",
+    "  return index >= 0 ? process.argv[index + 1] : null;",
+    "}",
+    "",
+    'const port = Number.parseInt(argValue("--port") ?? "0", 10);',
+    'const pidFile = argValue("--pid-file");',
+    'const logFile = argValue("--log-file");',
+    "if (!Number.isInteger(port) || port <= 0 || !pidFile || !logFile) {",
+    '  console.error("usage: node service-lifecycle-hard-server.mjs --port <port> --pid-file <path> --log-file <path>");',
+    "  process.exit(2);",
+    "}",
+    "",
+    "for (const file of [pidFile, logFile]) {",
+    "  fs.mkdirSync(path.dirname(file), { recursive: true });",
+    "}",
+    "",
+    "const startedAt = Date.now();",
+    "function appendLog(message) {",
+    "  fs.appendFileSync(logFile, `${new Date().toISOString()} ${message}\\n`);",
+    "}",
+    "",
+    "const server = http.createServer((request, response) => {",
+    '  if (request.url === "/healthz") {',
+    '    response.writeHead(200, { "content-type": "application/json" });',
+    "    response.end(JSON.stringify({",
+    "      ok: true,",
+    "      lifecycle: 'hard',",
+    "      pid: process.pid,",
+    "      port,",
+    "      uptime_ms: Date.now() - startedAt,",
+    "    }));",
+    "    return;",
+    "  }",
+    '  response.writeHead(404, { "content-type": "text/plain" });',
+    '  response.end("not found\\n");',
+    "});",
+    "",
+    'server.listen(port, "127.0.0.1", () => {',
+    "  fs.writeFileSync(pidFile, JSON.stringify({ pid: process.pid, port, started_at_ms: startedAt }) + '\\n');",
+    "  appendLog(`service_lifecycle_hard_started pid=${process.pid} port=${port}`);",
+    "  process.stdout.write(`service-lifecycle-hard-server listening on 127.0.0.1:${port}\\n`);",
+    "});",
+    "",
+    "function shutdown() {",
+    "  appendLog(`service_lifecycle_hard_stopping pid=${process.pid}`);",
+    "  server.close(() => process.exit(0));",
+    "  setTimeout(() => process.exit(0), 1000).unref();",
+    "}",
+    "",
+    'process.on("SIGTERM", shutdown);',
+    'process.on("SIGINT", shutdown);',
+    "",
+  ].join("\n");
+}
 export const aiCodeCiRepairVariants = [
   "percentage_rounding",
   "misleading_ai_patch",
@@ -360,6 +452,7 @@ function usage(): string {
   return [
     "Usage:",
     "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_service_after_exit --workspace /tmp/worktree [--force]",
+    "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_service_lifecycle_hard --workspace /tmp/worktree [--force]",
     "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_publish_install --workspace /tmp/worktree [--force]",
     "  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_deploy_hook_web --workspace /tmp/worktree [--force]",
     `  npx tsx scripts/aionis-real-ab-prepare-workspace.ts --probe external_probe_ai_code_ci_repair --workspace /tmp/worktree [--variant ${aiCodeCiRepairVariants.join("|")}] [--force]`,
@@ -427,6 +520,27 @@ export function prepareServiceAfterExitWorkspace(workspace: string, options: { f
       "",
       "Launch `scripts/fixtures/runtime-dogfood/service-after-exit-server.mjs` as a detached service.",
       "The verifier starts the workspace copy, waits for the launcher to exit, then probes `/healthz` from a fresh shell.",
+      "",
+    ].join("\n"),
+    force,
+  );
+}
+
+export function prepareServiceLifecycleHardWorkspace(workspace: string, options: { force?: boolean } = {}): void {
+  const root = path.resolve(workspace);
+  const force = options.force ?? false;
+  writeFile(
+    path.join(root, serviceLifecycleHardRelativePath),
+    serviceLifecycleHardBrokenSource,
+    force,
+  );
+  writeFile(
+    path.join(root, "README.service-lifecycle-hard-fixture.md"),
+    [
+      "# Service Lifecycle Hard Fixture",
+      "",
+      `Repair \`${serviceLifecycleHardRelativePath}\` so it honors \`--pid-file\` and \`--log-file\`, writes lifecycle evidence, survives launcher exit, and serves \`/healthz\` from a detached process.`,
+      "The verifier launches the workspace copy, waits for the launcher to exit, then validates the HTTP endpoint, pid file, live process, and lifecycle log from a fresh shell.",
       "",
     ].join("\n"),
     force,
@@ -560,6 +674,11 @@ function main(): void {
   const options = parseArgs(process.argv.slice(2));
   if (options.probe === "external_probe_service_after_exit") {
     prepareServiceAfterExitWorkspace(options.workspace ?? "", { force: options.force });
+    console.log(`Prepared ${options.probe} fixture in ${path.resolve(options.workspace ?? "")}`);
+    return;
+  }
+  if (options.probe === "external_probe_service_lifecycle_hard") {
+    prepareServiceLifecycleHardWorkspace(options.workspace ?? "", { force: options.force });
     console.log(`Prepared ${options.probe} fixture in ${path.resolve(options.workspace ?? "")}`);
     return;
   }

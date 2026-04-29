@@ -9,7 +9,9 @@ import {
   prepareDeployHookWebWorkspace,
   preparePublishInstallWorkspace,
   prepareServiceAfterExitWorkspace,
+  prepareServiceLifecycleHardWorkspace,
   publishInstallFixedBuildScript,
+  serviceLifecycleHardFixedSource,
 } from "../aionis-real-ab-prepare-workspace.ts";
 import { runRuntimeDogfoodSuite, runtimeDogfoodTasksFromSpecs } from "../lib/lite-runtime-dogfood.ts";
 import {
@@ -226,11 +228,11 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.equal(run.run_version, "runtime_dogfood_external_probe_run_v1");
   assert.equal(run.launcher_exit_code, 0);
   assert.ok(run.service_pid);
-  assert.equal(run.probes.length, 7);
+  assert.equal(run.probes.length, 8);
   assert.equal(run.diagnostics.length, runtimeDogfoodExternalProbeSlices.length);
   assert.equal(run.fresh_shell_probe_passed, true);
   assert.equal(run.dogfood_result.overall_status, "pass");
-  assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 7);
+  assert.equal(run.dogfood_result.proof_boundary.live_execution_scenarios, 8);
   assert.equal(run.dogfood_result.proof_boundary.fixture_evidence_scenarios, 0);
   assert.equal(run.dogfood_result.summary.after_exit_correct_rate, 1);
   assert.equal(run.dogfood_result.report.product_status, "pass_live_evidence");
@@ -247,7 +249,7 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.handoff_resume?.rate, 1);
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.agent_takeover?.rate, 1);
   assert.equal(run.dogfood_result.report.product_metrics.live_execution_coverage_by_family.ai_code_ci_repair?.rate, 1);
-  assert.equal(run.dogfood_result.coverage.task_families.service_publish_validate, 1);
+  assert.equal(run.dogfood_result.coverage.task_families.service_publish_validate, 2);
   assert.equal(run.dogfood_result.coverage.task_families.package_publish_validate, 1);
   assert.equal(run.dogfood_result.coverage.task_families.git_deploy_webserver, 1);
   assert.equal(run.dogfood_result.coverage.task_families.task_resume_interrupted_export_pipeline, 1);
@@ -259,6 +261,7 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
   const diagnosticSlices = new Set(run.diagnostics.map((diagnostic) => diagnostic.slice));
   assert.deepEqual(diagnosticSlices, new Set(runtimeDogfoodExternalProbeSlices));
   assert.ok(scenarioIds.has("external_probe_service_after_exit"));
+  assert.ok(scenarioIds.has("external_probe_service_lifecycle_hard"));
   assert.ok(scenarioIds.has("external_probe_publish_install"));
   assert.ok(scenarioIds.has("external_probe_deploy_hook_web"));
   assert.ok(scenarioIds.has("external_probe_interrupted_resume"));
@@ -290,9 +293,53 @@ test("runtime dogfood external probe runs live proof slices and produces live ev
     assert.equal(scenario.metrics.stable_promotion_allowed, true);
   }
   assert.match(run.fresh_shell_probe_output, /"ok":true/);
+  assert.match(run.fresh_shell_probe_output, /pid_file_matches/);
   assert.match(run.fresh_shell_probe_output, /Successfully installed vectorops-0\.1\.0/);
   assert.match(run.fresh_shell_probe_output, /deployed revision visible through live dogfood/);
   assert.match(run.fresh_shell_probe_output, /applies percentage discounts in cents/);
+});
+
+test("hard service lifecycle external probe validates pid, log, live process, and fresh shell causally", async () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-dogfood-service-hard-workspace-"));
+  const servicePath = path.join(workspace, "scripts", "fixtures", "runtime-dogfood", "service-lifecycle-hard-server.mjs");
+  try {
+    prepareServiceLifecycleHardWorkspace(workspace, { force: true });
+
+    const failedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["service_lifecycle_hard"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(failedRun.probes.length, 1);
+    assert.equal(failedRun.fresh_shell_probe_passed, false);
+    assert.match(failedRun.probes[0]?.diagnostics.stderr_tail ?? "", /pid_file_missing_or_invalid|log_missing_start_marker/);
+    assert.equal(
+      failedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      false,
+    );
+
+    fs.writeFileSync(servicePath, serviceLifecycleHardFixedSource());
+    const passedRun = await runRuntimeDogfoodExternalProbe({
+      slices: ["service_lifecycle_hard"],
+      workspaceRoot: workspace,
+    });
+    assert.equal(passedRun.fresh_shell_probe_passed, true);
+    assert.match(passedRun.fresh_shell_probe_output, /"pid_file_matches":true/);
+    assert.match(passedRun.fresh_shell_probe_output, /"log_has_start_marker":true/);
+    assert.match(passedRun.fresh_shell_probe_output, /"process_alive":true/);
+    assert.deepEqual(passedRun.probes[0]?.provenance?.target_paths, [servicePath]);
+    assert.equal(passedRun.probes[0]?.provenance?.fresh_shell, true);
+    assert.equal(passedRun.probes[0]?.provenance?.after_agent_exit, true);
+    assert.deepEqual(
+      passedRun.probes[0]?.task_spec.expectations.target_files_include,
+      ["scripts/fixtures/runtime-dogfood/service-lifecycle-hard-server.mjs"],
+    );
+    assert.equal(
+      passedRun.dogfood_result.scenarios[0]?.metrics.execution_evidence_allows_authoritative,
+      true,
+    );
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
 });
 
 test("runtime dogfood external probe can run one selected slice with diagnostics", async () => {

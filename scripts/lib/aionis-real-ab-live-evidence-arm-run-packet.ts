@@ -36,6 +36,7 @@ export type RealAbLiveEvidenceArmRunPacket = {
 
 const probeToSlice: Record<string, string> = {
   external_probe_service_after_exit: "service_after_exit",
+  external_probe_service_lifecycle_hard: "service_lifecycle_hard",
   external_probe_publish_install: "publish_install",
   external_probe_deploy_hook_web: "deploy_hook_web",
   external_probe_interrupted_resume: "interrupted_resume",

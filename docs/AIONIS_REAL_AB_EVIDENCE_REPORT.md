@@ -21,6 +21,7 @@ These runs are directional pilot evidence, not broad product proof.
 - The LLM runner now records explicit run-environment evidence: requested model, reasoning effort, agent CLI, CLI version, command hash, and workspace before/after hashes.
 - New clean suites should include `aionis_ab_fairness_manifest_v1`: frozen task ids, frozen verifier, frozen packet policy, required same model/effort/CLI/command/workspace hashes, and verifier workspace provenance.
 - External dogfood probe artifacts now carry `runtime_dogfood_external_probe_provenance_v1`, including the verified workspace root, target paths, verifier commands, and fresh-shell/after-exit boundary flags.
+- The hard service lifecycle verifier is available as `external_probe_service_lifecycle_hard`; it validates HTTP health, pid-file, live process, and lifecycle log evidence from a fresh shell after launcher exit.
 - LLM suites run before this arm-prompt isolation should be treated as directional evidence and verifier evidence, not final clean A/B proof.
 
 ## Suites
@@ -352,6 +353,7 @@ Completed:
 - Ran `service-causal-model-locked-20260429-164153`; the gate passed with 70.4% action-count reduction, 46.4% token reduction, and 45.8% time reduction versus explicit GPT-5.5/xhigh Codex baseline.
 - Added `aionis_ab_fairness_manifest_v1` templates and assembler guards so future clean suites fail when arms do not share model/effort/CLI/version/command hash/initial workspace hash or when verifier workspace provenance is missing.
 - Added external probe provenance to dogfood run JSON so verifier artifacts state which workspace root and target paths were actually validated.
+- Added `external_probe_service_lifecycle_hard`, a harder service lifecycle slice that requires the service to preserve durable lifecycle evidence beyond a health endpoint: pid file, lifecycle log, live PID, and fresh-shell HTTP validation.
 - Kept full workflow, replay, and pattern memory internal by default.
 - Kept harness verifiers outside the agent default workflow.
 - Repeated the same three families after packet compression.
@@ -416,6 +418,7 @@ Not allowed current claim:
 Run at least two more paired trials for the current families, but only under the frozen fairness protocol:
 
 - `external_probe_service_after_exit`
+- `external_probe_service_lifecycle_hard`
 - `external_probe_publish_install`
 - `external_probe_deploy_hook_web`
 - `external_probe_ai_code_ci_repair`

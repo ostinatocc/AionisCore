@@ -19,6 +19,7 @@ import {
 
 export type RuntimeDogfoodExternalProbeSlice =
   | "service_after_exit"
+  | "service_lifecycle_hard"
   | "publish_install"
   | "deploy_hook_web"
   | "interrupted_resume"
@@ -140,8 +141,11 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..", "..");
 const serviceRelativePath = "scripts/fixtures/runtime-dogfood/service-after-exit-server.mjs";
 const repoServicePath = path.join(repoRoot, serviceRelativePath);
+const serviceLifecycleHardRelativePath = "scripts/fixtures/runtime-dogfood/service-lifecycle-hard-server.mjs";
+const repoServiceLifecycleHardPath = path.join(repoRoot, serviceLifecycleHardRelativePath);
 export const runtimeDogfoodExternalProbeSlices: readonly RuntimeDogfoodExternalProbeSlice[] = [
   "service_after_exit",
+  "service_lifecycle_hard",
   "publish_install",
   "deploy_hook_web",
   "interrupted_resume",
@@ -160,6 +164,20 @@ function childProcessEnv(): NodeJS.ProcessEnv {
   delete env.NODE_TEST_CONTEXT;
   delete env.NODE_TEST_REPORTER;
   delete env.NODE_TEST_REPORTER_DESTINATION;
+  delete env.HTTP_PROXY;
+  delete env.HTTPS_PROXY;
+  delete env.ALL_PROXY;
+  delete env.http_proxy;
+  delete env.https_proxy;
+  delete env.all_proxy;
+  const noProxy = new Set([
+    ...(env.NO_PROXY ?? env.no_proxy ?? "").split(",").map((entry) => entry.trim()).filter(Boolean),
+    "127.0.0.1",
+    "localhost",
+    "::1",
+  ]);
+  env.NO_PROXY = [...noProxy].join(",");
+  env.no_proxy = env.NO_PROXY;
   return env;
 }
 
@@ -248,6 +266,95 @@ function writeDetachedLauncher(args: {
   return launcherPath;
 }
 
+function writeServiceLifecycleHardVerifier(tempDir: string): string {
+  const verifierPath = path.join(tempDir, "service-lifecycle-hard-verifier.mjs");
+  fs.writeFileSync(
+    verifierPath,
+    [
+      'import fs from "node:fs";',
+      'import http from "node:http";',
+      "",
+      "function argValue(flag) {",
+      "  const index = process.argv.indexOf(flag);",
+      "  return index >= 0 ? process.argv[index + 1] : null;",
+      "}",
+      "",
+      "function fail(message) {",
+      "  console.error(message);",
+      "  process.exit(1);",
+      "}",
+      "",
+      "function readJsonFile(filePath, label) {",
+      "  try {",
+      "    return JSON.parse(fs.readFileSync(filePath, 'utf8'));",
+      "  } catch (error) {",
+      "    fail(`${label}_missing_or_invalid:${error instanceof Error ? error.message : String(error)}`);",
+      "  }",
+      "}",
+      "",
+      "function getJson(url) {",
+      "  return new Promise((resolve, reject) => {",
+      "    const request = http.get(url, (response) => {",
+      "      let body = '';",
+      "      response.setEncoding('utf8');",
+      "      response.on('data', (chunk) => { body += chunk; });",
+      "      response.on('end', () => {",
+      "        if (response.statusCode !== 200) {",
+      "          reject(new Error(`http_status:${response.statusCode}`));",
+      "          return;",
+      "        }",
+      "        try {",
+      "          resolve(JSON.parse(body));",
+      "        } catch (error) {",
+      "          reject(error);",
+      "        }",
+      "      });",
+      "    });",
+      "    request.on('error', reject);",
+      "    request.setTimeout(3000, () => {",
+      "      request.destroy(new Error('http_timeout'));",
+      "    });",
+      "  });",
+      "}",
+      "",
+      "const healthUrl = argValue('--health-url');",
+      "const pidFile = argValue('--pid-file');",
+      "const logFile = argValue('--log-file');",
+      "const expectedPid = Number.parseInt(argValue('--expected-pid') ?? '0', 10);",
+      "if (!healthUrl || !pidFile || !logFile || !Number.isInteger(expectedPid) || expectedPid <= 0) {",
+      "  fail('usage: service-lifecycle-hard-verifier --health-url <url> --pid-file <path> --log-file <path> --expected-pid <pid>');",
+      "}",
+      "",
+      "const health = await getJson(healthUrl).catch((error) => fail(`health_probe_failed:${error instanceof Error ? error.message : String(error)}`));",
+      "const pidData = readJsonFile(pidFile, 'pid_file');",
+      "const logText = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';",
+      "",
+      "if (health.ok !== true) fail('health_not_ok');",
+      "if (health.pid !== expectedPid) fail(`health_pid_mismatch:${health.pid}:${expectedPid}`);",
+      "if (pidData.pid !== expectedPid) fail(`pid_file_mismatch:${pidData.pid}:${expectedPid}`);",
+      "if (pidData.port !== health.port) fail(`pid_file_port_mismatch:${pidData.port}:${health.port}`);",
+      "if (!logText.includes('service_lifecycle_hard_started')) fail('log_missing_start_marker');",
+      "try {",
+      "  process.kill(expectedPid, 0);",
+      "} catch {",
+      "  fail(`process_not_alive:${expectedPid}`);",
+      "}",
+      "",
+      "console.log(JSON.stringify({",
+      "  ok: true,",
+      "  health_url: healthUrl,",
+      "  pid: expectedPid,",
+      "  health_pid: health.pid,",
+      "  pid_file_matches: true,",
+      "  log_has_start_marker: true,",
+      "  process_alive: true,",
+      "}));",
+      "",
+    ].join("\n"),
+  );
+  return verifierPath;
+}
+
 async function launchDetachedProcess(args: {
   tempDir: string;
   command: string;
@@ -275,11 +382,11 @@ async function probeFreshShellCommand(command: string, timeoutMs = 5000, cwd = r
   return await execFileResult(shell, args, { timeoutMs, cwd });
 }
 
-async function waitForFreshShellCommand(command: string, timeoutMs = 8000): Promise<CommandResult> {
+async function waitForFreshShellCommand(command: string, timeoutMs = 8000, cwd = repoRoot): Promise<CommandResult> {
   let last: CommandResult = { code: 1, stdout: "", stderr: "probe_not_started", durationMs: 0 };
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    last = await probeFreshShellCommand(command);
+    last = await probeFreshShellCommand(command, 5000, cwd);
     if (last.code === 0) return last;
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
@@ -294,6 +401,10 @@ function killService(pid: number | null): void {
     const code = (error as NodeJS.ErrnoException).code;
     if (code !== "ESRCH") throw error;
   }
+}
+
+function removeTempDir(tempDir: string): void {
+  fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }
 
 function escapeRegex(value: string): string {
@@ -588,6 +699,138 @@ function buildServiceTaskSpec(args: {
   };
 }
 
+function buildServiceLifecycleHardTaskSpec(args: {
+  endpoint: string;
+  probe: CommandResult;
+  servicePid: number | null;
+  launcherExitCode: number | null;
+}): RuntimeDogfoodTaskSpec {
+  const validationPassed = args.probe.code === 0;
+  const healthCheck = `${args.endpoint}/healthz`;
+  const curlHealthCheck = `curl -fsS ${healthCheck}`;
+  const evidenceCommand = "service-lifecycle-hard-verifier";
+  return {
+    id: "external_probe_service_lifecycle_hard",
+    title: "External probe hard service lifecycle validation",
+    query_text: "Repair the service so it survives launcher exit and proves lifecycle state through HTTP, pid-file, live PID, and log evidence from a fresh shell.",
+    evidence_source: "external_probe",
+    trajectory: {
+      title: "Runtime dogfood hard detached service lifecycle validation",
+      task_family: "service_publish_validate",
+      steps: [
+        { role: "assistant", text: "The service must survive launcher exit and expose durable lifecycle evidence, not just a transient health response." },
+        {
+          role: "tool",
+          tool_name: "bash",
+          command: `nohup node ${serviceLifecycleHardRelativePath} --port ${new URL(args.endpoint).port} --pid-file /tmp/aionis-hard-service.pid --log-file /tmp/aionis-hard-service.log >/tmp/aionis-hard-service.out 2>&1 &`,
+        },
+        { role: "tool", tool_name: "bash", command: evidenceCommand },
+        {
+          role: "assistant",
+          text: `Update ${serviceLifecycleHardRelativePath}, launch it detached, then verify ${healthCheck}, pid file, live process, and lifecycle log from a fresh shell after the launcher exits.`,
+        },
+      ],
+    },
+    hints: {
+      target_files: [serviceLifecycleHardRelativePath],
+      acceptance_checks: [
+        evidenceCommand,
+        curlHealthCheck,
+        healthCheck,
+        "--pid-file",
+        "--log-file",
+        "--expected-pid",
+      ],
+      success_invariants: [
+        "fresh_shell_revalidation_passes",
+        "pid_file_matches_live_process",
+        "lifecycle_log_contains_start_marker",
+      ],
+      dependency_requirements: [
+        "service launch must not depend on the agent shell",
+        "pid file and lifecycle log must be durable after launcher exit",
+      ],
+      environment_assumptions: [
+        "detached_process_supported",
+        "fresh_shell_available_for_revalidation",
+        "pid_file_writable",
+        "log_file_writable",
+        "validation_can_run_from_fresh_shell",
+      ],
+      must_hold_after_exit: [
+        "task_result_remains_valid_after_agent_exit",
+        "fresh_shell_revalidation_still_passes_after_agent_exit",
+        "service_pid_remains_alive_after_launcher_exit",
+      ],
+      external_visibility_requirements: [
+        `endpoint_reachable:${healthCheck}`,
+        "pid_file_visible_to_fresh_shell",
+        "lifecycle_log_visible_to_fresh_shell",
+      ],
+    },
+    execution_evidence: runtimeVerifierEvidence({
+      verifierId: "service_lifecycle_hard_fresh_shell_probe",
+      command: evidenceCommand,
+      probe: args.probe,
+      success: validationPassed,
+      failureReason: validationFailureReason("fresh_shell_probe_failed", args.probe),
+      afterAgentExit: true,
+      externalVisibilityRequired: true,
+      evidenceRefs: [
+        `external_probe:fresh_shell:${healthCheck}`,
+        "external_probe:pid_file_matches_live_process",
+        "external_probe:lifecycle_log_contains_start_marker",
+        `launcher_exit_code:${args.launcherExitCode ?? "null"}`,
+        `service_pid:${args.servicePid ?? "null"}`,
+      ],
+    }),
+    expectations: {
+      target_files_include: [serviceLifecycleHardRelativePath],
+      acceptance_checks_match: [
+        "service-lifecycle-hard-verifier",
+        escapeRegex(curlHealthCheck),
+        escapeRegex(healthCheck),
+        "--pid-file",
+        "--log-file",
+        "--expected-pid",
+      ],
+      next_action_match: [escapeRegex(serviceLifecycleHardRelativePath), "pid file", "lifecycle log", "fresh shell"],
+      success_invariants_include: [
+        "fresh_shell_revalidation_passes",
+        "pid_file_matches_live_process",
+        "lifecycle_log_contains_start_marker",
+      ],
+      dependency_requirements_match: [
+        "service launch must not depend on the agent shell",
+        "pid file and lifecycle log must be durable after launcher exit",
+      ],
+      environment_assumptions_include: [
+        "detached_process_supported",
+        "fresh_shell_available_for_revalidation",
+        "pid_file_writable",
+        "log_file_writable",
+        "validation_can_run_from_fresh_shell",
+      ],
+      must_hold_after_exit_include: [
+        "task_result_remains_valid_after_agent_exit",
+        "fresh_shell_revalidation_still_passes_after_agent_exit",
+        "service_pid_remains_alive_after_launcher_exit",
+      ],
+      external_visibility_requirements_match: [
+        escapeRegex(`endpoint_reachable:${healthCheck}`),
+        "pid_file_visible_to_fresh_shell",
+        "lifecycle_log_visible_to_fresh_shell",
+      ],
+      service_lifecycle_required: true,
+      after_exit_required: true,
+      authoritative_gate_allows: true,
+      evidence_allows_authoritative: validationPassed,
+      stable_promotion_allowed: validationPassed,
+      evidence_reasons_include: validationPassed ? [] : ["validation_failed"],
+    },
+  };
+}
+
 function buildPublishInstallTaskSpec(args: {
   endpoint: string;
   probe: CommandResult;
@@ -801,7 +1044,7 @@ async function runLiveWorkspaceProbe(args: {
     const probe = await probeFreshShellCommand(args.validationCommand, 15000, tempDir);
     return { probe, cwd: tempDir, command: args.validationCommand };
   } finally {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 }
 
@@ -932,7 +1175,7 @@ async function runServiceAfterExitProbe(port?: number, workspaceRoot?: string): 
     probe = await waitForFreshShellCommand(healthCommand);
   } finally {
     killService(servicePid);
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 
   const taskSpec = buildServiceTaskSpec({ endpoint, probe, servicePid, launcherExitCode });
@@ -943,6 +1186,98 @@ async function runServiceAfterExitProbe(port?: number, workspaceRoot?: string): 
   });
   const diagnostics = buildSliceDiagnostics({
     slice: "service_after_exit",
+    scenarioId: taskSpec.id,
+    primary: probeDiagnostic,
+    commands: launcherDiagnostic ? [launcherDiagnostic, probeDiagnostic] : [probeDiagnostic],
+    failureClass: launcherExitCode !== 0 || !servicePid
+      ? "service_launch_failed"
+      : probe.code === 0
+        ? "none"
+        : "fresh_shell_probe_failed",
+  });
+  return {
+    id: taskSpec.id,
+    task_family_hint: "service_publish_validate",
+    endpoint,
+    service_pid: servicePid,
+    launcher_exit_code: launcherExitCode,
+    fresh_shell_probe_passed: probe.code === 0,
+    fresh_shell_probe_output: probe.stdout.trim(),
+    diagnostics,
+    task_spec: taskSpec,
+  };
+}
+
+async function runServiceLifecycleHardProbe(port?: number, workspaceRoot?: string): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
+  const selectedPort = port ?? await findOpenPort();
+  const endpoint = `http://127.0.0.1:${selectedPort}`;
+  const resolvedWorkspaceRoot = workspaceRoot ? path.resolve(workspaceRoot) : null;
+  const servicePath = resolvedWorkspaceRoot
+    ? path.join(resolvedWorkspaceRoot, serviceLifecycleHardRelativePath)
+    : repoServiceLifecycleHardPath;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-runtime-dogfood-service-hard-"));
+  const pidFile = path.join(tempDir, "service.pid.json");
+  const logFile = path.join(tempDir, "service.log");
+  const verifierPath = writeServiceLifecycleHardVerifier(tempDir);
+  let servicePid: number | null = null;
+  let launcherExitCode: number | null = null;
+  let probe: CommandResult = { code: 1, stdout: "", stderr: "probe_not_run", durationMs: 0 };
+  let launcherDiagnostic: RuntimeDogfoodExternalProbeCommandDiagnostic | null = null;
+  let verifierCommand = "";
+
+  try {
+    const launched = await launchDetachedProcess({
+      tempDir,
+      command: process.execPath,
+      commandArgs: [
+        servicePath,
+        "--port",
+        String(selectedPort),
+        "--pid-file",
+        pidFile,
+        "--log-file",
+        logFile,
+      ],
+    });
+    servicePid = launched.pid;
+    launcherExitCode = launched.launcherExitCode;
+    launcherDiagnostic = buildCommandDiagnostic({
+      command: launched.launcherCommand,
+      result: launched.launcherResult,
+      failureClass: "service_launch_failed",
+    });
+    verifierCommand = [
+      shellQuote(process.execPath),
+      shellQuote(verifierPath),
+      "--health-url",
+      shellQuote(`${endpoint}/healthz`),
+      "--pid-file",
+      shellQuote(pidFile),
+      "--log-file",
+      shellQuote(logFile),
+      "--expected-pid",
+      String(servicePid ?? 0),
+    ].join(" ");
+    probe = await waitForFreshShellCommand(verifierCommand, 10000, resolvedWorkspaceRoot ?? repoRoot);
+  } finally {
+    killService(servicePid);
+    removeTempDir(tempDir);
+  }
+
+  const taskSpec = buildServiceLifecycleHardTaskSpec({
+    endpoint,
+    probe,
+    servicePid,
+    launcherExitCode,
+  });
+  const probeDiagnostic = buildCommandDiagnostic({
+    command: verifierCommand,
+    cwd: resolvedWorkspaceRoot ?? repoRoot,
+    result: probe,
+    failureClass: "fresh_shell_probe_failed",
+  });
+  const diagnostics = buildSliceDiagnostics({
+    slice: "service_lifecycle_hard",
     scenarioId: taskSpec.id,
     primary: probeDiagnostic,
     commands: launcherDiagnostic ? [launcherDiagnostic, probeDiagnostic] : [probeDiagnostic],
@@ -1035,7 +1370,7 @@ async function runPublishInstallProbe(port?: number, workspaceRoot?: string): Pr
     }
   } finally {
     killService(servicePid);
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 
   const taskSpec = buildPublishInstallTaskSpec({ endpoint, probe, servicePid, launcherExitCode });
@@ -1123,7 +1458,7 @@ async function runDeployHookWebProbe(port?: number, workspaceRoot?: string): Pro
     probe = await waitForFreshShellCommand(webCommand, 10000);
   } finally {
     killService(servicePid);
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 
   const contentMatched = probe.stdout.includes(expectedContent);
@@ -1445,6 +1780,7 @@ async function runProbeSlice(
   workspaceRoot?: string,
 ): Promise<RuntimeDogfoodExternalProbeScenarioRun> {
   if (slice === "service_after_exit") return await runServiceAfterExitProbe(port, workspaceRoot);
+  if (slice === "service_lifecycle_hard") return await runServiceLifecycleHardProbe(port, workspaceRoot);
   if (slice === "publish_install") return await runPublishInstallProbe(port, workspaceRoot);
   if (slice === "deploy_hook_web") return await runDeployHookWebProbe(port, workspaceRoot);
   if (slice === "interrupted_resume") return await runInterruptedResumeProbe();
@@ -1456,7 +1792,7 @@ async function runProbeSlice(
 export async function runRuntimeDogfoodExternalProbe(options: ExternalProbeOptions = {}): Promise<RuntimeDogfoodExternalProbeRun> {
   const slices = options.slices?.length ? options.slices : defaultSlices;
   const networkSliceCount = slices.filter((slice) =>
-    slice === "service_after_exit" || slice === "publish_install" || slice === "deploy_hook_web"
+    slice === "service_after_exit" || slice === "service_lifecycle_hard" || slice === "publish_install" || slice === "deploy_hook_web"
   ).length;
   const ports = options.port
     ? [options.port, ...await findOpenPorts(Math.max(0, networkSliceCount - 1))]
@@ -1464,7 +1800,7 @@ export async function runRuntimeDogfoodExternalProbe(options: ExternalProbeOptio
   const probes: RuntimeDogfoodExternalProbeScenarioRun[] = [];
   let portIndex = 0;
   for (const slice of slices) {
-    const needsPort = slice === "service_after_exit" || slice === "publish_install" || slice === "deploy_hook_web";
+    const needsPort = slice === "service_after_exit" || slice === "service_lifecycle_hard" || slice === "publish_install" || slice === "deploy_hook_web";
     const probe = await runProbeSlice(slice, needsPort ? ports[portIndex++] : undefined, options.workspaceRoot);
     probes.push(attachScenarioProvenance({ probe, workspaceRoot: options.workspaceRoot }));
   }

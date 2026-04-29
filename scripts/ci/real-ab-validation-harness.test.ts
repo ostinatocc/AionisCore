@@ -1691,7 +1691,7 @@ process.stdout.write(JSON.stringify({
 test("real A/B live evidence arm run packet maps probes to dogfood command and recorder examples", () => {
   const manifest = buildRealAbLiveEvidenceManifestTemplate({
     suite_id: "first-live-evidence",
-    task_ids: ["external_probe_service_after_exit", "external_probe_deploy_hook_web"],
+    task_ids: ["external_probe_service_after_exit", "external_probe_service_lifecycle_hard", "external_probe_deploy_hook_web"],
   });
   const manifestPath = path.join(os.tmpdir(), "first-live-evidence", "manifest.json");
   const packet = buildRealAbLiveEvidenceArmRunPacket({
@@ -1702,9 +1702,10 @@ test("real A/B live evidence arm run packet maps probes to dogfood command and r
   const markdown = renderRealAbLiveEvidenceArmRunPacketMarkdown(packet);
 
   assert.equal(packet.packet_version, "aionis_real_ab_live_evidence_arm_run_packet_v1");
-  assert.deepEqual(packet.probe_slices, ["service_after_exit", "deploy_hook_web"]);
-  assert.match(packet.dogfood_command, /--slice service_after_exit,deploy_hook_web/);
+  assert.deepEqual(packet.probe_slices, ["service_after_exit", "service_lifecycle_hard", "deploy_hook_web"]);
+  assert.match(packet.dogfood_command, /--slice service_after_exit,service_lifecycle_hard,deploy_hook_web/);
   assert.match(packet.recorder_examples.external_probe_service_after_exit, /ab:evidence:event/);
+  assert.match(packet.recorder_examples.external_probe_service_lifecycle_hard, /--probe external_probe_service_lifecycle_hard/);
   assert.match(packet.recorder_examples.external_probe_deploy_hook_web, /--arm aionis_assisted/);
   assert.ok(packet.guardrails.some((guardrail) => guardrail.includes("manual prompt surgery")));
   assert.match(markdown, /Aionis Real A\/B Arm Run Packet: aionis_assisted/);

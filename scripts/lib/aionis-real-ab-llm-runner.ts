@@ -141,6 +141,32 @@ const probeTaskBriefs: Record<string, ProbeTaskBrief> = {
       "Record the actual action/tool events; do not convert a mere success claim into verifier evidence.",
     ],
   },
+  external_probe_service_lifecycle_hard: {
+    title: "External probe hard service lifecycle validation",
+    task_family: "service_publish_validate",
+    task_prompt: "Repair the service so after the launcher exits a fresh shell can validate HTTP health, pid-file, live PID, and lifecycle log evidence.",
+    target_files: ["scripts/fixtures/runtime-dogfood/service-lifecycle-hard-server.mjs"],
+    next_action: "Inspect the hard service entrypoint, make it honor --pid-file and --log-file, launch it detached, then validate /healthz plus lifecycle artifacts from a fresh shell.",
+    acceptance_checks: ["service-lifecycle-hard-verifier --health-url <fresh-shell-endpoint>/healthz --pid-file <path> --log-file <path> --expected-pid <pid>"],
+    lifecycle_constraints: [
+      "must_survive_agent_exit",
+      "revalidate_from_fresh_shell",
+      "detach_then_probe",
+      "pid_file_matches_live_process",
+      "lifecycle_log_contains_start_marker",
+    ],
+    authority_boundary: [
+      "A health endpoint alone is not authoritative without pid-file, live process, and lifecycle log evidence.",
+      "The collection harness, not the agent, writes dogfood-run.json.",
+    ],
+    workflow_steps: [
+      "Inspect the service entrypoint and identify required --port, --pid-file, and --log-file arguments.",
+      "Implement durable lifecycle evidence before claiming success: write pid metadata and append a start marker to the log after listen succeeds.",
+      "Launch the service detached, not as a foreground child tied to the current shell.",
+      "Probe the endpoint, pid file, log file, and live process from a fresh shell after the launch command returns.",
+      "Record the actual lifecycle actions; do not convert a bare /healthz response into verifier evidence.",
+    ],
+  },
   external_probe_publish_install: {
     title: "External probe publish/install clean-client validation",
     task_family: "package_publish_validate",
