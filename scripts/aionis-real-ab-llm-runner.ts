@@ -23,6 +23,9 @@ type CliOptions = {
   command: string | null;
   eventsPath: string | null;
   cwd: string | null;
+  model: string | null;
+  reasoningEffort: string | null;
+  agentCli: string | null;
   timeoutMs: number;
   outJson: string | null;
   packetMode: RealAbLlmPacketMode;
@@ -43,6 +46,9 @@ Flags:
   --command <command>     Shell command for the external LLM/agent CLI.
   --events <path>         Optional agent-events JSON override. Defaults to manifest arm agent_events_path.
   --cwd <path>            Optional command working directory. Defaults to current repo/process cwd.
+  --model <name>          Explicit agent model for evidence metadata, for example gpt-5.5.
+  --reasoning-effort <n>  Explicit reasoning effort for evidence metadata, for example xhigh.
+  --agent-cli <bin>       Agent CLI to version-stamp with --version, for example codex.
   --timeout-ms <n>        Command timeout. Defaults to 300000.
   --out-json <path>       Optional run result JSON path.
   --packet-mode <mode>    contract_only or workflow_expanded. Defaults to contract_only.
@@ -100,6 +106,9 @@ function parseArgs(argv: string[]): CliOptions {
     command: null,
     eventsPath: null,
     cwd: null,
+    model: null,
+    reasoningEffort: null,
+    agentCli: null,
     timeoutMs: 300_000,
     outJson: null,
     packetMode: "contract_only",
@@ -132,6 +141,18 @@ function parseArgs(argv: string[]): CliOptions {
         break;
       case "--cwd":
         options.cwd = readValue(argv, index, arg);
+        index += 1;
+        break;
+      case "--model":
+        options.model = readValue(argv, index, arg);
+        index += 1;
+        break;
+      case "--reasoning-effort":
+        options.reasoningEffort = readValue(argv, index, arg);
+        index += 1;
+        break;
+      case "--agent-cli":
+        options.agentCli = readValue(argv, index, arg);
         index += 1;
         break;
       case "--timeout-ms":
@@ -179,7 +200,11 @@ function readJson<T>(filePath: string): T {
 
 function writeJson(filePath: string, value: unknown) {
   ensureParent(filePath);
-  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+  fs.writeFileSync(filePath, jsonFileContent(value));
+}
+
+function jsonFileContent(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`;
 }
 
 function resolveFromManifestDir(manifestPath: string, targetPath: string): string {
@@ -202,11 +227,11 @@ function resolveEventsPath(args: {
   return resolveFromManifestDir(args.manifestPath, args.manifest.arms[arm].agent_events_path);
 }
 
-function readEventsFile(eventsPath: string): RealAbLiveEvidenceAgentEventsFile | Record<string, RealAbTraceEvent[]> {
-  if (!fs.existsSync(eventsPath)) {
+function readEventsFileContent(content: string | null): RealAbLiveEvidenceAgentEventsFile | Record<string, RealAbTraceEvent[]> {
+  if (content === null) {
     return { events_by_probe_id: {} };
   }
-  return readJson<RealAbLiveEvidenceAgentEventsFile | Record<string, RealAbTraceEvent[]>>(eventsPath);
+  return JSON.parse(content) as RealAbLiveEvidenceAgentEventsFile | Record<string, RealAbTraceEvent[]>;
 }
 
 function readFileIfExists(filePath: string): string | null {
@@ -241,6 +266,9 @@ if (options.dryRun) {
     probe_id: probeId,
     events_path: eventsPath,
     cwd: options.cwd ? path.resolve(options.cwd) : process.cwd(),
+    model: options.model,
+    reasoning_effort: options.reasoningEffort,
+    agent_cli: options.agentCli,
     packet_mode: options.packetMode,
     prompt,
   }, null, 2)}\n`);
@@ -253,20 +281,24 @@ if (options.dryRun) {
     probe_id: probeId,
     command: options.command ?? "",
     cwd: options.cwd ? path.resolve(options.cwd) : process.cwd(),
+    model: options.model,
+    reasoning_effort: options.reasoningEffort,
+    agent_cli: options.agentCli,
     timeout_ms: options.timeoutMs,
     agent_events_path: eventsPath,
     packet_mode: options.packetMode,
     allow_agent_verifier: options.allowAgentVerifier,
   });
-  const afterEventsContent = readFileIfExists(eventsPath);
-  if (beforeEventsContent !== afterEventsContent) {
-    throw new Error("agent command mutated agent-events.json directly; return JSON events only and let the runner persist evidence");
-  }
-  const existingEvents = readEventsFile(eventsPath);
+  const existingEvents = readEventsFileContent(beforeEventsContent);
   const updatedEvents = applyRealAbLlmArmAttemptToAgentEvents({
     events_file: existingEvents,
     attempt,
   });
+  const afterEventsContent = readFileIfExists(eventsPath);
+  const expectedEventsContent = jsonFileContent(updatedEvents);
+  if (beforeEventsContent !== afterEventsContent && afterEventsContent !== expectedEventsContent) {
+    throw new Error("agent command mutated agent-events.json directly; return JSON events only and let the runner persist evidence");
+  }
   writeJson(eventsPath, updatedEvents);
 
   const result = {

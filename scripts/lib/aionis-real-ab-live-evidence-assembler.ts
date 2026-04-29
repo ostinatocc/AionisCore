@@ -6,6 +6,7 @@ import {
   type RealAbGateRequirement,
   type RealAbArmMetrics,
   type RealAbMemoryMode,
+  type RealAbRunEnvironmentEvidence,
   type RealAbSuiteInput,
   type RealAbSuiteKind,
   type RealAbTraceEvent,
@@ -54,6 +55,7 @@ export type RealAbLiveEvidenceLlmArmAttemptResult = {
   result_version?: string;
   probe_id?: string;
   success?: boolean;
+  run_environment?: RealAbRunEnvironmentEvidence;
   command_result?: {
     duration_ms?: number;
     stdout_tail?: string;
@@ -229,6 +231,7 @@ function assembleArm(
     dogfood_run: loaded.dogfood_run,
     agent_events_by_probe_id: normalizeAgentEvents(loaded.agent_events),
     outcomes_by_probe_id: llmOutcomeByProbeId(loaded.llm_result),
+    run_environment: loaded.llm_result?.run_environment,
     notes: manifest.notes,
   };
 }

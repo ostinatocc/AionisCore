@@ -122,12 +122,33 @@ export type RealAbRunTrace = {
   outcome?: Partial<RealAbArmMetrics>;
 };
 
+export type RealAbWorkspaceFingerprintEvidence = {
+  algorithm?: string;
+  root?: string;
+  hash?: string;
+  file_count?: number;
+  byte_count?: number;
+  ignored_directories?: string[];
+};
+
+export type RealAbRunEnvironmentEvidence = {
+  model?: string | null;
+  reasoning_effort?: string | null;
+  agent_cli?: string | null;
+  agent_cli_version?: string | null;
+  command_sha256?: string;
+  cwd?: string;
+  workspace_before?: RealAbWorkspaceFingerprintEvidence | null;
+  workspace_after?: RealAbWorkspaceFingerprintEvidence | null;
+};
+
 export type RealAbArmObservation = {
   memory_mode: RealAbMemoryMode;
   authority_level: RealAbAuthorityLevel;
   packet_source: "none" | "automatic_runtime" | "irrelevant_low_trust" | "oracle_handoff";
   metrics?: RealAbArmMetrics;
   trace?: RealAbRunTrace;
+  run_environment?: RealAbRunEnvironmentEvidence;
   notes?: string[];
 };
 
@@ -1290,7 +1311,29 @@ function costSignalRow(task: RealAbTaskResult): string {
   return `| ${cells.join(" | ")} |`;
 }
 
+function envText(value: string | null | undefined): string {
+  return value && value.trim().length > 0 ? value : "n/a";
+}
+
+function shortHash(value: string | null | undefined): string {
+  if (!value) return "n/a";
+  return value.length > 12 ? `${value.slice(0, 12)}...` : value;
+}
+
+function runEnvironmentRows(report: RealAbReport): string[] {
+  return report.tasks.flatMap((task) =>
+    realAbRequiredArms.flatMap((arm) => {
+      const environment = task.arms[arm].run_environment;
+      if (!environment) return [];
+      return [
+        `| ${task.id} | ${arm} | ${envText(environment.model)} | ${envText(environment.reasoning_effort)} | ${envText(environment.agent_cli)} | ${envText(environment.agent_cli_version)} | ${shortHash(environment.command_sha256)} | ${shortHash(environment.workspace_before?.hash)} | ${shortHash(environment.workspace_after?.hash)} |`,
+      ];
+    })
+  );
+}
+
 export function renderRealAbMarkdownReport(report: RealAbReport): string {
+  const runEnvironmentEvidenceRows = runEnvironmentRows(report);
   const lines = [
     `# Aionis Real A/B Validation Report`,
     "",
@@ -1329,6 +1372,16 @@ export function renderRealAbMarkdownReport(report: RealAbReport): string {
     `| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |`,
     ...report.tasks.map(costSignalRow),
     "",
+    ...(runEnvironmentEvidenceRows.length > 0
+      ? [
+        "## Run Environment Evidence",
+        "",
+        `| Task | Arm | Model | Effort | Agent CLI | CLI version | Command hash | Workspace before | Workspace after |`,
+        `| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: |`,
+        ...runEnvironmentEvidenceRows,
+        "",
+      ]
+      : []),
     "## Discipline Compliance",
     "",
     `| Task | Family | Aionis discipline | Severe violations | First target event | First edit event | Pre-edit steps | First acceptance pass |`,

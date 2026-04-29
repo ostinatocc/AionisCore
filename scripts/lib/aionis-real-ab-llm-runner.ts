@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -51,6 +51,26 @@ export type RealAbLlmCommandResult = {
   duration_ms: number;
 };
 
+export type RealAbLlmWorkspaceFingerprint = {
+  algorithm: "sha256";
+  root: string;
+  hash: string;
+  file_count: number;
+  byte_count: number;
+  ignored_directories: string[];
+};
+
+export type RealAbLlmRunEnvironment = {
+  model: string | null;
+  reasoning_effort: string | null;
+  agent_cli: string | null;
+  agent_cli_version: string | null;
+  command_sha256: string;
+  cwd: string;
+  workspace_before: RealAbLlmWorkspaceFingerprint | null;
+  workspace_after: RealAbLlmWorkspaceFingerprint | null;
+};
+
 export type RealAbLlmArmAttemptResult = {
   result_version: "aionis_real_ab_llm_arm_attempt_result_v1";
   suite_id: string;
@@ -58,6 +78,7 @@ export type RealAbLlmArmAttemptResult = {
   probe_id: string;
   command: string;
   prompt_sha256: string;
+  run_environment: RealAbLlmRunEnvironment;
   agent_events_path?: string;
   command_result: RealAbLlmCommandResult;
   parsed_output: RealAbLlmAgentOutput;
@@ -68,6 +89,20 @@ export type RealAbLlmArmAttemptResult = {
 };
 
 const OutputTailLimit = 8192;
+const WorkspaceHashIgnoredDirectories = [
+  ".aionis",
+  ".git",
+  ".next",
+  ".turbo",
+  ".vite",
+  "__pycache__",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "venv",
+  ".venv",
+];
 
 type ProbeTaskBrief = {
   title: string;
@@ -287,6 +322,64 @@ function tail(value: string, limit = OutputTailLimit): string {
 
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function shouldIgnoreWorkspaceEntry(name: string): boolean {
+  return WorkspaceHashIgnoredDirectories.includes(name);
+}
+
+function workspaceFingerprint(root: string | undefined): RealAbLlmWorkspaceFingerprint | null {
+  if (!root) return null;
+  const resolvedRoot = path.resolve(root);
+  if (!fs.existsSync(resolvedRoot)) return null;
+  const hash = createHash("sha256");
+  let fileCount = 0;
+  let byteCount = 0;
+
+  function visit(directory: string) {
+    const entries = fs.readdirSync(directory, { withFileTypes: true })
+      .filter((entry) => !shouldIgnoreWorkspaceEntry(entry.name))
+      .sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      const absolute = path.join(directory, entry.name);
+      const relative = path.relative(resolvedRoot, absolute).split(path.sep).join("/");
+      if (entry.isDirectory()) {
+        visit(absolute);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const content = fs.readFileSync(absolute);
+      hash.update("file\0");
+      hash.update(relative);
+      hash.update("\0");
+      hash.update(String(content.length));
+      hash.update("\0");
+      hash.update(content);
+      fileCount += 1;
+      byteCount += content.length;
+    }
+  }
+
+  visit(resolvedRoot);
+  return {
+    algorithm: "sha256",
+    root: resolvedRoot,
+    hash: hash.digest("hex"),
+    file_count: fileCount,
+    byte_count: byteCount,
+    ignored_directories: WorkspaceHashIgnoredDirectories,
+  };
+}
+
+function resolveAgentCliVersion(agentCli: string | undefined): string | null {
+  if (!agentCli) return null;
+  const result = spawnSync(agentCli, ["--version"], {
+    encoding: "utf8",
+    timeout: 10_000,
+  });
+  if (result.error || result.status !== 0) return null;
+  const version = [result.stdout, result.stderr].join("\n").trim();
+  return version.length > 0 ? version : null;
 }
 
 function shellQuoteForPrompt(value: string): string {
@@ -723,6 +816,9 @@ export async function runRealAbLlmArmAttempt(args: {
   probe_id: string;
   command: string;
   cwd?: string;
+  model?: string | null;
+  reasoning_effort?: string | null;
+  agent_cli?: string | null;
   timeout_ms?: number;
   agent_events_path?: string;
   shellPath?: string;
@@ -740,6 +836,10 @@ export async function runRealAbLlmArmAttempt(args: {
     workspace_root: args.cwd,
     packet_mode: packetMode,
   });
+  const resolvedCwd = path.resolve(args.cwd ?? process.cwd());
+  const workspaceBefore = workspaceFingerprint(resolvedCwd);
+  const agentCli = args.agent_cli?.trim() || null;
+  const agentCliVersion = resolveAgentCliVersion(agentCli ?? undefined);
   const commandResult = await runShellCommand({
     command: args.command,
     cwd: args.cwd,
@@ -755,9 +855,14 @@ export async function runRealAbLlmArmAttempt(args: {
       AIONIS_AB_PACKET_SOURCE: armManifest.packet_source,
       AIONIS_AB_PACKET_MODE: packetMode,
       AIONIS_AB_MANIFEST_PATH: path.resolve(args.manifest_path),
+      ...(args.model ? { AIONIS_AB_MODEL: args.model } : {}),
+      ...(args.reasoning_effort ? { AIONIS_AB_REASONING_EFFORT: args.reasoning_effort } : {}),
+      ...(agentCli ? { AIONIS_AB_AGENT_CLI: agentCli } : {}),
+      ...(agentCliVersion ? { AIONIS_AB_AGENT_CLI_VERSION: agentCliVersion } : {}),
       ...(args.cwd ? { AIONIS_AB_WORKSPACE_ROOT: path.resolve(args.cwd) } : {}),
     },
   });
+  const workspaceAfter = workspaceFingerprint(resolvedCwd);
   if (commandResult.timed_out || commandResult.exit_code !== 0) {
     throw new Error([
       `LLM command failed for ${args.arm}/${args.probe_id}: exit_code=${commandResult.exit_code ?? "null"} timed_out=${commandResult.timed_out}`,
@@ -788,6 +893,16 @@ export async function runRealAbLlmArmAttempt(args: {
     probe_id: args.probe_id,
     command: args.command,
     prompt_sha256: sha256(prompt),
+    run_environment: {
+      model: args.model ?? null,
+      reasoning_effort: args.reasoning_effort ?? null,
+      agent_cli: agentCli,
+      agent_cli_version: agentCliVersion,
+      command_sha256: sha256(args.command),
+      cwd: resolvedCwd,
+      workspace_before: workspaceBefore,
+      workspace_after: workspaceAfter,
+    },
     ...(args.agent_events_path ? { agent_events_path: path.resolve(args.agent_events_path) } : {}),
     command_result: {
       exit_code: commandResult.exit_code,

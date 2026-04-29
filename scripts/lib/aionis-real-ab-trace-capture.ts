@@ -6,6 +6,7 @@ import {
   type RealAbFairnessContract,
   type RealAbGateRequirement,
   type RealAbMemoryMode,
+  type RealAbRunEnvironmentEvidence,
   type RealAbRunTrace,
   type RealAbSuiteInput,
   type RealAbSuiteKind,
@@ -23,6 +24,7 @@ export type RealAbTraceCaptureArmRun = {
   ended_at_ms?: number;
   events: RealAbTraceEvent[];
   outcome?: Partial<RealAbArmMetrics>;
+  run_environment?: RealAbRunEnvironmentEvidence;
   notes?: string[];
 };
 
@@ -210,6 +212,7 @@ function compileTask(task: RealAbTraceCaptureTask): RealAbTaskSpec {
         authority_level: task.runs.baseline.authority_level,
         packet_source: task.runs.baseline.packet_source,
         trace: compileRunToTrace(task.runs.baseline),
+        run_environment: task.runs.baseline.run_environment,
         notes: task.runs.baseline.notes,
       },
       aionis_assisted: {
@@ -217,6 +220,7 @@ function compileTask(task: RealAbTraceCaptureTask): RealAbTaskSpec {
         authority_level: task.runs.aionis_assisted.authority_level,
         packet_source: task.runs.aionis_assisted.packet_source,
         trace: compileRunToTrace(task.runs.aionis_assisted),
+        run_environment: task.runs.aionis_assisted.run_environment,
         notes: task.runs.aionis_assisted.notes,
       },
       negative_control: {
@@ -224,6 +228,7 @@ function compileTask(task: RealAbTraceCaptureTask): RealAbTaskSpec {
         authority_level: task.runs.negative_control.authority_level,
         packet_source: task.runs.negative_control.packet_source,
         trace: compileRunToTrace(task.runs.negative_control),
+        run_environment: task.runs.negative_control.run_environment,
         notes: task.runs.negative_control.notes,
       },
       positive_control: {
@@ -231,6 +236,7 @@ function compileTask(task: RealAbTraceCaptureTask): RealAbTaskSpec {
         authority_level: task.runs.positive_control.authority_level,
         packet_source: task.runs.positive_control.packet_source,
         trace: compileRunToTrace(task.runs.positive_control),
+        run_environment: task.runs.positive_control.run_environment,
         notes: task.runs.positive_control.notes,
       },
     },

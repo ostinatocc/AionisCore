@@ -767,6 +767,15 @@ test("real A/B live evidence assembler carries LLM runner resource outcomes into
     result_version: "aionis_real_ab_llm_arm_attempt_result_v1",
     probe_id: "external_probe_service_after_exit",
     success: true,
+    run_environment: {
+      model: "gpt-5.5",
+      reasoning_effort: "xhigh",
+      agent_cli: "codex",
+      agent_cli_version: "codex-cli 0.125.0",
+      command_sha256: "a".repeat(64),
+      workspace_before: { hash: "b".repeat(64) },
+      workspace_after: { hash: "c".repeat(64) },
+    },
     command_result: {
       duration_ms: 200_000,
       stderr_tail: "tokens used\n57,179\n",
@@ -776,6 +785,15 @@ test("real A/B live evidence assembler carries LLM runner resource outcomes into
     result_version: "aionis_real_ab_llm_arm_attempt_result_v1",
     probe_id: "external_probe_service_after_exit",
     success: true,
+    run_environment: {
+      model: "gpt-5.5",
+      reasoning_effort: "xhigh",
+      agent_cli: "codex",
+      agent_cli_version: "codex-cli 0.125.0",
+      command_sha256: "d".repeat(64),
+      workspace_before: { hash: "e".repeat(64) },
+      workspace_after: { hash: "f".repeat(64) },
+    },
     command_result: {
       duration_ms: 125_000,
       stderr_tail: "tokens used\n47,894\n",
@@ -789,8 +807,10 @@ test("real A/B live evidence assembler carries LLM runner resource outcomes into
 
   assert.equal(capture.tasks[0].runs.baseline.outcome?.time_to_success_ms, 200_000);
   assert.equal(capture.tasks[0].runs.baseline.outcome?.tokens_to_success, 57179);
+  assert.equal(capture.tasks[0].runs.baseline.run_environment?.model, "gpt-5.5");
   assert.equal(capture.tasks[0].runs.aionis_assisted.outcome?.time_to_success_ms, 125_000);
   assert.equal(capture.tasks[0].runs.aionis_assisted.outcome?.tokens_to_success, 47894);
+  assert.equal(report.tasks[0].arms.aionis_assisted.run_environment?.agent_cli_version, "codex-cli 0.125.0");
   assert.equal(report.tasks[0].deltas.time_to_success_delta_ms, -75_000);
   assert.equal(report.tasks[0].deltas.tokens_to_success_delta, -9285);
   assert.ok((report.summary.token_reduction_pct ?? 0) > 10);
@@ -801,6 +821,9 @@ test("real A/B live evidence assembler carries LLM runner resource outcomes into
   assert.match(markdown, /-75s/);
   assert.match(markdown, /Token reduction:/);
   assert.match(markdown, /Time reduction:/);
+  assert.match(markdown, /Run Environment Evidence/);
+  assert.match(markdown, /codex-cli 0\.125\.0/);
+  assert.match(markdown, /aaaaaaaaaaaa\.\.\./);
 });
 
 test("real A/B live evidence assembler rejects loaded arm artifacts without probe events", () => {
@@ -1071,7 +1094,10 @@ test("real A/B LLM runner executes a configured agent command and returns audita
     arm: "aionis_assisted",
     probe_id: probeId,
     command: `${JSON.stringify(process.execPath)} ${JSON.stringify(mockAgentPath)}`,
-    cwd: repoRoot,
+    cwd: dir,
+    model: "gpt-5.5",
+    reasoning_effort: "xhigh",
+    agent_cli: process.execPath,
     timeout_ms: 10_000,
     agent_events_path: eventsPath,
   });
@@ -1087,6 +1113,15 @@ test("real A/B LLM runner executes a configured agent command and returns audita
   assert.equal(attempt.action_event_count, 2);
   assert.equal(attempt.command_result.exit_code, 0);
   assert.match(attempt.prompt_sha256, /^[a-f0-9]{64}$/);
+  assert.equal(attempt.run_environment.model, "gpt-5.5");
+  assert.equal(attempt.run_environment.reasoning_effort, "xhigh");
+  assert.equal(attempt.run_environment.agent_cli, process.execPath);
+  assert.match(attempt.run_environment.agent_cli_version ?? "", /^v?\d+\./);
+  assert.match(attempt.run_environment.command_sha256, /^[a-f0-9]{64}$/);
+  assert.equal(attempt.run_environment.workspace_before?.root, dir);
+  assert.equal(attempt.run_environment.workspace_after?.root, dir);
+  assert.match(attempt.run_environment.workspace_before?.hash ?? "", /^[a-f0-9]{64}$/);
+  assert.match(attempt.run_environment.workspace_after?.hash ?? "", /^[a-f0-9]{64}$/);
   assert.equal(updated.events_by_probe_id[probeId].length, 2);
   assert.match(updated.events_by_probe_id[probeId][0].text ?? "", /arm=aionis_assisted/);
 });
@@ -1430,6 +1465,12 @@ test("real A/B LLM runner CLI writes structured events into the selected arm eve
     eventsPath,
     "--out-json",
     resultPath,
+    "--model",
+    "gpt-5.5",
+    "--reasoning-effort",
+    "xhigh",
+    "--agent-cli",
+    process.execPath,
   ], {
     cwd: repoRoot,
     encoding: "utf8",
@@ -1441,6 +1482,12 @@ test("real A/B LLM runner CLI writes structured events into the selected arm eve
   assert.equal(events.events_by_probe_id[probeId].length, 2);
   assert.equal(events.events_by_probe_id[probeId][1].kind, "tool_call");
   assert.equal(result.success, true);
+  assert.equal(result.run_environment.model, "gpt-5.5");
+  assert.equal(result.run_environment.reasoning_effort, "xhigh");
+  assert.equal(result.run_environment.agent_cli, process.execPath);
+  assert.match(result.run_environment.agent_cli_version ?? "", /^v?\d+\./);
+  assert.match(result.run_environment.workspace_before.hash, /^[a-f0-9]{64}$/);
+  assert.match(result.run_environment.workspace_after.hash, /^[a-f0-9]{64}$/);
   assert.equal(result.agent_events_patch.events_by_probe_id[probeId].length, 2);
 });
 

@@ -6,7 +6,7 @@ Last reviewed: 2026-04-29
 
 Document status: real A/B evidence report
 
-This report summarizes the first real LLM-backed A/B evidence runs for Aionis Runtime, the follow-up `contract_only` reruns, the first action-discipline revalidation, and the causal publish/install revalidation. The goal is not to claim broad product superiority. The goal is to state what the current evidence can and cannot prove, then define the next Runtime hardening steps.
+This report summarizes the first real LLM-backed A/B evidence runs for Aionis Runtime, the follow-up `contract_only` reruns, the first action-discipline revalidation, the causal publish/install revalidation, and the model-locked causal publish/install rerun. The goal is not to claim broad product superiority. The goal is to state what the current evidence can and cannot prove, then define the next Runtime hardening steps.
 
 ## Evidence Boundary
 
@@ -18,6 +18,7 @@ These runs are directional pilot evidence, not broad product proof.
 - The evidence supports family-level claims only for the tested task families.
 - The evidence does not prove universal token savings or universal agent performance gains.
 - The LLM runner now isolates prompt surfaces by arm: `baseline` receives only a normal task request, `aionis_assisted` receives the Runtime contract, `negative_control` receives non-authoritative low-trust context, and `positive_control` receives an oracle handoff.
+- The LLM runner now records explicit run-environment evidence: requested model, reasoning effort, agent CLI, CLI version, command hash, and workspace before/after hashes.
 - LLM suites run before this arm-prompt isolation should be treated as directional evidence and verifier evidence, not final clean A/B proof.
 
 ## Suites
@@ -51,6 +52,7 @@ These runs are directional pilot evidence, not broad product proof.
 | `ai-code-ci-dependency-surface-action-discipline-20260428-232156` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-action-discipline-20260428-232156/validation-report.md` | pass |
 | `ai-code-ci-dependency-surface-action-discipline-20260428-232156` discipline-gate revalidation | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-action-discipline-20260428-232156/validation-report.discipline-gate.md` | pass |
 | `publish-install-causal-20260429-114214` | `package_publish_validate` | `.artifacts/real-ab/publish-install-causal-20260429-114214/validation-report.md` | pass |
+| `publish-install-causal-model-locked-20260429-150631` | `package_publish_validate` | `.artifacts/real-ab/publish-install-causal-model-locked-20260429-150631/validation-report.md` | pass |
 
 ## Initial Directional Results
 
@@ -213,6 +215,26 @@ This run passed the product evidence gate after the gate was corrected to measur
 
 The first assembly failed before the gate correction because the discipline gate used a fixed `max_pre_edit_confirmation_steps=2`. That was too crude for outcome-contract tasks where the correct workflow is target-file inspection plus targeted failure reproduction before editing. The Runtime now derives the pre-edit budget from the outcome contract: target-file count, required acceptance checks, and lifecycle/external-visibility constraints.
 
+## Model-Locked Causal Publish/Install Revalidation
+
+The `publish-install-causal-model-locked-20260429-150631` suite reran the same package publish/install causal workspace scenario with explicit agent-environment evidence. Every arm used `codex exec --model gpt-5.5` with `model_reasoning_effort="xhigh"`, and the runner recorded `codex-cli 0.125.0`, command hash, plus workspace before/after hashes for each arm.
+
+| Family | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `package_publish_validate / causal workspace / model-locked` | 20 | 12 | 24 | 17 | 3 | 1 | 284s | 311s | 68,987 | 61,905 |
+
+This model-locked rerun passed the product evidence gate:
+
+- Aionis preserved verifier-backed clean-client install correctness under the same explicit GPT-5.5/xhigh Codex setup as baseline.
+- Aionis reduced action events by 40.0% versus baseline.
+- Aionis reduced self-marked wasted steps by 66.7% versus baseline.
+- Aionis reduced token use by 10.3% versus baseline.
+- Aionis was slower in wall-clock time: +27s, or -9.7% time reduction.
+- Aionis followed locked action discipline: first target event `0`, first edit event `2`, pre-edit budget `2/4`, severe violations `0`.
+- Negative control also passed, so this remains an efficiency, scope-control, and verifier-boundary signal, not unique correctness separation.
+
+This is the cleanest current publish/install cost-control evidence because the model, reasoning effort, CLI version, command hash, and workspace fingerprints are all recorded. It also shows the current limit: Aionis can shorten the execution path and reduce tokens in this family, but elapsed-time savings are still not stable.
+
 ## What This Proves
 
 Aionis can currently make defensible directional claims in these areas:
@@ -228,6 +250,7 @@ Aionis can currently make defensible directional claims in these areas:
 - In one clean arm-isolated CI repair run, it can reduce token usage substantially while preserving verifier-backed correctness.
 - In dependency-surface CI repair runs, it can preserve verifier-backed correctness and has shown token compression and action-count compression, but not consistently in the same run and not yet with stable elapsed-time improvement.
 - In the causal publish/install rerun, it can reduce action count, elapsed time, and token use while preserving verifier-backed clean-client install correctness.
+- In the model-locked causal publish/install rerun, it can reduce action count, wasted steps, and token use under explicit GPT-5.5/xhigh Codex conditions while preserving verifier-backed clean-client install correctness.
 
 ## What This Does Not Prove
 
@@ -235,6 +258,7 @@ Aionis should not currently claim:
 
 - Universal token savings.
 - Stable token savings across all task families.
+- Stable wall-clock speedup for publish/install based on the model-locked causal rerun.
 - Stable token savings for `dependency_surface` CI repair based on current repeat evidence.
 - Universal runtime speedup.
 - Unique correctness advantage for AI code CI repair based on one easy pilot fixture.
@@ -254,7 +278,7 @@ Aionis should be positioned as a reliability and continuity Runtime first:
 - It carries task-family execution contracts across attempts.
 - It can help agents start from the right work surface instead of re-discovering the task.
 
-It should not be positioned primarily as a token-saving layer yet, but the `contract_only` reruns and causal publish/install revalidation now show credible cost-compression potential in publish/install, deploy/webserver, and selected CI repair tasks.
+It should not be positioned primarily as a token-saving layer yet, but the `contract_only` reruns, causal publish/install revalidation, and model-locked publish/install rerun now show credible cost-compression potential in publish/install, deploy/webserver, and selected CI repair tasks.
 
 The `ai_code_ci_repair` pilot adds a second kind of product signal: Aionis can act as a compact execution-contract layer for AI coding repair loops, where the measurable advantage is fewer irrelevant actions and lower token cost while still requiring targeted CI evidence.
 
@@ -272,6 +296,9 @@ Completed:
 - Revalidated the latest dependency-surface action-discipline trace under the new gate; the gate passed with zero severe discipline violations.
 - Added causal workspace verification for publish/install: the verifier now builds `scripts/build_index.py` inside the actual arm workspace and then performs fresh-shell clean-client install validation.
 - Ran `publish-install-causal-20260429-114214`; the gate passed with 55.3% token reduction and 29.5% time reduction versus baseline.
+- Added model/effort/CLI/version/command-hash/workspace-fingerprint evidence to the LLM runner.
+- Tightened runner evidence ownership so direct `agent-events.json` mutation still fails unless the file already equals the runner's deterministic projection from parsed stdout.
+- Ran `publish-install-causal-model-locked-20260429-150631`; the gate passed with 40.0% action-count reduction and 10.3% token reduction versus explicit GPT-5.5/xhigh Codex baseline.
 - Kept full workflow, replay, and pattern memory internal by default.
 - Kept harness verifiers outside the agent default workflow.
 - Repeated the same three families after packet compression.
@@ -290,6 +317,7 @@ Remaining:
 - Run the remaining harder `ai_code_ci_repair` variants as paired LLM A/B trials before treating the commercial-family signal as stable.
 - Rerun more commercial-family trials after arm-prompt isolation before making stable clean A/B claims.
 - Add larger dependency-surface variants that are more likely to separate correctness rather than only cost/control.
+- Rerun service lifecycle, deploy/webserver, and AI code CI repair with explicit model/effort/CLI/workspace-hash evidence before treating cross-family cost claims as stable.
 
 ## Claim Policy
 
@@ -312,6 +340,10 @@ Allowed clean commercial-family cost claim:
 Allowed dependency-surface cost claim:
 
 > In one dependency-surface AI code CI repair run, Aionis Runtime preserved verifier-backed correctness while reducing actions, elapsed time, and token usage versus baseline, but it did not yet prove unique correctness.
+
+Allowed model-locked publish/install claim:
+
+> In one explicit GPT-5.5/xhigh Codex causal publish/install run, Aionis Runtime preserved verifier-backed clean-client install correctness while reducing action count, wasted steps, and token usage versus baseline, but it did not improve wall-clock time and did not prove unique correctness.
 
 Not allowed current claim:
 

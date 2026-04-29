@@ -6,6 +6,7 @@ import {
   type RealAbGateRequirement,
   type RealAbArmMetrics,
   type RealAbMemoryMode,
+  type RealAbRunEnvironmentEvidence,
   type RealAbSuiteInput,
   type RealAbSuiteKind,
   type RealAbTraceEvent,
@@ -24,6 +25,7 @@ export type RealAbDogfoodArmRunInput = {
   dogfood_run: RuntimeDogfoodExternalProbeRun;
   agent_events_by_probe_id: Record<string, RealAbTraceEvent[]>;
   outcomes_by_probe_id?: Record<string, Partial<RealAbArmMetrics>>;
+  run_environment?: RealAbRunEnvironmentEvidence;
   notes?: string[];
 };
 
@@ -244,6 +246,7 @@ function compileArm(input: RealAbDogfoodPairedCaptureInput, arm: RealAbArm, prob
     packet_source: armInput.packet_source,
     events: traceEventsForProbe({ arm, armInput, probe }),
     ...(armInput.outcomes_by_probe_id?.[probeId] ? { outcome: armInput.outcomes_by_probe_id[probeId] } : {}),
+    run_environment: armInput.run_environment,
     notes: armInput.notes,
   };
 }
