@@ -181,7 +181,16 @@ test("real A/B trace capture compiles auditable pilot traces into a validation s
 
 test("real A/B product evidence records clean locked action discipline", () => {
   const capture = readTraceCapture();
-  capture.tasks[0].runs.aionis_assisted.authority_level = "authoritative";
+  const run = capture.tasks[0].runs.aionis_assisted;
+  run.authority_level = "authoritative";
+  run.events.splice(1, 0, {
+    kind: "tool_call",
+    command: "npm test -- tests/exporter.test.mjs",
+    text: "Ran the declared acceptance check from the agent shell and it passed.",
+    success: true,
+    correct: true,
+    tokens: 700,
+  });
 
   const report = runRealAbValidationSuite(compileRealAbTraceCapture(capture));
   const task = report.tasks.find((entry) => entry.id === "capture_coding_resume");

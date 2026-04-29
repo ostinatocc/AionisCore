@@ -564,7 +564,7 @@ function deriveDisciplineCompliance(
     if (isAcceptancePassEvent(event, task)) {
       if (firstAcceptancePassEventIndex === null) {
         firstAcceptancePassEventIndex = index;
-      } else {
+      } else if (isActionEvent(event)) {
         violations.push(disciplineViolation(
           "repeat_validation_after_pass",
           event,

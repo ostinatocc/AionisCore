@@ -2,11 +2,11 @@
 
 Date: 2026-04-28
 
-Last reviewed: 2026-04-28
+Last reviewed: 2026-04-29
 
 Document status: real A/B evidence report
 
-This report summarizes the first real LLM-backed A/B evidence runs for Aionis Runtime and the follow-up `contract_only` reruns. The goal is not to claim broad product superiority. The goal is to state what the current evidence can and cannot prove, then define the next Runtime hardening steps.
+This report summarizes the first real LLM-backed A/B evidence runs for Aionis Runtime, the follow-up `contract_only` reruns, and the first action-discipline revalidation. The goal is not to claim broad product superiority. The goal is to state what the current evidence can and cannot prove, then define the next Runtime hardening steps.
 
 ## Evidence Boundary
 
@@ -49,6 +49,7 @@ These runs are directional pilot evidence, not broad product proof.
 | `ai-code-ci-dependency-surface-repeat-20260428-220043` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-repeat-20260428-220043/validation-report.md` | pass |
 | `ai-code-ci-dependency-surface-contract-packet-20260428-224137` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-contract-packet-20260428-224137/validation-report.md` | pass |
 | `ai-code-ci-dependency-surface-action-discipline-20260428-232156` | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-action-discipline-20260428-232156/validation-report.md` | pass |
+| `ai-code-ci-dependency-surface-action-discipline-20260428-232156` discipline-gate revalidation | `ai_code_ci_repair` | `.artifacts/real-ab/ai-code-ci-dependency-surface-action-discipline-20260428-232156/validation-report.discipline-gate.md` | pass |
 
 ## Initial Directional Results
 
@@ -179,7 +180,18 @@ The action-discipline run fixed the action-count regression but exposed remainin
 - Aionis took 93.1% longer than baseline.
 - Negative control also passed with the same action count as baseline.
 
-The current defensible claim for this family is narrower: compact Aionis Runtime contracts plus action discipline can preserve correctness and reduce action count, but token and elapsed-time savings are still not stable on this dependency-surface repair task. The remaining gap is execution latency and cost variance after the agent follows the declared path.
+The same trace was then revalidated after adding an explicit `Discipline Compliance` gate to the A/B report. The revalidation passed:
+
+- Aionis discipline status was `pass (0)`.
+- Severe discipline violations: `0`.
+- First declared target event index: `1`.
+- First edit event index: `2`.
+- Pre-edit confirmation steps: `2/2`.
+- First acceptance pass event index: `7`.
+
+This matters because the older pass only proved verifier-backed completion. The discipline-gate revalidation also proves the authoritative Aionis arm followed the locked execution contract: inspect declared target surface first, stay within the allowed work surface, keep acceptance evidence read-only, and stop after required validation while allowing the harness verifier to add independent evidence.
+
+The current defensible claim for this family is narrower: compact Aionis Runtime contracts plus action discipline can preserve correctness, reduce action count, and keep authoritative execution inside a measurable contract boundary, but token and elapsed-time savings are still not stable on this dependency-surface repair task. The remaining gap is execution latency and cost variance after the agent follows the declared path.
 
 ## What This Proves
 
@@ -192,6 +204,7 @@ Aionis can currently make defensible directional claims in these areas:
 - It can force the distinction between an agent success claim and verifier-backed success.
 - It can turn external checks such as fresh-shell curl, clean-client install, and causal deploy verification into authority boundaries.
 - It can protect CI repair evidence against forged success by rejecting modified tests, package metadata, or fixture README files.
+- It can now audit contract-locked action discipline in A/B reports, including first target touch, pre-edit confirmation count, repeated agent validation after pass, non-target expansion, and acceptance-evidence edits.
 - In one clean arm-isolated CI repair run, it can reduce token usage substantially while preserving verifier-backed correctness.
 - In dependency-surface CI repair runs, it can preserve verifier-backed correctness and has shown token compression and action-count compression, but not consistently in the same run and not yet with stable elapsed-time improvement.
 
@@ -231,6 +244,8 @@ Completed:
 - Added reusable `execution_agent_contract_packet_v1` Runtime projection so compact agent-facing packets are produced from execution contracts instead of benchmark-local prompt assembly.
 - Added automatic escalation from `contract_only` to expanded workflow packets when the compact contract is missing target files, next action, acceptance checks, unresolved blockers are present, or verification has failed.
 - Added `action_discipline` to the Runtime agent contract packet so authoritative complete contracts can lock the first action, allowed work surface, required validation, prohibited broad discovery, and stop conditions.
+- Added A/B `discipline_compliance` reporting and a product/pilot gate so authoritative Aionis treatment evidence fails when the agent violates locked action discipline.
+- Revalidated the latest dependency-surface action-discipline trace under the new gate; the gate passed with zero severe discipline violations.
 - Kept full workflow, replay, and pattern memory internal by default.
 - Kept harness verifiers outside the agent default workflow.
 - Repeated the same three families after packet compression.
@@ -243,7 +258,7 @@ Completed:
 Remaining:
 
 - Dogfood the automatic escalation path in live trials and verify it expands only after compact-contract insufficiency or verifier failure.
-- Repeat action-discipline trials and add stricter latency/cost analysis to separate model sampling latency from Runtime packet quality.
+- Repeat action-discipline trials with the new `discipline_compliance` gate enabled and add stricter latency/cost analysis to separate model sampling latency from Runtime packet quality.
 - Run at least two more paired trials per family before making stronger cost or reliability claims.
 - Extend causal workspace verification beyond deploy/webserver where feasible.
 - Run the remaining harder `ai_code_ci_repair` variants as paired LLM A/B trials before treating the commercial-family signal as stable.

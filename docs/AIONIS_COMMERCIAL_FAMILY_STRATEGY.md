@@ -108,6 +108,7 @@ Current evidence status:
 - The first Runtime-level contract-packet repeat preserved correctness and reduced token use by 20.7% versus baseline, but increased action/tool events and elapsed time. This points to action-discipline hardening, not more packet text.
 - Runtime packet `action_discipline` now marks authoritative complete contracts as `contract_locked`, limiting first action, broad discovery, non-target expansion, repeat validation, and acceptance-evidence edits.
 - The first action-discipline repeat preserved correctness and reduced action/tool events by 38.5% versus baseline, but token use was slightly higher and elapsed time was worse. This proves action discipline can change behavior, but cost/latency still need repeat evidence.
+- The same action-discipline trace now passes the A/B `discipline_compliance` gate with zero severe violations. This closes an evidence gap: the run no longer proves only verifier-backed completion, it also proves the authoritative Aionis arm followed the locked execution boundary.
 - The next CI repair proof must either repeat harder variants enough times to show stable cost/control advantage, or increase task difficulty further with larger dependency surfaces and less obvious implementation fixes.
 
 ### Metrics

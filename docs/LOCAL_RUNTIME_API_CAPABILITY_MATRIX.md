@@ -139,6 +139,7 @@ Agent-facing execution contract packet:
 3. `workflow_steps`, `pattern_hints`, selected tool, and provenance stay internal unless the packet escalates to `workflow_expanded`
 4. escalation is automatic when the compact contract is missing target files, next action, acceptance checks, unresolved blockers are present, or verification has failed
 5. `action_discipline` is included in the packet; authoritative complete contracts enter `contract_locked` mode with a declared first action, allowed work surface, required validation, prohibited broad discovery, and stop conditions
+6. real A/B validation now reports `discipline_compliance` for authoritative Aionis treatment traces and fails product/pilot evidence when the agent violates the locked execution boundary
 
 Recommended integrator read path:
 
