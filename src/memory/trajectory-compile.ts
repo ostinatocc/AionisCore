@@ -459,12 +459,16 @@ function extractSuccessInvariants(args: {
 function extractMustHoldAfterExit(args: {
   queryText: string;
   steps: NormalizedStep[];
+  taskFamily: string | null;
   acceptanceChecks: string[];
   serviceConstraints: ServiceLifecycleConstraintV1[];
   hintMustHold?: string[];
 }): string[] {
   const corpus = compileCorpus(args.queryText, args.steps);
   const out: Array<string | null> = [...(args.hintMustHold ?? [])];
+  if (args.taskFamily !== "service_publish_validate") {
+    return uniqueStrings(out, 24);
+  }
   const afterExitRequired = hasAfterExitSignal(corpus, args.serviceConstraints);
   for (const constraint of args.serviceConstraints) {
     if (!constraint.must_survive_agent_exit) continue;
@@ -632,6 +636,7 @@ export function buildTrajectoryCompileLite(body: unknown, defaults: {
   const mustHoldAfterExit = extractMustHoldAfterExit({
     queryText: parsed.query_text,
     steps,
+    taskFamily,
     acceptanceChecks,
     serviceConstraints,
     hintMustHold: parsed.hints?.must_hold_after_exit ?? [],

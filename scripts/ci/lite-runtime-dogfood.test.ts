@@ -31,7 +31,7 @@ test("runtime dogfood slice compiles real task families into outcome-backed cont
   assert.equal(result.proof_boundary.scenarios_without_execution_evidence, 0);
   assert.ok(result.proof_boundary.claim_scope.some((entry) => entry.includes("not a live external probe")));
   assert.equal(result.coverage.coverage_version, "runtime_dogfood_coverage_v1");
-  assert.equal(result.coverage.after_exit_required_scenarios, 4);
+  assert.equal(result.coverage.after_exit_required_scenarios, 3);
   assert.equal(result.coverage.service_lifecycle_required_scenarios, 3);
   assert.equal(result.coverage.external_visibility_required_scenarios, 5);
   assert.equal(result.coverage.negative_control_scenarios, 2);

@@ -6,7 +6,7 @@ Last reviewed: 2026-04-29
 
 Document status: real A/B evidence report
 
-This report summarizes the first real LLM-backed A/B evidence runs for Aionis Runtime, the follow-up `contract_only` reruns, the first action-discipline revalidation, and the model-locked causal revalidations for publish/install, deploy/webserver, and service lifecycle. The goal is not to claim broad product superiority. The goal is to state what the current evidence can and cannot prove, then define the next Runtime hardening steps.
+This report summarizes the first real LLM-backed A/B evidence runs for Aionis Runtime, the follow-up `contract_only` reruns, the first action-discipline revalidation, and the model-locked causal revalidations for publish/install, deploy/webserver, and service lifecycle. It also records the hard service lifecycle repeat and hard publish/install repeat outcomes. The goal is not to claim broad product superiority. The goal is to state what the current evidence can and cannot prove, then define the next Runtime hardening steps.
 
 ## Evidence Boundary
 
@@ -62,6 +62,9 @@ These runs are directional pilot evidence, not broad product proof.
 | `service-hard-contract-equalcmd-20260429-194810` | `service_publish_validate` | `.artifacts/real-ab/service-hard-contract-equalcmd-20260429-194810/validation-report.md` | pass |
 | `service-hard-contract-repeat-20260429-202438` | `service_publish_validate` | `.artifacts/real-ab/service-hard-contract-repeat-20260429-202438/validation-report.md` | pass |
 | `publish-install-hard-contract-fix-20260429-221952` | `package_publish_validate` | `.artifacts/real-ab/publish-install-hard-contract-fix-20260429-221952/validation-report.md` | pass |
+| `publish-install-hard-repeat-20260429-225822` | `package_publish_validate` | `.artifacts/real-ab/publish-install-hard-repeat-20260429-225822/validation-report.md` | pass |
+| `publish-install-hard-boundary-rerun-20260429-235132` | `package_publish_validate` | `.artifacts/real-ab/publish-install-hard-boundary-rerun-20260429-235132/validation-report.md` | pass |
+| `deploy-web-boundary-repeat-20260430-003740` | `git_deploy_webserver` | `.artifacts/real-ab/deploy-web-boundary-repeat-20260430-003740/validation-report.md` | pass |
 
 ## Initial Directional Results
 
@@ -264,6 +267,23 @@ This model-locked rerun passed the product evidence gate:
 
 This is now the cleanest deploy/webserver evidence because it combines model-locked run metadata, identical starting workspace hashes, independent causal workspace verification, and direct run-environment rows in the validation report. It strengthens the deploy/webserver family claim: Aionis can materially shorten the execution path and wall-clock time for hook/web visibility repair while preserving verifier-backed correctness. It does not prove stable waste reduction or unique correctness.
 
+## Deploy/Webserver Boundary Repeat Result
+
+The `deploy-web-boundary-repeat-20260430-003740` suite reran the same deploy/hook/web visible-outcome scenario after adding deploy-specific `validation_boundary` guidance to the Runtime agent packet. The suite used GPT-5.5, `xhigh`, Codex CLI `0.125.0`, identical initial workspace hashes, normalized command-template hash equality across arms, and external verifier provenance for every arm.
+
+| Family / variant | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `git_deploy_webserver / boundary repeat` | 13 | 10 | 11 | 10 | 1 | 1 | 117s | 136s | 29,739 | 68,958 |
+
+This repeat passed the paired product gate and produced mixed evidence:
+
+- All four arms passed the external served-content verifier.
+- Aionis reduced action count by 23.1% versus baseline.
+- Aionis did not reduce wasted steps, elapsed time, or token use in this run.
+- Aionis no longer performed random endpoint discovery or long-lived webserver lifecycle management; the remaining self-marked wasted step was a `git diff` attempt in a non-git fixture workspace.
+- Negative control also passed with fewer tokens than both baseline and Aionis, so this run is a boundary/discipline and action-count signal, not a cost or correctness-separation signal.
+- The deploy/webserver claim is now narrower: Aionis can preserve external served-content correctness and reduce action count, but stable token/time savings are not proved.
+
 ## Model-Locked Service Lifecycle Revalidation
 
 The `service-causal-model-locked-20260429-164153` suite reran the service after-exit scenario with explicit agent-environment evidence. Before this run, the service external verifier was upgraded to support `--workspace-root`, so it now launches the service script from the exact arm workspace instead of the repository fixture. Every arm used `codex exec --model gpt-5.5` with `model_reasoning_effort="xhigh"`, and the runner recorded `codex-cli 0.125.0`, command hash, plus workspace before/after hashes for each arm.
@@ -337,6 +357,39 @@ This run passed the paired product gate:
 - Negative control also passed, so this is an efficiency/control signal, not correctness separation.
 - The result validates the Runtime contract-boundary fix: package publish/install should carry clean-client and installed-API outcome constraints without injecting service lifecycle instructions.
 
+## Hard Publish/Install Repeat Result
+
+The `publish-install-hard-repeat-20260429-225822` suite repeated the same hard package publish/install slice under the frozen fairness protocol: GPT-5.5, `xhigh`, Codex CLI `0.125.0`, same command hash across arms, same initial workspace hash, and external verifier provenance for each arm.
+
+| Family / variant | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `package_publish_validate / hard publish-install / repeat` | 17 | 22 | 19 | 21 | 0 | 5 | 205s | 336s | 81,232 | 51,891 |
+
+This repeat passed the paired product gate but produced a mixed cost signal:
+
+- All four arms passed the external verifier again.
+- Aionis reduced token use by 36.1% versus baseline.
+- Aionis used more actions, more self-marked wasted steps, more incorrect events, and more elapsed time than baseline.
+- Negative control also passed, so this repeat is not a correctness-separation signal.
+- The stable hard publish/install claim is now narrower: repeated clean-client installed-API correctness plus repeated token compression, but not stable action/time/waste compression.
+
+## Hard Publish/Install Boundary Rerun Result
+
+The `publish-install-hard-boundary-rerun-20260429-235132` suite reran the hard package publish/install slice after adding `validation_boundary` to the Runtime agent packet and tightening trajectory/dogfood package boundaries. This run used the same frozen fairness protocol: GPT-5.5, `xhigh`, Codex CLI `0.125.0`, same command hash across arms, same initial workspace hash, and external verifier provenance for each arm.
+
+| Family / variant | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `package_publish_validate / hard publish-install / validation boundary` | 22 | 5 | 23 | 20 | 4 | 0 | 304s | 139s | 99,260 | 71,669 |
+
+This rerun passed the paired product gate and directly tested the previous regression:
+
+- All four arms passed the external verifier.
+- Aionis reduced action count by 77.3%, wasted steps by 100.0%, elapsed time by 54.2%, and token use by 27.8% versus baseline.
+- The Aionis trace no longer performed random endpoint discovery or repeated background server retries.
+- Aionis used one scoped local HTTP server for validation, then shut it down, matching the new package validation-transport boundary.
+- After-exit correctness is now `n/a` for this package suite, which is correct: package clean-client visibility is an external validation boundary, not product-owned service lifecycle.
+- Negative control also passed, so this is still an efficiency/control signal, not correctness separation.
+
 ## What This Proves
 
 Aionis can currently make defensible directional claims in these areas:
@@ -354,10 +407,13 @@ Aionis can currently make defensible directional claims in these areas:
 - In the causal publish/install rerun, it can reduce action count, elapsed time, and token use while preserving verifier-backed clean-client install correctness.
 - In the model-locked causal publish/install rerun, it can reduce action count, wasted steps, and token use under explicit GPT-5.5/xhigh Codex conditions while preserving verifier-backed clean-client install correctness.
 - In the model-locked deploy/webserver rerun, it can reduce action count and elapsed time under explicit GPT-5.5/xhigh Codex conditions while preserving verifier-backed served-content correctness.
+- In the deploy/webserver boundary repeat, it preserved served-content correctness and reduced action count after adding explicit served-content validation boundaries, but did not reduce tokens or elapsed time.
 - In the model-locked service lifecycle rerun, it can reduce action count, elapsed time, token use, and wasted steps while preserving after-exit and fresh-shell correctness.
 - In the hard service lifecycle equal-command rerun, it can produce a correctness separation against both baseline and negative control while reducing actions, elapsed time, and tokens under explicit GPT-5.5/xhigh Codex conditions.
 - In the hard service lifecycle repeat, it reproduced correctness separation against both baseline and negative control under the same frozen fairness protocol.
-- In the hard publish/install contract-fix run, it preserved verifier-backed clean-client correctness while reducing actions, wasted steps, elapsed time, and token use versus baseline.
+- Across three hard publish/install runs after the contract-boundary fix, it preserved verifier-backed clean-client installed-API correctness and reduced token use versus baseline.
+- In hard publish/install, the `validation_boundary` rerun restored action/time/waste compression after the previous repeat regression, and removed endpoint-discovery/background-server retry noise from the Aionis trace.
+- Hard publish/install action/time/waste compression is promising but should still be called repeat-backed directional evidence rather than universal package-task proof, because one of the three hard runs regressed on those metrics before the validation-boundary fix.
 
 ## What This Does Not Prove
 
@@ -367,9 +423,11 @@ Aionis should not currently claim:
 - Stable token savings across all task families.
 - Stable wall-clock speedup for publish/install based on the model-locked causal rerun.
 - Stable wasted-step reduction for deploy/webserver based on the model-locked causal rerun.
+- Stable token or elapsed-time savings for deploy/webserver, because the boundary repeat regressed on both while still reducing actions.
 - Unique correctness advantage for the easier service lifecycle fixture, because negative control also passed with very few actions.
 - Broad service-task superiority from two hard lifecycle runs.
 - Stable hard-lifecycle wasted-step reduction, because the repeat had more self-marked wasted steps for Aionis than baseline.
+- Universal hard publish/install action-count, wall-clock, or wasted-step reduction across all historical runs, because the pre-`validation_boundary` repeat regressed on those metrics.
 - Stable token savings for `dependency_surface` CI repair based on current repeat evidence.
 - Universal runtime speedup.
 - Unique correctness advantage for AI code CI repair based on one easy pilot fixture.
@@ -390,7 +448,7 @@ Aionis should be positioned as a reliability and continuity Runtime first:
 - It carries task-family execution contracts across attempts.
 - It can help agents start from the right work surface instead of re-discovering the task.
 
-It should not be positioned primarily as a token-saving layer yet, but the `contract_only` reruns, model-locked causal reruns, and hard lifecycle equal-command rerun now show credible cost-compression potential in service lifecycle, publish/install, deploy/webserver, and selected CI repair tasks.
+It should not be positioned primarily as a token-saving layer yet. The `contract_only` reruns, model-locked causal reruns, hard lifecycle equal-command rerun, and hard publish/install repeats show credible cost-compression potential in service lifecycle, publish/install, and selected CI repair tasks. Deploy/webserver should be framed more cautiously after the boundary repeat: correctness and action-path compression are supported, but stable token/time savings are not.
 
 The `ai_code_ci_repair` pilot adds a second kind of product signal: Aionis can act as a compact execution-contract layer for AI coding repair loops, where the measurable advantage is fewer irrelevant actions and lower token cost while still requiring targeted CI evidence.
 
@@ -432,6 +490,10 @@ Completed:
 - Ran `service-hard-contract-repeat-20260429-202438`; the gate passed with Aionis and positive control passing while baseline and negative control failed on missing lifecycle marker.
 - Narrowed package publish/install contracts so fresh-shell clean-client validation remains authoritative while local HTTP index serving does not become service lifecycle guidance.
 - Ran `publish-install-hard-contract-fix-20260429-221952`; the gate passed with all arms externally correct and Aionis materially reducing action count, wasted steps, elapsed time, and tokens versus baseline.
+- Ran `publish-install-hard-repeat-20260429-225822`; the gate passed with all arms externally correct and Aionis reducing token use by 36.1%, but Aionis regressed on action count, wasted steps, incorrect events, and elapsed time.
+- Added `validation_boundary` to `execution_agent_contract_packet_v1` so package publish/install packets explicitly separate verifier-owned fresh-shell endpoints and ephemeral HTTP validation transport from product-owned service lifecycle.
+- Tightened trajectory compile and dogfood task boundaries so package publish/install can keep fresh-shell clean-client visibility requirements without inventing `must_hold_after_exit` or service lifecycle constraints.
+- Ran `publish-install-hard-boundary-rerun-20260429-235132`; the gate passed with all arms externally correct and Aionis reducing actions by 77.3%, wasted steps by 100.0%, elapsed time by 54.2%, and token use by 27.8% versus baseline.
 
 Remaining:
 
@@ -443,8 +505,18 @@ Remaining:
 - Rerun more commercial-family trials after arm-prompt isolation before making stable clean A/B claims.
 - Add larger dependency-surface variants that are more likely to separate correctness rather than only cost/control.
 - Rerun AI code CI repair with explicit model/effort/CLI/workspace-hash evidence before treating cross-family cost claims as stable.
-- Repeat `external_probe_publish_install_hard` at least once more before treating package-family cost reduction as stable.
+- Optionally run one more `external_probe_publish_install_hard` repeat only if package-family release copy needs a second post-`validation_boundary` trace.
 - Treat any new clean A/B suite without `aionis_ab_fairness_manifest_v1` and verifier provenance as directional evidence only.
+
+## Release Evidence Matrix
+
+| Family | Evidence status | Proved | Not proved | Next move |
+| --- | --- | --- | --- | --- |
+| `service_publish_validate / hard lifecycle` | strongest current signal | repeated correctness separation against baseline and negative control; after-exit/fresh-shell lifecycle value | broad service-task superiority; stable wasted-step reduction | freeze as the main v0.4 hero claim, then run one more repeat only if release copy needs a third trace |
+| `package_publish_validate / hard publish-install` | useful repeat-backed efficiency signal | repeated clean-client installed-API correctness; repeated token compression; post-`validation_boundary` action/time/waste compression | correctness separation; universal action/time/waste reduction across all historical runs | optionally run one more post-`validation_boundary` repeat, otherwise move to deploy/webserver hard repeat |
+| `git_deploy_webserver` | repeated served-content correctness with mixed cost signal | model-locked causal served-content correctness; repeated action-count reduction; boundary noise reduction | stable token/time savings; correctness separation | add a harder deploy/webserver variant before using as a strong release claim |
+| `ai_code_ci_repair` | commercial-family pilot | verifier can reject forged success and selected fixtures show cost/control gains | stable unique correctness or broad CI repair superiority | add harder real-world variants with misleading dependency surfaces |
+| `handoff_resume / agent_takeover / interrupted_resume` | Runtime capability coverage, weak product proof | continuity primitives exist in Runtime architecture | clean LLM A/B product value | build real sequential task traces before release claims |
 
 ## Claim Policy
 
@@ -486,7 +558,7 @@ Allowed hard service lifecycle claim:
 
 Allowed hard publish/install claim:
 
-> In one explicit GPT-5.5/xhigh Codex hard package publish/install run with the same command hash and same initial workspace hash across arms, Aionis Runtime preserved verifier-backed clean-client installed-API correctness while reducing action count, wasted steps, elapsed time, and token usage versus baseline. This is an efficiency/control signal, not a correctness-separation claim.
+> In three explicit GPT-5.5/xhigh Codex hard package publish/install runs with the same command hash and same initial workspace hash across arms, Aionis Runtime preserved verifier-backed clean-client installed-API correctness and reduced token usage versus baseline. After adding `validation_boundary`, the latest rerun also reduced action count, wasted steps, elapsed time, and validation-transport noise. This is an efficiency/control signal, not a correctness-separation claim.
 
 Not allowed current claim:
 
@@ -494,16 +566,17 @@ Not allowed current claim:
 
 ## Next Evidence Step
 
-Run at least two more paired trials for the current families, but only under the frozen fairness protocol:
+Run focused paired trials for the current families, but only under the frozen fairness protocol:
 
 - `external_probe_service_after_exit`
 - `external_probe_service_lifecycle_hard`
 - `external_probe_publish_install`
-- `external_probe_publish_install_hard`
 - `external_probe_deploy_hook_web`
 - `external_probe_ai_code_ci_repair`
 
 Each new clean suite should be initialized with `aionis_ab_fairness_manifest_v1`, run with explicit model/effort/CLI metadata, and assembled only after the verifier records the actual arm workspace provenance.
+
+The latest `external_probe_publish_install_hard` post-`validation_boundary` rerun validated that endpoint discovery and background-server retry noise dropped in the Aionis arm. The next stronger evidence move is a hard deploy/webserver repeat or a harder real-world CI repair variant, not more package-only accumulation by default.
 
 Then add the next continuity-heavy families:
 

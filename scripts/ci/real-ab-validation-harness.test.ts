@@ -914,6 +914,38 @@ test("real A/B fairness manifest accepts model-locked causal arm evidence", () =
   ));
 });
 
+test("real A/B fairness manifest compares normalized command template hash across arm workspaces", () => {
+  const manifest = liveEvidenceManifest();
+  manifest.fairness_manifest = buildRealAbFairnessManifestV1({
+    suite_id: manifest.suite_id,
+    suite_kind: manifest.suite_kind,
+    task_ids: manifest.task_ids ?? [],
+    model: "gpt-5.5",
+    reasoning_effort: "xhigh",
+    agent_cli: "codex",
+  });
+  const loaded = loadedLiveEvidence();
+  addFairnessLockedLlmResults(loaded);
+  addVerifierProvenance(loaded);
+  const templateHash = "c".repeat(64);
+  let index = 0;
+  for (const arm of ["baseline", "aionis_assisted", "negative_control", "positive_control"] as const) {
+    const environment = loaded[arm].llm_result?.run_environment;
+    assert.ok(environment);
+    environment.command_sha256 = `${index}`.repeat(64);
+    environment.command_template_sha256 = templateHash;
+    index += 1;
+  }
+
+  const assemblerRequirements = validateRealAbLiveEvidenceAssemblerInputs({ manifest, loaded });
+
+  assert.ok(assemblerRequirements.some((requirement) =>
+    requirement.id === "live_evidence:fairness_manifest:run_environment:command_hash"
+    && requirement.status === "pass"
+    && requirement.actual === templateHash
+  ));
+});
+
 test("real A/B fairness manifest fails when one arm uses a different model", () => {
   const manifest = liveEvidenceManifest();
   manifest.fairness_manifest = buildRealAbFairnessManifestV1({
@@ -1253,6 +1285,7 @@ test("real A/B LLM runner executes a configured agent command and returns audita
   assert.equal(attempt.run_environment.agent_cli, process.execPath);
   assert.match(attempt.run_environment.agent_cli_version ?? "", /^v?\d+\./);
   assert.match(attempt.run_environment.command_sha256, /^[a-f0-9]{64}$/);
+  assert.match(attempt.run_environment.command_template_sha256, /^[a-f0-9]{64}$/);
   assert.equal(attempt.run_environment.workspace_before?.root, dir);
   assert.equal(attempt.run_environment.workspace_after?.root, dir);
   assert.match(attempt.run_environment.workspace_before?.hash ?? "", /^[a-f0-9]{64}$/);
@@ -1317,9 +1350,12 @@ test("real A/B LLM runner publish/install oracle prompt routes verifier to the a
   assert.match(prompt, /package_publish_validate/);
   assert.match(prompt, /scripts\/build_index\.py/);
   assert.match(prompt, /src\/vectorops\/__init__\.py/);
-  assert.match(prompt, /Harness verifier:/);
-  assert.match(prompt, /--workspace-root/);
-  assert.match(prompt, /The agent may run narrower checks while working/);
+  assert.match(prompt, /Verifier boundary:/);
+  assert.match(prompt, /collection harness runs the full dogfood verifier/);
+  assert.match(prompt, /Do not invoke the external dogfood verifier/);
+  assert.doesNotMatch(prompt, /Harness verifier:/);
+  assert.doesNotMatch(prompt, /scripts\/lite-runtime-dogfood-external-probe\.ts/);
+  assert.doesNotMatch(prompt, /--workspace-root/);
 });
 
 test("real A/B LLM runner hard publish/install prompt carries installed API contract", () => {
@@ -1342,8 +1378,41 @@ test("real A/B LLM runner hard publish/install prompt carries installed API cont
   assert.match(prompt, /src\/vectorops\/__init__\.py/);
   assert.match(prompt, /vector_norm/);
   assert.match(prompt, /installed_api_contract_required/);
+  assert.match(prompt, /validation_boundary:/);
+  assert.match(prompt, /fresh_shell_endpoint_placeholder_is_verifier_owned_not_an_agent_discovery_target/);
+  assert.match(prompt, /package_index_http_server_is_validation_transport_not_product_service/);
+  assert.match(prompt, /do_not_discover_or_probe_random_fresh_shell_endpoints/);
+  assert.match(prompt, /external_verifier_owns_final_fresh_shell_probe/);
   assert.match(prompt, /contract_locked/);
+  assert.doesNotMatch(prompt, /after_exit_claim_requires_fresh_shell_revalidation/);
   assert.doesNotMatch(prompt, /Harness verifier:/);
+  assert.doesNotMatch(prompt, /Service lifecycle tasks must use headless portable process management/);
+  assert.doesNotMatch(prompt, /nohup <command>/);
+});
+
+test("real A/B LLM runner deploy/webserver prompt carries served-content boundary", () => {
+  const probeId = "external_probe_deploy_hook_web";
+  const workspace = path.join(os.tmpdir(), "aionis-real-ab-deploy-workspace");
+  const manifest = buildRealAbLiveEvidenceManifestTemplate({
+    suite_id: "deploy-webserver-boundary-prompt",
+    task_ids: [probeId],
+  });
+  const prompt = buildRealAbLlmArmPrompt({
+    manifest,
+    manifest_path: path.join(os.tmpdir(), "aionis-real-ab", "manifest.json"),
+    arm: "aionis_assisted",
+    probe_id: probeId,
+    workspace_root: workspace,
+  });
+
+  assert.match(prompt, /git_deploy_webserver/);
+  assert.match(prompt, /hooks\/post-receive/);
+  assert.match(prompt, /validation_boundary:/);
+  assert.match(prompt, /served_web_endpoint_is_external_visibility_boundary/);
+  assert.match(prompt, /git_or_hook_success_is_not_served_content_proof/);
+  assert.match(prompt, /do_not_claim_success_from_git_or_hook_exit_without_served_endpoint_probe/);
+  assert.match(prompt, /deploy_claim_requires_served_endpoint_content_match/);
+  assert.doesNotMatch(prompt, /after_exit_claim_requires_fresh_shell_revalidation/);
   assert.doesNotMatch(prompt, /Service lifecycle tasks must use headless portable process management/);
   assert.doesNotMatch(prompt, /nohup <command>/);
 });

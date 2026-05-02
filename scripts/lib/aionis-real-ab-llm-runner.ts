@@ -66,6 +66,7 @@ export type RealAbLlmRunEnvironment = {
   agent_cli: string | null;
   agent_cli_version: string | null;
   command_sha256: string;
+  command_template_sha256: string;
   cwd: string;
   workspace_before: RealAbLlmWorkspaceFingerprint | null;
   workspace_after: RealAbLlmWorkspaceFingerprint | null;
@@ -388,6 +389,10 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function normalizeCommandForFairness(command: string, cwd: string): string {
+  return command.split(path.resolve(cwd)).join("<arm-workspace>");
+}
+
 function shouldIgnoreWorkspaceEntry(name: string): boolean {
   return WorkspaceHashIgnoredDirectories.includes(name);
 }
@@ -484,6 +489,7 @@ function serviceLifecycleConstraintsFromBrief(brief: ProbeTaskBrief): ServiceLif
 
 function mustHoldAfterExitFromBrief(brief: ProbeTaskBrief): string[] {
   const out: string[] = [];
+  if (brief.task_family !== "service_publish_validate") return out;
   const promptRequiresAfterExit = /\bafter\b.*\b(?:agent|worker|launcher|session).*?\bexit/i.test(brief.task_prompt)
     || brief.lifecycle_constraints.includes("must_survive_agent_exit");
   if (promptRequiresAfterExit) out.push("task_result_remains_valid_after_agent_exit");
@@ -581,10 +587,10 @@ function armSpecificTaskBody(args: {
       "Expected workflow:",
       ...brief.workflow_steps.map((step, index) => `${index + 1}. ${step}`),
       "",
-      "Harness verifier:",
-      "After the agent attempt, the collection harness can run this dogfood probe command to produce dogfood-run.json.",
-      "The agent may run narrower checks while working, but should not fake or pre-fill harness verifier evidence.",
-      dogfoodCommand,
+      "Verifier boundary:",
+      "The collection harness runs the full dogfood verifier after the agent attempt.",
+      "Do not invoke the external dogfood verifier, inspect verifier source, run evidence-recorder scripts, or write dogfood/evidence artifacts from inside the agent attempt.",
+      "Run only narrow local checks needed to make the target files correct.",
     ];
   }
   if (packetMode === "contract_only") {
@@ -1001,6 +1007,7 @@ export async function runRealAbLlmArmAttempt(args: {
       agent_cli: agentCli,
       agent_cli_version: agentCliVersion,
       command_sha256: sha256(args.command),
+      command_template_sha256: sha256(normalizeCommandForFairness(args.command, resolvedCwd)),
       cwd: resolvedCwd,
       workspace_before: workspaceBefore,
       workspace_after: workspaceAfter,

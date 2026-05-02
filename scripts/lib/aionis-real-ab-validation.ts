@@ -137,6 +137,7 @@ export type RealAbRunEnvironmentEvidence = {
   agent_cli?: string | null;
   agent_cli_version?: string | null;
   command_sha256?: string;
+  command_template_sha256?: string;
   cwd?: string;
   workspace_before?: RealAbWorkspaceFingerprintEvidence | null;
   workspace_after?: RealAbWorkspaceFingerprintEvidence | null;

@@ -46,6 +46,7 @@ export const ExecutionAgentContractPacketV1Schema = z.object({
     next_action: z.string().trim().min(1).nullable(),
     acceptance_checks: StringList,
     lifecycle_constraints: StringList,
+    validation_boundary: StringList,
     authority_boundary: StringList,
     success_invariants: StringList,
     dependency_requirements: StringList,
@@ -101,6 +102,59 @@ function lifecycleConstraints(contract: ExecutionContractV1): string[] {
   ], 32);
 }
 
+function isPackagePublishValidate(contract: ExecutionContractV1): boolean {
+  return contract.task_family === "package_publish_validate";
+}
+
+function isGitDeployWebserver(contract: ExecutionContractV1): boolean {
+  return contract.task_family === "git_deploy_webserver";
+}
+
+function acceptanceMentionsFreshShellPlaceholder(contract: ExecutionContractV1): boolean {
+  return contract.outcome.acceptance_checks.some((check) => /<fresh-shell-endpoint>/i.test(check));
+}
+
+function hasServiceLifecycleConstraint(contract: ExecutionContractV1): boolean {
+  return contract.service_lifecycle_constraints.some((constraint) =>
+    constraint.must_survive_agent_exit
+    || constraint.revalidate_from_fresh_shell
+    || constraint.detach_then_probe
+    || Boolean(constraint.endpoint)
+  );
+}
+
+function validationBoundary(contract: ExecutionContractV1): string[] {
+  return uniqueStrings([
+    acceptanceMentionsFreshShellPlaceholder(contract)
+      ? "fresh_shell_endpoint_placeholder_is_verifier_owned_not_an_agent_discovery_target"
+      : null,
+    isPackagePublishValidate(contract)
+      ? "package_index_http_server_is_validation_transport_not_product_service"
+      : null,
+    isPackagePublishValidate(contract)
+      ? "agent_may_use_a_single_scoped_local_server_for_local_install_checks_when_needed"
+      : null,
+    isPackagePublishValidate(contract)
+      ? "do_not_require_package_index_transport_to_survive_agent_exit_without_service_lifecycle_constraint"
+      : null,
+    isPackagePublishValidate(contract)
+      ? "final_clean_client_fresh_shell_install_is_owned_by_external_verifier"
+      : null,
+    isGitDeployWebserver(contract)
+      ? "served_web_endpoint_is_external_visibility_boundary"
+      : null,
+    isGitDeployWebserver(contract)
+      ? "git_or_hook_success_is_not_served_content_proof"
+      : null,
+    isGitDeployWebserver(contract)
+      ? "publish_root_file_presence_is_not_served_content_proof"
+      : null,
+    isGitDeployWebserver(contract) && !hasServiceLifecycleConstraint(contract)
+      ? "do_not_manage_webserver_lifecycle_without_declared_service_constraint"
+      : null,
+  ], 16);
+}
+
 function authorityBoundary(contract: ExecutionContractV1): string[] {
   return uniqueStrings([
     contract.contract_trust && contract.contract_trust !== "authoritative"
@@ -114,6 +168,12 @@ function authorityBoundary(contract: ExecutionContractV1): string[] {
       : null,
     contract.outcome.external_visibility_requirements.length > 0
       ? "external_visibility_must_be_verified_outside_agent_claim"
+      : null,
+    acceptanceMentionsFreshShellPlaceholder(contract)
+      ? "fresh_shell_endpoint_placeholder_must_not_trigger_endpoint_discovery"
+      : null,
+    isGitDeployWebserver(contract)
+      ? "deploy_claim_requires_served_endpoint_content_match"
       : null,
   ], 16);
 }
@@ -170,11 +230,35 @@ function buildActionDiscipline(contract: ExecutionContractV1): ExecutionAgentCon
       contractLocked ? "do_not_read_general_skill_or_preference_files_before_declared_targets" : null,
       contractLocked ? "do_not_expand_beyond_target_files_without_new_failing_evidence" : null,
       contractLocked ? "do_not_repeat_successful_acceptance_checks_without_new_evidence" : null,
+      acceptanceMentionsFreshShellPlaceholder(contract)
+        ? "do_not_discover_or_probe_random_fresh_shell_endpoints"
+        : null,
+      isPackagePublishValidate(contract)
+        ? "do_not_treat_package_index_http_transport_as_service_lifecycle"
+        : null,
+      isPackagePublishValidate(contract)
+        ? "do_not_retry_background_package_index_servers_without_new_bind_or_log_evidence"
+        : null,
+      isGitDeployWebserver(contract)
+        ? "do_not_claim_success_from_git_or_hook_exit_without_served_endpoint_probe"
+        : null,
+      isGitDeployWebserver(contract) && !hasServiceLifecycleConstraint(contract)
+        ? "do_not_restart_or_reconfigure_webserver_without_declared_lifecycle_target"
+        : null,
       acceptanceEvidenceFiles.length > 0 ? `do_not_edit_acceptance_evidence:${acceptanceEvidenceFiles.join(",")}` : null,
     ], 16),
     stop_conditions: uniqueStrings([
       contract.outcome.acceptance_checks.length > 0
         ? "stop_after_required_validation_passes_and_report_evidence"
+        : null,
+      acceptanceMentionsFreshShellPlaceholder(contract)
+        ? "do_not_search_for_placeholder_fresh_shell_endpoint; external_verifier_owns_final_fresh_shell_probe"
+        : null,
+      isPackagePublishValidate(contract)
+        ? "after_package_artifact_index_and_installed_api_are_correct_do_not_keep_validation_transport_alive"
+        : null,
+      isGitDeployWebserver(contract)
+        ? "after_served_endpoint_matches_deployed_revision_do_not_keep_reworking_hook_or_webserver"
         : null,
       "do_not_run_external_harness_verifier_from_inside_agent_attempt",
     ], 8),
@@ -214,6 +298,7 @@ export function buildExecutionAgentContractPacketV1(args: {
       next_action: contract.next_action,
       acceptance_checks: contract.outcome.acceptance_checks,
       lifecycle_constraints: lifecycleConstraints(contract),
+      validation_boundary: validationBoundary(contract),
       authority_boundary: authorityBoundary(contract),
       success_invariants: contract.outcome.success_invariants,
       dependency_requirements: contract.outcome.dependency_requirements,
@@ -253,6 +338,7 @@ export function renderExecutionAgentContractPacketMarkdown(packetInput: Executio
     `- next_action: ${packet.contract.next_action ?? "<none>"}`,
     `- acceptance_checks: ${formatList(packet.contract.acceptance_checks)}`,
     `- lifecycle_constraints: ${formatList(packet.contract.lifecycle_constraints)}`,
+    `- validation_boundary: ${formatList(packet.contract.validation_boundary)}`,
     `- authority_boundary: ${formatList(packet.contract.authority_boundary)}`,
     "",
     "Action discipline:",

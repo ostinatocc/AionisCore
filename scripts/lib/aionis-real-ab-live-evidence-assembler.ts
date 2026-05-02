@@ -144,6 +144,10 @@ function maybeSame(values: Array<string | null | undefined>): boolean {
   return present.length <= 1;
 }
 
+function fairnessCommandHash(environment: RealAbRunEnvironmentEvidence | undefined): string | undefined {
+  return environment?.command_template_sha256 ?? environment?.command_sha256;
+}
+
 function armPacketSourceFromFairnessManifest(
   manifest: RealAbFairnessManifestV1,
   arm: RealAbArm,
@@ -294,10 +298,10 @@ function validateFairnessManifest(args: {
     assemblerRequirement({
       id: "live_evidence:fairness_manifest:run_environment:command_hash",
       scope: "suite",
-      ok: maybeSame(environments.map((entry) => entry?.command_sha256)) && environments.every(Boolean),
-      actual: unique(environments.map((entry) => entry?.command_sha256)).join(",") || null,
-      expected: "same_command_hash_across_arms",
-      message: "fairness-locked evidence requires the same command hash across all arms",
+      ok: maybeSame(environments.map(fairnessCommandHash)) && environments.every(Boolean),
+      actual: unique(environments.map(fairnessCommandHash)).join(",") || null,
+      expected: "same_command_template_hash_across_arms",
+      message: "fairness-locked evidence requires the same command template hash across all arms",
     }),
     assemblerRequirement({
       id: "live_evidence:fairness_manifest:run_environment:initial_workspace_hash",
