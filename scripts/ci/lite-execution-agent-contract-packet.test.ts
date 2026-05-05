@@ -73,6 +73,55 @@ test("execution agent contract packet defaults to compact contract-only output",
   assert.doesNotMatch(markdown, /prefer nohup/);
 });
 
+test("execution agent contract packet can render a short agent-facing contract", () => {
+  const contract = buildExecutionContractFromProjection({
+    contract_trust: "authoritative",
+    task_family: "service_publish_validate",
+    target_files: ["scripts/server.mjs"],
+    next_action: "Launch the service detached and probe /healthz from a fresh shell.",
+    workflow_steps: [
+      "Inspect service entrypoint.",
+      "Launch detached with redirected stdio.",
+      "Probe from a fresh shell.",
+    ],
+    pattern_hints: ["prefer nohup over foreground child processes"],
+    service_lifecycle_constraints: [serviceConstraint("runtime-service")],
+    acceptance_checks: ["curl -fsS http://127.0.0.1:4199/healthz"],
+    provenance: {
+      source_kind: "trajectory_compile",
+      source_summary_version: "trajectory_compile_v1",
+      source_anchor: "anchor_service",
+      evidence_refs: ["evidence:service"],
+      notes: ["compiled from failed service trajectory"],
+    },
+  });
+
+  const packet = buildExecutionAgentContractPacketV1({
+    contract,
+    task_prompt: "Keep the service alive after worker exit.",
+  });
+  const operatorMarkdown = renderExecutionAgentContractPacketMarkdown(packet);
+  const agentMarkdown = renderExecutionAgentContractPacketMarkdown(packet, { audience: "agent_minimal" });
+  const rendered = agentMarkdown.join("\n");
+
+  assert.ok(agentMarkdown.length < operatorMarkdown.length);
+  assert.match(rendered, /Runtime contract:/);
+  assert.match(rendered, /Execution boundary:/);
+  assert.match(rendered, /target_files: scripts\/server\.mjs/);
+  assert.match(rendered, /next_action: Launch the service detached/);
+  assert.match(rendered, /acceptance_checks: curl -fsS http:\/\/127\.0\.0\.1:4199\/healthz/);
+  assert.match(rendered, /must_survive_agent_exit/);
+  assert.match(rendered, /authority_boundary: success_requires_declared_acceptance_checks/);
+  assert.match(rendered, /do_not_run_broad_repository_file_enumeration_before_declared_targets/);
+  assert.match(rendered, /stop_after_required_validation_passes_and_report_evidence/);
+  assert.doesNotMatch(rendered, /task_prompt:/);
+  assert.doesNotMatch(rendered, /Action discipline:/);
+  assert.doesNotMatch(rendered, /first_action:/);
+  assert.doesNotMatch(rendered, /allowed_work_surface:/);
+  assert.doesNotMatch(rendered, /Inspect service entrypoint/);
+  assert.doesNotMatch(rendered, /prefer nohup/);
+});
+
 test("execution agent contract packet expands only when compact contract is insufficient or failed", () => {
   const completeContract = buildExecutionContractFromProjection({
     task_family: "ai_code_ci_repair",

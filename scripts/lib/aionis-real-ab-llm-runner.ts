@@ -537,7 +537,7 @@ function renderRuntimeContractOnlyBrief(brief: ProbeTaskBrief): string[] {
     task_prompt: brief.task_prompt,
     requested_mode: "contract_only",
   });
-  return renderExecutionAgentContractPacketMarkdown(packet);
+  return renderExecutionAgentContractPacketMarkdown(packet, { audience: "agent_minimal" });
 }
 
 function armSpecificTaskBody(args: {

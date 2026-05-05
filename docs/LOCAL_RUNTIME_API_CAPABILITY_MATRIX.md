@@ -135,11 +135,12 @@ Planner-packet contract:
 Agent-facing execution contract packet:
 
 1. `execution_agent_contract_packet_v1` is the compact agent-facing projection of `execution_contract_v1`
-2. default mode is `contract_only`, exposing only task family, task prompt, target files, next action, acceptance checks, lifecycle constraints, and authority boundary
+2. default mode is `contract_only`; the default agent render is contract-first and omits task prompt prose, allowed-work-surface duplication, first-action prose, workflow steps, pattern hints, selected tool, and provenance
 3. `workflow_steps`, `pattern_hints`, selected tool, and provenance stay internal unless the packet escalates to `workflow_expanded`
 4. escalation is automatic when the compact contract is missing target files, next action, acceptance checks, unresolved blockers are present, or verification has failed
-5. `action_discipline` is included in the packet; authoritative complete contracts enter `contract_locked` mode with a declared first action, allowed work surface, required validation, prohibited broad discovery, and stop conditions
-6. real A/B validation now reports `discipline_compliance` for authoritative Aionis treatment traces and fails product/pilot evidence when the agent violates the locked execution boundary
+5. the minimal agent render keeps the hard fields only: task family, target files, next action, acceptance checks, lifecycle constraints, validation boundary, authority boundary, execution mode, prohibited actions, and stop conditions
+6. the full packet still carries `action_discipline`; authoritative complete contracts enter `contract_locked` mode with a declared first action, allowed work surface, required validation, prohibited broad discovery, and stop conditions for operator diagnostics and downstream policy
+7. real A/B validation now reports `discipline_compliance` for authoritative Aionis treatment traces and fails product/pilot evidence when the agent violates the locked execution boundary
 
 Recommended integrator read path:
 

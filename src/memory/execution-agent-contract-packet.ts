@@ -11,6 +11,11 @@ const StringList = z.array(z.string().trim().min(1)).default([]);
 export const ExecutionAgentContractPacketModeSchema = z.enum(["contract_only", "workflow_expanded"]);
 export type ExecutionAgentContractPacketMode = z.infer<typeof ExecutionAgentContractPacketModeSchema>;
 
+export const ExecutionAgentContractPacketRenderAudienceSchema = z.enum(["operator_diagnostic", "agent_minimal"]);
+export type ExecutionAgentContractPacketRenderAudience = z.infer<
+  typeof ExecutionAgentContractPacketRenderAudienceSchema
+>;
+
 export const ExecutionAgentContractPacketEscalationReasonSchema = z.enum([
   "explicit_workflow_expanded_requested",
   "verification_failed",
@@ -328,8 +333,49 @@ function formatList(values: string[]): string {
   return values.length > 0 ? values.join(" | ") : "<none>";
 }
 
-export function renderExecutionAgentContractPacketMarkdown(packetInput: ExecutionAgentContractPacketV1): string[] {
+function renderAgentMinimalContractPacketMarkdown(packet: ExecutionAgentContractPacketV1): string[] {
+  const lines = [
+    "Runtime contract:",
+    `- task_family: ${packet.contract.task_family ?? "<unknown>"}`,
+    `- target_files: ${formatList(packet.contract.target_files)}`,
+    `- next_action: ${packet.contract.next_action ?? "<none>"}`,
+    `- acceptance_checks: ${formatList(packet.contract.acceptance_checks)}`,
+    `- lifecycle_constraints: ${formatList(packet.contract.lifecycle_constraints)}`,
+    `- validation_boundary: ${formatList(packet.contract.validation_boundary)}`,
+    `- authority_boundary: ${formatList(packet.contract.authority_boundary)}`,
+    "",
+    "Execution boundary:",
+    `- execution_mode: ${packet.action_discipline.execution_mode}`,
+    `- prohibited_actions: ${formatList(packet.action_discipline.prohibited_actions)}`,
+    `- stop_conditions: ${formatList(packet.action_discipline.stop_conditions)}`,
+  ].filter((line): line is string => Boolean(line));
+
+  if (packet.mode === "workflow_expanded" && packet.expanded) {
+    lines.push(
+      "",
+      "Expanded workflow:",
+      ...packet.expanded.workflow_steps.map((step, index) => `${index + 1}. ${step}`),
+    );
+    if (packet.expanded.pattern_hints.length > 0) {
+      lines.push("", "Pattern hints:", ...packet.expanded.pattern_hints.map((hint) => `- ${hint}`));
+    }
+    if (packet.escalation.reasons.length > 0) {
+      lines.push("", `Escalation reasons: ${packet.escalation.reasons.join(", ")}`);
+    }
+  }
+
+  return lines;
+}
+
+export function renderExecutionAgentContractPacketMarkdown(
+  packetInput: ExecutionAgentContractPacketV1,
+  options: { audience?: ExecutionAgentContractPacketRenderAudience } = {},
+): string[] {
   const packet = ExecutionAgentContractPacketV1Schema.parse(packetInput);
+  const audience = ExecutionAgentContractPacketRenderAudienceSchema.parse(options.audience ?? "operator_diagnostic");
+  if (audience === "agent_minimal") {
+    return renderAgentMinimalContractPacketMarkdown(packet);
+  }
   const lines = [
     "Runtime contract:",
     `- task_family: ${packet.contract.task_family ?? "<unknown>"}`,
