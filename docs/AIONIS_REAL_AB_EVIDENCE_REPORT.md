@@ -67,6 +67,7 @@ These runs are directional pilot evidence, not broad product proof.
 | `publish-install-hard-boundary-rerun-20260429-235132` | `package_publish_validate` | `.artifacts/real-ab/publish-install-hard-boundary-rerun-20260429-235132/validation-report.md` | pass |
 | `deploy-web-boundary-repeat-20260430-003740` | `git_deploy_webserver` | `.artifacts/real-ab/deploy-web-boundary-repeat-20260430-003740/validation-report.md` | pass |
 | `publish-install-hard-agent-minimal-20260505-152951` | `package_publish_validate` | `.artifacts/real-ab/publish-install-hard-agent-minimal-20260505-152951/validation-report.md` | pass |
+| `deploy-web-agent-minimal-20260505-184928` | `git_deploy_webserver` | `.artifacts/real-ab/deploy-web-agent-minimal-20260505-184928/validation-report.md` | pass |
 
 ## Initial Directional Results
 
@@ -286,6 +287,23 @@ This repeat passed the paired product gate and produced mixed evidence:
 - Negative control also passed with fewer tokens than both baseline and Aionis, so this run is a boundary/discipline and action-count signal, not a cost or correctness-separation signal.
 - The deploy/webserver claim is now narrower: Aionis can preserve external served-content correctness and reduce action count, but stable token/time savings are not proved.
 
+## Deploy/Webserver Agent-Minimal Rerun Result
+
+The `deploy-web-agent-minimal-20260505-184928` suite reran the deploy/hook/web visible-outcome scenario with the default Aionis treatment prompt using the `agent_minimal` execution-contract render. The verifier again checked the exact arm workspace and validated served web content through the external HTTP boundary.
+
+| Family / variant | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `git_deploy_webserver / agent minimal` | 22 | 12 | 23 | 20 | 1 | 1 | 239s | 100s | 64,895 | 29,640 |
+
+This rerun passed the paired product gate and materially strengthened the deploy/webserver cost-control signal:
+
+- All four arms passed the external served-content verifier.
+- Aionis reduced action count by 45.5%, elapsed time by 58.2%, and token use by 54.3% versus baseline.
+- Aionis had equal self-marked wasted and incorrect steps versus baseline: `1` versus `1` in both categories.
+- Aionis followed locked action discipline with zero severe violations.
+- Negative control also passed, so this is still an efficiency/control signal, not correctness separation.
+- This run reverses the prior boundary-repeat token/time regression and supports the narrower claim that short execution contracts can materially reduce deploy/webserver execution cost while preserving served-content correctness.
+
 ## Model-Locked Service Lifecycle Revalidation
 
 The `service-causal-model-locked-20260429-164153` suite reran the service after-exit scenario with explicit agent-environment evidence. Before this run, the service external verifier was upgraded to support `--workspace-root`, so it now launches the service script from the exact arm workspace instead of the repository fixture. Every arm used `codex exec --model gpt-5.5` with `model_reasoning_effort="xhigh"`, and the runner recorded `codex-cli 0.125.0`, command hash, plus workspace before/after hashes for each arm.
@@ -427,6 +445,7 @@ Aionis can currently make defensible directional claims in these areas:
 - In the model-locked causal publish/install rerun, it can reduce action count, wasted steps, and token use under explicit GPT-5.5/xhigh Codex conditions while preserving verifier-backed clean-client install correctness.
 - In the model-locked deploy/webserver rerun, it can reduce action count and elapsed time under explicit GPT-5.5/xhigh Codex conditions while preserving verifier-backed served-content correctness.
 - In the deploy/webserver boundary repeat, it preserved served-content correctness and reduced action count after adding explicit served-content validation boundaries, but did not reduce tokens or elapsed time.
+- In the deploy/webserver `agent_minimal` rerun, it preserved served-content correctness while reducing action count, elapsed time, and token use versus baseline with no additional wasted/incorrect steps.
 - In the model-locked service lifecycle rerun, it can reduce action count, elapsed time, token use, and wasted steps while preserving after-exit and fresh-shell correctness.
 - In the hard service lifecycle equal-command rerun, it can produce a correctness separation against both baseline and negative control while reducing actions, elapsed time, and tokens under explicit GPT-5.5/xhigh Codex conditions.
 - In the hard service lifecycle repeat, it reproduced correctness separation against both baseline and negative control under the same frozen fairness protocol.
@@ -443,7 +462,7 @@ Aionis should not currently claim:
 - Stable token savings across all task families.
 - Stable wall-clock speedup for publish/install based on the model-locked causal rerun.
 - Stable wasted-step reduction for deploy/webserver based on the model-locked causal rerun.
-- Stable token or elapsed-time savings for deploy/webserver, because the boundary repeat regressed on both while still reducing actions.
+- Universal token or elapsed-time savings for deploy/webserver across all historical runs, because the boundary repeat regressed on both while still reducing actions.
 - Unique correctness advantage for the easier service lifecycle fixture, because negative control also passed with very few actions.
 - Broad service-task superiority from two hard lifecycle runs.
 - Stable hard-lifecycle wasted-step reduction, because the repeat had more self-marked wasted steps for Aionis than baseline.
@@ -516,6 +535,7 @@ Completed:
 - Ran `publish-install-hard-boundary-rerun-20260429-235132`; the gate passed with all arms externally correct and Aionis reducing actions by 77.3%, wasted steps by 100.0%, elapsed time by 54.2%, and token use by 27.8% versus baseline.
 - Added `agent_minimal` rendering for `execution_agent_contract_packet_v1`, so the treatment prompt keeps hard contract fields while omitting task-prompt prose, allowed-work-surface duplication, first-action prose, workflow steps, pattern hints, selected tool, and provenance.
 - Ran `publish-install-hard-agent-minimal-20260505-152951`; the gate passed with all arms externally correct and Aionis reducing actions by 10.0%, elapsed time by 25.8%, and token use by 8.0% versus baseline, while still regressing by one wasted/incorrect step.
+- Ran `deploy-web-agent-minimal-20260505-184928`; the gate passed with all arms externally correct and Aionis reducing actions by 45.5%, elapsed time by 58.2%, and token use by 54.3% versus baseline, with equal wasted/incorrect steps.
 
 Remaining:
 
@@ -535,7 +555,7 @@ Remaining:
 | --- | --- | --- | --- | --- |
 | `service_publish_validate / hard lifecycle` | strongest current signal | repeated correctness separation against baseline and negative control; after-exit/fresh-shell lifecycle value | broad service-task superiority; stable wasted-step reduction | freeze as the main v0.4 hero claim, then run one more repeat only if release copy needs a third trace |
 | `package_publish_validate / hard publish-install` | useful repeat-backed efficiency signal | repeated clean-client installed-API correctness; repeated token compression; post-`validation_boundary` and `agent_minimal` action/time compression | correctness separation; universal wasted/incorrect-step reduction across all historical runs | move to deploy/webserver hard repeat or a harder commercial-family CI repair variant |
-| `git_deploy_webserver` | repeated served-content correctness with mixed cost signal | model-locked causal served-content correctness; repeated action-count reduction; boundary noise reduction | stable token/time savings; correctness separation | add a harder deploy/webserver variant before using as a strong release claim |
+| `git_deploy_webserver` | repeated served-content correctness with stronger cost signal after `agent_minimal` | model-locked causal served-content correctness; repeated action-count reduction; `agent_minimal` token/time/action compression; boundary noise reduction | correctness separation; universal cost savings across all historical runs | add a harder deploy/webserver variant before using as a strong release claim |
 | `ai_code_ci_repair` | commercial-family pilot | verifier can reject forged success and selected fixtures show cost/control gains | stable unique correctness or broad CI repair superiority | add harder real-world variants with misleading dependency surfaces |
 | `handoff_resume / agent_takeover / interrupted_resume` | Runtime capability coverage, weak product proof | continuity primitives exist in Runtime architecture | clean LLM A/B product value | build real sequential task traces before release claims |
 
@@ -567,7 +587,7 @@ Allowed model-locked publish/install claim:
 
 Allowed model-locked deploy/webserver claim:
 
-> In one explicit GPT-5.5/xhigh Codex causal deploy/webserver run, Aionis Runtime preserved verifier-backed served-content correctness while reducing action count, elapsed time, and token usage versus baseline, but it did not reduce self-marked wasted steps and did not prove unique correctness.
+> In explicit GPT-5.5/xhigh Codex causal deploy/webserver runs, Aionis Runtime preserved verifier-backed served-content correctness and repeatedly reduced action count versus baseline. The latest `agent_minimal` rerun also reduced elapsed time by 58.2% and token use by 54.3% with equal wasted/incorrect steps. This remains an efficiency/control signal, not a correctness-separation claim.
 
 Allowed model-locked service lifecycle claim:
 
@@ -597,7 +617,7 @@ Run focused paired trials for the current families, but only under the frozen fa
 
 Each new clean suite should be initialized with `aionis_ab_fairness_manifest_v1`, run with explicit model/effort/CLI metadata, and assembled only after the verifier records the actual arm workspace provenance.
 
-The latest `external_probe_publish_install_hard` `agent_minimal` rerun validated that short agent-facing contracts can preserve clean-client installed-API correctness while improving token, action, and elapsed-time cost versus baseline. It did not fully stabilize wasted/incorrect steps. The next stronger evidence move is a hard deploy/webserver repeat or a harder real-world CI repair variant, not more package-only accumulation by default.
+The latest `external_probe_deploy_hook_web` `agent_minimal` rerun validated that short agent-facing contracts can preserve served-content correctness while materially improving token, action, and elapsed-time cost versus baseline. The next stronger evidence move is a harder real-world CI repair variant or a continuity-heavy sequential trace, not more package/deploy accumulation by default.
 
 Then add the next continuity-heavy families:
 
