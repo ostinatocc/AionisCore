@@ -23,6 +23,7 @@ These runs are directional pilot evidence, not broad product proof.
 - External dogfood probe artifacts now carry `runtime_dogfood_external_probe_provenance_v1`, including the verified workspace root, target paths, verifier commands, and fresh-shell/after-exit boundary flags.
 - The hard service lifecycle verifier is available as `external_probe_service_lifecycle_hard`; it validates HTTP health, pid-file, live process, and lifecycle log evidence from a fresh shell after launcher exit.
 - The hard publish/install verifier is available as `external_probe_publish_install_hard`; it validates package index visibility, clean-client install, and installed package API behavior from a fresh shell after worker exit.
+- The default Aionis treatment prompt now uses the `agent_minimal` execution-contract render: full Runtime packet fields remain internal, while the agent receives only the hard contract and execution-boundary fields needed for action.
 - LLM suites run before this arm-prompt isolation should be treated as directional evidence and verifier evidence, not final clean A/B proof.
 
 ## Suites
@@ -65,6 +66,7 @@ These runs are directional pilot evidence, not broad product proof.
 | `publish-install-hard-repeat-20260429-225822` | `package_publish_validate` | `.artifacts/real-ab/publish-install-hard-repeat-20260429-225822/validation-report.md` | pass |
 | `publish-install-hard-boundary-rerun-20260429-235132` | `package_publish_validate` | `.artifacts/real-ab/publish-install-hard-boundary-rerun-20260429-235132/validation-report.md` | pass |
 | `deploy-web-boundary-repeat-20260430-003740` | `git_deploy_webserver` | `.artifacts/real-ab/deploy-web-boundary-repeat-20260430-003740/validation-report.md` | pass |
+| `publish-install-hard-agent-minimal-20260505-152951` | `package_publish_validate` | `.artifacts/real-ab/publish-install-hard-agent-minimal-20260505-152951/validation-report.md` | pass |
 
 ## Initial Directional Results
 
@@ -390,6 +392,23 @@ This rerun passed the paired product gate and directly tested the previous regre
 - After-exit correctness is now `n/a` for this package suite, which is correct: package clean-client visibility is an external validation boundary, not product-owned service lifecycle.
 - Negative control also passed, so this is still an efficiency/control signal, not correctness separation.
 
+## Hard Publish/Install Agent-Minimal Rerun Result
+
+The `publish-install-hard-agent-minimal-20260505-152951` suite reran the hard package publish/install slice after changing the Aionis treatment prompt to the `agent_minimal` execution-contract render. The full `execution_agent_contract_packet_v1` remains available for operator diagnostics and policy, but the agent-facing treatment prompt now omits task-prompt prose, allowed-work-surface duplication, first-action prose, workflow steps, pattern hints, selected tool, and provenance.
+
+| Family / variant | Baseline actions | Aionis actions | Negative actions | Positive actions | Baseline wasted | Aionis wasted | Baseline duration | Aionis duration | Baseline tokens | Aionis tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `package_publish_validate / hard publish-install / agent minimal` | 10 | 9 | 28 | 17 | 1 | 2 | 269s | 199s | 41,709 | 38,374 |
+
+This rerun passed the paired product gate and tested the Runtime cost-compression change:
+
+- All four arms passed the external verifier.
+- Aionis reduced action count by 10.0%, elapsed time by 25.8%, and token use by 8.0% versus baseline.
+- Aionis preserved clean-client installed-API correctness with discipline compliance passing and zero severe boundary violations.
+- Aionis had worse self-marked wasted and incorrect steps than baseline: `2` versus `1` in both categories.
+- Negative control also passed, so this remains an efficiency/control signal, not correctness separation.
+- The result supports keeping the default agent-facing packet short, but it does not prove that packet compression alone fully stabilizes action quality.
+
 ## What This Proves
 
 Aionis can currently make defensible directional claims in these areas:
@@ -413,7 +432,8 @@ Aionis can currently make defensible directional claims in these areas:
 - In the hard service lifecycle repeat, it reproduced correctness separation against both baseline and negative control under the same frozen fairness protocol.
 - Across three hard publish/install runs after the contract-boundary fix, it preserved verifier-backed clean-client installed-API correctness and reduced token use versus baseline.
 - In hard publish/install, the `validation_boundary` rerun restored action/time/waste compression after the previous repeat regression, and removed endpoint-discovery/background-server retry noise from the Aionis trace.
-- Hard publish/install action/time/waste compression is promising but should still be called repeat-backed directional evidence rather than universal package-task proof, because one of the three hard runs regressed on those metrics before the validation-boundary fix.
+- In the hard publish/install `agent_minimal` rerun, it preserved verifier-backed correctness while reducing actions, elapsed time, and token use versus baseline; however, it still showed higher self-marked wasted/incorrect steps than baseline.
+- Hard publish/install action/time/token compression is promising but should still be called repeat-backed directional evidence rather than universal package-task proof, because not every hard run reduced wasted or incorrect steps.
 
 ## What This Does Not Prove
 
@@ -494,6 +514,8 @@ Completed:
 - Added `validation_boundary` to `execution_agent_contract_packet_v1` so package publish/install packets explicitly separate verifier-owned fresh-shell endpoints and ephemeral HTTP validation transport from product-owned service lifecycle.
 - Tightened trajectory compile and dogfood task boundaries so package publish/install can keep fresh-shell clean-client visibility requirements without inventing `must_hold_after_exit` or service lifecycle constraints.
 - Ran `publish-install-hard-boundary-rerun-20260429-235132`; the gate passed with all arms externally correct and Aionis reducing actions by 77.3%, wasted steps by 100.0%, elapsed time by 54.2%, and token use by 27.8% versus baseline.
+- Added `agent_minimal` rendering for `execution_agent_contract_packet_v1`, so the treatment prompt keeps hard contract fields while omitting task-prompt prose, allowed-work-surface duplication, first-action prose, workflow steps, pattern hints, selected tool, and provenance.
+- Ran `publish-install-hard-agent-minimal-20260505-152951`; the gate passed with all arms externally correct and Aionis reducing actions by 10.0%, elapsed time by 25.8%, and token use by 8.0% versus baseline, while still regressing by one wasted/incorrect step.
 
 Remaining:
 
@@ -505,7 +527,6 @@ Remaining:
 - Rerun more commercial-family trials after arm-prompt isolation before making stable clean A/B claims.
 - Add larger dependency-surface variants that are more likely to separate correctness rather than only cost/control.
 - Rerun AI code CI repair with explicit model/effort/CLI/workspace-hash evidence before treating cross-family cost claims as stable.
-- Optionally run one more `external_probe_publish_install_hard` repeat only if package-family release copy needs a second post-`validation_boundary` trace.
 - Treat any new clean A/B suite without `aionis_ab_fairness_manifest_v1` and verifier provenance as directional evidence only.
 
 ## Release Evidence Matrix
@@ -513,7 +534,7 @@ Remaining:
 | Family | Evidence status | Proved | Not proved | Next move |
 | --- | --- | --- | --- | --- |
 | `service_publish_validate / hard lifecycle` | strongest current signal | repeated correctness separation against baseline and negative control; after-exit/fresh-shell lifecycle value | broad service-task superiority; stable wasted-step reduction | freeze as the main v0.4 hero claim, then run one more repeat only if release copy needs a third trace |
-| `package_publish_validate / hard publish-install` | useful repeat-backed efficiency signal | repeated clean-client installed-API correctness; repeated token compression; post-`validation_boundary` action/time/waste compression | correctness separation; universal action/time/waste reduction across all historical runs | optionally run one more post-`validation_boundary` repeat, otherwise move to deploy/webserver hard repeat |
+| `package_publish_validate / hard publish-install` | useful repeat-backed efficiency signal | repeated clean-client installed-API correctness; repeated token compression; post-`validation_boundary` and `agent_minimal` action/time compression | correctness separation; universal wasted/incorrect-step reduction across all historical runs | move to deploy/webserver hard repeat or a harder commercial-family CI repair variant |
 | `git_deploy_webserver` | repeated served-content correctness with mixed cost signal | model-locked causal served-content correctness; repeated action-count reduction; boundary noise reduction | stable token/time savings; correctness separation | add a harder deploy/webserver variant before using as a strong release claim |
 | `ai_code_ci_repair` | commercial-family pilot | verifier can reject forged success and selected fixtures show cost/control gains | stable unique correctness or broad CI repair superiority | add harder real-world variants with misleading dependency surfaces |
 | `handoff_resume / agent_takeover / interrupted_resume` | Runtime capability coverage, weak product proof | continuity primitives exist in Runtime architecture | clean LLM A/B product value | build real sequential task traces before release claims |
@@ -558,7 +579,7 @@ Allowed hard service lifecycle claim:
 
 Allowed hard publish/install claim:
 
-> In three explicit GPT-5.5/xhigh Codex hard package publish/install runs with the same command hash and same initial workspace hash across arms, Aionis Runtime preserved verifier-backed clean-client installed-API correctness and reduced token usage versus baseline. After adding `validation_boundary`, the latest rerun also reduced action count, wasted steps, elapsed time, and validation-transport noise. This is an efficiency/control signal, not a correctness-separation claim.
+> In four explicit GPT-5.5/xhigh Codex hard package publish/install runs with verifier-backed arm workspace provenance, Aionis Runtime preserved verifier-backed clean-client installed-API correctness and repeatedly reduced token usage versus baseline. After adding `validation_boundary` and then `agent_minimal`, the latest clean reruns also reduced action count and elapsed time. This is an efficiency/control signal, not a correctness-separation claim, and wasted/incorrect-step reduction is not yet universal.
 
 Not allowed current claim:
 
@@ -576,7 +597,7 @@ Run focused paired trials for the current families, but only under the frozen fa
 
 Each new clean suite should be initialized with `aionis_ab_fairness_manifest_v1`, run with explicit model/effort/CLI metadata, and assembled only after the verifier records the actual arm workspace provenance.
 
-The latest `external_probe_publish_install_hard` post-`validation_boundary` rerun validated that endpoint discovery and background-server retry noise dropped in the Aionis arm. The next stronger evidence move is a hard deploy/webserver repeat or a harder real-world CI repair variant, not more package-only accumulation by default.
+The latest `external_probe_publish_install_hard` `agent_minimal` rerun validated that short agent-facing contracts can preserve clean-client installed-API correctness while improving token, action, and elapsed-time cost versus baseline. It did not fully stabilize wasted/incorrect steps. The next stronger evidence move is a hard deploy/webserver repeat or a harder real-world CI repair variant, not more package-only accumulation by default.
 
 Then add the next continuity-heavy families:
 
