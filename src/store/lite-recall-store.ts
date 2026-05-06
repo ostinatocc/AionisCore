@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { toVectorLiteral } from "../util/pgvector.js";
+import { hasNodeWorkflowAnchorSurface } from "../memory/node-execution-surface.js";
 import { RECALL_STORE_ACCESS_CAPABILITY_VERSION, adjustRecallCandidateSimilarityForTrust } from "./recall-access.js";
 import type {
   RecallAuditInsertParams,
@@ -116,17 +117,6 @@ function parseEmbedding(raw: string | null | undefined): number[] | null {
   const numbers = parsed.map((v) => Number(v));
   if (numbers.some((v) => !Number.isFinite(v))) return null;
   return numbers;
-}
-
-function hasExecutionNativeWorkflowAnchor(slots: Record<string, unknown>): boolean {
-  const executionNative = parseJsonExecutionNative(slots);
-  return executionNative?.execution_kind === "workflow_anchor";
-}
-
-function parseJsonExecutionNative(slots: Record<string, unknown>): { execution_kind?: string } | null {
-  const executionNative = slots.execution_native_v1;
-  if (!executionNative || typeof executionNative !== "object" || Array.isArray(executionNative)) return null;
-  return executionNative as { execution_kind?: string };
 }
 
 function cosineDistance(a: number[], b: number[]): number {
@@ -281,11 +271,9 @@ export function createLiteRecallStore(
     for (const item of knn) {
       const row = item.row;
       const slots = parseJsonObject(row.slots_json);
-      const hasAnchorPayload =
-        !!slots.anchor_v1 && typeof slots.anchor_v1 === "object" && !Array.isArray(slots.anchor_v1);
-      const hasExecutionWorkflowAnchor = hasExecutionNativeWorkflowAnchor(slots);
+      const hasWorkflowAnchorSurface = hasNodeWorkflowAnchorSurface(slots);
       if (!["event", "topic", "concept", "entity", "rule", "procedure"].includes(row.type)) continue;
-      if (row.type === "procedure" && !hasAnchorPayload && !hasExecutionWorkflowAnchor) continue;
+      if (row.type === "procedure" && !hasWorkflowAnchorSurface) continue;
       if ((row.type === "event" || row.type === "evidence")
         && String(slots.replay_learning_episode ?? "false") === "true"
         && String(slots.lifecycle_state ?? "active") === "archived") {

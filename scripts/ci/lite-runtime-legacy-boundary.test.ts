@@ -106,6 +106,36 @@ test("archive relocation consumes anchor payload refs through node execution sur
   assert.match(text, /resolveNodeAnchorPayloadRefs/);
 });
 
+test("embedded memory runtime consumes anchor presence through node execution surface", () => {
+  const embeddedRuntimeFile = "src/store/embedded-memory-runtime.ts";
+  const legacyFiles = new Set(runtimeBoundaryInventoryLegacyFiles());
+  assert.equal(
+    legacyFiles.has(embeddedRuntimeFile),
+    false,
+    "embedded memory runtime should not be a direct legacy slot access boundary",
+  );
+
+  const text = fs.readFileSync(path.join(ROOT, embeddedRuntimeFile), "utf8");
+  assert.equal(text.includes("anchor_v1"), false, "embedded memory runtime should not directly read anchor_v1");
+  assert.equal(text.includes("parseNodeAnchor"), false, "embedded memory runtime should use a narrow resolver surface");
+  assert.match(text, /hasNodeWorkflowAnchorSurface/);
+});
+
+test("lite recall store consumes workflow anchor presence through node execution surface", () => {
+  const liteRecallStoreFile = "src/store/lite-recall-store.ts";
+  const legacyFiles = new Set(runtimeBoundaryInventoryLegacyFiles());
+  assert.equal(
+    legacyFiles.has(liteRecallStoreFile),
+    false,
+    "lite recall store should not be a direct legacy slot access boundary",
+  );
+
+  const text = fs.readFileSync(path.join(ROOT, liteRecallStoreFile), "utf8");
+  assert.equal(text.includes("anchor_v1"), false, "lite recall store should not directly read anchor_v1");
+  assert.equal(text.includes("execution_native_v1"), false, "lite recall store should not directly read execution_native_v1");
+  assert.match(text, /hasNodeWorkflowAnchorSurface/);
+});
+
 test("route layer resolves execution state slots through boundary surfaces", () => {
   const offenders = listTypeScriptFiles(path.join(SRC, "routes"))
     .map((filePath) => ({

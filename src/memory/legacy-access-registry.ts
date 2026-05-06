@@ -113,18 +113,6 @@ export const RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY = [
     reason: "rehydrates persisted anchor payloads through the explicit anchor boundary",
   },
   {
-    id: "embedded_memory_runtime_store",
-    file: "src/store/embedded-memory-runtime.ts",
-    kind: "store_adapter",
-    reason: "translates persisted legacy rows into store query surfaces",
-  },
-  {
-    id: "lite_recall_store",
-    file: "src/store/lite-recall-store.ts",
-    kind: "store_adapter",
-    reason: "indexes persisted legacy execution slots for recall queries",
-  },
-  {
     id: "lite_write_store",
     file: "src/store/lite-write-store.ts",
     kind: "store_adapter",

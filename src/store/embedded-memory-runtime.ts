@@ -13,6 +13,7 @@ import {
   type RecallStoreCapabilities,
   type RecallStoreAccess,
 } from "./recall-access.js";
+import { hasNodeWorkflowAnchorSurface } from "../memory/node-execution-surface.js";
 import { toVectorLiteral } from "../util/pgvector.js";
 
 type EmbeddedNodeInput = {
@@ -1609,10 +1610,9 @@ export class EmbeddedMemoryRuntime {
     const out: RecallCandidate[] = [];
     for (const item of knn) {
       const n = item.n;
-      const hasAnchorPayload =
-        !!n.slots?.anchor_v1 && typeof n.slots.anchor_v1 === "object" && !Array.isArray(n.slots.anchor_v1);
+      const hasWorkflowAnchorSurface = hasNodeWorkflowAnchorSurface(n.slots);
       if (!["event", "topic", "concept", "entity", "rule", "procedure"].includes(n.type)) continue;
-      if (n.type === "procedure" && !hasAnchorPayload) continue;
+      if (n.type === "procedure" && !hasWorkflowAnchorSurface) continue;
       if ((n.type === "event" || n.type === "evidence")
         && String(n.slots?.["replay_learning_episode"] ?? "false") === "true"
         && String(n.slots?.["lifecycle_state"] ?? "active") === "archived") {

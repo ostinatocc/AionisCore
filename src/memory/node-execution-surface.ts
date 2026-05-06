@@ -128,6 +128,10 @@ export function resolveNodeAnchorPayloadRefs(
   return asRecord(parseNodeAnchor(slots)?.payload_refs);
 }
 
+function hasNodeAnchorPayload(slots: Record<string, unknown> | null | undefined): boolean {
+  return parseNodeAnchor(slots) !== null;
+}
+
 export function resolveNodeExecutionContract(args: {
   slots: Record<string, unknown> | null | undefined;
   executionResultSummary?: Record<string, unknown> | null;
@@ -355,6 +359,10 @@ export function resolveNodeAnchorKind(slots: Record<string, unknown> | null | un
     mapExecutionKindToAnchorKind(resolveNodeExecutionKind(slots)),
     parseNodeAnchor(slots)?.anchor_kind,
   );
+}
+
+export function hasNodeWorkflowAnchorSurface(slots: Record<string, unknown> | null | undefined): boolean {
+  return hasNodeAnchorPayload(slots) || resolveNodeExecutionKind(slots) === "workflow_anchor";
 }
 
 export function resolveNodeAnchorLevel(

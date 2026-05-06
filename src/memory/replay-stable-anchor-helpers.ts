@@ -19,6 +19,7 @@ import {
   buildRuntimeAuthorityGate,
   downgradeAuthoritativeTrust,
 } from "./authority-gate.js";
+import { resolveNodeDistillationSurface } from "./node-execution-surface.js";
 
 function asObject(v: unknown): Record<string, unknown> | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
@@ -328,8 +329,7 @@ export async function buildStablePlaybookNodeFields(args: {
     sourceCommitId: args.sourceCommitId,
     slots: args.slots,
   });
-  const existingExecutionNative = asObject(asObject(args.slots)?.execution_native_v1);
-  const existingDistillation = asObject(existingExecutionNative?.distillation);
+  const existingDistillation = resolveNodeDistillationSurface(args.slots);
   const rawWorkflowContract = deriveReplayWorkflowContractFromSlots(args.slots);
   const authority = authorityGatedReplayWorkflowContract({
     base: rawWorkflowContract,
