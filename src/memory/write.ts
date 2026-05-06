@@ -5,7 +5,13 @@ import { assertDim, toVectorLiteral } from "../util/pgvector.js";
 import { normalizeText } from "../util/normalize.js";
 import { badRequest } from "../util/http.js";
 import { type CapabilityFailureMode } from "../capability-contract.js";
-import { assertWriteStoreAccessContract, createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
+import {
+  assertWriteStoreAccessContract,
+  createPostgresWriteStoreAccess,
+  writeNodeFingerprint,
+  type WriteNodeInsertArgs,
+  type WriteStoreAccess,
+} from "../store/write-access.js";
 import { type AssociativeLinkTriggerOrigin } from "./associative-linking-types.js";
 import { MemoryWriteRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
@@ -74,6 +80,13 @@ type ApplyWriteOptions = PrepareWriteOptions & {
   write_access?: WriteStoreAccess;
   associativeLinkOrigin?: AssociativeLinkTriggerOrigin;
 };
+
+type PlannedWriteNodeInsert = Omit<WriteNodeInsertArgs, "commitId">;
+
+function allowsExistingNodeContentReuse(node: PreparedNode): boolean {
+  if (typeof node.client_id !== "string") return false;
+  return node.client_id.startsWith("workflow_projection:") || node.client_id.startsWith("session:");
+}
 
 export type PreparedNode = {
   id: string;
@@ -262,15 +275,12 @@ export async function applyMemoryWrite(
   assertSingleScopeWrite(scope, prepared.scope_public, nodes, edges);
   const localNodeScope = new Map(nodes.map((n) => [n.id, n.scope]));
 
-  // Guard against explicit-id collisions across scopes.
-  {
-    const ids = nodes.map((n) => n.id);
-    const existing = await writeAccess.nodeScopesByIds(Array.from(new Set(ids)));
-    for (const n of nodes) {
-      const s = existing.get(n.id);
-      if (s && s !== n.scope) {
-        throw new Error(`node id collision across scopes: id=${n.id} existing.scope=${s} requested.scope=${n.scope}`);
-      }
+  const localNodeIds = Array.from(new Set(nodes.map((n) => n.id)));
+  const existingNodeFingerprints = await writeAccess.nodeFingerprintsByIds(localNodeIds);
+  for (const n of nodes) {
+    const existing = existingNodeFingerprints.get(n.id);
+    if (existing && existing.scope !== n.scope) {
+      throw new Error(`node id collision across scopes: id=${n.id} existing.scope=${existing.scope} requested.scope=${n.scope}`);
     }
   }
 
@@ -289,6 +299,65 @@ export async function applyMemoryWrite(
       throw new Error(
         `cross-scope edge not allowed: edge.scope=${e.scope} src.scope=${srcScope} dst.scope=${dstScope} (set ALLOW_CROSS_SCOPE_EDGES=true to override)`,
       );
+    }
+  }
+
+  const plannedNodeInserts: Array<{ node: PreparedNode; insert: PlannedWriteNodeInsert }> = nodes.map((n) => {
+    if (n.embedding) assertDim(n.embedding, 1536);
+
+    const embedPlanned = prepared.auto_embed_effective && !n.embedding && !!n.embed_text;
+    const embeddingStatus = n.embedding ? "ready" : embedPlanned ? "pending" : "failed";
+    const embeddingLastError = n.embedding
+      ? null
+      : embedPlanned
+        ? null
+        : prepared.auto_embed_effective
+          ? "no_embed_text"
+          : "auto_embed_disabled_or_no_provider";
+    const embeddingModel = n.embedding ? (n.embedding_model?.trim() ? n.embedding_model.trim() : "client") : null;
+
+    return {
+      node: n,
+      insert: {
+        id: n.id,
+        scope: n.scope,
+        clientId: n.client_id ?? null,
+        type: n.type,
+        tier: n.tier ?? "hot",
+        title: n.title ?? null,
+        textSummary: n.text_summary ?? null,
+        slotsJson: JSON.stringify(n.slots ?? {}),
+        rawRef: n.raw_ref ?? null,
+        evidenceRef: n.evidence_ref ?? null,
+        embeddingVector: n.embedding ? toVectorLiteral(n.embedding) : null,
+        embeddingModel,
+        memoryLane: n.memory_lane,
+        producerAgentId: n.producer_agent_id ?? null,
+        ownerAgentId: n.owner_agent_id ?? null,
+        ownerTeamId: n.owner_team_id ?? null,
+        embeddingStatus,
+        embeddingLastError,
+        salience: n.salience ?? 0.5,
+        importance: n.importance ?? 0.5,
+        confidence: n.confidence ?? 0.5,
+        redactionVersion: 1,
+      },
+    };
+  });
+
+  for (const { node, insert } of plannedNodeInserts) {
+    const existing = existingNodeFingerprints.get(node.id);
+    if (!existing || existing.scope !== node.scope) continue;
+    if (allowsExistingNodeContentReuse(node)) continue;
+    const requestedFingerprint = writeNodeFingerprint(insert);
+    if (existing.fingerprint !== requestedFingerprint) {
+      badRequest("duplicate_node_id_conflict", "node id already exists with different persisted content", {
+        node_id: node.id,
+        client_id: node.client_id ?? null,
+        scope: prepared.scope_public,
+        scope_key: node.scope,
+        type: node.type,
+      });
     }
   }
 
@@ -328,43 +397,9 @@ export async function applyMemoryWrite(
   });
 
   // Insert nodes.
-  for (const n of nodes) {
-    if (n.embedding) assertDim(n.embedding, 1536);
-
-    const embedPlanned = prepared.auto_embed_effective && !n.embedding && !!n.embed_text;
-    const embeddingStatus = n.embedding ? "ready" : embedPlanned ? "pending" : "failed";
-    const embeddingLastError = n.embedding
-      ? null
-      : embedPlanned
-        ? null
-        : prepared.auto_embed_effective
-          ? "no_embed_text"
-          : "auto_embed_disabled_or_no_provider";
-    const embeddingModel = n.embedding ? (n.embedding_model?.trim() ? n.embedding_model.trim() : "client") : null;
-
+  for (const { node: n, insert } of plannedNodeInserts) {
     await writeAccess.insertNode({
-      id: n.id,
-      scope: n.scope,
-      clientId: n.client_id ?? null,
-      type: n.type,
-      tier: n.tier ?? "hot",
-      title: n.title ?? null,
-      textSummary: n.text_summary ?? null,
-      slotsJson: JSON.stringify(n.slots ?? {}),
-      rawRef: n.raw_ref ?? null,
-      evidenceRef: n.evidence_ref ?? null,
-      embeddingVector: n.embedding ? toVectorLiteral(n.embedding) : null,
-      embeddingModel,
-      memoryLane: n.memory_lane,
-      producerAgentId: n.producer_agent_id ?? null,
-      ownerAgentId: n.owner_agent_id ?? null,
-      ownerTeamId: n.owner_team_id ?? null,
-      embeddingStatus,
-      embeddingLastError,
-      salience: n.salience ?? 0.5,
-      importance: n.importance ?? 0.5,
-      confidence: n.confidence ?? 0.5,
-      redactionVersion: 1,
+      ...insert,
       commitId: commit_id,
     });
 

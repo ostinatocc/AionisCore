@@ -18,8 +18,9 @@ import type {
   WriteRuleDefInsertArgs,
   WriteShadowMirrorCopied,
   WriteStoreAccess,
+  WriteExistingNodeFingerprint,
 } from "./write-access.js";
-import { WRITE_STORE_ACCESS_CAPABILITY_VERSION } from "./write-access.js";
+import { WRITE_STORE_ACCESS_CAPABILITY_VERSION, writeNodeFingerprint } from "./write-access.js";
 import { createSqliteDatabase, type SqliteDatabase } from "./sqlite-compat.js";
 
 type LiteSessionNodeView = {
@@ -1878,6 +1879,93 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
       const sql = `SELECT id, scope FROM lite_memory_nodes WHERE id IN (${ids.map(() => "?").join(",")})`;
       const rows = db.prepare(sql).all(...ids) as Array<{ id: string; scope: string }>;
       return new Map(rows.map((row) => [row.id, row.scope]));
+    },
+
+    async nodeFingerprintsByIds(ids: string[]): Promise<Map<string, WriteExistingNodeFingerprint>> {
+      if (ids.length === 0) return new Map();
+      const sql = `
+        SELECT
+          id,
+          scope,
+          client_id,
+          type,
+          tier,
+          title,
+          text_summary,
+          slots_json,
+          raw_ref,
+          evidence_ref,
+          embedding_vector_json AS embedding_vector,
+          embedding_model,
+          memory_lane,
+          producer_agent_id,
+          owner_agent_id,
+          owner_team_id,
+          embedding_status,
+          embedding_last_error,
+          salience,
+          importance,
+          confidence,
+          redaction_version
+        FROM lite_memory_nodes
+        WHERE id IN (${ids.map(() => "?").join(",")})
+      `;
+      const rows = db.prepare(sql).all(...ids) as Array<{
+        id: string;
+        scope: string;
+        client_id: string | null;
+        type: string;
+        tier: string;
+        title: string | null;
+        text_summary: string | null;
+        slots_json: string;
+        raw_ref: string | null;
+        evidence_ref: string | null;
+        embedding_vector: string | null;
+        embedding_model: string | null;
+        memory_lane: "private" | "shared";
+        producer_agent_id: string | null;
+        owner_agent_id: string | null;
+        owner_team_id: string | null;
+        embedding_status: "pending" | "ready" | "failed";
+        embedding_last_error: string | null;
+        salience: number;
+        importance: number;
+        confidence: number;
+        redaction_version: number;
+      }>;
+      return new Map(
+        rows.map((row) => [
+          row.id,
+          {
+            scope: row.scope,
+            fingerprint: writeNodeFingerprint({
+              id: row.id,
+              scope: row.scope,
+              clientId: row.client_id,
+              type: row.type,
+              tier: row.tier,
+              title: row.title,
+              textSummary: row.text_summary,
+              slotsJson: row.slots_json,
+              rawRef: row.raw_ref,
+              evidenceRef: row.evidence_ref,
+              embeddingVector: row.embedding_vector,
+              embeddingModel: row.embedding_model,
+              memoryLane: row.memory_lane,
+              producerAgentId: row.producer_agent_id,
+              ownerAgentId: row.owner_agent_id,
+              ownerTeamId: row.owner_team_id,
+              embeddingStatus: row.embedding_status,
+              embeddingLastError: row.embedding_last_error,
+              salience: row.salience,
+              importance: row.importance,
+              confidence: row.confidence,
+              redactionVersion: row.redaction_version,
+            }),
+          },
+        ]),
+      );
     },
 
     async parentCommitHash(scope: string, parentCommitId: string): Promise<string | null> {

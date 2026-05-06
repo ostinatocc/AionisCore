@@ -60,6 +60,14 @@ function normalizeSql(sql: string): string {
   return sql.replace(/\s+/g, " ").trim();
 }
 
+function throwUnsupportedLiteHostSql(normalizedSql: string): never {
+  const preview = normalizedSql.slice(0, 240);
+  const err = new Error(`unsupported lite host store SQL: ${preview}`);
+  (err as any).code = "lite_host_store_unsupported_sql";
+  (err as any).details = { sql_preview: preview };
+  throw err;
+}
+
 function parseJsonObject(raw: string | null | undefined): Record<string, unknown> {
   if (!raw) return {};
   try {
@@ -245,8 +253,25 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
   `);
   const insertTelemetry = db.prepare(`
     INSERT INTO memory_sandbox_run_telemetry (
-      id, run_id, tenant_id, scope, status, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?)
+      id,
+      run_id,
+      session_id,
+      tenant_id,
+      scope,
+      mode,
+      status,
+      executor,
+      timeout_ms,
+      queue_wait_ms,
+      runtime_ms,
+      total_latency_ms,
+      cancel_requested,
+      output_truncated,
+      exit_code,
+      error_code,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO NOTHING
   `);
 
   return {
@@ -446,18 +471,63 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
       }
 
       if (normalized.includes("INSERT INTO memory_sandbox_run_telemetry")) {
+        const runId = String(params[0] ?? "");
         insertTelemetry.run(
-          randomUUID(),
-          String(params[0] ?? ""),
+          runId,
+          runId,
           String(params[1] ?? ""),
           String(params[2] ?? ""),
           String(params[3] ?? ""),
+          String(params[4] ?? ""),
+          String(params[5] ?? ""),
+          String(params[6] ?? ""),
+          Number.isFinite(Number(params[7])) ? Number(params[7]) : null,
+          Number.isFinite(Number(params[8])) ? Number(params[8]) : null,
+          Number.isFinite(Number(params[9])) ? Number(params[9]) : null,
+          Number.isFinite(Number(params[10])) ? Number(params[10]) : null,
+          params[11] ? 1 : 0,
+          params[12] ? 1 : 0,
+          Number.isFinite(Number(params[13])) ? Number(params[13]) : null,
+          params[14] ? String(params[14]) : null,
           nowIso(),
         );
         return { rows: [], rowCount: 1 };
       }
 
-      return { rows: [], rowCount: 0 };
+      if (normalized.includes("FROM memory_sandbox_runs") && normalized.includes("count(*)::text AS total_runs")) {
+        const tenantId = String(params[0] ?? "");
+        const windowHours = Number.isFinite(Number(params[1])) ? Math.max(1, Math.trunc(Number(params[1]))) : 24;
+        const scopeFilter = typeof params[2] === "string" && params[2].trim().length > 0 ? params[2].trim() : null;
+        const projectFilter = typeof params[3] === "string" && params[3].trim().length > 0 ? params[3].trim() : null;
+        const cutoff = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString();
+        const row = db.prepare<{
+          total_runs: number;
+          timeout_runs: number | null;
+          failed_runs: number | null;
+        }>(`
+          SELECT
+            COUNT(*) AS total_runs,
+            SUM(CASE WHEN status = 'timeout' THEN 1 ELSE 0 END) AS timeout_runs,
+            SUM(CASE WHEN status IN ('failed', 'timeout') THEN 1 ELSE 0 END) AS failed_runs
+          FROM memory_sandbox_runs
+          WHERE tenant_id = ?
+            AND created_at >= ?
+            AND (? IS NULL OR scope = ?)
+            AND (? IS NULL OR project_id = ?)
+        `).get(tenantId, cutoff, scopeFilter, scopeFilter, projectFilter, projectFilter);
+        return {
+          rows: [
+            {
+              total_runs: String(row?.total_runs ?? 0),
+              timeout_runs: String(row?.timeout_runs ?? 0),
+              failed_runs: String(row?.failed_runs ?? 0),
+            } as T,
+          ],
+          rowCount: 1,
+        };
+      }
+
+      throwUnsupportedLiteHostSql(normalized);
     },
   };
 }
@@ -529,12 +599,43 @@ function initialize(db: SqliteDatabase) {
     CREATE TABLE IF NOT EXISTS memory_sandbox_run_telemetry (
       id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
+      session_id TEXT,
       tenant_id TEXT NOT NULL,
       scope TEXT NOT NULL,
+      mode TEXT,
       status TEXT NOT NULL,
+      executor TEXT,
+      timeout_ms INTEGER,
+      queue_wait_ms INTEGER,
+      runtime_ms INTEGER,
+      total_latency_ms INTEGER,
+      cancel_requested INTEGER NOT NULL DEFAULT 0,
+      output_truncated INTEGER NOT NULL DEFAULT 0,
+      exit_code INTEGER,
+      error_code TEXT,
       created_at TEXT NOT NULL
     );
   `);
+  const telemetryMigrations = [
+    "ALTER TABLE memory_sandbox_run_telemetry ADD COLUMN session_id TEXT",
+    "ALTER TABLE memory_sandbox_run_telemetry ADD COLUMN mode TEXT",
+    "ALTER TABLE memory_sandbox_run_telemetry ADD COLUMN executor TEXT",
+    "ALTER TABLE memory_sandbox_run_telemetry ADD COLUMN timeout_ms INTEGER",
+    "ALTER TABLE memory_sandbox_run_telemetry ADD COLUMN queue_wait_ms INTEGER",
+    "ALTER TABLE memory_sandbox_run_telemetry ADD COLUMN runtime_ms INTEGER",
+    "ALTER TABLE memory_sandbox_run_telemetry ADD COLUMN total_latency_ms INTEGER",
+    "ALTER TABLE memory_sandbox_run_telemetry ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE memory_sandbox_run_telemetry ADD COLUMN output_truncated INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE memory_sandbox_run_telemetry ADD COLUMN exit_code INTEGER",
+    "ALTER TABLE memory_sandbox_run_telemetry ADD COLUMN error_code TEXT",
+  ];
+  for (const sql of telemetryMigrations) {
+    try {
+      db.exec(sql);
+    } catch {
+      // Column already exists in initialized databases.
+    }
+  }
 }
 
 export function createLiteHostStore(path: string): MemoryStore {
@@ -542,6 +643,7 @@ export function createLiteHostStore(path: string): MemoryStore {
   const db = createSqliteDatabase(path);
   initialize(db);
   const client = createQueryClient(db);
+  let txDepth = 0;
 
   return {
     backend: "embedded",
@@ -549,7 +651,19 @@ export function createLiteHostStore(path: string): MemoryStore {
       return fn(client);
     },
     async withTx<T>(fn: (client: any) => Promise<T>): Promise<T> {
-      return fn(client);
+      if (txDepth > 0) return fn(client);
+      db.exec("BEGIN IMMEDIATE");
+      txDepth += 1;
+      try {
+        const out = await fn(client);
+        db.exec("COMMIT");
+        return out;
+      } catch (err) {
+        db.exec("ROLLBACK");
+        throw err;
+      } finally {
+        txDepth -= 1;
+      }
     },
     async close(): Promise<void> {
       db.close();

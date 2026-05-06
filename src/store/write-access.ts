@@ -1,4 +1,6 @@
 import type pg from "pg";
+import stableStringify from "fast-json-stable-stringify";
+import { sha256Hex } from "../util/crypto.js";
 import type {
   AssociationCandidateRecord,
   AssociativeCandidateStoreAccess,
@@ -8,7 +10,7 @@ import type {
   UpsertAssociationCandidateArgs,
 } from "../memory/associative-candidate-store.js";
 
-export const WRITE_STORE_ACCESS_CAPABILITY_VERSION = 4 as const;
+export const WRITE_STORE_ACCESS_CAPABILITY_VERSION = 5 as const;
 
 export type WriteCommitInsertArgs = {
   scope: string;
@@ -45,6 +47,13 @@ export type WriteNodeInsertArgs = {
   confidence: number;
   redactionVersion: number;
   commitId: string;
+};
+
+export type WriteNodeFingerprintInput = Omit<WriteNodeInsertArgs, "commitId">;
+
+export type WriteExistingNodeFingerprint = {
+  scope: string;
+  fingerprint: string;
 };
 
 export type WriteRuleDefInsertArgs = {
@@ -105,6 +114,7 @@ export interface WriteStoreAccess extends AssociativeCandidateStoreAccess {
   readonly capability_version: typeof WRITE_STORE_ACCESS_CAPABILITY_VERSION;
   readonly capabilities: WriteStoreCapabilities;
   nodeScopesByIds(ids: string[]): Promise<Map<string, string>>;
+  nodeFingerprintsByIds(ids: string[]): Promise<Map<string, WriteExistingNodeFingerprint>>;
   parentCommitHash(scope: string, parentCommitId: string): Promise<string | null>;
   insertCommit(args: WriteCommitInsertArgs): Promise<string>;
   insertNode(args: WriteNodeInsertArgs): Promise<void>;
@@ -119,6 +129,107 @@ export interface WriteStoreAccess extends AssociativeCandidateStoreAccess {
 function resolveWriteStoreCapabilities(partial?: Partial<WriteStoreCapabilities>): WriteStoreCapabilities {
   return {
     shadow_mirror_v2: partial?.shadow_mirror_v2 ?? true,
+  };
+}
+
+function parseJsonForFingerprint(raw: string | null): unknown {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
+
+function nullableString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return String(value);
+}
+
+function nullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function writeNodeFingerprint(input: WriteNodeFingerprintInput): string {
+  return sha256Hex(
+    stableStringify({
+      id: input.id,
+      scope: input.scope,
+      clientId: input.clientId,
+      type: input.type,
+      tier: input.tier,
+      title: input.title,
+      textSummary: input.textSummary,
+      slots: parseJsonForFingerprint(input.slotsJson),
+      rawRef: input.rawRef,
+      evidenceRef: input.evidenceRef,
+      memoryLane: input.memoryLane,
+      producerAgentId: input.producerAgentId,
+      ownerAgentId: input.ownerAgentId,
+      ownerTeamId: input.ownerTeamId,
+      salience: input.salience,
+      importance: input.importance,
+      confidence: input.confidence,
+      redactionVersion: input.redactionVersion,
+    }),
+  );
+}
+
+function writeNodeFingerprintFromRow(row: {
+  id: unknown;
+  scope: unknown;
+  client_id: unknown;
+  type: unknown;
+  tier: unknown;
+  title: unknown;
+  text_summary: unknown;
+  slots_json: unknown;
+  raw_ref: unknown;
+  evidence_ref: unknown;
+  embedding_vector: unknown;
+  embedding_model: unknown;
+  memory_lane: unknown;
+  producer_agent_id: unknown;
+  owner_agent_id: unknown;
+  owner_team_id: unknown;
+  embedding_status: unknown;
+  embedding_last_error: unknown;
+  salience: unknown;
+  importance: unknown;
+  confidence: unknown;
+  redaction_version: unknown;
+}): WriteExistingNodeFingerprint {
+  return {
+    scope: String(row.scope),
+    fingerprint: writeNodeFingerprint({
+      id: String(row.id),
+      scope: String(row.scope),
+      clientId: nullableString(row.client_id),
+      type: String(row.type),
+      tier: String(row.tier),
+      title: nullableString(row.title),
+      textSummary: nullableString(row.text_summary),
+      slotsJson: nullableString(row.slots_json) ?? "{}",
+      rawRef: nullableString(row.raw_ref),
+      evidenceRef: nullableString(row.evidence_ref),
+      embeddingVector: nullableString(row.embedding_vector),
+      embeddingModel: nullableString(row.embedding_model),
+      memoryLane: String(row.memory_lane) === "shared" ? "shared" : "private",
+      producerAgentId: nullableString(row.producer_agent_id),
+      ownerAgentId: nullableString(row.owner_agent_id),
+      ownerTeamId: nullableString(row.owner_team_id),
+      embeddingStatus:
+        row.embedding_status === "pending" || row.embedding_status === "ready" || row.embedding_status === "failed"
+          ? row.embedding_status
+          : "failed",
+      embeddingLastError: nullableString(row.embedding_last_error),
+      salience: nullableNumber(row.salience) ?? 0.5,
+      importance: nullableNumber(row.importance) ?? 0.5,
+      confidence: nullableNumber(row.confidence) ?? 0.5,
+      redactionVersion: nullableNumber(row.redaction_version) ?? 1,
+    }),
   };
 }
 
@@ -139,6 +250,66 @@ export function createPostgresWriteStoreAccess(
       const scopes = new Map<string, string>();
       for (const row of out.rows) scopes.set(row.id, row.scope);
       return scopes;
+    },
+
+    async nodeFingerprintsByIds(ids: string[]): Promise<Map<string, WriteExistingNodeFingerprint>> {
+      if (ids.length === 0) return new Map();
+      const out = await client.query<{
+        id: string;
+        scope: string;
+        client_id: string | null;
+        type: string;
+        tier: string;
+        title: string | null;
+        text_summary: string | null;
+        slots_json: string;
+        raw_ref: string | null;
+        evidence_ref: string | null;
+        embedding_vector: string | null;
+        embedding_model: string | null;
+        memory_lane: string;
+        producer_agent_id: string | null;
+        owner_agent_id: string | null;
+        owner_team_id: string | null;
+        embedding_status: string;
+        embedding_last_error: string | null;
+        salience: number;
+        importance: number;
+        confidence: number;
+        redaction_version: number;
+      }>(
+        `
+        SELECT
+          id::text AS id,
+          scope,
+          client_id,
+          type::text AS type,
+          tier::text AS tier,
+          title,
+          text_summary,
+          slots::text AS slots_json,
+          raw_ref,
+          evidence_ref,
+          embedding::text AS embedding_vector,
+          embedding_model,
+          memory_lane::text AS memory_lane,
+          producer_agent_id,
+          owner_agent_id,
+          owner_team_id,
+          embedding_status::text AS embedding_status,
+          embedding_last_error,
+          salience,
+          importance,
+          confidence,
+          redaction_version
+        FROM memory_nodes
+        WHERE id = ANY($1::uuid[])
+        `,
+        [ids],
+      );
+      const fingerprints = new Map<string, WriteExistingNodeFingerprint>();
+      for (const row of out.rows) fingerprints.set(row.id, writeNodeFingerprintFromRow(row));
+      return fingerprints;
     },
 
     async parentCommitHash(scope: string, parentCommitId: string): Promise<string | null> {
@@ -493,6 +664,7 @@ export function assertWriteStoreAccessContract(access: WriteStoreAccess): void {
   }
   const requiredMethods = [
     "nodeScopesByIds",
+    "nodeFingerprintsByIds",
     "parentCommitHash",
     "insertCommit",
     "insertNode",

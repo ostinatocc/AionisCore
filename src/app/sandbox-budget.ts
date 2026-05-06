@@ -21,6 +21,20 @@ type ResolvedSandboxTenantBudget = {
     | "env_global_default";
 };
 
+type SandboxBudgetUsage = {
+  total_runs: number;
+  timeout_runs: number;
+  failed_runs: number;
+};
+
+type SandboxBudgetQueryClient = {
+  query<T = any>(sql: string, params?: any[]): Promise<{ rows: T[]; rowCount?: number | null }>;
+};
+
+type SandboxBudgetUsageStore = {
+  withClient<T>(fn: (client: SandboxBudgetQueryClient) => Promise<T>): Promise<T>;
+};
+
 function normalizeScope(scopeRaw: string | null | undefined): string {
   const scope = String(scopeRaw ?? "").trim();
   return scope.length > 0 ? scope : "*";
@@ -190,12 +204,47 @@ async function resolveSandboxTenantBudget(args: {
   return null;
 }
 
+async function readSandboxBudgetUsage(
+  client: SandboxBudgetQueryClient,
+  args: {
+    tenantId: string;
+    windowHours: number;
+    scopeFilter: string | null;
+    projectFilter: string | null;
+  },
+): Promise<SandboxBudgetUsage> {
+  const out = await client.query<{
+    total_runs: string;
+    timeout_runs: string;
+    failed_runs: string;
+  }>(
+    `
+    SELECT
+      count(*)::text AS total_runs,
+      count(*) FILTER (WHERE status = 'timeout')::text AS timeout_runs,
+      count(*) FILTER (WHERE status IN ('failed', 'timeout'))::text AS failed_runs
+    FROM memory_sandbox_runs
+    WHERE tenant_id = $1
+      AND created_at >= now() - make_interval(hours => $2::int)
+      AND ($3::text IS NULL OR scope = $3)
+      AND ($4::text IS NULL OR project_id = $4)
+    `,
+    [args.tenantId, args.windowHours, args.scopeFilter, args.projectFilter],
+  );
+  return {
+    total_runs: Number(out.rows[0]?.total_runs ?? "0"),
+    timeout_runs: Number(out.rows[0]?.timeout_runs ?? "0"),
+    failed_runs: Number(out.rows[0]?.failed_runs ?? "0"),
+  };
+}
+
 export function createSandboxBudgetService(args: {
   env: Env;
   db: Db;
   sandboxTenantBudgetPolicy: Map<string, SandboxTenantBudgetPolicy>;
+  usageStore?: SandboxBudgetUsageStore | null;
 }) {
-  const { env, db, sandboxTenantBudgetPolicy } = args;
+  const { env, db, sandboxTenantBudgetPolicy, usageStore } = args;
 
   const enforceSandboxTenantBudget = async (
     reply: any,
@@ -220,31 +269,17 @@ export function createSandboxBudgetService(args: {
     const windowHours = env.SANDBOX_TENANT_BUDGET_WINDOW_HOURS;
     const policy = resolved.policy;
 
-    let usage: { total_runs: number; timeout_runs: number; failed_runs: number };
+    let usage: SandboxBudgetUsage;
     try {
-      const out = await db.pool.query<{
-        total_runs: string;
-        timeout_runs: string;
-        failed_runs: string;
-      }>(
-        `
-        SELECT
-          count(*)::text AS total_runs,
-          count(*) FILTER (WHERE status = 'timeout')::text AS timeout_runs,
-          count(*) FILTER (WHERE status IN ('failed', 'timeout'))::text AS failed_runs
-        FROM memory_sandbox_runs
-        WHERE tenant_id = $1
-          AND created_at >= now() - make_interval(hours => $2::int)
-          AND ($3::text IS NULL OR scope = $3)
-          AND ($4::text IS NULL OR project_id = $4)
-        `,
-        [tenantId, windowHours, resolved.scope_filter, resolved.project_filter],
-      );
-      usage = {
-        total_runs: Number(out.rows[0]?.total_runs ?? "0"),
-        timeout_runs: Number(out.rows[0]?.timeout_runs ?? "0"),
-        failed_runs: Number(out.rows[0]?.failed_runs ?? "0"),
+      const readArgs = {
+        tenantId,
+        windowHours,
+        scopeFilter: resolved.scope_filter,
+        projectFilter: resolved.project_filter,
       };
+      usage = usageStore
+        ? await usageStore.withClient((client) => readSandboxBudgetUsage(client, readArgs))
+        : await readSandboxBudgetUsage(db.pool, readArgs);
     } catch (err: any) {
       const code = String(err?.code ?? "");
       if (code === "42P01" || code === "42703") {

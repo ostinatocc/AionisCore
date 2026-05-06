@@ -98,6 +98,7 @@ export async function startAionisRuntime(): Promise<void> {
     env,
     db,
     sandboxTenantBudgetPolicy,
+    usageStore: store,
   });
   const {
     globalRecallProfileDefaults,
