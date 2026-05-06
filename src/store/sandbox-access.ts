@@ -1,5 +1,12 @@
 import type pg from "pg";
-import type { SandboxMode, SandboxRunRow, SandboxRunStatus, SandboxSessionRow } from "../memory/sandbox-shared.js";
+import {
+  TERMINAL_SANDBOX_STATUSES,
+  trimOrNull,
+  type SandboxMode,
+  type SandboxRunRow,
+  type SandboxRunStatus,
+  type SandboxSessionRow,
+} from "../memory/sandbox-shared.js";
 
 export type SandboxSessionInsertArgs = {
   tenantId: string;
@@ -43,6 +50,37 @@ export type SandboxRunFinalizeArgs = {
   resultJson: string;
 };
 
+export type SandboxRunTelemetryInsertArgs = {
+  runId: string;
+  sessionId: string;
+  tenantId: string;
+  scope: string;
+  mode: SandboxMode;
+  status: SandboxRunStatus;
+  executor: string | null;
+  timeoutMs: number;
+  queueWaitMs: number;
+  runtimeMs: number;
+  totalLatencyMs: number;
+  cancelRequested: boolean;
+  outputTruncated: boolean;
+  exitCode: number | null;
+  errorCode: string | null;
+};
+
+export type SandboxBudgetUsageArgs = {
+  tenantId: string;
+  windowHours: number;
+  scopeFilter: string | null;
+  projectFilter: string | null;
+};
+
+export type SandboxBudgetUsage = {
+  total_runs: number;
+  timeout_runs: number;
+  failed_runs: number;
+};
+
 export interface SandboxStoreAccess {
   createSession(args: SandboxSessionInsertArgs): Promise<SandboxSessionRow>;
   getSessionRef(args: { id: string; tenantId: string; scope: string }): Promise<SandboxSessionRef | null>;
@@ -57,6 +95,8 @@ export interface SandboxStoreAccess {
   getRunningRun(args: { id: string }): Promise<SandboxRunRow | null>;
   finalizeRun(args: SandboxRunFinalizeArgs): Promise<SandboxRunRow | null>;
   finalizeRunningRun(args: SandboxRunFinalizeArgs): Promise<SandboxRunRow | null>;
+  recordRunTelemetry(args: SandboxRunTelemetryInsertArgs): Promise<void>;
+  readBudgetUsage(args: SandboxBudgetUsageArgs): Promise<SandboxBudgetUsage>;
 }
 
 export type SandboxStoreAccessClient = {
@@ -122,6 +162,59 @@ function normalizeRunStatus(status: unknown): SandboxRunStatus {
     return status;
   }
   return "failed";
+}
+
+function isoToMs(v: string | null): number | null {
+  if (!v) return null;
+  const ms = new Date(v).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function deltaMs(startMs: number | null, endMs: number | null): number {
+  if (!Number.isFinite(startMs ?? NaN) || !Number.isFinite(endMs ?? NaN)) return 0;
+  return Math.max(0, Number(endMs) - Number(startMs));
+}
+
+function normalizeTelemetryErrorCode(v: string | null): string | null {
+  const raw = trimOrNull(v);
+  if (!raw) return null;
+  const compact = raw.toLowerCase().replace(/[^a-z0-9:_-]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!compact) return null;
+  return compact.slice(0, 120);
+}
+
+function telemetryExecutor(row: SandboxRunRow): string | null {
+  const value = row.result_json && typeof row.result_json === "object" ? (row.result_json as any).executor : null;
+  const normalized = trimOrNull(typeof value === "string" ? value : null);
+  return normalized ? normalized.slice(0, 32) : null;
+}
+
+export async function recordSandboxRunTelemetryRow(
+  client: pg.PoolClient,
+  row: SandboxRunRow,
+): Promise<void> {
+  if (!TERMINAL_SANDBOX_STATUSES.has(row.status)) return;
+  const createdMs = isoToMs(row.created_at);
+  const startedMs = isoToMs(row.started_at);
+  const finishedMs = isoToMs(row.finished_at) ?? isoToMs(row.updated_at);
+
+  await sandboxStoreAccessForClient(client).recordRunTelemetry({
+    runId: row.id,
+    sessionId: row.session_id,
+    tenantId: row.tenant_id,
+    scope: row.scope,
+    mode: row.mode,
+    status: row.status,
+    executor: telemetryExecutor(row),
+    timeoutMs: row.timeout_ms,
+    queueWaitMs: startedMs !== null ? deltaMs(createdMs, startedMs) : deltaMs(createdMs, finishedMs),
+    runtimeMs: startedMs !== null ? deltaMs(startedMs, finishedMs) : 0,
+    totalLatencyMs: deltaMs(createdMs, finishedMs),
+    cancelRequested: row.cancel_requested,
+    outputTruncated: row.output_truncated,
+    exitCode: row.exit_code,
+    errorCode: normalizeTelemetryErrorCode(row.error),
+  });
 }
 
 export function createPostgresSandboxStoreAccess(client: pg.PoolClient): SandboxStoreAccess {
@@ -406,6 +499,96 @@ export function createPostgresSandboxStoreAccess(client: pg.PoolClient): Sandbox
       );
       const row = out.rows[0] ?? null;
       return row ? normalizeRunRow(row) : null;
+    },
+
+    async recordRunTelemetry(args): Promise<void> {
+      try {
+        await client.query(
+          `
+          INSERT INTO memory_sandbox_run_telemetry (
+            run_id,
+            session_id,
+            tenant_id,
+            scope,
+            mode,
+            status,
+            executor,
+            timeout_ms,
+            queue_wait_ms,
+            runtime_ms,
+            total_latency_ms,
+            cancel_requested,
+            output_truncated,
+            exit_code,
+            error_code
+          )
+          VALUES (
+            $1::uuid,
+            $2::uuid,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9,
+            $10,
+            $11,
+            $12,
+            $13,
+            $14,
+            $15
+          )
+          ON CONFLICT (run_id) DO NOTHING
+          `,
+          [
+            args.runId,
+            args.sessionId,
+            args.tenantId,
+            args.scope,
+            args.mode,
+            args.status,
+            args.executor,
+            args.timeoutMs,
+            args.queueWaitMs,
+            args.runtimeMs,
+            args.totalLatencyMs,
+            args.cancelRequested,
+            args.outputTruncated,
+            args.exitCode,
+            args.errorCode,
+          ],
+        );
+      } catch (err: any) {
+        if (String(err?.code ?? "") === "42P01") return;
+        throw err;
+      }
+    },
+
+    async readBudgetUsage(args): Promise<SandboxBudgetUsage> {
+      const out = await client.query<{
+        total_runs: string;
+        timeout_runs: string;
+        failed_runs: string;
+      }>(
+        `
+        SELECT
+          count(*)::text AS total_runs,
+          count(*) FILTER (WHERE status = 'timeout')::text AS timeout_runs,
+          count(*) FILTER (WHERE status IN ('failed', 'timeout'))::text AS failed_runs
+        FROM memory_sandbox_runs
+        WHERE tenant_id = $1
+          AND created_at >= now() - make_interval(hours => $2::int)
+          AND ($3::text IS NULL OR scope = $3)
+          AND ($4::text IS NULL OR project_id = $4)
+        `,
+        [args.tenantId, args.windowHours, args.scopeFilter, args.projectFilter],
+      );
+      return {
+        total_runs: Number(out.rows[0]?.total_runs ?? "0"),
+        timeout_runs: Number(out.rows[0]?.timeout_runs ?? "0"),
+        failed_runs: Number(out.rows[0]?.failed_runs ?? "0"),
+      };
     },
   };
 }

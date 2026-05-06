@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { lookup } from "node:dns/promises";
 import { mkdir } from "node:fs/promises";
 import { isIP } from "node:net";
-import { sandboxStoreAccessForClient } from "../store/sandbox-access.js";
+import { recordSandboxRunTelemetryRow, sandboxStoreAccessForClient } from "../store/sandbox-access.js";
 import { HttpError, badRequest } from "../util/http.js";
 import {
   ipInCidrs,
@@ -23,7 +23,6 @@ import {
   jsonObject,
   normalizeSandboxStatus,
   normalizeTimeoutMs,
-  recordSandboxRunTelemetryRow,
   tailText,
   trimOrNull,
 } from "./sandbox-shared.js";

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type pg from "pg";
 import {
+  recordSandboxRunTelemetryRow,
   sandboxStoreAccessForClient,
 } from "../store/sandbox-access.js";
 import { HttpError } from "../util/http.js";
@@ -19,7 +20,6 @@ import type { SandboxDefaults } from "./sandbox-shared.js";
 import {
   jsonObject,
   normalizeTimeoutMs,
-  recordSandboxRunTelemetryRow,
   tailText,
   toRunPayload,
   trimOrNull,

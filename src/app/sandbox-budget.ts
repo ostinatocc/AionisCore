@@ -1,6 +1,7 @@
 import type { Env } from "../config.js";
 import type { Db } from "../db.js";
 import { assertEmbeddingSurfaceForbidden } from "../embeddings/surface-policy.js";
+import { sandboxStoreAccessForClient, type SandboxBudgetUsage, type SandboxBudgetUsageArgs } from "../store/sandbox-access.js";
 import { HttpError } from "../util/http.js";
 import { sanitizeBudgetCap, type SandboxTenantBudgetPolicy } from "./runtime-services.js";
 
@@ -21,18 +22,8 @@ type ResolvedSandboxTenantBudget = {
     | "env_global_default";
 };
 
-type SandboxBudgetUsage = {
-  total_runs: number;
-  timeout_runs: number;
-  failed_runs: number;
-};
-
-type SandboxBudgetQueryClient = {
-  query<T = any>(sql: string, params?: any[]): Promise<{ rows: T[]; rowCount?: number | null }>;
-};
-
 type SandboxBudgetUsageStore = {
-  withClient<T>(fn: (client: SandboxBudgetQueryClient) => Promise<T>): Promise<T>;
+  withClient<T>(fn: (client: any) => Promise<T>): Promise<T>;
 };
 
 function normalizeScope(scopeRaw: string | null | undefined): string {
@@ -205,37 +196,10 @@ async function resolveSandboxTenantBudget(args: {
 }
 
 async function readSandboxBudgetUsage(
-  client: SandboxBudgetQueryClient,
-  args: {
-    tenantId: string;
-    windowHours: number;
-    scopeFilter: string | null;
-    projectFilter: string | null;
-  },
+  client: any,
+  args: SandboxBudgetUsageArgs,
 ): Promise<SandboxBudgetUsage> {
-  const out = await client.query<{
-    total_runs: string;
-    timeout_runs: string;
-    failed_runs: string;
-  }>(
-    `
-    SELECT
-      count(*)::text AS total_runs,
-      count(*) FILTER (WHERE status = 'timeout')::text AS timeout_runs,
-      count(*) FILTER (WHERE status IN ('failed', 'timeout'))::text AS failed_runs
-    FROM memory_sandbox_runs
-    WHERE tenant_id = $1
-      AND created_at >= now() - make_interval(hours => $2::int)
-      AND ($3::text IS NULL OR scope = $3)
-      AND ($4::text IS NULL OR project_id = $4)
-    `,
-    [args.tenantId, args.windowHours, args.scopeFilter, args.projectFilter],
-  );
-  return {
-    total_runs: Number(out.rows[0]?.total_runs ?? "0"),
-    timeout_runs: Number(out.rows[0]?.timeout_runs ?? "0"),
-    failed_runs: Number(out.rows[0]?.failed_runs ?? "0"),
-  };
+  return await sandboxStoreAccessForClient(client).readBudgetUsage(args);
 }
 
 export function createSandboxBudgetService(args: {

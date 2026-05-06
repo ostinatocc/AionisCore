@@ -2,7 +2,13 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { MemoryStore } from "./memory-store.js";
-import type { SandboxRunFinalizeArgs, SandboxRunLogRow, SandboxStoreAccess } from "./sandbox-access.js";
+import type {
+  SandboxBudgetUsage,
+  SandboxRunFinalizeArgs,
+  SandboxRunLogRow,
+  SandboxRunTelemetryInsertArgs,
+  SandboxStoreAccess,
+} from "./sandbox-access.js";
 import { createSqliteDatabase, type SqliteDatabase } from "./sqlite-compat.js";
 
 type QueryResult<T = any> = {
@@ -281,6 +287,21 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO NOTHING
   `);
+  const readBudgetUsageStmt = db.prepare<{
+    total_runs: number;
+    timeout_runs: number | null;
+    failed_runs: number | null;
+  }>(`
+    SELECT
+      COUNT(*) AS total_runs,
+      SUM(CASE WHEN status = 'timeout' THEN 1 ELSE 0 END) AS timeout_runs,
+      SUM(CASE WHEN status IN ('failed', 'timeout') THEN 1 ELSE 0 END) AS failed_runs
+    FROM memory_sandbox_runs
+    WHERE tenant_id = ?
+      AND created_at >= ?
+      AND (? IS NULL OR scope = ?)
+      AND (? IS NULL OR project_id = ?)
+  `);
 
   const finalizeSandboxRun = (args: SandboxRunFinalizeArgs, onlyIfRunning: boolean): SandboxRunRecord | undefined => {
     const finishedAt = nowIso();
@@ -299,6 +320,50 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
     );
     if (sqliteChangeCount(result) < 1) return undefined;
     return getRunById(db, args.id);
+  };
+
+  const insertSandboxTelemetry = (args: SandboxRunTelemetryInsertArgs): void => {
+    insertTelemetry.run(
+      args.runId,
+      args.runId,
+      args.sessionId,
+      args.tenantId,
+      args.scope,
+      args.mode,
+      args.status,
+      args.executor,
+      args.timeoutMs,
+      args.queueWaitMs,
+      args.runtimeMs,
+      args.totalLatencyMs,
+      args.cancelRequested ? 1 : 0,
+      args.outputTruncated ? 1 : 0,
+      args.exitCode,
+      args.errorCode,
+      nowIso(),
+    );
+  };
+
+  const readSandboxBudgetUsage = (args: {
+    tenantId: string;
+    windowHours: number;
+    scopeFilter: string | null;
+    projectFilter: string | null;
+  }): SandboxBudgetUsage => {
+    const cutoff = new Date(Date.now() - Math.max(1, Math.trunc(args.windowHours)) * 60 * 60 * 1000).toISOString();
+    const row = readBudgetUsageStmt.get(
+      args.tenantId,
+      cutoff,
+      args.scopeFilter,
+      args.scopeFilter,
+      args.projectFilter,
+      args.projectFilter,
+    );
+    return {
+      total_runs: Number(row?.total_runs ?? 0),
+      timeout_runs: Number(row?.timeout_runs ?? 0),
+      failed_runs: Number(row?.failed_runs ?? 0),
+    };
   };
 
   const sandboxStoreAccess: SandboxStoreAccess = {
@@ -432,6 +497,14 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
       const run = finalizeSandboxRun(args, true);
       return run ? (toRunPayloadRow(run) as any) : null;
     },
+
+    async recordRunTelemetry(args) {
+      insertSandboxTelemetry(args);
+    },
+
+    async readBudgetUsage(args) {
+      return readSandboxBudgetUsage(args);
+    },
   };
 
   return {
@@ -439,64 +512,6 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
 
     async query<T = any>(sql: string, params: any[] = []): Promise<QueryResult<T>> {
       const normalized = normalizeSql(sql);
-
-      if (normalized.includes("INSERT INTO memory_sandbox_run_telemetry")) {
-        const runId = String(params[0] ?? "");
-        insertTelemetry.run(
-          runId,
-          runId,
-          String(params[1] ?? ""),
-          String(params[2] ?? ""),
-          String(params[3] ?? ""),
-          String(params[4] ?? ""),
-          String(params[5] ?? ""),
-          params[6] ? String(params[6]) : null,
-          Number.isFinite(Number(params[7])) ? Number(params[7]) : null,
-          Number.isFinite(Number(params[8])) ? Number(params[8]) : null,
-          Number.isFinite(Number(params[9])) ? Number(params[9]) : null,
-          Number.isFinite(Number(params[10])) ? Number(params[10]) : null,
-          params[11] ? 1 : 0,
-          params[12] ? 1 : 0,
-          Number.isFinite(Number(params[13])) ? Number(params[13]) : null,
-          params[14] ? String(params[14]) : null,
-          nowIso(),
-        );
-        return { rows: [], rowCount: 1 };
-      }
-
-      if (normalized.includes("FROM memory_sandbox_runs") && normalized.includes("count(*)::text AS total_runs")) {
-        const tenantId = String(params[0] ?? "");
-        const windowHours = Number.isFinite(Number(params[1])) ? Math.max(1, Math.trunc(Number(params[1]))) : 24;
-        const scopeFilter = typeof params[2] === "string" && params[2].trim().length > 0 ? params[2].trim() : null;
-        const projectFilter = typeof params[3] === "string" && params[3].trim().length > 0 ? params[3].trim() : null;
-        const cutoff = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString();
-        const row = db.prepare<{
-          total_runs: number;
-          timeout_runs: number | null;
-          failed_runs: number | null;
-        }>(`
-          SELECT
-            COUNT(*) AS total_runs,
-            SUM(CASE WHEN status = 'timeout' THEN 1 ELSE 0 END) AS timeout_runs,
-            SUM(CASE WHEN status IN ('failed', 'timeout') THEN 1 ELSE 0 END) AS failed_runs
-          FROM memory_sandbox_runs
-          WHERE tenant_id = ?
-            AND created_at >= ?
-            AND (? IS NULL OR scope = ?)
-            AND (? IS NULL OR project_id = ?)
-        `).get(tenantId, cutoff, scopeFilter, scopeFilter, projectFilter, projectFilter);
-        return {
-          rows: [
-            {
-              total_runs: String(row?.total_runs ?? 0),
-              timeout_runs: String(row?.timeout_runs ?? 0),
-              failed_runs: String(row?.failed_runs ?? 0),
-            } as T,
-          ],
-          rowCount: 1,
-        };
-      }
-
       throwUnsupportedLiteHostSql(normalized);
     },
   };
