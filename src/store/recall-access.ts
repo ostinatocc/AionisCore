@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { resolveNodePatternExecutionSurface } from "../memory/node-execution-surface.js";
 import { toVectorLiteral } from "../util/pgvector.js";
 
 export const RECALL_STORE_ACCESS_CAPABILITY_VERSION = 2 as const;
@@ -171,10 +172,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
-function firstString(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
 function clampSimilarity(value: number): number {
   return Math.max(-1, Math.min(1, value));
 }
@@ -185,16 +182,10 @@ export function adjustRecallCandidateSimilarityForTrust(args: {
   similarity: number;
 }): number {
   const slots = asRecord(args.slots);
-  const executionNative = asRecord(slots?.execution_native_v1);
-  const anchor = asRecord(slots?.anchor_v1);
-  const anchorKind = firstString(executionNative?.anchor_kind)
-    ?? (firstString(executionNative?.execution_kind) === "pattern_anchor" ? "pattern" : null)
-    ?? firstString(anchor?.anchor_kind);
-  if (anchorKind !== "pattern") return args.similarity;
-  const patternState = firstString(executionNative?.pattern_state ?? anchor?.pattern_state) === "stable" ? "stable" : "provisional";
-  const promotion = asRecord(executionNative?.promotion) ?? asRecord(anchor?.promotion);
-  const counterEvidenceOpen = promotion?.counter_evidence_open === true;
-  if (counterEvidenceOpen) {
+  const patternSurface = resolveNodePatternExecutionSurface({ slots });
+  if (patternSurface.anchor_kind !== "pattern") return args.similarity;
+  const patternState = patternSurface.pattern_state === "stable" ? "stable" : "provisional";
+  if (patternSurface.promotion.counter_evidence_open) {
     return clampSimilarity(args.similarity - 0.12);
   }
   if (patternState === "stable") {

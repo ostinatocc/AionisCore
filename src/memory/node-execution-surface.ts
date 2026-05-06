@@ -118,6 +118,12 @@ export function parseNodeExecutionNative(slots: Record<string, unknown> | null |
   return asRecord(slots?.execution_native_v1);
 }
 
+export function resolveNodeNativeExecutionSurface(
+  slots: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  return parseNodeExecutionNative(slots);
+}
+
 export function parseNodeAnchor(slots: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
   return asRecord(slots?.anchor_v1);
 }
@@ -201,6 +207,15 @@ export function resolveNodeWorkflowSignature(args: {
     contract?.workflow_signature,
     parseNodeExecutionNative(args.slots)?.workflow_signature,
     args.slots?.workflow_signature,
+  );
+}
+
+export function resolveNodePatternSignature(
+  slots: Record<string, unknown> | null | undefined,
+): string | null {
+  return firstString(
+    parseNodeExecutionNative(slots)?.pattern_signature,
+    parseNodeAnchor(slots)?.pattern_signature,
   );
 }
 

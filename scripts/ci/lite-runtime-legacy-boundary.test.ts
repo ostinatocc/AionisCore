@@ -136,6 +136,21 @@ test("lite recall store consumes workflow anchor presence through node execution
   assert.match(text, /hasNodeWorkflowAnchorSurface/);
 });
 
+test("lite write store filters execution-native rows through node execution surface", () => {
+  const liteWriteStoreFile = "src/store/lite-write-store.ts";
+  const legacyFiles = new Set(runtimeBoundaryInventoryLegacyFiles());
+  assert.equal(
+    legacyFiles.has(liteWriteStoreFile),
+    false,
+    "lite write store should not be a direct legacy slot access boundary",
+  );
+
+  const text = fs.readFileSync(path.join(ROOT, liteWriteStoreFile), "utf8");
+  assert.equal(text.includes("execution_native_v1"), false, "lite write store should not directly read execution_native_v1");
+  assert.equal(text.includes("anchor_v1"), false, "lite write store should not directly read anchor_v1");
+  assert.match(text, /resolveNodeNativeExecutionSurface/);
+});
+
 test("route layer resolves execution state slots through boundary surfaces", () => {
   const offenders = listTypeScriptFiles(path.join(SRC, "routes"))
     .map((filePath) => ({

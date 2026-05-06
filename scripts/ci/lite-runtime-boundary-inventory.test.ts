@@ -77,7 +77,7 @@ test("runtime boundary inventory exposes cross-cutting boundary files and summar
     "src/memory/authority-producer-registry.ts",
     "src/memory/legacy-access-registry.ts",
     "src/memory/workflow-write-projection.ts",
-    "src/store/lite-write-store.ts",
+    "src/store/recall-access.ts",
   ]) {
     assert.ok(files.includes(file), `inventory must include ${file}`);
   }

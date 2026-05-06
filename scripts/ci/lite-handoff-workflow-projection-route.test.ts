@@ -306,11 +306,11 @@ test("handoff/store projects workflow memory into planner guidance through the g
       limit: 10,
       offset: 0,
     });
-    const storedHandoff = continuityRows.rows.find((row) => row.execution_native_v1.summary_kind === "handoff");
+    const storedHandoff = continuityRows.rows.find((row) => row.execution_native.summary_kind === "handoff");
     assert.ok(storedHandoff);
-    assert.equal(storedHandoff?.execution_native_v1.file_path, "src/routes/export.ts");
-    assert.deepEqual(storedHandoff?.execution_native_v1.target_files, ["src/routes/export.ts"]);
-    assert.equal(storedHandoff?.execution_native_v1.next_action, "Patch src/routes/export.ts and rerun export tests");
+    assert.equal(storedHandoff?.execution_native.file_path, "src/routes/export.ts");
+    assert.deepEqual(storedHandoff?.execution_native.target_files, ["src/routes/export.ts"]);
+    assert.equal(storedHandoff?.execution_native.next_action, "Patch src/routes/export.ts and rerun export tests");
 
     const firstPlanning = await app.inject({
       method: "POST",
@@ -475,16 +475,16 @@ test("trajectory-backed handoff promotion preserves recovery compiler fields int
       limit: 10,
       offset: 0,
     });
-    const storedHandoff = continuityRows.rows.find((row) => row.execution_native_v1.summary_kind === "handoff");
+    const storedHandoff = continuityRows.rows.find((row) => row.execution_native.summary_kind === "handoff");
     assert.ok(storedHandoff);
-    assert.equal(storedHandoff?.execution_native_v1.task_family, "service_publish_validate");
-    assert.ok(storedHandoff?.execution_native_v1.task_signature);
-    assert.ok(storedHandoff?.execution_native_v1.workflow_signature);
-    assert.deepEqual(storedHandoff?.execution_native_v1.target_files, ["scripts/export-preview.ts", "package.json"]);
-    assert.ok(storedHandoff?.execution_native_v1.workflow_steps?.some((step) => step.includes("python -m http.server 8080")));
-    assert.ok(storedHandoff?.execution_native_v1.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
-    assert.equal(storedHandoff?.execution_native_v1.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);
-    assert.equal(storedHandoff?.execution_native_v1.service_lifecycle_constraints?.[0]?.revalidate_from_fresh_shell, true);
+    assert.equal(storedHandoff?.execution_native.task_family, "service_publish_validate");
+    assert.ok(storedHandoff?.execution_native.task_signature);
+    assert.ok(storedHandoff?.execution_native.workflow_signature);
+    assert.deepEqual(storedHandoff?.execution_native.target_files, ["scripts/export-preview.ts", "package.json"]);
+    assert.ok(storedHandoff?.execution_native.workflow_steps?.some((step) => step.includes("python -m http.server 8080")));
+    assert.ok(storedHandoff?.execution_native.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
+    assert.equal(storedHandoff?.execution_native.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);
+    assert.equal(storedHandoff?.execution_native.service_lifecycle_constraints?.[0]?.revalidate_from_fresh_shell, true);
 
     const firstPlanning = await app.inject({
       method: "POST",
@@ -510,9 +510,9 @@ test("trajectory-backed handoff promotion preserves recovery compiler fields int
       offset: 0,
     });
     assert.equal(projectedRows.rows.length, 1);
-    assert.equal(projectedRows.rows[0]?.execution_native_v1.task_family, "service_publish_validate");
+    assert.equal(projectedRows.rows[0]?.execution_native.task_family, "service_publish_validate");
     assert.deepEqual(
-      [...(projectedRows.rows[0]?.execution_native_v1.target_files ?? [])].sort(),
+      [...(projectedRows.rows[0]?.execution_native.target_files ?? [])].sort(),
       ["package.json", "scripts/export-preview.ts"],
     );
     assert.equal(projectedRows.rows[0]?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
@@ -521,9 +521,9 @@ test("trajectory-backed handoff promotion preserves recovery compiler fields int
       [...(projectedRows.rows[0]?.slots.execution_contract_v1?.target_files ?? [])].sort(),
       ["package.json", "scripts/export-preview.ts"],
     );
-    assert.ok(projectedRows.rows[0]?.execution_native_v1.workflow_steps?.some((step) => step.includes("python -m http.server 8080")));
-    assert.ok(projectedRows.rows[0]?.execution_native_v1.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
-    assert.equal(projectedRows.rows[0]?.execution_native_v1.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);
+    assert.ok(projectedRows.rows[0]?.execution_native.workflow_steps?.some((step) => step.includes("python -m http.server 8080")));
+    assert.ok(projectedRows.rows[0]?.execution_native.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
+    assert.equal(projectedRows.rows[0]?.execution_native.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);
 
     const secondStore = await app.inject({
       method: "POST",
@@ -563,9 +563,9 @@ test("trajectory-backed handoff promotion preserves recovery compiler fields int
       offset: 0,
     });
     assert.equal(stableRows.rows.length, 1);
-    assert.equal(stableRows.rows[0]?.execution_native_v1.task_family, "service_publish_validate");
+    assert.equal(stableRows.rows[0]?.execution_native.task_family, "service_publish_validate");
     assert.deepEqual(
-      [...(stableRows.rows[0]?.execution_native_v1.target_files ?? [])].sort(),
+      [...(stableRows.rows[0]?.execution_native.target_files ?? [])].sort(),
       ["package.json", "scripts/export-preview.ts"],
     );
     assert.equal(stableRows.rows[0]?.slots.execution_contract_v1?.schema_version, "execution_contract_v1");
@@ -573,9 +573,9 @@ test("trajectory-backed handoff promotion preserves recovery compiler fields int
       [...(stableRows.rows[0]?.slots.execution_contract_v1?.target_files ?? [])].sort(),
       ["package.json", "scripts/export-preview.ts"],
     );
-    assert.ok(stableRows.rows[0]?.execution_native_v1.workflow_steps?.some((step) => step.includes("python -m http.server 8080")));
-    assert.ok(stableRows.rows[0]?.execution_native_v1.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
-    assert.equal(stableRows.rows[0]?.execution_native_v1.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);
+    assert.ok(stableRows.rows[0]?.execution_native.workflow_steps?.some((step) => step.includes("python -m http.server 8080")));
+    assert.ok(stableRows.rows[0]?.execution_native.pattern_hints?.includes("revalidate_service_from_fresh_shell"));
+    assert.equal(stableRows.rows[0]?.execution_native.service_lifecycle_constraints?.[0]?.must_survive_agent_exit, true);
     assert.equal(
       ((stableRows.rows[0]?.slots?.anchor_v1 as any)?.service_lifecycle_constraints?.[0]?.detach_then_probe) ?? false,
       true,

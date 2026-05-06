@@ -437,7 +437,7 @@ test("lite write store exposes execution-first query filters over execution_nati
       offset: 0,
     });
     assert.equal(workflowRows.rows.length, 1);
-    assert.equal(workflowRows.rows[0]?.execution_native_v1.anchor_kind, "workflow");
+    assert.equal(workflowRows.rows[0]?.execution_native.anchor_kind, "workflow");
 
     const patternRows = await store.findExecutionNativeNodes({
       scope: "default",
@@ -450,7 +450,7 @@ test("lite write store exposes execution-first query filters over execution_nati
       offset: 0,
     });
     assert.equal(patternRows.rows.length, 1);
-    assert.equal(patternRows.rows[0]?.execution_native_v1.selected_tool, "edit");
+    assert.equal(patternRows.rows[0]?.execution_native.selected_tool, "edit");
 
     const signatureFactRows = await store.findExecutionNativeNodes({
       scope: "default",
@@ -577,9 +577,9 @@ test("prepare/apply write normalizes execution-native metadata for handoff and s
       limit: 10,
       offset: 0,
     });
-    assert.ok(continuityRows.rows.some((row) => row.execution_native_v1.summary_kind === "handoff" && row.execution_native_v1.file_path === filePath && row.slots?.execution_contract_v1?.file_path === filePath));
-    assert.ok(continuityRows.rows.some((row) => row.execution_native_v1.summary_kind === "session_event" && row.execution_native_v1.file_path === filePath && row.slots?.execution_contract_v1?.file_path === filePath));
-    assert.ok(continuityRows.rows.some((row) => row.execution_native_v1.summary_kind === "session"));
+    assert.ok(continuityRows.rows.some((row) => row.execution_native.summary_kind === "handoff" && row.execution_native.file_path === filePath && row.slots?.execution_contract_v1?.file_path === filePath));
+    assert.ok(continuityRows.rows.some((row) => row.execution_native.summary_kind === "session_event" && row.execution_native.file_path === filePath && row.slots?.execution_contract_v1?.file_path === filePath));
+    assert.ok(continuityRows.rows.some((row) => row.execution_native.summary_kind === "session"));
   } finally {
     await store.close();
   }

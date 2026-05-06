@@ -113,12 +113,6 @@ export const RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY = [
     reason: "rehydrates persisted anchor payloads through the explicit anchor boundary",
   },
   {
-    id: "lite_write_store",
-    file: "src/store/lite-write-store.ts",
-    kind: "store_adapter",
-    reason: "stores and filters persisted legacy execution slot payloads",
-  },
-  {
     id: "recall_access_store",
     file: "src/store/recall-access.ts",
     kind: "store_adapter",

@@ -277,11 +277,11 @@ test("memory/sessions projects session continuity state into workflow guidance",
       limit: 10,
       offset: 0,
     });
-    const storedSession = continuityRows.rows.find((row) => row.execution_native_v1.summary_kind === "session");
+    const storedSession = continuityRows.rows.find((row) => row.execution_native.summary_kind === "session");
     assert.ok(storedSession);
-    assert.equal(storedSession?.execution_native_v1.file_path, "src/routes/export.ts");
-    assert.deepEqual(storedSession?.execution_native_v1.target_files, ["src/routes/export.ts"]);
-    assert.equal(storedSession?.execution_native_v1.next_action, "Patch src/routes/export.ts and rerun export tests");
+    assert.equal(storedSession?.execution_native.file_path, "src/routes/export.ts");
+    assert.deepEqual(storedSession?.execution_native.target_files, ["src/routes/export.ts"]);
+    assert.equal(storedSession?.execution_native.next_action, "Patch src/routes/export.ts and rerun export tests");
 
     const firstPlanning = await app.inject({
       method: "POST",

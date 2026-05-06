@@ -1,6 +1,17 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ExecutionNativeV1 } from "../memory/schemas.js";
+import {
+  resolveNodeAnchorKind,
+  resolveNodeCompressionLayer,
+  resolveNodeErrorSignature,
+  resolveNodeExecutionKind,
+  resolveNodeNativeExecutionSurface,
+  resolveNodePatternSignature,
+  resolveNodePatternState,
+  resolveNodeTaskSignature,
+  resolveNodeWorkflowSignature,
+} from "../memory/node-execution-surface.js";
 import type {
   AssociationCandidateRecord,
   ListAssociationCandidatesForSourceArgs,
@@ -244,7 +255,7 @@ export type LiteRuleFeedbackRow = {
 };
 
 export type LiteExecutionNativeNodeRow = LiteFindNodeRow & {
-  execution_native_v1: ExecutionNativeV1;
+  execution_native: ExecutionNativeV1;
 };
 
 export type LiteWriteStore = WriteStoreAccess & {
@@ -1052,22 +1063,22 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
       });
       const filtered = rows
         .map((row) => {
-          const executionNative = row.slots?.execution_native_v1;
-          if (!executionNative || typeof executionNative !== "object" || Array.isArray(executionNative)) return null;
+          const executionNative = resolveNodeNativeExecutionSurface(row.slots);
+          if (!executionNative) return null;
           return {
             ...row,
-            execution_native_v1: executionNative as ExecutionNativeV1,
+            execution_native: executionNative as ExecutionNativeV1,
           } satisfies LiteExecutionNativeNodeRow;
         })
         .filter((row): row is LiteExecutionNativeNodeRow => !!row)
-        .filter((row) => !args.executionKind || row.execution_native_v1.execution_kind === args.executionKind)
-        .filter((row) => !args.anchorKind || row.execution_native_v1.anchor_kind === args.anchorKind)
-        .filter((row) => !args.patternState || row.execution_native_v1.pattern_state === args.patternState)
-        .filter((row) => !args.taskSignature || row.execution_native_v1.task_signature === args.taskSignature)
-        .filter((row) => !args.errorSignature || row.execution_native_v1.error_signature === args.errorSignature)
-        .filter((row) => !args.workflowSignature || row.execution_native_v1.workflow_signature === args.workflowSignature)
-        .filter((row) => !args.patternSignature || row.execution_native_v1.pattern_signature === args.patternSignature)
-        .filter((row) => !args.compressionLayer || row.execution_native_v1.compression_layer === args.compressionLayer);
+        .filter((row) => !args.executionKind || resolveNodeExecutionKind(row.slots) === args.executionKind)
+        .filter((row) => !args.anchorKind || resolveNodeAnchorKind(row.slots) === args.anchorKind)
+        .filter((row) => !args.patternState || resolveNodePatternState(row.slots) === args.patternState)
+        .filter((row) => !args.taskSignature || resolveNodeTaskSignature({ slots: row.slots }) === args.taskSignature)
+        .filter((row) => !args.errorSignature || resolveNodeErrorSignature(row.slots) === args.errorSignature)
+        .filter((row) => !args.workflowSignature || resolveNodeWorkflowSignature({ slots: row.slots }) === args.workflowSignature)
+        .filter((row) => !args.patternSignature || resolveNodePatternSignature(row.slots) === args.patternSignature)
+        .filter((row) => !args.compressionLayer || resolveNodeCompressionLayer({ type: row.type, slots: row.slots }) === args.compressionLayer);
       const slice = filtered.slice(args.offset, args.offset + args.limit + 1);
       const hasMore = slice.length > args.limit;
       return {
