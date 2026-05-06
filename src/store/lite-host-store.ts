@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { MemoryStore } from "./memory-store.js";
+import type { SandboxRunFinalizeArgs, SandboxRunLogRow, SandboxStoreAccess } from "./sandbox-access.js";
 import { createSqliteDatabase, type SqliteDatabase } from "./sqlite-compat.js";
 
 type QueryResult<T = any> = {
@@ -49,6 +50,7 @@ type SandboxRunRecord = {
 };
 
 type QueryClient = {
+  sandboxStoreAccess: SandboxStoreAccess;
   query<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>>;
 };
 
@@ -66,6 +68,12 @@ function throwUnsupportedLiteHostSql(normalizedSql: string): never {
   (err as any).code = "lite_host_store_unsupported_sql";
   (err as any).details = { sql_preview: preview };
   throw err;
+}
+
+function sqliteChangeCount(result: unknown): number {
+  const value = (result as any)?.changes;
+  const count = Number(value);
+  return Number.isFinite(count) ? count : 0;
 }
 
 function parseJsonObject(raw: string | null | undefined): Record<string, unknown> {
@@ -137,7 +145,7 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
     LIMIT 1
   `);
 
-  const insertRun = db.prepare(`
+  const insertRunStmt = db.prepare(`
     INSERT INTO memory_sandbox_runs (
       id,
       session_id,
@@ -172,7 +180,7 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
     WHERE id = ? AND tenant_id = ? AND scope = ?
     LIMIT 1
   `);
-  const getRunLogs = db.prepare<Pick<SandboxRunRecord, "id" | "status" | "stdout_text" | "stderr_text" | "output_truncated">>(`
+  const getRunLogsStmt = db.prepare<Pick<SandboxRunRecord, "id" | "status" | "stdout_text" | "stderr_text" | "output_truncated">>(`
     SELECT id, status, stdout_text, stderr_text, output_truncated
     FROM memory_sandbox_runs
     WHERE id = ? AND tenant_id = ? AND scope = ?
@@ -191,7 +199,7 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
     WHERE id = ? AND tenant_id = ? AND scope = ?
     LIMIT 1
   `);
-  const cancelQueuedRun = db.prepare(`
+  const cancelQueuedRunStmt = db.prepare(`
     UPDATE memory_sandbox_runs
     SET status = 'canceled',
         finished_at = ?,
@@ -200,20 +208,20 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
         updated_at = ?
     WHERE id = ? AND status = 'queued'
   `);
-  const claimQueuedRun = db.prepare(`
+  const claimQueuedRunStmt = db.prepare(`
     UPDATE memory_sandbox_runs
     SET status = 'running',
         started_at = COALESCE(started_at, ?),
         updated_at = ?
     WHERE id = ? AND status = 'queued'
   `);
-  const getRunningRun = db.prepare<SandboxRunRecord>(`
+  const getRunningRunStmt = db.prepare<SandboxRunRecord>(`
     SELECT *
     FROM memory_sandbox_runs
     WHERE id = ? AND status = 'running'
     LIMIT 1
   `);
-  const finalizeRun = db.prepare(`
+  const finalizeRunStmt = db.prepare(`
     UPDATE memory_sandbox_runs
     SET status = ?,
         stdout_text = ?,
@@ -226,7 +234,7 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
         updated_at = ?
     WHERE id = ?
   `);
-  const finalizeIfRunning = db.prepare(`
+  const finalizeIfRunningStmt = db.prepare(`
     UPDATE memory_sandbox_runs
     SET status = ?,
         stdout_text = ?,
@@ -239,12 +247,12 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
         updated_at = ?
     WHERE id = ? AND status = 'running'
   `);
-  const touchRunningRun = db.prepare(`
+  const touchRunningRunStmt = db.prepare(`
     UPDATE memory_sandbox_runs
     SET updated_at = ?
     WHERE id = ? AND status = 'running'
   `);
-  const listStaleRunningRuns = db.prepare<SandboxRunRecord>(`
+  const listStaleRunningRunsStmt = db.prepare<SandboxRunRecord>(`
     SELECT *
     FROM memory_sandbox_runs
     WHERE status = 'running' AND updated_at < ?
@@ -274,201 +282,163 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
     ON CONFLICT(id) DO NOTHING
   `);
 
+  const finalizeSandboxRun = (args: SandboxRunFinalizeArgs, onlyIfRunning: boolean): SandboxRunRecord | undefined => {
+    const finishedAt = nowIso();
+    const update = onlyIfRunning ? finalizeIfRunningStmt : finalizeRunStmt;
+    const result = update.run(
+      args.status,
+      args.stdoutText,
+      args.stderrText,
+      args.outputTruncated ? 1 : 0,
+      args.exitCode,
+      args.error,
+      args.resultJson,
+      finishedAt,
+      finishedAt,
+      args.id,
+    );
+    if (sqliteChangeCount(result) < 1) return undefined;
+    return getRunById(db, args.id);
+  };
+
+  const sandboxStoreAccess: SandboxStoreAccess = {
+    async createSession(args) {
+      const id = randomUUID();
+      const createdAt = nowIso();
+      insertSession.run(
+        id,
+        args.tenantId,
+        args.scope,
+        args.profile,
+        args.metadataJson,
+        args.expiresAt,
+        createdAt,
+        createdAt,
+      );
+      const session = getSession.get(id, args.tenantId, args.scope) as SandboxSessionRecord | undefined;
+      if (!session) throw new Error(`lite sandbox session insert failed: ${id}`);
+      return toSessionRow(session) as any;
+    },
+
+    async getSessionRef(args) {
+      const session = getSession.get(args.id, args.tenantId, args.scope) as SandboxSessionRecord | undefined;
+      return session ? { id: session.id, expires_at: session.expires_at } : null;
+    },
+
+    async insertRun(args) {
+      const createdAt = nowIso();
+      insertRunStmt.run(
+        args.id,
+        args.sessionId,
+        args.tenantId,
+        args.scope,
+        args.projectId,
+        args.plannerRunId,
+        args.decisionId,
+        "command",
+        args.actionJson,
+        args.mode,
+        "queued",
+        args.timeoutMs,
+        args.metadataJson,
+        createdAt,
+        createdAt,
+      );
+      const run = getRunByIdTenantScope.get(args.id, args.tenantId, args.scope) as SandboxRunRecord | undefined;
+      if (!run) throw new Error(`lite sandbox run insert failed: ${args.id}`);
+      return toRunPayloadRow(run) as any;
+    },
+
+    async getRun(args) {
+      const run = getRunByIdTenantScope.get(args.id, args.tenantId, args.scope) as SandboxRunRecord | undefined;
+      return run ? (toRunPayloadRow(run) as any) : null;
+    },
+
+    async getRunLogs(args): Promise<SandboxRunLogRow | null> {
+      const run = getRunLogsStmt.get(args.id, args.tenantId, args.scope) as
+        | Pick<SandboxRunRecord, "id" | "status" | "stdout_text" | "stderr_text" | "output_truncated">
+        | undefined;
+      return run
+        ? ({
+            id: run.id,
+            status: run.status,
+            stdout_text: run.stdout_text ?? "",
+            stderr_text: run.stderr_text ?? "",
+            output_truncated: run.output_truncated === 1,
+          } as SandboxRunLogRow)
+        : null;
+    },
+
+    async requestCancel(args) {
+      const updatedAt = nowIso();
+      updateCancelRequested.run(args.reason, updatedAt, args.id, args.tenantId, args.scope);
+      const run = getRunStatusAndCancel.get(args.id, args.tenantId, args.scope) as
+        | Pick<SandboxRunRecord, "id" | "status" | "cancel_requested" | "cancel_reason">
+        | undefined;
+      return run
+        ? ({
+            id: run.id,
+            status: run.status,
+            cancel_requested: run.cancel_requested === 1,
+            cancel_reason: run.cancel_reason,
+          } as any)
+        : null;
+    },
+
+    async cancelQueuedRun(args) {
+      const finishedAt = nowIso();
+      const existing = getRunningOrQueuedRunById(db, args.id);
+      const nextResult = JSON.stringify({
+        ...parseJsonObject(existing?.result_json),
+        canceled: true,
+      });
+      const updateResult = cancelQueuedRunStmt.run(finishedAt, nextResult, finishedAt, args.id);
+      if (sqliteChangeCount(updateResult) < 1) return null;
+      const run = getRunById(db, args.id);
+      return run ? (toRunPayloadRow(run) as any) : null;
+    },
+
+    async touchRunningRun(args) {
+      touchRunningRunStmt.run(nowIso(), args.id);
+    },
+
+    async listStaleRunningRuns(args) {
+      const cutoff = new Date(Date.now() - Math.max(1, Math.trunc(args.staleAfterSeconds)) * 1000).toISOString();
+      const limit = Math.max(1, Math.trunc(args.limit));
+      return listStaleRunningRunsStmt
+        .all(cutoff, limit)
+        .map((row) => toRunPayloadRow(row) as any);
+    },
+
+    async claimQueuedRun(args) {
+      const startedAt = nowIso();
+      const updateResult = claimQueuedRunStmt.run(startedAt, startedAt, args.id);
+      if (sqliteChangeCount(updateResult) < 1) return null;
+      const run = getRunningRunStmt.get(args.id) as SandboxRunRecord | undefined;
+      return run ? (toRunPayloadRow(run) as any) : null;
+    },
+
+    async getRunningRun(args) {
+      const run = getRunningRunStmt.get(args.id) as SandboxRunRecord | undefined;
+      return run ? (toRunPayloadRow(run) as any) : null;
+    },
+
+    async finalizeRun(args) {
+      const run = finalizeSandboxRun(args, false);
+      return run ? (toRunPayloadRow(run) as any) : null;
+    },
+
+    async finalizeRunningRun(args) {
+      const run = finalizeSandboxRun(args, true);
+      return run ? (toRunPayloadRow(run) as any) : null;
+    },
+  };
+
   return {
+    sandboxStoreAccess,
+
     async query<T = any>(sql: string, params: any[] = []): Promise<QueryResult<T>> {
       const normalized = normalizeSql(sql);
-
-      if (normalized.includes("INSERT INTO memory_sandbox_sessions")) {
-        const id = randomUUID();
-        const createdAt = nowIso();
-        insertSession.run(
-          id,
-          String(params[0] ?? ""),
-          String(params[1] ?? ""),
-          String(params[2] ?? "default"),
-          String(params[3] ?? "{}"),
-          params[4] ? String(params[4]) : null,
-          createdAt,
-          createdAt,
-        );
-        const session = getSession.get(id, String(params[0] ?? ""), String(params[1] ?? "")) as SandboxSessionRecord | undefined;
-        const row = session ? toSessionRow(session) : null;
-        return { rows: row ? [row as T] : [], rowCount: row ? 1 : 0 };
-      }
-
-      if (
-        normalized.includes("FROM memory_sandbox_sessions")
-        && normalized.includes("WHERE id = $1")
-        && normalized.includes("tenant_id = $2")
-        && normalized.includes("scope = $3")
-      ) {
-        const session = getSession.get(String(params[0] ?? ""), String(params[1] ?? ""), String(params[2] ?? "")) as SandboxSessionRecord | undefined;
-        const row = session
-          ? {
-              id: session.id,
-              expires_at: session.expires_at,
-            }
-          : null;
-        return { rows: row ? [row as T] : [], rowCount: row ? 1 : 0 };
-      }
-
-      if (normalized.includes("INSERT INTO memory_sandbox_runs")) {
-        const createdAt = nowIso();
-        insertRun.run(
-          String(params[0] ?? ""),
-          String(params[1] ?? ""),
-          String(params[2] ?? ""),
-          String(params[3] ?? ""),
-          params[4] ? String(params[4]) : null,
-          params[5] ? String(params[5]) : null,
-          params[6] ? String(params[6]) : null,
-          "command",
-          String(params[7] ?? "{}"),
-          String(params[8] ?? "async"),
-          "queued",
-          Number(params[9] ?? 0),
-          String(params[10] ?? "{}"),
-          createdAt,
-          createdAt,
-        );
-        const run = getRunByIdTenantScope.get(String(params[0] ?? ""), String(params[2] ?? ""), String(params[3] ?? "")) as SandboxRunRecord | undefined;
-        const row = run ? toRunPayloadRow(run) : null;
-        return { rows: row ? [row as T] : [], rowCount: row ? 1 : 0 };
-      }
-
-      if (
-        normalized.includes("FROM memory_sandbox_runs")
-        && normalized.includes("WHERE id = $1")
-        && normalized.includes("tenant_id = $2")
-        && normalized.includes("scope = $3")
-        && normalized.includes("LIMIT 1")
-        && normalized.includes("stdout_text")
-        && normalized.includes("stderr_text")
-        && !normalized.includes("AND status = 'running'")
-      ) {
-        const run = getRunByIdTenantScope.get(String(params[0] ?? ""), String(params[1] ?? ""), String(params[2] ?? "")) as SandboxRunRecord | undefined;
-        if (normalized.includes("tail_bytes")) {
-          const logs = run
-            ? {
-                id: run.id,
-                status: run.status,
-                stdout_text: run.stdout_text ?? "",
-                stderr_text: run.stderr_text ?? "",
-                output_truncated: run.output_truncated === 1,
-              }
-            : null;
-          return { rows: logs ? [logs as T] : [], rowCount: logs ? 1 : 0 };
-        }
-        const row = run ? toRunPayloadRow(run) : null;
-        return { rows: row ? [row as T] : [], rowCount: row ? 1 : 0 };
-      }
-
-      if (
-        normalized.includes("FROM memory_sandbox_runs")
-        && normalized.includes("WHERE id = $1")
-        && normalized.includes("tenant_id = $2")
-        && normalized.includes("scope = $3")
-        && normalized.includes("LIMIT 1")
-        && normalized.includes("SELECT id::text, status::text")
-      ) {
-        const run = getRunLogs.get(String(params[0] ?? ""), String(params[1] ?? ""), String(params[2] ?? "")) as
-          | Pick<SandboxRunRecord, "id" | "status" | "stdout_text" | "stderr_text" | "output_truncated">
-          | undefined;
-        const row = run
-          ? {
-              id: run.id,
-              status: run.status,
-              stdout_text: run.stdout_text ?? "",
-              stderr_text: run.stderr_text ?? "",
-              output_truncated: run.output_truncated === 1,
-            }
-          : null;
-        return { rows: row ? [row as T] : [], rowCount: row ? 1 : 0 };
-      }
-
-      if (normalized.includes("SET cancel_requested = true")) {
-        const updatedAt = nowIso();
-        updateCancelRequested.run(
-          params[3] ? String(params[3]) : null,
-          updatedAt,
-          String(params[0] ?? ""),
-          String(params[1] ?? ""),
-          String(params[2] ?? ""),
-        );
-        const run = getRunStatusAndCancel.get(String(params[0] ?? ""), String(params[1] ?? ""), String(params[2] ?? "")) as
-          | Pick<SandboxRunRecord, "id" | "status" | "cancel_requested" | "cancel_reason">
-          | undefined;
-        const row = run
-          ? {
-              id: run.id,
-              status: run.status,
-              cancel_requested: run.cancel_requested === 1,
-              cancel_reason: run.cancel_reason,
-            }
-          : null;
-        return { rows: row ? [row as T] : [], rowCount: row ? 1 : 0 };
-      }
-
-      if (normalized.includes("WHERE id = $1") && normalized.includes("status = 'queued'") && normalized.includes("finished_at = now()")) {
-        const finishedAt = nowIso();
-        const existing = getRunningOrQueuedRunById(db, String(params[0] ?? ""));
-        const nextResult = JSON.stringify({
-          ...parseJsonObject(existing?.result_json),
-          canceled: true,
-        });
-        cancelQueuedRun.run(finishedAt, nextResult, finishedAt, String(params[0] ?? ""));
-        const run = getRunById(db, String(params[0] ?? ""));
-        const row = run ? toRunPayloadRow(run) : null;
-        return { rows: row ? [row as T] : [], rowCount: row ? 1 : 0 };
-      }
-
-      if (normalized.includes("SET updated_at = now()") && normalized.includes("WHERE id = $1") && normalized.includes("status = 'running'") && !normalized.includes("RETURNING")) {
-        touchRunningRun.run(nowIso(), String(params[0] ?? ""));
-        return { rows: [], rowCount: 0 };
-      }
-
-      if (normalized.includes("updated_at < now() - make_interval(secs => $1::int)")) {
-        const cutoff = new Date(Date.now() - Math.max(1, Number(params[0] ?? 0)) * 1000).toISOString();
-        const limit = Math.max(1, Number(params[1] ?? 1));
-        const rows = listStaleRunningRuns
-          .all(cutoff, limit)
-          .map((row) => toRunPayloadRow(row)) as T[];
-        return { rows, rowCount: rows.length };
-      }
-
-      if (normalized.includes("SET status = 'running'") && normalized.includes("WHERE id = $1") && normalized.includes("status = 'queued'")) {
-        const startedAt = nowIso();
-        claimQueuedRun.run(startedAt, startedAt, String(params[0] ?? ""));
-        const run = getRunningRun.get(String(params[0] ?? "")) as SandboxRunRecord | undefined;
-        const row = run ? toRunPayloadRow(run) : null;
-        return { rows: row ? [row as T] : [], rowCount: row ? 1 : 0 };
-      }
-
-      if (normalized.includes("FROM memory_sandbox_runs") && normalized.includes("AND status = 'running'") && normalized.includes("LIMIT 1")) {
-        const run = getRunningRun.get(String(params[0] ?? "")) as SandboxRunRecord | undefined;
-        const row = run ? toRunPayloadRow(run) : null;
-        return { rows: row ? [row as T] : [], rowCount: row ? 1 : 0 };
-      }
-
-      if (normalized.includes("SET status = $2") && normalized.includes("WHERE id = $1") && normalized.includes("RETURNING")) {
-        const finishedAt = nowIso();
-        const update = normalized.includes("AND status = 'running'") ? finalizeIfRunning : finalizeRun;
-        update.run(
-          String(params[1] ?? ""),
-          String(params[2] ?? ""),
-          String(params[3] ?? ""),
-          params[4] ? 1 : 0,
-          Number.isFinite(Number(params[5])) ? Number(params[5]) : null,
-          params[6] ? String(params[6]) : null,
-          String(params[7] ?? "{}"),
-          finishedAt,
-          finishedAt,
-          String(params[0] ?? ""),
-        );
-        const run = getRunById(db, String(params[0] ?? ""));
-        const row = run ? toRunPayloadRow(run) : null;
-        return { rows: row ? [row as T] : [], rowCount: row ? 1 : 0 };
-      }
 
       if (normalized.includes("INSERT INTO memory_sandbox_run_telemetry")) {
         const runId = String(params[0] ?? "");
@@ -480,7 +450,7 @@ function createQueryClient(db: SqliteDatabase): QueryClient {
           String(params[3] ?? ""),
           String(params[4] ?? ""),
           String(params[5] ?? ""),
-          String(params[6] ?? ""),
+          params[6] ? String(params[6]) : null,
           Number.isFinite(Number(params[7])) ? Number(params[7]) : null,
           Number.isFinite(Number(params[8])) ? Number(params[8]) : null,
           Number.isFinite(Number(params[9])) ? Number(params[9]) : null,

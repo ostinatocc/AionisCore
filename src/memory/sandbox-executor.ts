@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { lookup } from "node:dns/promises";
 import { mkdir } from "node:fs/promises";
 import { isIP } from "node:net";
+import { sandboxStoreAccessForClient } from "../store/sandbox-access.js";
 import { HttpError, badRequest } from "../util/http.js";
 import {
   ipInCidrs,
@@ -258,18 +259,7 @@ export class SandboxExecutor {
     if (prev) clearInterval(prev);
     const timer = setInterval(() => {
       void this.store.withClient(async (client) => {
-        if (!client || typeof (client as { query?: unknown }).query !== "function") {
-          return;
-        }
-        await client.query(
-          `
-          UPDATE memory_sandbox_runs
-          SET updated_at = now()
-          WHERE id = $1
-            AND status = 'running'
-          `,
-          [id],
-        );
+        await sandboxStoreAccessForClient(client).touchRunningRun({ id });
       }).catch(() => {
         // heartbeat failures are best-effort and should not crash executor loop
       });
@@ -287,46 +277,10 @@ export class SandboxExecutor {
     this.recoveryInFlight = true;
     try {
       const staleRows = await this.store.withClient(async (client) => {
-        if (!client || typeof (client as { query?: unknown }).query !== "function") {
-          return [] as SandboxRunRow[];
-        }
-        const out = await client.query<SandboxRunRow>(
-          `
-          SELECT
-            id::text,
-            session_id::text,
-            tenant_id,
-            scope,
-            project_id,
-            planner_run_id,
-            decision_id::text,
-            action_kind::text AS action_kind,
-            action_json,
-            mode::text,
-            status::text,
-            timeout_ms,
-            stdout_text,
-            stderr_text,
-            output_truncated,
-            exit_code,
-            error,
-            cancel_requested,
-            cancel_reason,
-            metadata,
-            result_json,
-            started_at::text,
-            finished_at::text,
-            created_at::text,
-            updated_at::text
-          FROM memory_sandbox_runs
-          WHERE status = 'running'
-            AND updated_at < now() - make_interval(secs => $1::int)
-          ORDER BY updated_at ASC
-          LIMIT $2
-          `,
-          [Math.max(1, Math.trunc(this.config.staleAfterMs / 1000)), this.config.recoveryBatchSize],
-        );
-        return out.rows;
+        return await sandboxStoreAccessForClient(client).listStaleRunningRuns({
+          staleAfterSeconds: Math.max(1, Math.trunc(this.config.staleAfterMs / 1000)),
+          limit: this.config.recoveryBatchSize,
+        });
       });
 
       for (const row of staleRows) {
@@ -817,86 +771,13 @@ export class SandboxExecutor {
 
   private async claimQueuedRun(runId: string): Promise<SandboxRunRow | null> {
     return await this.store.withTx(async (client) => {
-      const res = await client.query<SandboxRunRow>(
-        `
-        UPDATE memory_sandbox_runs
-        SET
-          status = 'running',
-          started_at = COALESCE(started_at, now()),
-          updated_at = now()
-        WHERE id = $1
-          AND status = 'queued'
-        RETURNING
-          id::text,
-          session_id::text,
-          tenant_id,
-          scope,
-          project_id,
-          planner_run_id,
-          decision_id::text,
-          action_kind::text AS action_kind,
-          action_json,
-          mode::text,
-          status::text,
-          timeout_ms,
-          stdout_text,
-          stderr_text,
-          output_truncated,
-          exit_code,
-          error,
-          cancel_requested,
-          cancel_reason,
-          metadata,
-          result_json,
-          started_at::text,
-          finished_at::text,
-          created_at::text,
-          updated_at::text
-        `,
-        [runId],
-      );
-      return res.rows[0] ?? null;
+      return await sandboxStoreAccessForClient(client).claimQueuedRun({ id: runId });
     });
   }
 
   private async loadRunningRun(runId: string): Promise<SandboxRunRow | null> {
     return await this.store.withClient(async (client) => {
-      const res = await client.query<SandboxRunRow>(
-        `
-        SELECT
-          id::text,
-          session_id::text,
-          tenant_id,
-          scope,
-          project_id,
-          planner_run_id,
-          decision_id::text,
-          action_kind::text AS action_kind,
-          action_json,
-          mode::text,
-          status::text,
-          timeout_ms,
-          stdout_text,
-          stderr_text,
-          output_truncated,
-          exit_code,
-          error,
-          cancel_requested,
-          cancel_reason,
-          metadata,
-          result_json,
-          started_at::text,
-          finished_at::text,
-          created_at::text,
-          updated_at::text
-        FROM memory_sandbox_runs
-        WHERE id = $1
-          AND status = 'running'
-        LIMIT 1
-        `,
-        [runId],
-      );
-      return res.rows[0] ?? null;
+      return await sandboxStoreAccessForClient(client).getRunningRun({ id: runId });
     });
   }
 
@@ -913,50 +794,16 @@ export class SandboxExecutor {
     },
   ): Promise<void> {
     await this.store.withClient(async (client) => {
-      const out = await client.query<SandboxRunRow>(
-        `
-        UPDATE memory_sandbox_runs
-        SET
-          status = $2,
-          stdout_text = $3,
-          stderr_text = $4,
-          output_truncated = $5,
-          exit_code = $6,
-          error = $7,
-          result_json = $8::jsonb,
-          finished_at = now(),
-          updated_at = now()
-        WHERE id = $1
-        RETURNING
-          id::text,
-          session_id::text,
-          tenant_id,
-          scope,
-          project_id,
-          planner_run_id,
-          decision_id::text,
-          action_kind::text AS action_kind,
-          action_json,
-          mode::text,
-          status::text,
-          timeout_ms,
-          stdout_text,
-          stderr_text,
-          output_truncated,
-          exit_code,
-          error,
-          cancel_requested,
-          cancel_reason,
-          metadata,
-          result_json,
-          started_at::text,
-          finished_at::text,
-          created_at::text,
-          updated_at::text
-        `,
-        [runId, args.status, args.stdout, args.stderr, args.truncated, args.exitCode, args.error, JSON.stringify(args.result)],
-      );
-      const row = out.rows[0] ?? null;
+      const row = await sandboxStoreAccessForClient(client).finalizeRun({
+        id: runId,
+        status: args.status,
+        stdoutText: args.stdout,
+        stderrText: args.stderr,
+        outputTruncated: args.truncated,
+        exitCode: args.exitCode,
+        error: args.error,
+        resultJson: JSON.stringify(args.result),
+      });
       if (row) {
         await recordSandboxRunTelemetryRow(client, row);
       }
@@ -976,51 +823,16 @@ export class SandboxExecutor {
     },
   ): Promise<void> {
     await this.store.withClient(async (client) => {
-      const out = await client.query<SandboxRunRow>(
-        `
-        UPDATE memory_sandbox_runs
-        SET
-          status = $2,
-          stdout_text = $3,
-          stderr_text = $4,
-          output_truncated = $5,
-          exit_code = $6,
-          error = $7,
-          result_json = $8::jsonb,
-          finished_at = now(),
-          updated_at = now()
-        WHERE id = $1
-          AND status = 'running'
-        RETURNING
-          id::text,
-          session_id::text,
-          tenant_id,
-          scope,
-          project_id,
-          planner_run_id,
-          decision_id::text,
-          action_kind::text AS action_kind,
-          action_json,
-          mode::text,
-          status::text,
-          timeout_ms,
-          stdout_text,
-          stderr_text,
-          output_truncated,
-          exit_code,
-          error,
-          cancel_requested,
-          cancel_reason,
-          metadata,
-          result_json,
-          started_at::text,
-          finished_at::text,
-          created_at::text,
-          updated_at::text
-        `,
-        [runId, args.status, args.stdout, args.stderr, args.truncated, args.exitCode, args.error, JSON.stringify(args.result)],
-      );
-      const row = out.rows[0] ?? null;
+      const row = await sandboxStoreAccessForClient(client).finalizeRunningRun({
+        id: runId,
+        status: args.status,
+        stdoutText: args.stdout,
+        stderrText: args.stderr,
+        outputTruncated: args.truncated,
+        exitCode: args.exitCode,
+        error: args.error,
+        resultJson: JSON.stringify(args.result),
+      });
       if (row) {
         await recordSandboxRunTelemetryRow(client, row);
       }

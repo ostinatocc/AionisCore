@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { createSandboxBudgetService } from "../../src/app/sandbox-budget.ts";
 import { createNoopDb } from "../../src/db.ts";
-import { SandboxExecutor, createSandboxSession, enqueueSandboxRun } from "../../src/memory/sandbox.ts";
+import { SandboxExecutor, cancelSandboxRun, createSandboxSession, enqueueSandboxRun } from "../../src/memory/sandbox.ts";
 import { createLiteHostStore } from "../../src/store/lite-host-store.ts";
 import { createSqliteDatabase } from "../../src/store/sqlite-compat.ts";
 
@@ -50,6 +50,15 @@ function sandboxExecutorConfig(workdir: string) {
     recoveryPollIntervalMs: 0,
     recoveryBatchSize: 10,
   };
+}
+
+async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.fail("timed out waiting for condition");
 }
 
 test("lite sandbox tenant budget reads SQLite sandbox run usage", async () => {
@@ -160,6 +169,156 @@ test("lite sandbox telemetry preserves tenant scope and terminal status columns"
     assert.equal(row.mode, "async");
     assert.equal(row.status, "succeeded");
     assert.equal(row.executor, "mock");
+  } finally {
+    db.close();
+  }
+});
+
+test("lite sandbox queued cancel marks the run canceled and records terminal telemetry", async () => {
+  const dbPath = tmpDbPath("queued-cancel");
+  const store = createLiteHostStore(dbPath);
+  let runId = "";
+  try {
+    const session = await store.withTx((client) =>
+      createSandboxSession(client, { tenant_id: "tenant-a", scope: "scope-a" }, sandboxDefaults()),
+    );
+    const queued = await store.withTx((client) =>
+      enqueueSandboxRun(
+        client,
+        {
+          tenant_id: "tenant-a",
+          scope: "scope-a",
+          session_id: session.session.session_id,
+          mode: "async",
+          action: { kind: "command", argv: ["node", "-e", "process.exit(0)"] },
+        },
+        sandboxDefaults(),
+      ),
+    );
+    runId = queued.run.run_id;
+
+    const canceled = await store.withTx((client) =>
+      cancelSandboxRun(
+        client,
+        {
+          tenant_id: "tenant-a",
+          scope: "scope-a",
+          run_id: runId,
+          reason: "manual cancel",
+        },
+        sandboxDefaults(),
+      ),
+    );
+
+    assert.equal(canceled.status, "canceled");
+    assert.equal(canceled.cancel_requested, true);
+    assert.equal(canceled.cancel_reason, "manual cancel");
+  } finally {
+    await store.close();
+  }
+
+  const db = createSqliteDatabase(dbPath);
+  try {
+    const run = db.prepare<{ status: string; cancel_requested: number; cancel_reason: string | null }>(
+      `
+      SELECT status, cancel_requested, cancel_reason
+      FROM memory_sandbox_runs
+      WHERE id = ?
+      `,
+    ).get(runId);
+    const telemetry = db.prepare<{ status: string; executor: string | null }>(
+      `
+      SELECT status, executor
+      FROM memory_sandbox_run_telemetry
+      WHERE run_id = ?
+      LIMIT 1
+      `,
+    ).get(runId);
+
+    assert.ok(run);
+    assert.equal(run.status, "canceled");
+    assert.equal(run.cancel_requested, 1);
+    assert.equal(run.cancel_reason, "manual cancel");
+    assert.ok(telemetry);
+    assert.equal(telemetry.status, "canceled");
+    assert.equal(telemetry.executor, null);
+  } finally {
+    db.close();
+  }
+});
+
+test("lite sandbox recovery finalizes stale running runs through typed access", async () => {
+  const dbPath = tmpDbPath("stale-recovery");
+  const store = createLiteHostStore(dbPath);
+  let executor: SandboxExecutor | null = null;
+  let runId = "";
+  try {
+    const session = await store.withTx((client) =>
+      createSandboxSession(client, { tenant_id: "tenant-a", scope: "scope-a" }, sandboxDefaults()),
+    );
+    const queued = await store.withTx((client) =>
+      enqueueSandboxRun(
+        client,
+        {
+          tenant_id: "tenant-a",
+          scope: "scope-a",
+          session_id: session.session.session_id,
+          mode: "async",
+          action: { kind: "command", argv: ["node", "-e", "process.exit(0)"] },
+        },
+        sandboxDefaults(),
+      ),
+    );
+    runId = queued.run.run_id;
+
+    const claimed = await store.withTx((client: any) =>
+      client.sandboxStoreAccess.claimQueuedRun({ id: runId }),
+    );
+    assert.equal(claimed?.status, "running");
+
+    const db = createSqliteDatabase(dbPath);
+    try {
+      db.prepare("UPDATE memory_sandbox_runs SET updated_at = ? WHERE id = ?").run(
+        new Date(Date.now() - 5_000).toISOString(),
+        runId,
+      );
+    } finally {
+      db.close();
+    }
+
+    executor = new SandboxExecutor(store, {
+      ...sandboxExecutorConfig(path.dirname(dbPath)),
+      recoveryPollIntervalMs: 10,
+      staleAfterMs: 1_000,
+      recoveryBatchSize: 5,
+    });
+
+    await waitFor(async () => {
+      const row = await store.withClient((client: any) =>
+        client.sandboxStoreAccess.getRun({ id: runId, tenantId: "tenant-a", scope: "scope-a" }),
+      );
+      return row?.status === "timeout";
+    });
+  } finally {
+    executor?.shutdown();
+    await store.close();
+  }
+
+  const db = createSqliteDatabase(dbPath);
+  try {
+    const run = db.prepare<{ status: string; error: string | null }>(
+      "SELECT status, error FROM memory_sandbox_runs WHERE id = ?",
+    ).get(runId);
+    const telemetry = db.prepare<{ status: string; error_code: string | null }>(
+      "SELECT status, error_code FROM memory_sandbox_run_telemetry WHERE run_id = ? LIMIT 1",
+    ).get(runId);
+
+    assert.ok(run);
+    assert.equal(run.status, "timeout");
+    assert.equal(run.error, "executor_stale_recovered");
+    assert.ok(telemetry);
+    assert.equal(telemetry.status, "timeout");
+    assert.equal(telemetry.error_code, "executor_stale_recovered");
   } finally {
     db.close();
   }

@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type pg from "pg";
+import {
+  sandboxStoreAccessForClient,
+} from "../store/sandbox-access.js";
 import { HttpError } from "../util/http.js";
 import { sha256Text, trimTrailingSlash } from "./sandbox-network.js";
 export { SandboxExecutor, parseAllowedSandboxCommands } from "./sandbox-executor.js";
@@ -12,8 +15,15 @@ import {
   SandboxRunLogsRequest,
   SandboxSessionCreateRequest,
 } from "./schemas.js";
-import type { SandboxDefaults, SandboxRunRow, SandboxSessionRow } from "./sandbox-shared.js";
-import { jsonObject, normalizeTimeoutMs, tailText, toRunPayload, trimOrNull } from "./sandbox-shared.js";
+import type { SandboxDefaults } from "./sandbox-shared.js";
+import {
+  jsonObject,
+  normalizeTimeoutMs,
+  recordSandboxRunTelemetryRow,
+  tailText,
+  toRunPayload,
+  trimOrNull,
+} from "./sandbox-shared.js";
 import { resolveTenantScope } from "./tenant.js";
 import { summarizeToolResult } from "./tool-result-summary.js";
 
@@ -23,6 +33,14 @@ export {
   sandboxRemoteEgressAllowed,
   sandboxRemoteHostAllowed,
 } from "./sandbox-network.js";
+
+function sandboxRunNotFound(runId: string, tenantId: string, scope: string): never {
+  throw new HttpError(404, "sandbox_run_not_found", "sandbox run was not found in this tenant/scope", {
+    run_id: runId,
+    tenant_id: tenantId,
+    scope,
+  });
+}
 
 export async function createSandboxSession(
   client: pg.PoolClient,
@@ -38,25 +56,13 @@ export async function createSandboxSession(
     parsed.ttl_seconds && Number.isFinite(parsed.ttl_seconds)
       ? new Date(Date.now() + parsed.ttl_seconds * 1000).toISOString()
       : null;
-  const row = await client.query<SandboxSessionRow>(
-    `
-    INSERT INTO memory_sandbox_sessions (
-      tenant_id, scope, profile, metadata, expires_at
-    )
-    VALUES ($1, $2, $3, $4::jsonb, $5)
-    RETURNING
-      id::text,
-      tenant_id,
-      scope,
-      profile::text AS profile,
-      metadata,
-      expires_at::text AS expires_at,
-      created_at::text AS created_at,
-      updated_at::text AS updated_at
-    `,
-    [tenancy.tenant_id, tenancy.scope, parsed.profile, JSON.stringify(jsonObject(parsed.metadata)), expiresAt],
-  );
-  const session = row.rows[0];
+  const session = await sandboxStoreAccessForClient(client).createSession({
+    tenantId: tenancy.tenant_id,
+    scope: tenancy.scope,
+    profile: parsed.profile,
+    metadataJson: JSON.stringify(jsonObject(parsed.metadata)),
+    expiresAt,
+  });
   return {
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
@@ -81,19 +87,13 @@ export async function enqueueSandboxRun(
     { scope: parsed.scope, tenant_id: parsed.tenant_id },
     { defaultScope: defaults.defaultScope, defaultTenantId: defaults.defaultTenantId },
   );
+  const access = sandboxStoreAccessForClient(client);
 
-  const sessionRes = await client.query<{ id: string; expires_at: string | null }>(
-    `
-    SELECT id::text, expires_at::text AS expires_at
-    FROM memory_sandbox_sessions
-    WHERE id = $1
-      AND tenant_id = $2
-      AND scope = $3
-    LIMIT 1
-    `,
-    [parsed.session_id, tenancy.tenant_id, tenancy.scope],
-  );
-  const session = sessionRes.rows[0] ?? null;
+  const session = await access.getSessionRef({
+    id: parsed.session_id,
+    tenantId: tenancy.tenant_id,
+    scope: tenancy.scope,
+  });
   if (!session) {
     throw new HttpError(404, "sandbox_session_not_found", "sandbox session was not found in this tenant/scope", {
       session_id: parsed.session_id,
@@ -110,68 +110,19 @@ export async function enqueueSandboxRun(
 
   const timeoutMs = normalizeTimeoutMs(parsed.timeout_ms, defaults.defaultTimeoutMs);
   const runId = randomUUID();
-  const out = await client.query<SandboxRunRow>(
-    `
-    INSERT INTO memory_sandbox_runs (
-      id,
-      session_id,
-      tenant_id,
-      scope,
-      project_id,
-      planner_run_id,
-      decision_id,
-      action_kind,
-      action_json,
-      mode,
-      status,
-      timeout_ms,
-      metadata
-    )
-    VALUES (
-      $1, $2, $3, $4, $5, $6, $7, 'command', $8::jsonb, $9, 'queued', $10, $11::jsonb
-    )
-    RETURNING
-      id::text,
-      session_id::text,
-      tenant_id,
-      scope,
-      project_id,
-      planner_run_id,
-      decision_id::text,
-      action_kind::text AS action_kind,
-      action_json,
-      mode::text,
-      status::text,
-      timeout_ms,
-      stdout_text,
-      stderr_text,
-      output_truncated,
-      exit_code,
-      error,
-      cancel_requested,
-      cancel_reason,
-      metadata,
-      result_json,
-      started_at::text,
-      finished_at::text,
-      created_at::text,
-      updated_at::text
-    `,
-    [
-      runId,
-      parsed.session_id,
-      tenancy.tenant_id,
-      tenancy.scope,
-      trimOrNull(parsed.project_id),
-      trimOrNull(parsed.planner_run_id),
-      parsed.decision_id ?? null,
-      JSON.stringify({ argv: parsed.action.argv }),
-      parsed.mode,
-      timeoutMs,
-      JSON.stringify(jsonObject(parsed.metadata)),
-    ],
-  );
-  const row = out.rows[0];
+  const row = await access.insertRun({
+    id: runId,
+    sessionId: parsed.session_id,
+    tenantId: tenancy.tenant_id,
+    scope: tenancy.scope,
+    projectId: trimOrNull(parsed.project_id),
+    plannerRunId: trimOrNull(parsed.planner_run_id),
+    decisionId: parsed.decision_id ?? null,
+    actionJson: JSON.stringify({ argv: parsed.action.argv }),
+    mode: parsed.mode,
+    timeoutMs,
+    metadataJson: JSON.stringify(jsonObject(parsed.metadata)),
+  });
   return {
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
@@ -185,49 +136,13 @@ export async function getSandboxRun(client: pg.PoolClient, body: unknown, defaul
     { scope: parsed.scope, tenant_id: parsed.tenant_id },
     { defaultScope: defaults.defaultScope, defaultTenantId: defaults.defaultTenantId },
   );
-  const out = await client.query<SandboxRunRow>(
-    `
-    SELECT
-      id::text,
-      session_id::text,
-      tenant_id,
-      scope,
-      project_id,
-      planner_run_id,
-      decision_id::text,
-      action_kind::text AS action_kind,
-      action_json,
-      mode::text,
-      status::text,
-      timeout_ms,
-      stdout_text,
-      stderr_text,
-      output_truncated,
-      exit_code,
-      error,
-      cancel_requested,
-      cancel_reason,
-      metadata,
-      result_json,
-      started_at::text,
-      finished_at::text,
-      created_at::text,
-      updated_at::text
-    FROM memory_sandbox_runs
-    WHERE id = $1
-      AND tenant_id = $2
-      AND scope = $3
-    LIMIT 1
-    `,
-    [parsed.run_id, tenancy.tenant_id, tenancy.scope],
-  );
-  const row = out.rows[0] ?? null;
+  const row = await sandboxStoreAccessForClient(client).getRun({
+    id: parsed.run_id,
+    tenantId: tenancy.tenant_id,
+    scope: tenancy.scope,
+  });
   if (!row) {
-    throw new HttpError(404, "sandbox_run_not_found", "sandbox run was not found in this tenant/scope", {
-      run_id: parsed.run_id,
-      tenant_id: tenancy.tenant_id,
-      scope: tenancy.scope,
-    });
+    sandboxRunNotFound(parsed.run_id, tenancy.tenant_id, tenancy.scope);
   }
   return {
     tenant_id: tenancy.tenant_id,
@@ -242,29 +157,13 @@ export async function getSandboxRunLogs(client: pg.PoolClient, body: unknown, de
     { scope: parsed.scope, tenant_id: parsed.tenant_id },
     { defaultScope: defaults.defaultScope, defaultTenantId: defaults.defaultTenantId },
   );
-  const out = await client.query<Pick<SandboxRunRow, "id" | "status" | "stdout_text" | "stderr_text" | "output_truncated">>(
-    `
-    SELECT
-      id::text,
-      status::text,
-      stdout_text,
-      stderr_text,
-      output_truncated
-    FROM memory_sandbox_runs
-    WHERE id = $1
-      AND tenant_id = $2
-      AND scope = $3
-    LIMIT 1
-    `,
-    [parsed.run_id, tenancy.tenant_id, tenancy.scope],
-  );
-  const row = out.rows[0] ?? null;
+  const row = await sandboxStoreAccessForClient(client).getRunLogs({
+    id: parsed.run_id,
+    tenantId: tenancy.tenant_id,
+    scope: tenancy.scope,
+  });
   if (!row) {
-    throw new HttpError(404, "sandbox_run_not_found", "sandbox run was not found in this tenant/scope", {
-      run_id: parsed.run_id,
-      tenant_id: tenancy.tenant_id,
-      scope: tenancy.scope,
-    });
+    sandboxRunNotFound(parsed.run_id, tenancy.tenant_id, tenancy.scope);
   }
   return {
     tenant_id: tenancy.tenant_id,
@@ -297,49 +196,13 @@ export async function getSandboxRunArtifact(
     { scope: parsed.scope, tenant_id: parsed.tenant_id },
     { defaultScope: defaults.defaultScope, defaultTenantId: defaults.defaultTenantId },
   );
-  const out = await client.query<SandboxRunRow>(
-    `
-    SELECT
-      id::text,
-      session_id::text,
-      tenant_id,
-      scope,
-      project_id,
-      planner_run_id,
-      decision_id::text,
-      action_kind::text AS action_kind,
-      action_json,
-      mode::text,
-      status::text,
-      timeout_ms,
-      stdout_text,
-      stderr_text,
-      output_truncated,
-      exit_code,
-      error,
-      cancel_requested,
-      cancel_reason,
-      metadata,
-      result_json,
-      started_at::text,
-      finished_at::text,
-      created_at::text,
-      updated_at::text
-    FROM memory_sandbox_runs
-    WHERE id = $1
-      AND tenant_id = $2
-      AND scope = $3
-    LIMIT 1
-    `,
-    [parsed.run_id, tenancy.tenant_id, tenancy.scope],
-  );
-  const row = out.rows[0] ?? null;
+  const row = await sandboxStoreAccessForClient(client).getRun({
+    id: parsed.run_id,
+    tenantId: tenancy.tenant_id,
+    scope: tenancy.scope,
+  });
   if (!row) {
-    throw new HttpError(404, "sandbox_run_not_found", "sandbox run was not found in this tenant/scope", {
-      run_id: parsed.run_id,
-      tenant_id: tenancy.tenant_id,
-      scope: tenancy.scope,
-    });
+    sandboxRunNotFound(parsed.run_id, tenancy.tenant_id, tenancy.scope);
   }
   return {
     tenant_id: tenancy.tenant_id,
@@ -487,75 +350,19 @@ export async function cancelSandboxRun(client: pg.PoolClient, body: unknown, def
     { defaultScope: defaults.defaultScope, defaultTenantId: defaults.defaultTenantId },
   );
   const reason = trimOrNull(parsed.reason);
-  const out = await client.query<Pick<SandboxRunRow, "id" | "status" | "cancel_requested" | "cancel_reason">>(
-    `
-    UPDATE memory_sandbox_runs
-    SET
-      cancel_requested = true,
-      cancel_reason = COALESCE($4, cancel_reason),
-      updated_at = now()
-    WHERE id = $1
-      AND tenant_id = $2
-      AND scope = $3
-    RETURNING
-      id::text,
-      status::text,
-      cancel_requested,
-      cancel_reason
-    `,
-    [parsed.run_id, tenancy.tenant_id, tenancy.scope, reason],
-  );
-  const row = out.rows[0] ?? null;
+  const access = sandboxStoreAccessForClient(client);
+  const row = await access.requestCancel({
+    id: parsed.run_id,
+    tenantId: tenancy.tenant_id,
+    scope: tenancy.scope,
+    reason,
+  });
   if (!row) {
-    throw new HttpError(404, "sandbox_run_not_found", "sandbox run was not found in this tenant/scope", {
-      run_id: parsed.run_id,
-      tenant_id: tenancy.tenant_id,
-      scope: tenancy.scope,
-    });
+    sandboxRunNotFound(parsed.run_id, tenancy.tenant_id, tenancy.scope);
   }
 
   if (row.status === "queued") {
-    const canceled = await client.query<SandboxRunRow>(
-      `
-      UPDATE memory_sandbox_runs
-      SET
-        status = 'canceled',
-        finished_at = now(),
-        error = COALESCE(error, 'canceled_before_execution'),
-        result_json = COALESCE(result_json, '{}'::jsonb) || jsonb_build_object('canceled', true),
-        updated_at = now()
-      WHERE id = $1
-        AND status = 'queued'
-      RETURNING
-        id::text,
-        session_id::text,
-        tenant_id,
-        scope,
-        project_id,
-        planner_run_id,
-        decision_id::text,
-        action_kind::text AS action_kind,
-        action_json,
-        mode::text,
-        status::text,
-        timeout_ms,
-        stdout_text,
-        stderr_text,
-        output_truncated,
-        exit_code,
-        error,
-        cancel_requested,
-        cancel_reason,
-        metadata,
-        result_json,
-        started_at::text,
-        finished_at::text,
-        created_at::text,
-        updated_at::text
-      `,
-      [parsed.run_id],
-    );
-    const canceledRow = canceled.rows[0] ?? null;
+    const canceledRow = await access.cancelQueuedRun({ id: parsed.run_id });
     if (canceledRow) {
       row.status = "canceled";
       await recordSandboxRunTelemetryRow(client, canceledRow);
