@@ -117,6 +117,37 @@ test("lite sandbox tenant budget reads SQLite sandbox run usage", async () => {
   }
 });
 
+test("lite sandbox tenant budget fails closed without a usage store", async () => {
+  const service = createSandboxBudgetService({
+    env: {
+      MEMORY_TENANT_ID: "tenant-a",
+      MEMORY_SCOPE: "scope-a",
+      SANDBOX_TENANT_BUDGET_WINDOW_HOURS: 24,
+    } as any,
+    db: createNoopDb(),
+    sandboxTenantBudgetPolicy: new Map([["tenant-a", { daily_run_cap: 1 }]]),
+  });
+
+  const reply = {
+    headers: new Map<string, string>(),
+    header(name: string, value: string) {
+      this.headers.set(name.toLowerCase(), value);
+      return this;
+    },
+  };
+
+  await assert.rejects(
+    () => service.enforceSandboxTenantBudget(reply, "tenant-a", "scope-a", null),
+    (err: any) => {
+      assert.equal(err.statusCode, 503);
+      assert.equal(err.code, "sandbox_budget_unavailable");
+      assert.equal(err.details.tenant_id, "tenant-a");
+      assert.equal(err.details.table, "memory_sandbox_runs");
+      return true;
+    },
+  );
+});
+
 test("lite sandbox telemetry preserves tenant scope and terminal status columns", async () => {
   const dbPath = tmpDbPath("telemetry");
   const store = createLiteHostStore(dbPath);

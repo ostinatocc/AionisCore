@@ -32,17 +32,30 @@ export function createDb(databaseUrl: string, opts: DbPoolOptions = {}): Db {
 }
 
 export function createNoopDb(): Db {
-  const fakeClient = {
-    async query() {
+  const noopQuery = async (sql?: unknown) => {
+    const normalized = typeof sql === "string" ? sql.replace(/\s+/g, " ").trim().toUpperCase() : "";
+    if (
+      normalized === "BEGIN"
+      || normalized === "COMMIT"
+      || normalized === "ROLLBACK"
+      || normalized.startsWith("SAVEPOINT ")
+      || normalized.startsWith("RELEASE SAVEPOINT ")
+      || normalized.startsWith("ROLLBACK TO SAVEPOINT ")
+    ) {
       return { rows: [], rowCount: 0 };
-    },
+    }
+    const err = new Error("database query attempted through noop database");
+    (err as any).code = "42P01";
+    (err as any).details = { sql_preview: typeof sql === "string" ? sql.slice(0, 240) : null };
+    throw err;
+  };
+  const fakeClient = {
+    query: noopQuery,
     release() {},
   };
   return {
     pool: {
-      async query() {
-        return { rows: [], rowCount: 0 };
-      },
+      query: noopQuery,
       async connect() {
         return fakeClient;
       },
