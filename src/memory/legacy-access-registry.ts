@@ -107,12 +107,6 @@ export const RUNTIME_LEGACY_ACCESS_BOUNDARY_REGISTRY = [
     reason: "normalizes writes into execution-native compatibility slots",
   },
   {
-    id: "archive_relocation",
-    file: "src/memory/archive-relocation.ts",
-    kind: "archive_rehydrate",
-    reason: "reads legacy anchor payloads for archive relocation plans",
-  },
-  {
     id: "rehydrate_anchor",
     file: "src/memory/rehydrate-anchor.ts",
     kind: "archive_rehydrate",

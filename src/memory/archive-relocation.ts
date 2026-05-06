@@ -1,3 +1,4 @@
+import { resolveNodeAnchorPayloadRefs } from "./node-execution-surface.js";
 import type { SemanticForgettingDecision } from "./semantic-forgetting.js";
 
 export type ArchiveRelocationState = "none" | "candidate" | "cold_archive";
@@ -11,13 +12,8 @@ export type ArchiveRelocationPlan = {
   rationale: string[];
 };
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-}
-
 function hasAnchorPayloadRefs(slots: Record<string, unknown> | null): boolean {
-  const anchor = asRecord(slots?.anchor_v1);
-  const refs = asRecord(anchor?.payload_refs);
+  const refs = resolveNodeAnchorPayloadRefs(slots);
   if (!refs) return false;
   return ["node_ids", "decision_ids", "run_ids", "step_ids", "commit_ids"].some((key) => Array.isArray(refs[key]) && (refs[key] as unknown[]).length > 0);
 }

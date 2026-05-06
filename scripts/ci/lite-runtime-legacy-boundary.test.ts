@@ -91,6 +91,21 @@ test("legacy execution slots stay constrained to boundary modules", () => {
   );
 });
 
+test("archive relocation consumes anchor payload refs through node execution surface", () => {
+  const archiveRelocationFile = "src/memory/archive-relocation.ts";
+  const legacyFiles = new Set(runtimeBoundaryInventoryLegacyFiles());
+  assert.equal(
+    legacyFiles.has(archiveRelocationFile),
+    false,
+    "archive relocation should not be a direct legacy slot access boundary",
+  );
+
+  const text = fs.readFileSync(path.join(ROOT, archiveRelocationFile), "utf8");
+  assert.equal(text.includes("anchor_v1"), false, "archive relocation should not directly read anchor_v1");
+  assert.equal(text.includes("parseNodeAnchor"), false, "archive relocation should use a narrow resolver surface");
+  assert.match(text, /resolveNodeAnchorPayloadRefs/);
+});
+
 test("route layer resolves execution state slots through boundary surfaces", () => {
   const offenders = listTypeScriptFiles(path.join(SRC, "routes"))
     .map((filePath) => ({

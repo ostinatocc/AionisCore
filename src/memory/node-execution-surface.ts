@@ -122,6 +122,12 @@ export function parseNodeAnchor(slots: Record<string, unknown> | null | undefine
   return asRecord(slots?.anchor_v1);
 }
 
+export function resolveNodeAnchorPayloadRefs(
+  slots: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  return asRecord(parseNodeAnchor(slots)?.payload_refs);
+}
+
 export function resolveNodeExecutionContract(args: {
   slots: Record<string, unknown> | null | undefined;
   executionResultSummary?: Record<string, unknown> | null;
