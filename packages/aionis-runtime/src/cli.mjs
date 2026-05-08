@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const cliDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(cliDir, "..");
 const runtimeDir = path.join(distDir, "runtime");
-const runtimeEntry = path.join(runtimeDir, "src", "runtime-entry.ts");
+const runtimeEntry = path.join(runtimeDir, "src", "index.ts");
 const inspectorDistDir = path.join(runtimeDir, "apps", "inspector", "dist");
 const cwd = process.cwd();
 
@@ -132,7 +132,7 @@ async function startRuntime(args) {
     return;
   }
 
-  const tsxCli = require.resolve("tsx/dist/cli.mjs");
+  const tsxCli = require.resolve("tsx/cli");
   const child = spawn(process.execPath, [tsxCli, runtimeEntry, ...args], {
     cwd,
     stdio: "inherit",

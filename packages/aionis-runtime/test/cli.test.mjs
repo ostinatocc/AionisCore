@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -60,4 +60,18 @@ test("runtime cli prints standalone lite defaults", () => {
     parsed.LITE_WRITE_SQLITE_PATH,
     path.join(cwd, ".tmp", "aionis-lite-write.sqlite"),
   );
+});
+
+test("runtime cli resolves tsx through the public package export", () => {
+  const source = readFileSync(path.join(packageDir, "src", "cli.mjs"), "utf8");
+
+  assert.match(source, /require\.resolve\("tsx\/cli"\)/);
+  assert.doesNotMatch(source, /tsx\/dist\/cli\.mjs/);
+});
+
+test("runtime cli starts the executable runtime entrypoint", () => {
+  const source = readFileSync(path.join(packageDir, "src", "cli.mjs"), "utf8");
+
+  assert.match(source, /src", "index\.ts"/);
+  assert.doesNotMatch(source, /src", "runtime-entry\.ts"/);
 });
