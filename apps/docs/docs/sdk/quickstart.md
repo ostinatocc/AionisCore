@@ -76,7 +76,7 @@ If you can do that through the public SDK, you already understand the core produ
 Recommended standalone path:
 
 ```bash
-npx @ostinato/aionis-runtime start
+npx @ostinato/aionis-runtime@latest start
 ```
 
 Check that the runtime is alive:

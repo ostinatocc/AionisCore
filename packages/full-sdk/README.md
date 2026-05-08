@@ -169,7 +169,7 @@ await aionis.memory.nodes.activate({
 Recommended standalone runtime path:
 
 ```bash
-npx @ostinato/aionis-runtime start
+npx @ostinato/aionis-runtime@latest start
 ```
 
 If you are working from this repository and want the bundled examples:

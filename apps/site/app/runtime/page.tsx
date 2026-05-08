@@ -7,7 +7,7 @@ export default function RuntimePage() {
         kicker="Runtime"
         title="Start Aionis as a standalone runtime."
         body="Aionis Runtime gives your agents a local-first execution-memory engine you can start in one command."
-        commands={["npx @ostinato/aionis-runtime start"]}
+        commands={["npx @ostinato/aionis-runtime@latest start"]}
         actions={[
           { href: "/getting-started", label: "Getting Started" },
           { href: "/sdk", label: "Install SDK" },
@@ -19,7 +19,7 @@ export default function RuntimePage() {
             First-time users should be able to boot the runtime without cloning the monorepo. The standalone runtime
             package is the default public start path for evaluation and local development.
           </p>
-          <CommandBlock lines={["npx @ostinato/aionis-runtime start"]} />
+          <CommandBlock lines={["npx @ostinato/aionis-runtime@latest start"]} />
         </div>
       </SectionBlock>
       <SectionBlock index="02" kicker="Posture" title="Local-first by default.">

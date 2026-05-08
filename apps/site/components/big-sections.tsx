@@ -91,7 +91,7 @@ export function ArchitectureDiagram() {
           <rect x="40" y="380" width="1120" height="28"
             fill="var(--sw-2)" opacity="0.08" />
           <text x="60" y="400" className="tier-core-label">RUNTIME-CORE/0.1.0</text>
-          <text x="1140" y="400" className="tier-core-label" textAnchor="end">npx @ostinato/aionis-runtime start</text>
+          <text x="1140" y="400" className="tier-core-label" textAnchor="end">npx @ostinato/aionis-runtime@latest start</text>
 
           <CoreLane x={60}  y={420} w={258} label="Action Retrieval"       hue="var(--sw-5)" icon="AR" />
           <CoreLane x={330} y={420} w={258} label="Uncertainty Gates"      hue="var(--sw-1)" icon="UG" />

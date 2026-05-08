@@ -27,7 +27,7 @@ The current outward-facing validation state is:
 | --- | --- |
 | Release line | `Lite Developer Preview v0.4.0` |
 | Public SDK package | `@ostinato/aionis@0.4.0` |
-| Runtime package | `@ostinato/aionis-runtime@0.2.0` |
+| Runtime package | `@ostinato/aionis-runtime@0.2.1` |
 | Lite runtime test suite | `319 / 319 pass` |
 | Public SDK test suite | `20 / 20 pass` |
 | Docs reference integrity | `48 active markdown files checked` |

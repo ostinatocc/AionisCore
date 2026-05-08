@@ -55,7 +55,7 @@ fi
 
 PACK_DIR="${WORKDIR}/pack"
 CONSUMER_DIR="${WORKDIR}/consumer"
-CACHE_DIR="${WORKDIR}/npm-cache"
+CACHE_DIR="${AIONIS_NPM_CACHE_DIR:-/tmp/aionis-npm-cache}"
 mkdir -p "${PACK_DIR}" "${CONSUMER_DIR}" "${CACHE_DIR}"
 
 PACKAGE_NAME="$(node -e 'const fs=require("fs"); const pkg=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(pkg.name);' "${PACKAGE_ABS_DIR}/package.json")"
@@ -96,7 +96,7 @@ EOF
 cp "${VERIFY_ABS_TEMPLATE}" "${CONSUMER_DIR}/verify.mjs"
 
 echo "[package-release] installing tarball into isolated consumer"
-npm install --prefix "${CONSUMER_DIR}" "${TARBALL_PATH}" --cache "${CACHE_DIR}" --no-fund --no-audit >/dev/null
+npm install --prefix "${CONSUMER_DIR}" "${TARBALL_PATH}" --cache "${CACHE_DIR}" --package-lock=false --ignore-scripts --prefer-offline --no-fund --no-audit >/dev/null
 
 echo "[package-release] verifying clean import"
 VERIFY_OUTPUT="$(node "${CONSUMER_DIR}/verify.mjs")"

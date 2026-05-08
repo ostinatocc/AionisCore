@@ -76,7 +76,7 @@ export default function HomePage() {
               <div className="hero-meta">
                 <div>
                   <span>Install</span>
-                  <strong>npx @ostinato/aionis-runtime start</strong>
+                  <strong>npx @ostinato/aionis-runtime@latest start</strong>
                 </div>
                 <div>
                   <span>SDK</span>
@@ -330,7 +330,7 @@ export default function HomePage() {
                 <div className="code-note">
                   <span className="label">Install</span>
                   <p>
-                    The public start path is <code>npx @ostinato/aionis-runtime start</code> — no cloning the monorepo
+                    The public start path is <code>npx @ostinato/aionis-runtime@latest start</code> — no cloning the monorepo
                     first.
                   </p>
                 </div>

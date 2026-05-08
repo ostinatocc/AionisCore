@@ -7,7 +7,7 @@
 
 [Docs Site](https://ostinatocc.github.io/AionisCore/) · [Proof By Evidence](apps/docs/docs/evidence/proof-by-evidence.md) · [SDK Quickstart](docs/SDK_QUICKSTART.md) · [Examples](examples/full-sdk/README.md)
 
-- Status: Lite Developer Preview · local-first Lite runtime · public SDK v0.4.0 · runtime package v0.2.0
+- Status: Lite Developer Preview · local-first Lite runtime · public SDK v0.4.0 · runtime package v0.2.1
 - Runtime requirements: Node 22+ · SQLite via `node:sqlite` · local macOS or Linux shell recommended
 - Security posture: Lite binds to `127.0.0.1` by default; sandbox remote allowlists fail closed.
 
@@ -202,7 +202,7 @@ The strongest proofs to look at first are:
 ### 1. Start Aionis Runtime
 
 ```bash
-npx @ostinato/aionis-runtime start
+npx @ostinato/aionis-runtime@latest start
 ```
 
 If you are working from a source checkout instead of the published runtime package:

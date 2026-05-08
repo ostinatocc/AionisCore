@@ -37,13 +37,13 @@ features:
 ---
 
 <div class="hero-install" aria-label="Install command">
-  <code>npx @ostinato/aionis-runtime start</code>
+  <code>npx @ostinato/aionis-runtime@latest start</code>
 </div>
 
 <div class="trust-strip" aria-label="Project status">
   <span>Lite Developer Preview v0.4.0</span>
   <span>SDK v0.4.0</span>
-  <span>Runtime package v0.2.0</span>
+  <span>Runtime package v0.2.1</span>
   <span>319 / 319 Lite tests</span>
 </div>
 
@@ -311,7 +311,7 @@ flowchart TD
 ### 1. Start Aionis Runtime
 
 ```bash
-npx @ostinato/aionis-runtime start
+npx @ostinato/aionis-runtime@latest start
 ```
 
 If you are working from a source checkout instead of the published runtime package:

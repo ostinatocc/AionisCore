@@ -39,7 +39,7 @@ The fastest evaluation path is:
 Recommended standalone path:
 
 ```bash
-npx @ostinato/aionis-runtime start
+npx @ostinato/aionis-runtime@latest start
 ```
 
 The default local target is:

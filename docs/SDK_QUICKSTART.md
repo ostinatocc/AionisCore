@@ -9,7 +9,7 @@ This guide is the fastest way to get from a running Aionis Runtime instance to a
 ## 1. Start Aionis Runtime
 
 ```bash
-npx @ostinato/aionis-runtime start
+npx @ostinato/aionis-runtime@latest start
 ```
 
 Default local SDK target:

@@ -21,9 +21,10 @@ test("runtime cli prints package version", () => {
   const result = spawnSync(process.execPath, [cliPath, "--version"], {
     encoding: "utf8",
   });
+  const packageJson = JSON.parse(readFileSync(path.join(packageDir, "package.json"), "utf8"));
 
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout.trim(), "0.2.0");
+  assert.equal(result.stdout.trim(), packageJson.version);
 });
 
 test("runtime cli prints standalone lite defaults", () => {

@@ -91,7 +91,7 @@ export const metrics = [
 ] as const;
 
 export const heroSignals = [
-  { label: "Runtime package", value: "0.2.0", tone: "cyan" },
+  { label: "Runtime package", value: "0.2.1", tone: "cyan" },
   { label: "SDK package", value: "0.4.0", tone: "amber" },
   { label: "GitHub Release", value: "v0.4.0", tone: "cyan" },
   { label: "Reproducible proofs", value: "6", tone: "amber" },
@@ -112,11 +112,21 @@ export const releaseSummary = {
 
 export const changelogEntries = [
   {
+    version: "runtime 0.2.1",
+    date: "2026-05-08",
+    title: "Runtime package startup fix",
+    bullets: [
+      "Bumped @ostinato/aionis-runtime to 0.2.1 after the public 0.2.0 package exposed broken packaged CLI startup behavior",
+      "Added tarball install verification that checks --version, start --print-env, and live /health startup through the installed bin",
+      "Aligned public startup commands on npx @ostinato/aionis-runtime@latest start",
+    ],
+  },
+  {
     version: "v0.4.0",
     date: "2026-04-27",
     title: "Lite Developer Preview readiness",
     bullets: [
-      "Prepared @ostinato/aionis@0.4.0 and @ostinato/aionis-runtime@0.2.0",
+      "Prepared @ostinato/aionis@0.4.0 and @ostinato/aionis-runtime@0.2.1",
       "Hardened Runtime boundaries across Contract Compiler, Trust Gate, Orchestrator, Learning Loop, route, host, and Lite store seams",
       "Documented release readiness after build, Lite tests, package release checks, docs build, and smoke all passed",
     ],

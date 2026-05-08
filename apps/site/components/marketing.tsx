@@ -42,7 +42,7 @@ export function SiteHeader() {
       <div className="header-command">
         <span className="runtime-dot" />
         <span className="hc-tag">Runtime</span>
-        <code>npx @ostinato/aionis-runtime start</code>
+        <code>npx @ostinato/aionis-runtime@latest start</code>
         <span className="hc-right">v0.4.0 · Lite Developer Preview</span>
       </div>
       <div className="container header-bar">
@@ -124,7 +124,7 @@ export function SiteFooter() {
         <div className="footer-bottom">
           <span>© 2026 Aionis · Built on continuity</span>
           <span>
-            <code>npx @ostinato/aionis-runtime start</code>
+            <code>npx @ostinato/aionis-runtime@latest start</code>
           </span>
         </div>
       </div>
@@ -268,7 +268,7 @@ export function ArchitectureStack() {
           connects retrieval, gates, replay, governance, continuity memory, and the supporting store and sandbox
           layers.
         </p>
-        <CommandBlock lines={["npx @ostinato/aionis-runtime start", "npm install @ostinato/aionis"]} />
+        <CommandBlock lines={["npx @ostinato/aionis-runtime@latest start", "npm install @ostinato/aionis"]} />
       </div>
       <div className="architecture-stack-inner">
         {architectureLayers.map((layer, index) => (

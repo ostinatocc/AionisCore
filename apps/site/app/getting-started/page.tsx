@@ -7,7 +7,7 @@ export default function GettingStartedPage() {
         kicker="Getting started"
         title="Start Aionis in minutes."
         body="Launch the standalone runtime, install the SDK, and run your first continuity-aware agent flow."
-        commands={["npx @ostinato/aionis-runtime start", "npm install @ostinato/aionis"]}
+        commands={["npx @ostinato/aionis-runtime@latest start", "npm install @ostinato/aionis"]}
         actions={[
           { href: "/sdk", label: "View SDK" },
           { href: "/proofs", label: "View Proofs" },
@@ -16,7 +16,7 @@ export default function GettingStartedPage() {
       <SectionBlock index="01" kicker="Step 1" title="Start the standalone runtime.">
         <div className="page-copy">
           <p>Use the runtime package first. It is now the default public start path.</p>
-          <CommandBlock lines={["npx @ostinato/aionis-runtime start"]} />
+          <CommandBlock lines={["npx @ostinato/aionis-runtime@latest start"]} />
         </div>
       </SectionBlock>
       <SectionBlock index="02" kicker="Step 2" title="Install the SDK in your own project.">

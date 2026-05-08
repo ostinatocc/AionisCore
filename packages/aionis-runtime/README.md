@@ -2,12 +2,12 @@
 
 Standalone local-first Aionis Runtime package.
 
-Current release line: `0.2.0` for the Aionis Lite Developer Preview.
+Current release line: `0.2.1` for the Aionis Lite Developer Preview.
 
 ## Start
 
 ```bash
-npx @ostinato/aionis-runtime start
+npx @ostinato/aionis-runtime@latest start
 ```
 
 ## What it does

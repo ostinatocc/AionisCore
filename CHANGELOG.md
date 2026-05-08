@@ -4,6 +4,19 @@ This file tracks the public release train for Aionis Runtime packages and GitHub
 
 ## Unreleased
 
+### Runtime package patch
+
+#### `@ostinato/aionis-runtime@0.2.1`
+
+Fixes the public npm package startup path after `0.2.0` shipped with broken packaged CLI behavior.
+
+Highlights:
+
+- bump runtime package to `0.2.1` because npm cannot republish `0.2.0`
+- verify installed tarballs can print version, print env defaults, and start the Lite runtime through `/health`
+- align public startup docs on `npx @ostinato/aionis-runtime@latest start`
+- update Codex plugin autostart fallback to use the latest runtime package
+
 ### Planned public release train
 
 #### `@ostinato/aionis-runtime@0.1.0`
@@ -13,7 +26,7 @@ Initial public runtime package release.
 Highlights:
 
 - standalone local-first runtime package
-- `npx @ostinato/aionis-runtime start`
+- `npx @ostinato/aionis-runtime@latest start`
 - loopback-safe Lite defaults
 - release-check coverage for install, CLI help, and `start --print-env`
 
@@ -48,6 +61,6 @@ Recommended combined public release message:
 
 | Package | Current repo version | Next public recommendation |
 | --- | --- | --- |
-| `@ostinato/aionis-runtime` | `0.1.0` | publish `0.1.0` |
-| `@ostinato/aionis` | `0.3.0` | publish `0.3.0` |
+| `@ostinato/aionis-runtime` | `0.2.1` | publish `0.2.1` |
+| `@ostinato/aionis` | `0.4.0` | keep published SDK line |
 | `@ostinato/aionis-rtc` | `0.1.0` | keep as-is unless boundary exports change |
