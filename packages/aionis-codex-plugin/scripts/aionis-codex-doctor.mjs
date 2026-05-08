@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureRuntime, resolveConfig, runtimeHealth } from "../lib/aionis-codex-runtime.mjs";
+import { inspectLaunchAgent } from "../lib/aionis-codex-watchdog.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pluginRoot = path.resolve(__dirname, "..");
@@ -63,6 +64,7 @@ check("hook script", exists("hooks/aionis-codex-hook.mjs"));
 check("mcp config", exists(".mcp.json"));
 check("mcp server", exists("mcp/aionis-codex-mcp.mjs"));
 check("skill", exists("skills/aionis-runtime/SKILL.md"));
+check("watchdog daemon", exists("scripts/aionis-codex-runtime-daemon.mjs"));
 
 try {
   const hooks = JSON.parse(read(path.join(pluginRoot, "hooks", "hooks.json")));
@@ -85,6 +87,14 @@ if (fs.existsSync(codexConfig)) {
 
 const mcp = await runMcpProbe();
 check("mcp initialize", mcp.ok, mcp.error || mcp.stderr.trim());
+
+const watchdog = inspectLaunchAgent(pluginRoot);
+if (watchdog.supported) {
+  check("watchdog plist", watchdog.plistExists, watchdog.options.plistPath);
+  check("watchdog launchd", watchdog.loaded, watchdog.loaded ? watchdog.options.plistPath : "Run scripts/aionis-codex-install.mjs to install and load it.");
+} else {
+  check("watchdog launchd", true, "LaunchAgent watchdog is only supported on macOS.");
+}
 
 const config = resolveConfig({});
 if (process.argv.includes("--start-runtime")) {

@@ -20,6 +20,14 @@ node scripts/aionis-codex-install.mjs
 
 The installer creates a local plugin symlink under `~/plugins/aionis-codex`, adds a marketplace entry to `~/.agents/plugins/marketplace.json`, enables the local marketplace, enables `aionis-codex@local`, and turns on `codex_hooks`.
 
+On macOS, the installer also writes and loads a LaunchAgent watchdog:
+
+```text
+~/Library/LaunchAgents/com.ostinato.aionis-codex-runtime.plist
+```
+
+The watchdog keeps a small daemon alive. The daemon checks Runtime health and starts `@ostinato/aionis-runtime@latest` when Runtime is unavailable, so Codex hooks do not have to be the only recovery point.
+
 ## Runtime Defaults
 
 The plugin defaults to:
@@ -29,6 +37,7 @@ The plugin defaults to:
 - Project scope derived from the current working directory
 - Global user scope `codex:global`
 - Local Lite Runtime autostart enabled
+- macOS LaunchAgent watchdog enabled by the local installer
 
 Override with environment variables:
 
@@ -44,7 +53,7 @@ Override with environment variables:
 ## Doctor
 
 ```bash
-node scripts/aionis-codex-doctor.mjs --local
+node scripts/aionis-codex-doctor.mjs --local --start-runtime
 ```
 
-The doctor checks manifest files, hook files, MCP server startup, Codex config, and Runtime health.
+The doctor checks manifest files, hook files, MCP server startup, Codex config, watchdog state, and Runtime health.

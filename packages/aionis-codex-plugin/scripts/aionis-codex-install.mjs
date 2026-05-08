@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { installLaunchAgent } from "../lib/aionis-codex-watchdog.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pluginRoot = path.resolve(__dirname, "..");
@@ -12,6 +13,8 @@ const localPluginsDir = path.join(home, "plugins");
 const localPluginLink = path.join(localPluginsDir, "aionis-codex");
 const marketplacePath = path.join(agentsPluginsRoot, "marketplace.json");
 const codexConfigPath = path.join(home, ".codex", "config.toml");
+const installWatchdog = !process.argv.includes("--no-watchdog");
+const loadWatchdog = !process.argv.includes("--no-load-watchdog");
 
 function readJson(filePath, fallback) {
   try {
@@ -126,6 +129,9 @@ function ensureCodexConfig() {
 ensureSymlink();
 ensureMarketplace();
 ensureCodexConfig();
+const watchdog = installWatchdog
+  ? installLaunchAgent(pluginRoot, { load: loadWatchdog })
+  : { supported: process.platform === "darwin", loaded: false, message: "LaunchAgent watchdog install skipped." };
 
 process.stdout.write([
   "Aionis Codex plugin installed locally.",
@@ -135,5 +141,8 @@ process.stdout.write([
     ? "codex_hooks=true is enabled."
     : `codex_hooks could not be confirmed in ${codexConfigPath}`,
   'plugin_config=[plugins."aionis-codex@local"] enabled=true',
+  `watchdog=${watchdog.supported ? watchdog.message : "unsupported on this OS"}`,
+  watchdog.options?.plistPath ? `watchdog_plist=${watchdog.options.plistPath}` : null,
+  watchdog.options?.runtimeHome ? `runtime_home=${watchdog.options.runtimeHome}` : null,
   "",
-].join("\n"));
+].filter(Boolean).join("\n"));
