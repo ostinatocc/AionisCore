@@ -1,0 +1,47 @@
+{
+  "name": "aionis-codex",
+  "version": "0.1.0",
+  "description": "Automatic Aionis Runtime integration for Codex: task-start recall, context assembly, replay capture, handoff, governance, and MCP tools.",
+  "author": {
+    "name": "Aionis Core",
+    "url": "https://github.com/ostinatocc/AionisCore"
+  },
+  "homepage": "https://github.com/ostinatocc/AionisCore/tree/main/packages/aionis-codex-plugin",
+  "repository": "https://github.com/ostinatocc/AionisCore",
+  "license": "Apache-2.0",
+  "keywords": [
+    "aionis",
+    "codex",
+    "execution-memory",
+    "runtime",
+    "replay",
+    "handoff",
+    "governance",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Aionis Runtime",
+    "shortDescription": "Automatic execution memory and runtime context for Codex",
+    "longDescription": "Connects Codex to Aionis Runtime through lifecycle hooks and MCP tools. It can auto-start the local runtime, assemble task-start context, retrieve continuity and governance packs, record tool execution replay, store handoffs, and expose the complete runtime API surface to Codex.",
+    "developerName": "Aionis Core",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/ostinatocc/AionisCore",
+    "privacyPolicyURL": "https://github.com/ostinatocc/AionisCore",
+    "termsOfServiceURL": "https://github.com/ostinatocc/AionisCore",
+    "defaultPrompt": [
+      "Use Aionis memory for this coding task",
+      "Resume this project with Aionis context",
+      "Record this session into Aionis"
+    ],
+    "brandColor": "#111827",
+    "screenshots": []
+  }
+}

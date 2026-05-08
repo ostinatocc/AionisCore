@@ -1,0 +1,38 @@
+{
+  "name": "@ostinato/aionis-codex-plugin",
+  "version": "0.1.0",
+  "description": "Codex plugin that connects Aionis Runtime as an automatic execution-memory, recall, replay, handoff, and governance layer.",
+  "type": "module",
+  "private": true,
+  "files": [
+    ".codex-plugin",
+    ".mcp.json",
+    "hooks",
+    "lib",
+    "mcp",
+    "scripts",
+    "skills",
+    "README.md"
+  ],
+  "bin": {
+    "aionis-codex-install": "scripts/aionis-codex-install.mjs",
+    "aionis-codex-doctor": "scripts/aionis-codex-doctor.mjs"
+  },
+  "scripts": {
+    "doctor": "node scripts/aionis-codex-doctor.mjs --local",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "keywords": [
+    "aionis",
+    "codex",
+    "plugin",
+    "execution-memory",
+    "agent-memory",
+    "mcp"
+  ],
+  "author": "Aionis Core",
+  "license": "Apache-2.0"
+}

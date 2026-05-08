@@ -1,0 +1,87 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact|.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./hooks/aionis-codex-hook.mjs",
+            "statusMessage": "Aionis preparing execution memory"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./hooks/aionis-codex-hook.mjs",
+            "statusMessage": "Aionis assembling runtime context"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./hooks/aionis-codex-hook.mjs",
+            "statusMessage": "Aionis recording tool intent"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./hooks/aionis-codex-hook.mjs",
+            "statusMessage": "Aionis recording tool outcome"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./hooks/aionis-codex-hook.mjs",
+            "statusMessage": "Aionis storing turn handoff"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./hooks/aionis-codex-hook.mjs",
+            "statusMessage": "Aionis closing runtime session"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./hooks/aionis-codex-hook.mjs",
+            "statusMessage": "Aionis recording permission boundary"
+          }
+        ]
+      }
+    ]
+  }
+}

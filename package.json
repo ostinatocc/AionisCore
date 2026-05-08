@@ -61,6 +61,8 @@
     "runtime:pack:dry-run": "npm --prefix packages/aionis-runtime run pack:dry-run",
     "runtime:publish:dry-run": "npm --prefix packages/aionis-runtime run publish:dry-run",
     "runtime:release:check": "bash scripts/package-release-baseline.sh --package-dir packages/aionis-runtime --verify-template scripts/release-verify/runtime-consumer.mjs",
+    "codex-plugin:test": "npm --prefix packages/aionis-codex-plugin run test",
+    "codex-plugin:doctor": "npm --prefix packages/aionis-codex-plugin run doctor --",
     "packages:release:check": "npm run -s aionis-doc:release:check && npm run -s sdk:release:check && npm run -s runtime-core:release:check && npm run -s runtime:release:check",
     "ui-kit:install": "npm --prefix packages/ui-kit install",
     "ui-kit:build": "npm --prefix packages/ui-kit run build",

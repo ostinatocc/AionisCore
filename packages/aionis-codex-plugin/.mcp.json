@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "aionis-runtime": {
+      "command": "node",
+      "args": [
+        "./mcp/aionis-codex-mcp.mjs"
+      ],
+      "cwd": ".",
+      "env": {
+        "AIONIS_BASE_URL": "http://127.0.0.1:3101",
+        "AIONIS_CODEX_TENANT_ID": "local-codex"
+      }
+    }
+  }
+}

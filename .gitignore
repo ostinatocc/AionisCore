@@ -2,6 +2,7 @@
 .env
 .env.bak*
 .mcp.json
+!packages/aionis-codex-plugin/.mcp.json
 tmp/
 node_modules
 **/node_modules
