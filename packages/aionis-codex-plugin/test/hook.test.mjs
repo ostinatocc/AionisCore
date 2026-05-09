@@ -195,3 +195,34 @@ test("Stop hook still stores implementation summaries as task handoffs", async (
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("Stop hook does not store next-step planning advice as task handoffs", async () => {
+  const routes = [];
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    req.resume();
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "planning-advice-turn",
+      cwd: pluginRoot,
+      prompt: "接下来应该怎么继续推进呢？",
+      last_assistant_message: "接下来不要再开新坑。现在最该做的是把 0.2.8 当作第一个可用基线，连续真实使用，把有没有价值打穿。",
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/memory/events"), true);
+    assert.equal(routes.includes("/v1/memory/replay/run/end"), true);
+    assert.equal(routes.includes("/v1/handoff/store"), false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

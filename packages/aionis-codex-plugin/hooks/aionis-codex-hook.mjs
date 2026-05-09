@@ -256,12 +256,48 @@ function isStatusOnlyAssistantText(value) {
   ].some((pattern) => pattern.test(text));
 }
 
+function isNextStepPlanningPrompt(value) {
+  const text = normalizeStopText(value);
+  if (!text) return false;
+  return [
+    /\u63a5\u4e0b\u6765.*(\u600e\u4e48|\u5982\u4f55|\u5e94\u8be5|\u7ee7\u7eed|\u63a8\u8fdb)/i,
+    /(\u4e0b\u4e00\u6b65|\u63a5\u4e0b\u6765).*(\u63a8\u8fdb|\u505a|\u7ee7\u7eed)/i,
+    /\b(what next|next steps|how should.*continue|how.*continue)\b/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+function hasTaskHandoffEvidence(value) {
+  const text = normalizeStopText(value);
+  if (!text) return false;
+  return [
+    /\b(implemented|fixed|updated|changed|added|removed|verified|tested|passed|committed|released|published|installed|validated|created|refactored)\b/i,
+    /(?:\u5df2|\u5df2\u7ecf).*(\u5b9e\u73b0|\u4fee\u590d|\u66f4\u65b0|\u63d0\u4ea4|\u53d1\u5e03|\u9a8c\u8bc1|\u5b89\u88c5|\u5b8c\u6210|\u8dd1\u8fc7|\u901a\u8fc7)/,
+    /\bPASS\b/,
+  ].some((pattern) => pattern.test(text));
+}
+
+function isPlanningAdviceOnly(value) {
+  const text = normalizeStopText(value);
+  if (!text || hasTaskHandoffEvidence(text)) return false;
+  return [
+    /^\u63a5\u4e0b\u6765/,
+    /^\u4e0b\u4e00\u6b65/,
+    /^\u6211\u7684\u5efa\u8bae/,
+    /\u5efa\u8bae\u987a\u5e8f/,
+    /\u4e0d\u8981\u518d\u5f00\u65b0\u5751/,
+    /\u6700\u8be5\u505a/,
+    /^\s*(next steps|recommendation|i recommend)\b/i,
+  ].some((pattern) => pattern.test(text));
+}
+
 function shouldStoreStopHandoff(args) {
   const summary = normalizeStopText(args.summary);
   if (!summary) return false;
   if (isStatusOrCommandPrompt(args.prompt)) return false;
   if (isCommandInstructionOnly(summary)) return false;
   if (isStatusOnlyAssistantText(summary)) return false;
+  if (isNextStepPlanningPrompt(args.prompt) && isPlanningAdviceOnly(summary)) return false;
+  if (isPlanningAdviceOnly(summary)) return false;
   return true;
 }
 
