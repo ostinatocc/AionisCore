@@ -1,6 +1,6 @@
 # Aionis Codex Recall Dogfood
 
-Last updated: 2026-05-09
+Last updated: 2026-05-10
 
 Goal: use Aionis inside Codex for 10 real repository tasks, then improve recall, compaction, and display quality based on observed value rather than imagined product claims.
 
@@ -42,7 +42,7 @@ Garbage context:
 | 7 | Publish Runtime source fixes as `@ostinato/aionis-runtime@0.2.4` | Aionis context correctly highlighted the release boundary: source fixes and local plugin rebuilds do not update the live watchdog runtime unless the npm package is published and the running process is refreshed. | The first post-source live check still used an older npx cache process, so source-level success could be mistaken for live Runtime success. | Bumped runtime package/docs to `0.2.4`, published npm latest, reinstalled Codex plugin from the published package, restarted the runtime process, verified the cache package is `0.2.4`, and confirmed live `handoff/recover` works for the dogfood anchor. | done |
 | 8 | Promote latest dogfood progress in Codex task-start display | The live hook after `0.2.4` correctly recovered that candidate workflows existed and included the real `7 of 10` dogfood state. | The same display mixed stale `2 of 10` and `4 of 10` workflow entries with the latest `7 of 10`, while `Fast Task Facts` still omitted the newest progress. That made the first screen confusing even though the Runtime had the right data somewhere deeper. | Detect the highest `Aionis Codex recall dogfood loop: N of M` progress across planning/full assembly packs, promote it into `Fast Task Facts`, and suppress older dogfood workflow entries from rendered JSON while preserving the latest one. | done |
 | 9 | Recover latest repo handoff without fake cwd anchor | Live verification after Task 8 proved the `7 of 10` handoff existed in `memory/find`, but the hook still surfaced stale `4 of 10`. That narrowed the problem to agent resume continuity, not raw storage. | Codex hook and MCP defaults sent `anchor=config.cwd`, so `handoff/recover` looked for a handoff whose anchor was literally the repo path. Real task handoffs use task/session anchors, so repo-level latest handoff recovery was blocked. Removing the fake anchor also exposed that repo_root-only recover was rejected by schema and missing implicit handoffs could fail an otherwise useful resume pack. | Let handoff recovery accept `repo_root` / `file_path` / `symbol` locators, omit undefined anchor from slot filters, make implicit repo continuity optional on 404, and stop defaulting Codex hook/MCP agent pack requests to `anchor=config.cwd`. | done |
-| 10 | Pending | Pending | Pending | Pending | pending |
+| 10 | Push `0.2.9` source and verify clean npm install path | The injected fast facts recovered the `3b402bd` Codex MCP parity commit, test evidence, and pack dry-run result, which made the correct first action clear: push the four local commits, then validate the published runtime package from a clean HOME. | The latest fast fact still pointed at the pre-publish handoff. It did not carry the successful `npm publish` result from the previous turn, so the release state had to be revalidated with `npm view`. This showed the Stop hook suppression was too aggressive for externally visible release/publish completions. | Added a compact release outcome path for successful npm publish / git push / install verification so status-shaped but externally important completions become recallable without reopening the old noisy handoff problem. Verified with hook tests, runtime package tests, pack dry-run, and local Codex doctor. | done |
 
 ## Current Findings
 
@@ -55,9 +55,10 @@ Garbage context:
 7. Publishing `0.2.4` closed that release boundary for the current dogfood loop: npm latest, installed Codex plugin, watchdog runtime cache, and live handoff recovery now all reflect the Runtime source fixes.
 8. Task-start display still needs recency-aware compression, not just more recall. Task 8 keeps the latest dogfood progress visible as a fast fact and removes older dogfood progress candidates from the rendered planner packet.
 9. Agent resume continuity was artificially narrowed by a fake cwd anchor. Task 9 makes repo-level handoff recovery possible without breaking repos that have no handoff yet.
+10. Release completion is a special status class. Task 10 showed that suppressing status-only assistant replies prevents noise, but it can also drop externally visible outcomes such as a completed npm publish. The Codex Stop hook now stores those as compact `release_outcome` handoffs keyed by version.
 
 ## Next Fix Targets
 
-1. Add a compact dogfood summary command or report now that at least nine real tasks have observations.
-2. Release the repo-level handoff recovery fix and then reinstall/restart Codex runtime so live hooks use the source changes together.
-3. Use the next live Codex prompt to check whether `Fast Task Facts` now surfaces the latest 9/10 state through the resume pack, not only through raw `memory/find`.
+1. Add a compact dogfood summary command or report now that ten real Codex tasks have observations.
+2. Use the next live Codex prompt to check whether `Fast Task Facts` surfaces publish/push/install evidence through the resume pack, not only through raw command revalidation.
+3. Release the `0.2.10` Codex release-outcome fix after one clean source review, then reinstall from npm and verify the live watchdog package version.

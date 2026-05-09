@@ -196,6 +196,54 @@ test("Stop hook still stores implementation summaries as task handoffs", async (
   }
 });
 
+test("Stop hook stores verified release outcomes even when the reply is status-shaped", async () => {
+  const routes = [];
+  const bodies = {};
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "release-turn",
+      cwd: pluginRoot,
+      prompt: "执行 npm publish吧",
+      last_assistant_message: [
+        "发布完成。",
+        "`@ostinato/aionis-runtime@0.2.9` 已经成功发到 npm。",
+        "`npm view @ostinato/aionis-runtime version` 返回 `0.2.9`。",
+        "dist-tag latest 也是 `0.2.9`，`git push aioniscore main` 已完成。",
+      ].join(" "),
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/handoff/store"), true);
+    const handoff = bodies["/v1/handoff/store"][0];
+    assert.match(handoff.anchor, /#release:0\.2\.9$/);
+    assert.ok(handoff.tags.includes("release_outcome"));
+    assert.equal(handoff.execution_result_summary.release_outcome, true);
+    assert.equal(handoff.execution_result_summary.version, "0.2.9");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("Stop hook does not store next-step planning advice as task handoffs", async () => {
   const routes = [];
   const server = http.createServer((req, res) => {

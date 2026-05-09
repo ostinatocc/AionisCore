@@ -290,15 +290,80 @@ function isPlanningAdviceOnly(value) {
   ].some((pattern) => pattern.test(text));
 }
 
+function releaseOutcomeVersion(value) {
+  const text = normalizeStopText(value);
+  const scopedPackageVersion = text.match(/@[a-z0-9_.-]+\/[a-z0-9_.-]+@(\d+\.\d+\.\d+(?:[-+][a-z0-9_.-]+)?)/i);
+  if (scopedPackageVersion) return scopedPackageVersion[1];
+  const runtimeVersion = text.match(/@ostinato\/aionis-runtime[^\d]*(\d+\.\d+\.\d+(?:[-+][a-z0-9_.-]+)?)/i);
+  if (runtimeVersion) return runtimeVersion[1];
+  const latestVersion = text.match(/\b(?:latest|version|dist-tag|dist-tags|npm view)[^\d]*(\d+\.\d+\.\d+(?:[-+][a-z0-9_.-]+)?)/i);
+  if (latestVersion) return latestVersion[1];
+  return null;
+}
+
+function isReleaseOutcomeSummary(value) {
+  const text = normalizeStopText(value);
+  if (!text || !releaseOutcomeVersion(text)) return false;
+  const hasExternalSurface = [
+    /\bnpm\s+(?:publish|view)\b/i,
+    /\bdist-tags?\b/i,
+    /\bnpx\s+--yes\b/i,
+    /\bgit\s+push\b/i,
+    /\bcodex\s+status\b/i,
+    /\bclean npm install\b/i,
+    /\bregistry\b/i,
+    /\u53d1\u5e03|\u53d1\u5305|\u63a8\u9001|\u5df2\u7ecf\u6210\u529f\u53d1\u5230\s*npm/i,
+  ].some((pattern) => pattern.test(text));
+  const hasSuccessSignal = [
+    /\b(published|released|pushed|verified|validated|installed|PASS|ok=true|latest)\b/i,
+    /\b->\s*main\b/i,
+    /\u5b8c\u6210|\u6210\u529f|\u5df2\u7ecf|\u5df2|\u901a\u8fc7|\u5168\s*PASS/i,
+  ].some((pattern) => pattern.test(text));
+  return hasExternalSurface && hasSuccessSignal;
+}
+
 function shouldStoreStopHandoff(args) {
   const summary = normalizeStopText(args.summary);
   if (!summary) return false;
+  if (isReleaseOutcomeSummary(summary)) return true;
   if (isStatusOrCommandPrompt(args.prompt)) return false;
   if (isCommandInstructionOnly(summary)) return false;
   if (isStatusOnlyAssistantText(summary)) return false;
   if (isNextStepPlanningPrompt(args.prompt) && isPlanningAdviceOnly(summary)) return false;
   if (isPlanningAdviceOnly(summary)) return false;
   return true;
+}
+
+function buildStopHandoffPayload(config, sessionId, turnId, runId, turn, summary, eventName) {
+  const releaseVersion = releaseOutcomeVersion(summary);
+  const isReleaseOutcome = isReleaseOutcomeSummary(summary);
+  return {
+    ...commonRuntimeFields(config),
+    handoff_kind: "task_handoff",
+    anchor: isReleaseOutcome && releaseVersion
+      ? `${config.cwd}#release:${releaseVersion}`
+      : `${config.cwd}#${sessionId}:${turnId}`,
+    summary: summary.slice(0, 1800),
+    handoff_text: summary,
+    repo_root: config.cwd,
+    next_action: isReleaseOutcome
+      ? "Resume from the latest verified release, publish, push, and install state; re-check registry and git state before publishing again."
+      : "Resume from the latest Codex/Aionis runtime context and verify against the current repository state.",
+    tags: [
+      "codex",
+      "aionis-runtime",
+      eventName,
+      ...(isReleaseOutcome ? ["release", "release_outcome", ...(releaseVersion ? [releaseVersion] : [])] : []),
+    ],
+    execution_result_summary: {
+      host: "codex",
+      event: eventName,
+      run_id: runId,
+      turn_id: turnId,
+      prompt: turn.prompt || null,
+      ...(isReleaseOutcome ? { release_outcome: true, version: releaseVersion } : {}),
+    },
+  };
 }
 
 async function handleSessionStart(input) {
@@ -613,26 +678,18 @@ async function handleStop(input, eventName = "Stop") {
         eventText: summary,
         summary,
         metadata: { turn_id: turnId, run_id: runId, phase: eventName },
-      }), []);
+    }), []);
     if (shouldStoreStopHandoff({ prompt: turn.prompt, summary, eventName })) {
       await safeRuntimeCall(config, "handoff_store", () =>
-        runtimePost(config, "/v1/handoff/store", {
-          ...commonRuntimeFields(config),
-          handoff_kind: "task_handoff",
-          anchor: `${config.cwd}#${sessionId}:${turnId}`,
-          summary: summary.slice(0, 1800),
-          handoff_text: summary,
-          repo_root: config.cwd,
-          next_action: "Resume from the latest Codex/Aionis runtime context and verify against the current repository state.",
-          tags: ["codex", "aionis-runtime", eventName],
-          execution_result_summary: {
-            host: "codex",
-            event: eventName,
-            run_id: runId,
-            turn_id: turnId,
-            prompt: turn.prompt || null,
-          },
-        }), []);
+        runtimePost(config, "/v1/handoff/store", buildStopHandoffPayload(
+          config,
+          sessionId,
+          turnId,
+          runId,
+          turn,
+          summary,
+          eventName,
+        )), []);
     }
     await safeRuntimeCall(config, "replay_run_end", () =>
       runtimePost(config, "/v1/memory/replay/run/end", {
