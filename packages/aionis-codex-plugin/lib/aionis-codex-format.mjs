@@ -9,18 +9,76 @@ function stringList(value, limit = 8) {
   return value.filter((entry) => typeof entry === "string" && entry.trim()).slice(0, limit);
 }
 
+function truncateInlineText(value, limit = 4000) {
+  const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : String(value ?? "");
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 32)).trim()} ... [truncated ${text.length - limit} chars]`;
+}
+
 function compactEntryList(entries, limit = 8, charLimit = 420) {
   const seen = new Set();
   const out = [];
   for (const entry of entries) {
     if (typeof entry !== "string") continue;
-    const text = truncateText(entry.trim(), charLimit);
+    const text = truncateInlineText(entry.trim(), charLimit);
     if (!text || seen.has(text)) continue;
     seen.add(text);
     out.push(text);
     if (out.length >= limit) break;
   }
   return out;
+}
+
+function isWorkflowDisplayPath(path) {
+  const key = path.at(-1);
+  return [
+    "recommended_workflows",
+    "candidate_workflows",
+    "workflow_signals",
+    "stable_workflow_titles",
+    "promotion_ready_workflow_titles",
+    "observing_workflow_titles",
+  ].includes(key);
+}
+
+function isSupportingKnowledgePath(path) {
+  return path.at(-1) === "supporting_knowledge" || path.includes("supporting_knowledge");
+}
+
+function isLayerItemPath(path) {
+  return path.at(-1) === "items" && path.includes("layers");
+}
+
+function isLowSignalDisplayPath(path) {
+  const key = path.at(-1);
+  return key === "merged_text" || key === "context_pack_preview" || path.includes("citations");
+}
+
+function normalizeDisplayText(value) {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+function stripDisplayPrefix(value) {
+  return normalizeDisplayText(value)
+    .replace(/^supporting knowledge:\s*/i, "")
+    .replace(/^candidate workflow:\s*/i, "")
+    .replace(/^recommended workflow:\s*/i, "");
+}
+
+function isLowSignalDisplayText(value) {
+  const text = stripDisplayPrefix(value);
+  if (!text) return true;
+  if (/^ok\b/i.test(text) || /^ok[，,\s]/i.test(text)) return true;
+  if (/^(开始|继续)?继续推进吧[。.!！]*$/i.test(text)) return true;
+  if (/^Codex session [A-Za-z0-9:-]+ in AionisRuntime(?:\s*\(.+\))?$/i.test(text)) return true;
+  if (/^manual-verify-[\w-]+ in AionisRuntime(?:\s*\(.+\))?$/i.test(text)) return true;
+  if (/^dogfood-live-task\d+ in AionisRuntime(?:\s*\(.+\))?$/i.test(text)) return true;
+  if (/^selected tool:\s*[\w.:-]+$/i.test(text)) return true;
+  if (/^decision selected_tool:\s*[\w.:-]+$/i.test(text)) return true;
+  if (/^tool ranking:\s*/i.test(text)) return true;
+  if (/^decision_id:\s*/i.test(text)) return true;
+  return false;
 }
 
 function extractDogfoodProgressEntriesFromText(value) {
@@ -41,7 +99,7 @@ function extractDogfoodProgressEntriesFromText(value) {
     entries.push({
       completed,
       total,
-      text: truncateText(slice.slice(0, end).trim(), 420),
+      text: truncateInlineText(slice.slice(0, end).trim(), 420),
     });
   }
   return entries;
@@ -119,7 +177,7 @@ function extractHighSignalText(normalized, limit = 260) {
   ];
   for (const pattern of highSignal) {
     const match = normalized.match(pattern);
-    if (match?.[0]) return truncateText(match[0].trim(), limit);
+    if (match?.[0]) return truncateInlineText(match[0].trim(), limit);
   }
   return "";
 }
@@ -131,8 +189,14 @@ function compactWorkflowText(value, limit = 260) {
   const highSignal = extractHighSignalText(normalized, limit);
   if (highSignal) return highSignal;
   const cleaned = normalized.replace(/^(candidate|recommended)\s+workflow:\s*/i, "");
+  const actionable = isActionablePatternContext(cleaned);
+  const plainShortTitle =
+    cleaned.length <= 140
+    && !/[。；;]|```|\*\*/.test(cleaned)
+    && cleaned.split(/\s+/).length <= 14;
+  if (!actionable && !plainShortTitle) return "";
   if (cleaned.length > limit || /```|^\*\*/.test(cleaned)) return "";
-  return truncateText(cleaned, limit);
+  return truncateInlineText(cleaned, limit);
 }
 
 function compactPlannerText(value, limit = 420) {
@@ -147,7 +211,11 @@ function compactPlannerText(value, limit = 420) {
     return `${prefix}: ${highSignal}`;
   }
   if (/^candidate workflows visible/i.test(normalized)) return "candidate workflows visible";
-  return truncateText(normalized, limit);
+  const lowSignalPlanner =
+    /^selected tool:\s*[\w.:-]+/i.test(normalized)
+    && !/\b(file_path|target_files|acceptance_checks|next_action|Goal:|Aionis Codex recall dogfood loop)\b/i.test(normalized);
+  if (lowSignalPlanner) return "";
+  return truncateInlineText(normalized, limit);
 }
 
 function readPath(object, path) {
@@ -199,16 +267,24 @@ function shouldDropDisplayValue(value) {
   return shouldDropDisplayValueWithOptions(value, {});
 }
 
-function shouldDropDisplayValueWithOptions(value, options) {
+function shouldDropDisplayValueWithOptions(value, options, path = []) {
   const latestDogfoodCompleted = Number.isFinite(options.latestDogfoodCompleted)
     ? options.latestDogfoodCompleted
     : null;
+  if (isLowSignalDisplayPath(path)) return "low_signal_context";
   if (latestDogfoodCompleted !== null && staleDogfoodProgressEntriesFromDisplayValue(value, latestDogfoodCompleted).length > 0) {
     return "stale_dogfood_workflow";
+  }
+  if (typeof value === "string" && (isSupportingKnowledgePath(path) || isLayerItemPath(path)) && isLowSignalDisplayText(value)) {
+    return "low_signal_context";
   }
   if (isGenericToolOnlyPatternText(value)) return true;
   const record = asRecord(value);
   if (!record) return false;
+  if (isWorkflowDisplayPath(path) && !recordHasActionablePatternContext(record)) {
+    const summary = workflowEntryFromCandidate(record, path.at(-1) || "workflow");
+    if (!summary) return "low_signal_context";
+  }
   const anchor = asRecord(record.anchor);
   const text = [
     record.title,
@@ -227,32 +303,91 @@ function shouldDropDisplayValueWithOptions(value, options) {
   return isPatternObject && isGenericToolOnlyPatternText(text) && !recordHasActionablePatternContext(record);
 }
 
-function scrubDisplayPayload(value, stats = { suppressedGenericToolPatterns: 0, suppressedStaleDogfoodWorkflows: 0 }, options = {}) {
-  const dropReason = shouldDropDisplayValueWithOptions(value, options);
+function scrubDisplayString(value, path, stats) {
+  if (isWorkflowDisplayPath(path)) {
+    const compact = compactWorkflowText(value);
+    if (!compact) {
+      stats.suppressedLowSignalContext = (stats.suppressedLowSignalContext ?? 0) + 1;
+      return undefined;
+    }
+    stats.compactedDisplayEntries = (stats.compactedDisplayEntries ?? 0) + (compact === normalizeDisplayText(value) ? 0 : 1);
+    return compact;
+  }
+  if (isSupportingKnowledgePath(path) || isLayerItemPath(path)) {
+    const stripped = stripDisplayPrefix(value);
+    const compact = truncateInlineText(stripped, 260);
+    stats.compactedDisplayEntries = (stats.compactedDisplayEntries ?? 0) + (compact === normalizeDisplayText(value) ? 0 : 1);
+    return compact;
+  }
+  return value;
+}
+
+function scrubDisplayArray(value, stats, options, path) {
+  const out = [];
+  const seen = new Set();
+  for (const entry of value) {
+    const scrubbed = scrubDisplayPayload(entry, stats, options, path);
+    if (scrubbed === undefined) continue;
+    const key = typeof scrubbed === "string" ? scrubbed : JSON.stringify(scrubbed);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(scrubbed);
+  }
+  return out;
+}
+
+function scrubDisplayPayload(value, stats = {
+  suppressedGenericToolPatterns: 0,
+  suppressedStaleDogfoodWorkflows: 0,
+  suppressedLowSignalContext: 0,
+  compactedDisplayEntries: 0,
+}, options = {}, path = []) {
+  const dropReason = shouldDropDisplayValueWithOptions(value, options, path);
   if (dropReason) {
     if (dropReason === "stale_dogfood_workflow") {
       stats.suppressedStaleDogfoodWorkflows = (stats.suppressedStaleDogfoodWorkflows ?? 0) + 1;
+      return undefined;
+    }
+    if (dropReason === "low_signal_context") {
+      stats.suppressedLowSignalContext = (stats.suppressedLowSignalContext ?? 0) + 1;
       return undefined;
     }
     stats.suppressedGenericToolPatterns = (stats.suppressedGenericToolPatterns ?? 0) + 1;
     return undefined;
   }
   if (Array.isArray(value)) {
-    const out = [];
-    for (const entry of value) {
-      const scrubbed = scrubDisplayPayload(entry, stats, options);
-      if (scrubbed !== undefined) out.push(scrubbed);
-    }
-    return out;
+    return scrubDisplayArray(value, stats, options, path);
   }
   const record = asRecord(value);
+  if (typeof value === "string") return scrubDisplayString(value, path, stats);
   if (!record) return value;
+  if (isWorkflowDisplayPath(path)) {
+    const summary = workflowEntryFromCandidate(record, path.at(-1) || "workflow");
+    if (summary) {
+      stats.compactedDisplayEntries = (stats.compactedDisplayEntries ?? 0) + 1;
+      return summary;
+    }
+  }
   const out = {};
   for (const [key, entry] of Object.entries(record)) {
-    const scrubbed = scrubDisplayPayload(entry, stats, options);
+    const scrubbed = scrubDisplayPayload(entry, stats, options, [...path, key]);
     if (scrubbed !== undefined) out[key] = scrubbed;
   }
+  if (path.at(-2) === "layers") {
+    const items = Array.isArray(out.items) ? out.items : [];
+    const signals = Array.isArray(out.workflow_signals) ? out.workflow_signals : [];
+    if (items.length === 0 && signals.length === 0) return undefined;
+  }
   return out;
+}
+
+function filterDisplayEntries(entries, stats, options) {
+  const out = [];
+  for (const entry of entries) {
+    const scrubbed = scrubDisplayPayload(entry, stats, options);
+    if (typeof scrubbed === "string" && scrubbed.trim()) out.push(scrubbed);
+  }
+  return compactEntryList(out, entries.length, 560);
 }
 
 function addJsonSection(lines, title, value, limit) {
@@ -270,6 +405,25 @@ function addBullets(lines, title, entries) {
   if (present.length === 0) return;
   lines.push(`## ${title}`);
   for (const entry of present) lines.push(`- ${entry}`);
+}
+
+function plannerPacketHasDisplayContent(packet) {
+  const record = asRecord(packet);
+  const sections = asRecord(record?.sections);
+  if (!sections) return false;
+  return Object.values(sections).some((value) => Array.isArray(value) ? value.length > 0 : !!value);
+}
+
+function layeredContextHasDisplayContent(layeredContext) {
+  const layers = asRecord(asRecord(layeredContext)?.layers);
+  if (!layers) return false;
+  return Object.values(layers).some((layer) => {
+    const record = asRecord(layer);
+    if (!record) return false;
+    const items = Array.isArray(record.items) ? record.items : [];
+    const signals = Array.isArray(record.workflow_signals) ? record.workflow_signals : [];
+    return items.length > 0 || signals.length > 0;
+  });
 }
 
 function formatNonFatalError(error) {
@@ -297,7 +451,6 @@ function summarizePack(pack, kind) {
   const nextAction = summary.resume_next_action || summary.recommended_next_action || summary.handoff_next_action;
   const latestHandoff = summary.latest_handoff_anchor;
   if (latestHandoff) out.push(`latest_handoff_anchor=${latestHandoff}`);
-  if (selectedTool) out.push(`selected_tool=${selectedTool}`);
   if (filePath) out.push(`file_path=${filePath}`);
   if (nextAction) out.push(`next_action=${nextAction}`);
   const targetFiles = stringList(summary.resume_target_files || summary.handoff_target_files || summary.handoff_target_files);
@@ -311,6 +464,7 @@ function summarizePack(pack, kind) {
   const suppressed = stringList(summary.suppressed_pattern_anchor_ids);
   if (suppressed.length > 0) out.push(`suppressed_pattern_anchor_ids=${suppressed.join(", ")}`);
   if (summary.policy_governance_apply_payload) out.push("policy_governance_apply_payload=available");
+  if (selectedTool && out.length > 0) out.push(`selected_tool=${selectedTool}`);
   return out;
 }
 
@@ -357,8 +511,8 @@ function summarizeDirectHandoff(result) {
       : "";
   const targetFiles = stringList(handoff.target_files || handoff.targetFiles, 5);
   const checks = stringList(handoff.acceptance_checks || handoff.acceptanceChecks, 4);
-  if (summary) out.push(`latest_task_handoff=${truncateText(summary, 520)}`);
-  if (nextAction) out.push(`next_action=${truncateText(nextAction, 360)}`);
+  if (summary) out.push(`latest_task_handoff=${truncateInlineText(summary, 520)}`);
+  if (nextAction) out.push(`next_action=${truncateInlineText(nextAction, 360)}`);
   if (targetFiles.length > 0) out.push(`target_files=${targetFiles.join(", ")}`);
   if (checks.length > 0) out.push(`acceptance_checks=${checks.join(" | ")}`);
   if (typeof handoff.uri === "string") out.push(`handoff_uri=${handoff.uri}`);
@@ -376,10 +530,13 @@ function summarizeContextAssemble(context) {
   const selection = asRecord(tools.selection) || {};
   const kickoff = asRecord(record.kickoff_recommendation) || asRecord(planning.first_step_recommendation) || {};
   const first = [];
-  if (kickoff.selected_tool) first.push(`selected_tool=${kickoff.selected_tool}`);
   if (kickoff.file_path) first.push(`file_path=${kickoff.file_path}`);
   if (kickoff.next_action) first.push(`next_action=${kickoff.next_action}`);
-  if (summary.planner_explanation) first.push(`planner=${compactPlannerText(summary.planner_explanation)}`);
+  if (kickoff.selected_tool && (kickoff.file_path || kickoff.next_action)) first.push(`selected_tool=${kickoff.selected_tool}`);
+  if (summary.planner_explanation) {
+    const plannerText = compactPlannerText(summary.planner_explanation);
+    if (plannerText) first.push(`planner=${plannerText}`);
+  }
   if (selection.selected) first.push(`tools_selected=${selection.selected}`);
   if (strategy.task_family) first.push(`task_family=${strategy.task_family}`);
   if (strategy.validation_style) first.push(`validation_style=${strategy.validation_style}`);
@@ -425,7 +582,7 @@ function workflowEntryFromCandidate(candidate, label) {
   const compactTitle = compactWorkflowText(title);
   if (!compactTitle) return "";
   const nextAction = typeof record.next_action === "string" && record.next_action.trim()
-    ? `; next_action=${record.next_action.trim()}`
+    ? `; next_action=${truncateInlineText(record.next_action, 220)}`
     : "";
   return `${label}=${compactTitle}${nextAction}`;
 }
@@ -502,13 +659,16 @@ export function renderAionisHookContext(args) {
   );
   const displayStats = { suppressedGenericToolPatterns: 0, suppressedStaleDogfoodWorkflows: 0 };
   const displayOptions = { latestDogfoodCompleted: latestDogfood?.completed };
-  const displayFastPlannerPacket = contextSummary.plannerPacket
+  const scrubbedFastPlannerPacket = contextSummary.plannerPacket
     ? undefined
     : scrubDisplayPayload(fastContextSummary.plannerPacket, displayStats, displayOptions);
-  const displayPlannerPacket = scrubDisplayPayload(contextSummary.plannerPacket, displayStats, displayOptions);
+  const scrubbedPlannerPacket = scrubDisplayPayload(contextSummary.plannerPacket, displayStats, displayOptions);
   const displayOperatorProjection = scrubDisplayPayload(contextSummary.operatorProjection, displayStats, displayOptions);
   const displayRuntimeToolHints = scrubDisplayPayload(contextSummary.runtimeToolHints, displayStats, displayOptions);
-  const displayLayeredContext = scrubDisplayPayload(contextSummary.layeredContext, displayStats, displayOptions);
+  const scrubbedLayeredContext = scrubDisplayPayload(contextSummary.layeredContext, displayStats, displayOptions);
+  const displayFastPlannerPacket = plannerPacketHasDisplayContent(scrubbedFastPlannerPacket) ? scrubbedFastPlannerPacket : undefined;
+  const displayPlannerPacket = plannerPacketHasDisplayContent(scrubbedPlannerPacket) ? scrubbedPlannerPacket : undefined;
+  const displayLayeredContext = layeredContextHasDisplayContent(scrubbedLayeredContext) ? scrubbedLayeredContext : undefined;
   const projectHandoffSummary = summarizeDirectHandoff(projectHandoffFast);
   const fastFacts = [
     latestDogfood ? `dogfood_progress=${latestDogfood.text}` : "",
@@ -542,6 +702,12 @@ export function renderAionisHookContext(args) {
       : "",
     displayStats.suppressedStaleDogfoodWorkflows > 0
       ? `suppressed_stale_dogfood_workflows=${displayStats.suppressedStaleDogfoodWorkflows}`
+      : "",
+    displayStats.suppressedLowSignalContext > 0
+      ? `suppressed_low_signal_context=${displayStats.suppressedLowSignalContext}`
+      : "",
+    displayStats.compactedDisplayEntries > 0
+      ? `compacted_display_entries=${displayStats.compactedDisplayEntries}`
       : "",
   ]);
 

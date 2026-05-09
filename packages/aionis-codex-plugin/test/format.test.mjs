@@ -317,3 +317,75 @@ test("renderAionisHookContext promotes latest dogfood progress and suppresses st
   assert.doesNotMatch(text, /4 of 10/);
   assert.match(text, /7 of 10/);
 });
+
+test("renderAionisHookContext compacts noisy planner and layered display payloads", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-7",
+    runId: "run-7",
+    prompt: "Continue dogfood",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      handoff: {
+        title: "Aionis Runtime 0.2.6 release verified",
+        summary: "Aionis Codex recall dogfood loop: 10 of 10 real tasks completed; 0.2.6 follow-up published and verified @ostinato/aionis-runtime@0.2.6. " + "release evidence ".repeat(80),
+        uri: "aionis://local-codex/codex%3Aproject/event/release-026",
+      },
+    },
+    contextAssemble: {
+      assembly_summary: {
+        planner_explanation: "selected tool: functions.exec_command; supporting knowledge appended: 3; action retrieval uncertainty: high; no learned workflow matched this request yet",
+      },
+      tools: { selection: { selected: "functions.exec_command" } },
+      planner_packet: {
+        packet_version: "planner_packet_v1",
+        sections: {
+          candidate_workflows: [
+            "candidate workflow: unrelated long research note " + "x".repeat(500),
+            "candidate workflow: Aionis Codex recall dogfood loop: 7 of 10 real tasks completed; stale release state.",
+          ],
+          supporting_knowledge: [
+            "supporting knowledge: Codex session dogfood-live-task8 in AionisRuntime",
+            "supporting knowledge: ok 开始继续推进吧",
+            "supporting knowledge: 0.2.6 package is installed and runtime status is PASS.",
+          ],
+        },
+      },
+      layered_context: {
+        layers: {
+          facts: {
+            items: [
+              "Codex session manual-verify-final-ranked-clean in AionisRuntime (uri:aionis://local-codex/topic/manual)",
+              "0.2.6 package is installed and runtime status is PASS. " + "z".repeat(400),
+            ],
+          },
+          tools: {
+            items: [
+              "selected tool: functions.exec_command",
+              "tool ranking: functions.exec_command, filesystem, git",
+            ],
+            workflow_signals: [
+              {
+                title: "他做的测试本质上是一个 " + "无关内容".repeat(120),
+              },
+            ],
+          },
+        },
+      },
+    },
+  });
+
+  assert.match(text, /latest_task_handoff=Aionis Codex recall dogfood loop: 10 of 10 real tasks completed/);
+  assert.match(text, /suppressed_stale_dogfood_workflows=/);
+  assert.match(text, /suppressed_low_signal_context=/);
+  assert.match(text, /compacted_display_entries=/);
+  assert.doesNotMatch(text, /unrelated long research note/);
+  assert.doesNotMatch(text, /7 of 10/);
+  assert.doesNotMatch(text, /ok 开始继续推进吧/);
+  assert.doesNotMatch(text, /manual-verify-final-ranked-clean/);
+  assert.doesNotMatch(text, /tool ranking:/);
+  assert.doesNotMatch(text, /无关内容/);
+  assert.doesNotMatch(text, /latest_task_handoff=.*\n\.\.\. \[truncated/);
+  assert.match(text, /0\.2\.6 package is installed and runtime status is PASS/);
+});
