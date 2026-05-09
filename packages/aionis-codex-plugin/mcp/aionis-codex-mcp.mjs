@@ -218,13 +218,14 @@ const ROUTE_TOOLS = {
   aionis_workflow_contract: {
     description: "Retrieve selected workflow contract and authority summary by anchor, workflow signature, task family, or file path.",
     method: "POST",
-    path: "/v1/memory/execution/workflow-contract",
+    path: "/v1/memory/execution/introspect",
     identity: true,
     inputSchema: objectSchema({
       anchor_id: stringProperty,
       workflow_signature: stringProperty,
       task_family: stringProperty,
       file_path: stringProperty,
+      limit: { type: "number" },
       include_introspection: { type: "boolean" },
     }),
   },
@@ -643,6 +644,7 @@ const EXTRA_TOOLS = {
         }, ["tool_name", "tool_input", "status"]),
       },
       compile_playbook: { type: "boolean" },
+      simulate_playbook: { type: "boolean" },
       metadata: objectProperty,
     }, ["goal", "status"]),
   },
@@ -799,6 +801,7 @@ async function storeExecutionOutcome(config, args) {
     metadata,
   });
   let playbookCompile = null;
+  let playbookSimulation = null;
   if (args.compile_playbook === true) {
     playbookCompile = await runtimePost(config, "/v1/memory/replay/playbooks/compile_from_run", {
       ...identity,
@@ -807,6 +810,15 @@ async function storeExecutionOutcome(config, args) {
       allow_partial: true,
       metadata,
     });
+    const playbookId = stringValue(playbookCompile?.playbook_id);
+    if (playbookId && args.simulate_playbook === true) {
+      playbookSimulation = await runtimePost(config, "/v1/memory/replay/playbooks/run", {
+        ...identity,
+        playbook_id: playbookId,
+        mode: "simulate",
+        metadata,
+      });
+    }
   }
   return {
     summary_version: "aionis_mcp_store_execution_outcome_v1",
@@ -815,6 +827,7 @@ async function storeExecutionOutcome(config, args) {
     steps,
     ended,
     playbook_compile: playbookCompile,
+    playbook_simulation: playbookSimulation,
   };
 }
 
@@ -945,11 +958,15 @@ function authoritySummary(workflow, contract) {
 
 async function retrieveWorkflowContract(config, args) {
   await ensure(config);
-  const introspection = await runtimePost(config, "/v1/memory/execution/introspect", {
+  const introspectionConfig = {
+    ...config,
+    timeoutMs: Math.max(config.timeoutMs, 10000),
+  };
+  const introspection = await runtimePost(introspectionConfig, "/v1/memory/execution/introspect", {
     ...commonRuntimeFields(config),
     run_id: args.run_id,
     session_id: args.session_id,
-    limit: args.limit,
+    limit: typeof args.limit === "number" ? args.limit : 8,
   });
   const recommended = Array.isArray(introspection?.recommended_workflows)
     ? introspection.recommended_workflows.map(asRecord).filter(Boolean)
