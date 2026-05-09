@@ -447,3 +447,25 @@ test("renderAionisHookContext compacts markdown task handoffs and avoids duplica
   assert.match(text, /## Project Direct Handoff/);
   assert.match(text, /next_action=Continue dogfood by improving task-start context display quality/);
 });
+
+test("renderAionisHookContext keeps commit-heavy handoff summaries untruncated", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-9",
+    runId: "run-9",
+    prompt: "继续推进吧",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      handoff: {
+        summary: "推进了两块，并都已经提交： - 337d967 Suppress planning advice handoff noise “下一步怎么推进”这类纯策略回答不再写 task_handoff，只写 session/replay。 - 00885b3 Compact Codex handoff display latest_task_handoff 现在会压缩 markdown/验证列表，并且只在 Fast Facts 出现一次。 验证过： - npm run -s codex-plugin:test：25 pass - npm --prefix packages/aionis-runtime run test：7 pass - npm --prefix packages/aionis-runtime run pack:dry-run：通过 - 本地 codex install：PASS - Codex status / watchdog / runtime health：PASS 当前状态：main 干净，但相对 aioniscore/main 是 ahead 2。",
+        uri: "aionis://local-codex/codex%3Aproject/event/display-compact",
+      },
+    },
+  });
+
+  assert.match(text, /latest_task_handoff=推进了两块，并都已经提交/);
+  assert.match(text, /evidence: commits=337d967,00885b3; tests=25 pass, 7 pass; pack_dry_run=pass; codex_status=pass/);
+  assert.doesNotMatch(text, /latest_task_handoff=.*truncated/);
+  assert.doesNotMatch(text, /当前状态：main 干净/);
+});

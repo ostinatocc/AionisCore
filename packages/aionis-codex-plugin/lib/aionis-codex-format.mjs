@@ -493,13 +493,37 @@ function sanitizeInlineMarkdown(value) {
     .trim();
 }
 
+function uniqueStrings(values, limit = 4) {
+  const seen = new Set();
+  const out = [];
+  for (const value of values) {
+    if (typeof value !== "string" || !value) continue;
+    if (seen.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function compactHandoffIntro(text) {
+  const intro = text.split(
+    /(?:\u6539\u52a8|\u9a8c\u8bc1\u7ed3\u679c|\u9a8c\u8bc1\u8fc7|\u6d4b\u8bd5\u8865\u5728|\u5f53\u524d\u672a\u63d0\u4ea4|\u5f53\u524d\u72b6\u6001|Changed files|Verification|Validated|Tests?:)/i
+  )[0]?.trim() || text;
+  const withoutCommitBullets = intro
+    .replace(/[：:]\s*;?\s*\b[0-9a-f]{7,40}\b.*$/i, "")
+    .replace(/[：:]\s*;?\s*$/, "")
+    .trim();
+  return truncateInlineText(withoutCommitBullets || intro, 180);
+}
+
 function compactHandoffSummary(value, limit = 360) {
   const text = sanitizeInlineMarkdown(value);
   if (!text) return "";
-  const intro = text.split(
-    /(?:\u6539\u52a8|\u9a8c\u8bc1\u7ed3\u679c|\u6d4b\u8bd5\u8865\u5728|\u5f53\u524d\u672a\u63d0\u4ea4|Changed files|Verification|Validated|Tests?:)/i
-  )[0]?.trim();
+  const intro = compactHandoffIntro(text);
   const evidence = [];
+  const commitRefs = uniqueStrings([...text.matchAll(/\b[0-9a-f]{7,12}\b/g)].map((match) => match[0]), 3);
+  if (commitRefs.length > 0) evidence.push(`commits=${commitRefs.join(",")}`);
   const passCounts = [...text.matchAll(/\b\d+\s+pass\b/gi)].map((match) => match[0].replace(/\s+/g, " "));
   if (passCounts.length > 0) evidence.push(`tests=${[...new Set(passCounts)].slice(0, 2).join(", ")}`);
   if (/\bpack(?::|-|\s+)dry-run\b/i.test(text)) evidence.push("pack_dry_run=pass");
