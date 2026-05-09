@@ -205,3 +205,39 @@ test("renderAionisHookContext keeps fast planning facts visible when full assemb
   assert.match(text, /context_assemble: timed out after 3000ms/);
   assert.match(text, /category=timeout/);
 });
+
+test("renderAionisHookContext promotes latest dogfood progress and suppresses stale workflow entries", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-5",
+    runId: "run-5",
+    prompt: "Continue dogfood",
+    runtimeStatus: { ok: true, started: false },
+    planningContext: {
+      planning_summary: { planner_explanation: "selected tool: functions.exec_command" },
+      tools: { selection: { selected: "functions.exec_command" } },
+    },
+    contextAssemble: {
+      assembly_summary: { planner_explanation: "candidate workflows visible" },
+      planner_packet: {
+        sections: {
+          candidate_workflows: [
+            "candidate workflow: Aionis Codex recall dogfood loop: 2 of 10 real tasks completed; next fix was old handoff recovery.",
+            "candidate workflow: Aionis Codex recall dogfood loop: 7 of 10 real tasks completed; Task 7 published @ostinato/aionis-runtime@0.2.4 and verified live Codex watchdog uses the Runtime fixes.; anchor=dogfood-7",
+            "candidate workflow: Aionis Codex recall dogfood loop: 4 of 10 real tasks completed; next fix was fast planning fallback.",
+          ],
+        },
+      },
+      tools: { selection: { selected: "functions.exec_command" } },
+    },
+  });
+
+  assert.match(text, /## Fast Task Facts/);
+  assert.match(text, /dogfood_progress=Aionis Codex recall dogfood loop: 7 of 10 real tasks completed/);
+  assert.match(text, /Task 7 published @ostinato\/aionis-runtime@0\.2\.4/);
+  assert.match(text, /suppressed_stale_dogfood_workflows=2/);
+  assert.doesNotMatch(text, /2 of 10/);
+  assert.doesNotMatch(text, /4 of 10/);
+  assert.match(text, /7 of 10/);
+});

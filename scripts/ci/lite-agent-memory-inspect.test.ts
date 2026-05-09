@@ -519,6 +519,76 @@ test("agent memory inspect facade composes continuity and evolution into review/
   );
 });
 
+test("agent memory resume pack can recover latest handoff from repo_root without a fake cwd anchor", async () => {
+  const dbPath = tmpDbPath("agent-memory-repo-root-handoff");
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+
+  await seedEvolutionFixture(liteWriteStore);
+  await seedHandoffFixture(liteWriteStore);
+
+  const resumePack = await buildAgentMemoryResumePackLite({
+    liteWriteStore,
+    liteRecallAccess: liteRecallStore.createRecallAccess(),
+    embedder: FakeEmbeddingProvider,
+    defaultScope: "default",
+    defaultTenantId: "default",
+    defaultActorId: "local-user",
+    body: {
+      tenant_id: "default",
+      scope: "default",
+      query_text: "resume latest repo handoff",
+      context: {
+        repo_root: "/repo",
+      },
+      candidates: ["edit", "bash", "test"],
+      repo_root: "/repo",
+      handoff_kind: "patch_handoff",
+    },
+  });
+
+  assert.equal(resumePack.agent_memory_resume_pack.latest_handoff_anchor, "resume:src/routes/export.ts");
+  assert.equal(resumePack.agent_memory_resume_pack.resume_file_path, "src/routes/export.ts");
+  assert.equal(
+    resumePack.agent_memory_resume_pack.resume_next_action,
+    "Patch src/routes/export.ts and rerun export tests",
+  );
+  assert.ok(resumePack.agent_memory_resume_pack.recovered_handoff);
+});
+
+test("agent memory resume pack treats missing implicit repo handoff as optional continuity", async () => {
+  const dbPath = tmpDbPath("agent-memory-missing-repo-handoff");
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+
+  await seedEvolutionFixture(liteWriteStore);
+
+  const resumePack = await buildAgentMemoryResumePackLite({
+    liteWriteStore,
+    liteRecallAccess: liteRecallStore.createRecallAccess(),
+    embedder: FakeEmbeddingProvider,
+    defaultScope: "default",
+    defaultTenantId: "default",
+    defaultActorId: "local-user",
+    body: {
+      tenant_id: "default",
+      scope: "default",
+      query_text: "repair export failure in src/routes/export.ts",
+      context: {
+        repo_root: "/repo-without-handoff",
+      },
+      candidates: ["edit", "bash", "test"],
+      repo_root: "/repo-without-handoff",
+      handoff_kind: "patch_handoff",
+    },
+  });
+
+  assert.equal(resumePack.summary_version, "agent_memory_resume_pack_v1");
+  assert.equal(resumePack.agent_memory_resume_pack.latest_handoff_anchor, null);
+  assert.equal(resumePack.agent_memory_resume_pack.recovered_handoff, null);
+  assert.equal(resumePack.agent_memory_resume_pack.resume_selected_tool, "edit");
+});
+
 test("agent memory resume and handoff packs prefer canonical contract over legacy handoff fields", async () => {
   const dbPath = tmpDbPath("agent-memory-canonical-handoff");
   const liteWriteStore = createLiteWriteStore(dbPath);

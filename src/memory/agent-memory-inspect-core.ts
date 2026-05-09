@@ -108,7 +108,25 @@ function readPolicyGovernanceApplyResult(
 }
 
 function supportsContinuityInspect(parsed: AgentMemoryInspectInput) {
+  return !!parsed.handoff_id
+    || !!parsed.handoff_uri
+    || !!parsed.anchor
+    || !!parsed.repo_root
+    || !!parsed.file_path
+    || !!parsed.symbol;
+}
+
+function hasExplicitContinuityLocator(parsed: AgentMemoryInspectInput) {
   return !!parsed.handoff_id || !!parsed.handoff_uri || !!parsed.anchor;
+}
+
+function isHandoffNotFoundError(error: unknown) {
+  return !!error
+    && typeof error === "object"
+    && (
+      (error as { code?: unknown }).code === "handoff_not_found"
+      || (error as { statusCode?: unknown }).statusCode === 404
+    );
 }
 
 async function buildRecoveredContinuityLiteInner(
@@ -116,15 +134,20 @@ async function buildRecoveredContinuityLiteInner(
 ): Promise<AgentMemoryRecoveredContinuity> {
   const parsed = AgentMemoryInspectRequest.parse(args.body) as AgentMemoryInspectInput;
   if (!supportsContinuityInspect(parsed)) return null;
-  return await recoverHandoff({
-    liteWriteStore: args.liteWriteStore,
-    executionStateStore: args.executionStateStore ?? null,
-    input: parsed,
-    defaultScope: args.defaultScope,
-    defaultTenantId: args.defaultTenantId,
-    consumerAgentId: parsed.consumer_agent_id ?? null,
-    consumerTeamId: parsed.consumer_team_id ?? null,
-  }) as Record<string, unknown>;
+  try {
+    return await recoverHandoff({
+      liteWriteStore: args.liteWriteStore,
+      executionStateStore: args.executionStateStore ?? null,
+      input: parsed,
+      defaultScope: args.defaultScope,
+      defaultTenantId: args.defaultTenantId,
+      consumerAgentId: parsed.consumer_agent_id ?? null,
+      consumerTeamId: parsed.consumer_team_id ?? null,
+    }) as Record<string, unknown>;
+  } catch (error) {
+    if (!hasExplicitContinuityLocator(parsed) && isHandoffNotFoundError(error)) return null;
+    throw error;
+  }
 }
 
 async function readRecoveredContinuityLite(
@@ -151,15 +174,22 @@ async function buildAgentMemoryInspectLiteInner(
 
   const continuityAvailable = supportsContinuityInspect(parsed);
   const continuityReviewPack = continuityAvailable
-    ? await buildContinuityReviewPackLite({
-        liteWriteStore: args.liteWriteStore,
-        body: parsed,
-        defaultScope: args.defaultScope,
-        defaultTenantId: args.defaultTenantId,
-        consumerAgentId: parsed.consumer_agent_id ?? null,
-        consumerTeamId: parsed.consumer_team_id ?? null,
-        executionStateStore: args.executionStateStore ?? null,
-      })
+    ? await (async () => {
+        try {
+          return await buildContinuityReviewPackLite({
+            liteWriteStore: args.liteWriteStore,
+            body: parsed,
+            defaultScope: args.defaultScope,
+            defaultTenantId: args.defaultTenantId,
+            consumerAgentId: parsed.consumer_agent_id ?? null,
+            consumerTeamId: parsed.consumer_team_id ?? null,
+            executionStateStore: args.executionStateStore ?? null,
+          });
+        } catch (error) {
+          if (!hasExplicitContinuityLocator(parsed) && isHandoffNotFoundError(error)) return null;
+          throw error;
+        }
+      })()
     : null;
   const recoveredContinuity = continuityAvailable ? await readRecoveredContinuityLite(args, ctx) : null;
 

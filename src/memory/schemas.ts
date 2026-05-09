@@ -3127,11 +3127,11 @@ export const HandoffRecoverRequest = z.object({
   include_payload: z.boolean().optional(),
   limit: z.number().int().positive().max(20).default(5),
 }).superRefine((value, ctx) => {
-  if (!value.anchor && !value.handoff_id && !value.handoff_uri) {
+  if (!value.anchor && !value.handoff_id && !value.handoff_uri && !value.repo_root && !value.file_path && !value.symbol) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["anchor"],
-      message: "anchor, handoff_id, or handoff_uri is required",
+      message: "anchor, handoff_id, handoff_uri, repo_root, file_path, or symbol is required",
     });
   }
 });

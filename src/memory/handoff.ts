@@ -974,7 +974,7 @@ export async function recoverHandoff(args: {
             slots_contains: {
               summary_kind: "handoff",
               handoff_kind: parsed.handoff_kind,
-              anchor: parsed.anchor,
+              ...(parsed.anchor ? { anchor: parsed.anchor } : {}),
               ...(normalizedRepoRoot ? { repo_root: normalizedRepoRoot } : {}),
               ...(normalizedFilePath ? { file_path: normalizedFilePath } : {}),
               ...(normalizedSymbol ? { symbol: normalizedSymbol } : {}),

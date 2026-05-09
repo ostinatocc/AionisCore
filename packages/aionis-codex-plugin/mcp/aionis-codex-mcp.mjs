@@ -733,7 +733,6 @@ function defaultRoutePayload(config, toolName, args) {
       include_shadow: true,
       rules_limit: 20,
       repo_root: config.cwd,
-      anchor: config.cwd,
       include_payload: true,
       include_meta: true,
       limit: 12,
