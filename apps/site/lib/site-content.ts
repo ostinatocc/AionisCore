@@ -91,7 +91,7 @@ export const metrics = [
 ] as const;
 
 export const heroSignals = [
-  { label: "Runtime package", value: "0.2.3", tone: "cyan" },
+  { label: "Runtime package", value: "0.2.4", tone: "cyan" },
   { label: "SDK package", value: "0.4.0", tone: "amber" },
   { label: "GitHub Release", value: "v0.4.0", tone: "cyan" },
   { label: "Reproducible proofs", value: "6", tone: "amber" },
@@ -111,6 +111,16 @@ export const releaseSummary = {
 } as const;
 
 export const changelogEntries = [
+  {
+    version: "runtime 0.2.4",
+    date: "2026-05-09",
+    title: "Codex recall dogfood fixes",
+    bullets: [
+      "Published Runtime source fixes for structured Codex hook diagnostics and compact fast task-start facts",
+      "Added private task handoff recovery through request consumer identity in local/auth-off installs",
+      "Kept heavy context assembly non-fatal while preserving useful planning context ahead of debug JSON",
+    ],
+  },
   {
     version: "runtime 0.2.3",
     date: "2026-05-09",

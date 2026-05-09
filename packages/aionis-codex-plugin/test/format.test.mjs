@@ -100,7 +100,7 @@ test("renderAionisHookContext suppresses generic tool-only candidate patterns", 
           facts: {
             items: [
               "Candidate pattern: for Codex Bash completed with success, prefer Bash after one successful tool selection.",
-              "runtime package latest is 0.2.3",
+              "runtime package latest is 0.2.4",
             ],
           },
         },
@@ -113,7 +113,7 @@ test("renderAionisHookContext suppresses generic tool-only candidate patterns", 
   assert.doesNotMatch(text, /Pattern: prefer Bash/);
   assert.match(text, /release_docs/);
   assert.match(text, /target_files=README\.md/);
-  assert.match(text, /runtime package latest is 0\.2\.3/);
+  assert.match(text, /runtime package latest is 0\.2\.4/);
   assert.match(text, /Release docs workflow/);
 });
 
