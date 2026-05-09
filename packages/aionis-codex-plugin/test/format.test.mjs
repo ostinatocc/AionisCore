@@ -282,6 +282,37 @@ test("renderAionisHookContext ranks high-signal direct handoff nodes above newer
   assert.doesNotMatch(text, /Generic recent conversation summary/);
 });
 
+test("renderAionisHookContext prefers newer dogfood follow-up over old completed progress handoff", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-7",
+    runId: "run-7",
+    prompt: "Continue dogfood",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      nodes: [
+        {
+          title: "Aionis Codex display context cleaned after 0.2.6 dogfood",
+          text_summary: "Aionis Codex display-quality dogfood follow-up: cleaned task-start context after 0.2.6 and installed the local rebuilt plugin.",
+          uri: "aionis://local-codex/codex%3Aproject/event/display-follow-up",
+        },
+        {
+          title: "Aionis Runtime 0.2.6 release verified",
+          text_summary: "Aionis Codex recall dogfood loop: 10 of 10 real tasks completed; 0.2.6 follow-up published and verified @ostinato/aionis-runtime@0.2.6.",
+          uri: "aionis://local-codex/codex%3Aproject/event/release-026",
+        },
+      ],
+    },
+    planningContext: null,
+    contextAssemble: null,
+  });
+
+  assert.match(text, /latest_task_handoff=Aionis Codex display-quality dogfood follow-up/);
+  assert.match(text, /handoff_uri=aionis:\/\/local-codex\/codex%3Aproject\/event\/display-follow-up/);
+  assert.doesNotMatch(text, /latest_task_handoff=Aionis Codex recall dogfood loop: 10 of 10/);
+});
+
 test("renderAionisHookContext promotes latest dogfood progress and suppresses stale workflow entries", () => {
   const text = renderAionisHookContext({
     config,

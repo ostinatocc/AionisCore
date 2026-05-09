@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import http from "node:http";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -9,7 +10,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pluginRoot = path.resolve(__dirname, "..");
 
-function runHook(input) {
+function runHook(input, options = {}) {
   const runtimeHome = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-codex-hook-test-"));
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["hooks/aionis-codex-hook.mjs"], {
@@ -18,8 +19,9 @@ function runHook(input) {
       env: {
         ...process.env,
         AIONIS_CODEX_AUTOSTART: "false",
-        AIONIS_BASE_URL: "http://127.0.0.1:1",
+        AIONIS_BASE_URL: options.baseUrl || "http://127.0.0.1:1",
         AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+        ...(options.env || {}),
       },
     });
     let stdout = "";
@@ -39,6 +41,13 @@ function runHook(input) {
       resolve({ stdout, stderr });
     });
     child.stdin.end(`${JSON.stringify(input)}\n`);
+  });
+}
+
+function listen(server) {
+  return new Promise((resolve, reject) => {
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve(server.address()));
   });
 }
 
@@ -75,4 +84,56 @@ test("PreToolUse hook stays non-blocking when runtime is unavailable", async () 
     tool_input: { cmd: "pwd" },
   });
   assert.deepEqual(JSON.parse(result.stdout), {});
+});
+
+test("UserPromptSubmit skips blocking planning context when project handoff is already usable", async () => {
+  const routes = [];
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      if (req.url === "/health") {
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (req.url === "/v1/memory/find") {
+        res.end(JSON.stringify({
+          nodes: [
+            {
+              title: "Aionis display-quality follow-up",
+              text_summary: "Aionis Codex display-quality follow-up after 0.2.6 cleaned task-start context and should be enough to resume without blocking on planning context.",
+              uri: "aionis://local-codex/test/handoff",
+            },
+          ],
+        }));
+        return;
+      }
+      res.end(JSON.stringify({ ok: true, body: body ? JSON.parse(body) : null }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "UserPromptSubmit",
+      session_id: "test-session",
+      turn_id: "test-turn",
+      cwd: pluginRoot,
+      prompt: "Continue dogfood",
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    const output = JSON.parse(result.stdout);
+    const text = output.hookSpecificOutput.additionalContext;
+    assert.match(text, /latest_task_handoff=Aionis Codex display-quality follow-up/);
+    assert.doesNotMatch(text, /planning_context_fast/);
+    assert.equal(routes.includes("/v1/memory/planning/context"), false);
+    assert.equal(routes.includes("/v1/memory/context/assemble"), false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });

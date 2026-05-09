@@ -186,6 +186,29 @@ async function findProjectTaskHandoffs(config) {
   });
 }
 
+function projectTaskHandoffRecords(result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) return [];
+  const records = [];
+  for (const key of ["handoff", "execution_ready_handoff"]) {
+    const value = result[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) records.push(value);
+  }
+  if (Array.isArray(result.nodes)) {
+    for (const node of result.nodes) {
+      if (node && typeof node === "object" && !Array.isArray(node)) records.push(node);
+    }
+  }
+  return records;
+}
+
+function hasUsableProjectTaskHandoff(result) {
+  return projectTaskHandoffRecords(result).some((record) => {
+    const summary = String(record.summary || record.text_summary || record.handoff_text || "").replace(/\s+/g, " ").trim();
+    const nextAction = String(record.next_action || record.nextAction || "").trim();
+    return summary.length >= 80 || nextAction.length >= 24;
+  });
+}
+
 function hasTimeoutError(errors, label) {
   return errors.some((error) => {
     const detail = error?.aionis_non_fatal || error?.aionis_runtime_error;
@@ -274,27 +297,30 @@ async function handleUserPrompt(input) {
   const projectHandoffFast = await safeRuntimeCall(config, "project_handoff_fast", () =>
     findProjectTaskHandoffs(config), errors);
 
-  const planningContext = await safeRuntimeCall(config, "planning_context_fast", () =>
-    runtimePost(config, "/v1/memory/planning/context", taskStartContextRequest(config, prompt, context, runId, {
-      limit: 4,
-      neighborhood_hops: 1,
-      max_nodes: 12,
-      max_edges: 16,
-      ranked_limit: 20,
-      context_char_budget: Math.min(config.contextCharLimit, 3200),
-      context_compaction_profile: "aggressive",
-      context_optimization_profile: "aggressive",
-      return_layered_context: false,
-      include_meta: false,
-      include_slots_preview: false,
-    })), errors);
+  const hasFastProjectHandoff = hasUsableProjectTaskHandoff(projectHandoffFast);
+  const planningContext = hasFastProjectHandoff
+    ? null
+    : await safeRuntimeCall(config, "planning_context_fast", () =>
+        runtimePost(config, "/v1/memory/planning/context", taskStartContextRequest(config, prompt, context, runId, {
+          limit: 4,
+          neighborhood_hops: 1,
+          max_nodes: 12,
+          max_edges: 16,
+          ranked_limit: 20,
+          context_char_budget: Math.min(config.contextCharLimit, 3200),
+          context_compaction_profile: "aggressive",
+          context_optimization_profile: "aggressive",
+          return_layered_context: false,
+          include_meta: false,
+          include_slots_preview: false,
+        })), errors);
 
   let contextAssemble = null;
   let projectAgentResume = null;
   let projectAgentReview = null;
   let globalAgentResume = null;
   let globalRecall = null;
-  if (!hasTimeoutError(errors, "planning_context_fast")) {
+  if (planningContext && !hasTimeoutError(errors, "planning_context_fast")) {
     contextAssemble = await safeRuntimeCall(config, "context_assemble", () =>
       runtimePost(config, "/v1/memory/context/assemble", taskStartContextRequest(config, prompt, context, runId, {
         limit: 16,

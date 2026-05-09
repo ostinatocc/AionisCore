@@ -489,9 +489,14 @@ function directHandoffScore(record, index) {
     .sort((a, b) => (b.completed - a.completed) || (b.total - a.total))[0];
   const title = typeof record.title === "string" ? record.title : "";
   const explicitTitle = title && !title.startsWith("Handoff ");
-  return (progress ? progress.completed * 1000 + progress.total : 0)
-    + (explicitTitle ? 100 : 0)
-    - index;
+  const dogfoodFollowup = /Aionis Codex|dogfood|@ostinato\/aionis-runtime|Codex plugin/i.test(`${title} ${summary}`);
+  const summarySignal = summary.length >= 80 ? 50 : 0;
+  const progressSignal = progress ? Math.min(progress.completed, progress.total) * 5 : 0;
+  return (1000 - index * 100)
+    + (explicitTitle ? 200 : 0)
+    + (dogfoodFollowup ? 80 : 0)
+    + summarySignal
+    + progressSignal;
 }
 
 function summarizeDirectHandoff(result) {
