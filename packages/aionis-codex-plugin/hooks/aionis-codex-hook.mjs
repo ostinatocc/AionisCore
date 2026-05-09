@@ -154,6 +154,22 @@ async function agentPack(config, route, queryText, input, sessionId, extra = {})
   });
 }
 
+function taskStartContextRequest(config, prompt, context, runId, overrides = {}) {
+  return {
+    ...commonRuntimeFields(config),
+    query_text: prompt || `Codex turn in ${config.projectName}`,
+    context,
+    candidates: defaultToolCandidates(),
+    tool_candidates: defaultToolCandidates(),
+    include_shadow: true,
+    rules_limit: 20,
+    run_id: runId,
+    recall_strategy: "balanced",
+    recall_class_aware: true,
+    ...overrides,
+  };
+}
+
 async function handleSessionStart(input) {
   const config = resolveConfig(input);
   recordActiveProject(config, "SessionStart");
@@ -231,18 +247,23 @@ async function handleUserPrompt(input) {
       metadata: context,
     }), errors);
 
+  const planningContext = await safeRuntimeCall(config, "planning_context_fast", () =>
+    runtimePost(config, "/v1/memory/planning/context", taskStartContextRequest(config, prompt, context, runId, {
+      limit: 4,
+      neighborhood_hops: 1,
+      max_nodes: 12,
+      max_edges: 16,
+      ranked_limit: 20,
+      context_char_budget: Math.min(config.contextCharLimit, 3200),
+      context_compaction_profile: "aggressive",
+      context_optimization_profile: "aggressive",
+      return_layered_context: false,
+      include_meta: false,
+      include_slots_preview: false,
+    })), errors);
+
   const contextAssemble = await safeRuntimeCall(config, "context_assemble", () =>
-    runtimePost(config, "/v1/memory/context/assemble", {
-      ...commonRuntimeFields(config),
-      query_text: prompt || `Codex turn in ${config.projectName}`,
-      context,
-      candidates: defaultToolCandidates(),
-      tool_candidates: defaultToolCandidates(),
-      include_shadow: true,
-      rules_limit: 20,
-      run_id: runId,
-      recall_strategy: "balanced",
-      recall_class_aware: true,
+    runtimePost(config, "/v1/memory/context/assemble", taskStartContextRequest(config, prompt, context, runId, {
       limit: 16,
       neighborhood_hops: 2,
       max_nodes: 64,
@@ -255,7 +276,7 @@ async function handleUserPrompt(input) {
       include_meta: true,
       include_slots_preview: true,
       slots_preview_keys: 12,
-    }), errors);
+    })), errors);
 
   const projectAgentResume = await safeRuntimeCall(config, "project_agent_resume_pack", () =>
     agentPack(config, "/v1/memory/agent/resume-pack", prompt, input, sessionId, { run_id: runId }), errors);
@@ -306,6 +327,7 @@ async function handleUserPrompt(input) {
     runId,
     prompt,
     runtimeStatus,
+    planningContext,
     contextAssemble,
     projectAgentResume,
     projectAgentReview,

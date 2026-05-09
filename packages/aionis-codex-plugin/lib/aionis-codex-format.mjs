@@ -9,6 +9,58 @@ function stringList(value, limit = 8) {
   return value.filter((entry) => typeof entry === "string" && entry.trim()).slice(0, limit);
 }
 
+function compactEntryList(entries, limit = 8, charLimit = 420) {
+  const seen = new Set();
+  const out = [];
+  for (const entry of entries) {
+    if (typeof entry !== "string") continue;
+    const text = truncateText(entry.trim(), charLimit);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function extractHighSignalText(normalized, limit = 260) {
+  const highSignal = [
+    /Aionis Codex recall dogfood loop:[^`]+?(?=(?:; anchor=|; source=|; selected tool:|; trusted patterns|; candidate patterns|$))/i,
+    /Goal: run 10 real Codex tasks[^;.]*/i,
+  ];
+  for (const pattern of highSignal) {
+    const match = normalized.match(pattern);
+    if (match?.[0]) return truncateText(match[0].trim(), limit);
+  }
+  return "";
+}
+
+function compactWorkflowText(value, limit = 260) {
+  if (typeof value !== "string") return "";
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  const highSignal = extractHighSignalText(normalized, limit);
+  if (highSignal) return highSignal;
+  const cleaned = normalized.replace(/^(candidate|recommended)\s+workflow:\s*/i, "");
+  if (cleaned.length > limit || /```|^\*\*/.test(cleaned)) return "";
+  return truncateText(cleaned, limit);
+}
+
+function compactPlannerText(value, limit = 420) {
+  if (typeof value !== "string") return "";
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  const highSignal = extractHighSignalText(normalized, Math.min(limit, 300));
+  if (highSignal) {
+    const prefix = /^candidate workflows visible/i.test(normalized)
+      ? "candidate workflows visible"
+      : "planner";
+    return `${prefix}: ${highSignal}`;
+  }
+  if (/^candidate workflows visible/i.test(normalized)) return "candidate workflows visible";
+  return truncateText(normalized, limit);
+}
+
 function readPath(object, path) {
   let cursor = object;
   for (const segment of path) {
@@ -172,7 +224,7 @@ function summarizeContextAssemble(context) {
   if (kickoff.selected_tool) first.push(`selected_tool=${kickoff.selected_tool}`);
   if (kickoff.file_path) first.push(`file_path=${kickoff.file_path}`);
   if (kickoff.next_action) first.push(`next_action=${kickoff.next_action}`);
-  if (summary.planner_explanation) first.push(`planner=${summary.planner_explanation}`);
+  if (summary.planner_explanation) first.push(`planner=${compactPlannerText(summary.planner_explanation)}`);
   if (selection.selected) first.push(`tools_selected=${selection.selected}`);
   if (strategy.task_family) first.push(`task_family=${strategy.task_family}`);
   if (strategy.validation_style) first.push(`validation_style=${strategy.validation_style}`);
@@ -188,6 +240,66 @@ function summarizeContextAssemble(context) {
   };
 }
 
+function workflowTitleEntriesFromSummary(summary, sourceLabel) {
+  const record = asRecord(summary);
+  if (!record) return [];
+  const out = [];
+  const titleSets = [
+    ["stable_workflow", record.stable_workflow_titles],
+    ["promotion_ready_workflow", record.promotion_ready_workflow_titles],
+    ["observing_workflow", record.observing_workflow_titles],
+  ];
+  for (const [label, titles] of titleSets) {
+    for (const title of stringList(titles, 4)) {
+      const compactTitle = compactWorkflowText(title);
+      if (compactTitle) out.push(`${label}=${sourceLabel ? `${sourceLabel}: ` : ""}${compactTitle}`);
+    }
+  }
+  return out;
+}
+
+function workflowEntryFromCandidate(candidate, label) {
+  if (typeof candidate === "string" && candidate.trim()) {
+    const compactTitle = compactWorkflowText(candidate);
+    return compactTitle ? `${label}=${compactTitle}` : "";
+  }
+  const record = asRecord(candidate);
+  if (!record) return "";
+  const title = record.title || record.workflow_title || record.name || record.summary || record.text_summary;
+  if (!title || typeof title !== "string") return "";
+  const compactTitle = compactWorkflowText(title);
+  if (!compactTitle) return "";
+  const nextAction = typeof record.next_action === "string" && record.next_action.trim()
+    ? `; next_action=${record.next_action.trim()}`
+    : "";
+  return `${label}=${compactTitle}${nextAction}`;
+}
+
+function summarizeWorkflowFacts(context) {
+  const record = asRecord(context) || {};
+  const entries = [];
+  const summaries = [
+    [readPath(record, ["execution_kernel", "workflow_signal_summary"]), "execution_kernel"],
+    [readPath(record, ["execution_summary", "workflow_signal_summary"]), "execution_summary"],
+    [readPath(record, ["planning_summary", "workflow_signal_summary"]), "planning_summary"],
+    [readPath(record, ["assembly_summary", "workflow_signal_summary"]), "assembly_summary"],
+    [record.workflow_signal_summary, "top_level"],
+  ];
+  for (const [summary, label] of summaries) entries.push(...workflowTitleEntriesFromSummary(summary, label));
+
+  const plannerSections = asRecord(readPath(record, ["planner_packet", "sections"])) || {};
+  const candidateSources = [
+    ["recommended_workflow", plannerSections.recommended_workflows],
+    ["candidate_workflow", plannerSections.candidate_workflows],
+    ["workflow_signal", record.workflow_signals],
+  ];
+  for (const [label, values] of candidateSources) {
+    if (!Array.isArray(values)) continue;
+    for (const value of values.slice(0, 4)) entries.push(workflowEntryFromCandidate(value, label));
+  }
+  return compactEntryList(entries, 6, 520);
+}
+
 export function renderAionisHookContext(args) {
   const {
     config,
@@ -196,6 +308,7 @@ export function renderAionisHookContext(args) {
     runId,
     prompt,
     runtimeStatus,
+    planningContext,
     contextAssemble,
     projectAgentResume,
     projectAgentReview,
@@ -220,12 +333,20 @@ export function renderAionisHookContext(args) {
     runtimeStatus?.started ? "runtime_started_by_plugin=true" : "runtime_started_by_plugin=false",
   ]);
 
+  const fastContextSummary = summarizeContextAssemble(planningContext);
   const contextSummary = summarizeContextAssemble(contextAssemble);
   const displayStats = { suppressedGenericToolPatterns: 0 };
+  const displayFastPlannerPacket = contextSummary.plannerPacket
+    ? undefined
+    : scrubDisplayPayload(fastContextSummary.plannerPacket, displayStats);
   const displayPlannerPacket = scrubDisplayPayload(contextSummary.plannerPacket, displayStats);
   const displayOperatorProjection = scrubDisplayPayload(contextSummary.operatorProjection, displayStats);
   const displayRuntimeToolHints = scrubDisplayPayload(contextSummary.runtimeToolHints, displayStats);
   const displayLayeredContext = scrubDisplayPayload(contextSummary.layeredContext, displayStats);
+  addBullets(lines, "Fast Task Facts", compactEntryList([
+    ...fastContextSummary.first,
+    ...summarizeWorkflowFacts(planningContext),
+  ], 10, 560));
   addBullets(lines, "Task Start Guidance", contextSummary.first);
 
   const projectResume = summarizePack(projectAgentResume, "resume");
@@ -246,6 +367,7 @@ export function renderAionisHookContext(args) {
     ]);
   }
 
+  addJsonSection(lines, "Fast Planner Packet", displayFastPlannerPacket, 1800);
   addJsonSection(lines, "Planner Packet", displayPlannerPacket, 2600);
   addJsonSection(lines, "Operator Projection", displayOperatorProjection, 2400);
   addJsonSection(lines, "Runtime Tool Hints", displayRuntimeToolHints, 1800);

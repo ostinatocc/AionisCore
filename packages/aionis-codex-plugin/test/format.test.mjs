@@ -149,3 +149,59 @@ test("renderAionisHookContext renders structured non-fatal error diagnostics", (
   assert.match(text, /duration_ms=3004/);
   assert.match(text, /timeout_ms=3000/);
 });
+
+test("renderAionisHookContext keeps fast planning facts visible when full assembly fails", () => {
+  const error = new Error("context_assemble: timed out after 3000ms");
+  error.aionis_non_fatal = {
+    label: "context_assemble",
+    category: "timeout",
+    code: "runtime_request_timeout",
+    method: "POST",
+    route_path: "/v1/memory/context/assemble",
+    duration_ms: 3005,
+    timeout_ms: 3000,
+    message: "timed out after 3000ms",
+  };
+
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-4",
+    runId: "run-4",
+    prompt: "Continue dogfood",
+    runtimeStatus: { ok: true, started: false },
+    planningContext: {
+      planning_summary: {
+        planner_explanation: "candidate workflows visible but not yet promoted: Goal: run 10 real Codex tasks with Aionis hooks enabled and improve recall, compaction, and display quality from observed useful/noisy context.; trusted patterns available but not used: Bash",
+      },
+      tools: { selection: { selected: "functions.exec_command" } },
+      execution_kernel: {
+        workflow_signal_summary: {
+          observing_workflow_titles: [
+            "Long intro before signal\n\n```text\nAionis Codex recall dogfood loop: 4 of 10 real tasks completed; next fix is fast planning context fallback.; selected tool: functions.exec_command\n```",
+          ],
+        },
+      },
+      planner_packet: {
+        sections: {
+          candidate_workflows: [
+            "Aionis Codex recall dogfood loop: 4 of 10 real tasks completed; next action is to preserve task facts above noise.",
+          ],
+        },
+      },
+    },
+    contextAssemble: null,
+    errors: [error],
+  });
+
+  assert.match(text, /## Fast Task Facts/);
+  assert.match(text, /candidate workflows visible/);
+  assert.match(text, /Goal: run 10 real Codex tasks/);
+  assert.doesNotMatch(text, /trusted patterns available but not used/);
+  assert.match(text, /tools_selected=functions\.exec_command/);
+  assert.match(text, /Aionis Codex recall dogfood loop: 4 of 10 real tasks completed/);
+  assert.doesNotMatch(text, /Long intro before signal/);
+  assert.match(text, /## Fast Planner Packet/);
+  assert.match(text, /context_assemble: timed out after 3000ms/);
+  assert.match(text, /category=timeout/);
+});
