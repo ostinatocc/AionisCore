@@ -169,6 +169,31 @@ function taskStartContextRequest(config, prompt, context, runId, overrides = {})
   };
 }
 
+async function findProjectTaskHandoffs(config) {
+  return runtimePost(config, "/v1/memory/find", {
+    ...commonRuntimeFields(config),
+    type: "event",
+    memory_lane: "private",
+    include_meta: false,
+    include_slots: false,
+    include_slots_preview: false,
+    limit: 8,
+    slots_contains: {
+      summary_kind: "handoff",
+      handoff_kind: "task_handoff",
+      repo_root: config.cwd,
+    },
+  });
+}
+
+function hasTimeoutError(errors, label) {
+  return errors.some((error) => {
+    const detail = error?.aionis_non_fatal || error?.aionis_runtime_error;
+    if (!detail || detail.category !== "timeout") return false;
+    return !label || detail.label === label;
+  });
+}
+
 async function handleSessionStart(input) {
   const config = resolveConfig(input);
   recordActiveProject(config, "SessionStart");
@@ -246,6 +271,9 @@ async function handleUserPrompt(input) {
       metadata: context,
     }), errors);
 
+  const projectHandoffFast = await safeRuntimeCall(config, "project_handoff_fast", () =>
+    findProjectTaskHandoffs(config), errors);
+
   const planningContext = await safeRuntimeCall(config, "planning_context_fast", () =>
     runtimePost(config, "/v1/memory/planning/context", taskStartContextRequest(config, prompt, context, runId, {
       limit: 4,
@@ -261,58 +289,63 @@ async function handleUserPrompt(input) {
       include_slots_preview: false,
     })), errors);
 
-  const contextAssemble = await safeRuntimeCall(config, "context_assemble", () =>
-    runtimePost(config, "/v1/memory/context/assemble", taskStartContextRequest(config, prompt, context, runId, {
-      limit: 16,
-      neighborhood_hops: 2,
-      max_nodes: 64,
-      max_edges: 100,
-      ranked_limit: 120,
-      context_char_budget: config.contextCharLimit,
-      context_compaction_profile: "balanced",
-      context_optimization_profile: "balanced",
-      return_layered_context: true,
-      include_meta: true,
-      include_slots_preview: true,
-      slots_preview_keys: 12,
-    })), errors);
-
-  const projectAgentResume = await safeRuntimeCall(config, "project_agent_resume_pack", () =>
-    agentPack(config, "/v1/memory/agent/resume-pack", prompt, input, sessionId, { run_id: runId }), errors);
-  const projectAgentReview = await safeRuntimeCall(config, "project_agent_review_pack", () =>
-    agentPack(config, "/v1/memory/agent/review-pack", prompt, input, sessionId, { run_id: runId }), errors);
-
+  let contextAssemble = null;
+  let projectAgentResume = null;
+  let projectAgentReview = null;
   let globalAgentResume = null;
   let globalRecall = null;
-  if (config.globalScope && config.globalScope !== config.scope) {
-    const globalFields = { ...commonRuntimeFields(config), scope: config.globalScope };
-    globalAgentResume = await safeRuntimeCall(config, "global_agent_resume_pack", () =>
-      runtimePost(config, "/v1/memory/agent/resume-pack", {
-        ...globalFields,
-        query_text: prompt || "Codex user preference and global memory",
-        repo_root: config.cwd,
-        include_payload: true,
-        include_meta: true,
-        session_id: sessionId,
-        limit: 8,
-        candidates: defaultToolCandidates(),
-        include_shadow: true,
-        rules_limit: 20,
-        context,
-      }), errors);
-    globalRecall = await safeRuntimeCall(config, "global_recall_text", () =>
-      runtimePost(config, "/v1/memory/recall_text", {
-        ...globalFields,
-        query_text: prompt || "Codex user preference and global memory",
-        recall_strategy: "balanced",
-        recall_class_aware: true,
-        limit: 8,
-        max_nodes: 24,
-        max_edges: 40,
-        context_char_budget: 3000,
+  if (!hasTimeoutError(errors, "planning_context_fast")) {
+    contextAssemble = await safeRuntimeCall(config, "context_assemble", () =>
+      runtimePost(config, "/v1/memory/context/assemble", taskStartContextRequest(config, prompt, context, runId, {
+        limit: 16,
+        neighborhood_hops: 2,
+        max_nodes: 64,
+        max_edges: 100,
+        ranked_limit: 120,
+        context_char_budget: config.contextCharLimit,
+        context_compaction_profile: "balanced",
+        context_optimization_profile: "balanced",
+        return_layered_context: true,
         include_meta: true,
         include_slots_preview: true,
-      }), errors);
+        slots_preview_keys: 12,
+      })), errors);
+
+    projectAgentResume = await safeRuntimeCall(config, "project_agent_resume_pack", () =>
+      agentPack(config, "/v1/memory/agent/resume-pack", prompt, input, sessionId, { run_id: runId }), errors);
+    projectAgentReview = await safeRuntimeCall(config, "project_agent_review_pack", () =>
+      agentPack(config, "/v1/memory/agent/review-pack", prompt, input, sessionId, { run_id: runId }), errors);
+
+    if (config.globalScope && config.globalScope !== config.scope) {
+      const globalFields = { ...commonRuntimeFields(config), scope: config.globalScope };
+      globalAgentResume = await safeRuntimeCall(config, "global_agent_resume_pack", () =>
+        runtimePost(config, "/v1/memory/agent/resume-pack", {
+          ...globalFields,
+          query_text: prompt || "Codex user preference and global memory",
+          repo_root: config.cwd,
+          include_payload: true,
+          include_meta: true,
+          session_id: sessionId,
+          limit: 8,
+          candidates: defaultToolCandidates(),
+          include_shadow: true,
+          rules_limit: 20,
+          context,
+        }), errors);
+      globalRecall = await safeRuntimeCall(config, "global_recall_text", () =>
+        runtimePost(config, "/v1/memory/recall_text", {
+          ...globalFields,
+          query_text: prompt || "Codex user preference and global memory",
+          recall_strategy: "balanced",
+          recall_class_aware: true,
+          limit: 8,
+          max_nodes: 24,
+          max_edges: 40,
+          context_char_budget: 3000,
+          include_meta: true,
+          include_slots_preview: true,
+        }), errors);
+    }
   }
 
   state.turns[turnId].context_assembled_at = nowIso();
@@ -325,6 +358,7 @@ async function handleUserPrompt(input) {
     runId,
     prompt,
     runtimeStatus,
+    projectHandoffFast,
     planningContext,
     contextAssemble,
     projectAgentResume,

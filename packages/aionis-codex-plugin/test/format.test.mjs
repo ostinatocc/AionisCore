@@ -206,6 +206,82 @@ test("renderAionisHookContext keeps fast planning facts visible when full assemb
   assert.match(text, /category=timeout/);
 });
 
+test("renderAionisHookContext keeps direct handoff visible when heavy context is unavailable", () => {
+  const error = new Error("planning_context_fast: timed out after 3000ms");
+  error.aionis_non_fatal = {
+    label: "planning_context_fast",
+    category: "timeout",
+    code: "runtime_request_timeout",
+    method: "POST",
+    route_path: "/v1/memory/planning/context",
+    duration_ms: 3004,
+    timeout_ms: 3000,
+    message: "timed out after 3000ms",
+  };
+
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-5",
+    runId: "run-5",
+    prompt: "Continue dogfood",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      handoff: {
+        summary: "Aionis Codex recall dogfood loop: 10 of 10 real tasks completed; Task 10 verified npm latest and repo_root recovery.",
+        next_action: "Use Aionis in normal Codex work and measure recall quality.",
+        target_files: ["packages/aionis-codex-plugin/hooks/aionis-codex-hook.mjs"],
+        acceptance_checks: ["hook exposes 10 of 10"],
+        uri: "aionis://local-codex/codex%3AAionisRuntime/event/task-10",
+      },
+    },
+    planningContext: null,
+    contextAssemble: null,
+    errors: [error],
+  });
+
+  assert.match(text, /## Fast Task Facts/);
+  assert.match(text, /dogfood_progress=Aionis Codex recall dogfood loop: 10 of 10 real tasks completed/);
+  assert.match(text, /latest_task_handoff=Aionis Codex recall dogfood loop: 10 of 10 real tasks completed/);
+  assert.match(text, /## Project Direct Handoff/);
+  assert.match(text, /next_action=Use Aionis in normal Codex work and measure recall quality/);
+  assert.match(text, /hook exposes 10 of 10/);
+  assert.match(text, /planning_context_fast: timed out after 3000ms/);
+});
+
+test("renderAionisHookContext ranks high-signal direct handoff nodes above newer generic handoffs", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-6",
+    runId: "run-6",
+    prompt: "Project status",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      nodes: [
+        {
+          title: "Handoff /tmp/repo#newer",
+          text_summary: "Generic recent conversation summary that should not hide the dogfood status.",
+          uri: "aionis://local-codex/codex%3Aproject/event/newer",
+        },
+        {
+          title: "Aionis Codex recall dogfood task 10 complete",
+          text_summary: "Aionis Codex recall dogfood loop: 10 of 10 real tasks completed; Task 10 verified npm latest and repo_root recovery.",
+          uri: "aionis://local-codex/codex%3Aproject/event/dogfood-10",
+        },
+      ],
+    },
+    planningContext: null,
+    contextAssemble: null,
+  });
+
+  assert.match(text, /dogfood_progress=Aionis Codex recall dogfood loop: 10 of 10 real tasks completed/);
+  assert.match(text, /latest_task_handoff=Aionis Codex recall dogfood loop: 10 of 10 real tasks completed/);
+  assert.match(text, /handoff_uri=aionis:\/\/local-codex\/codex%3Aproject\/event\/dogfood-10/);
+  assert.doesNotMatch(text, /other_task_handoff=/);
+  assert.doesNotMatch(text, /Generic recent conversation summary/);
+});
+
 test("renderAionisHookContext promotes latest dogfood progress and suppresses stale workflow entries", () => {
   const text = renderAionisHookContext({
     config,

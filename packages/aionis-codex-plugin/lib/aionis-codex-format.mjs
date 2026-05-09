@@ -78,6 +78,9 @@ function dogfoodProgressEntriesFromValue(value, budget = { strings: 0 }) {
     "workflow_title",
     "name",
     "text_summary",
+    "handoff",
+    "execution_ready_handoff",
+    "nodes",
     "handoff_text",
     "next_action",
   ];
@@ -311,6 +314,57 @@ function summarizePack(pack, kind) {
   return out;
 }
 
+function directHandoffRecords(result) {
+  const record = asRecord(result) || {};
+  const nodes = Array.isArray(record.nodes) ? record.nodes.map(asRecord).filter(Boolean) : [];
+  const direct = asRecord(record.handoff) || asRecord(record.execution_ready_handoff);
+  return direct ? [direct, ...nodes] : nodes;
+}
+
+function handoffSummary(record) {
+  return typeof record.summary === "string"
+    ? record.summary
+    : typeof record.text_summary === "string"
+      ? record.text_summary
+      : "";
+}
+
+function directHandoffScore(record, index) {
+  const summary = handoffSummary(record);
+  const progress = extractDogfoodProgressEntriesFromText(summary)
+    .sort((a, b) => (b.completed - a.completed) || (b.total - a.total))[0];
+  const title = typeof record.title === "string" ? record.title : "";
+  const explicitTitle = title && !title.startsWith("Handoff ");
+  return (progress ? progress.completed * 1000 + progress.total : 0)
+    + (explicitTitle ? 100 : 0)
+    - index;
+}
+
+function summarizeDirectHandoff(result) {
+  const records = directHandoffRecords(result);
+  if (records.length === 0) return [];
+  const ranked = records
+    .map((record, index) => ({ record, score: directHandoffScore(record, index) }))
+    .sort((a, b) => b.score - a.score)
+    .map((entry) => entry.record);
+  const handoff = ranked[0];
+  const out = [];
+  const summary = handoffSummary(handoff);
+  const nextAction = typeof handoff.next_action === "string"
+    ? handoff.next_action
+    : typeof handoff.nextAction === "string"
+      ? handoff.nextAction
+      : "";
+  const targetFiles = stringList(handoff.target_files || handoff.targetFiles, 5);
+  const checks = stringList(handoff.acceptance_checks || handoff.acceptanceChecks, 4);
+  if (summary) out.push(`latest_task_handoff=${truncateText(summary, 520)}`);
+  if (nextAction) out.push(`next_action=${truncateText(nextAction, 360)}`);
+  if (targetFiles.length > 0) out.push(`target_files=${targetFiles.join(", ")}`);
+  if (checks.length > 0) out.push(`acceptance_checks=${checks.join(" | ")}`);
+  if (typeof handoff.uri === "string") out.push(`handoff_uri=${handoff.uri}`);
+  return out;
+}
+
 function summarizeContextAssemble(context) {
   const record = asRecord(context) || {};
   const summary = asRecord(record.assembly_summary) || asRecord(record.planning_summary) || {};
@@ -409,6 +463,7 @@ export function renderAionisHookContext(args) {
     runId,
     prompt,
     runtimeStatus,
+    projectHandoffFast,
     planningContext,
     contextAssemble,
     projectAgentResume,
@@ -439,6 +494,7 @@ export function renderAionisHookContext(args) {
   const latestDogfood = latestDogfoodProgress(
     planningContext,
     contextAssemble,
+    projectHandoffFast,
     projectAgentResume,
     projectAgentReview,
     globalAgentResume,
@@ -453,8 +509,10 @@ export function renderAionisHookContext(args) {
   const displayOperatorProjection = scrubDisplayPayload(contextSummary.operatorProjection, displayStats, displayOptions);
   const displayRuntimeToolHints = scrubDisplayPayload(contextSummary.runtimeToolHints, displayStats, displayOptions);
   const displayLayeredContext = scrubDisplayPayload(contextSummary.layeredContext, displayStats, displayOptions);
+  const projectHandoffSummary = summarizeDirectHandoff(projectHandoffFast);
   const fastFacts = [
     latestDogfood ? `dogfood_progress=${latestDogfood.text}` : "",
+    ...projectHandoffSummary.slice(0, 2),
     ...fastContextSummary.first,
     ...summarizeWorkflowFacts(planningContext),
   ].filter((entry) => {
@@ -466,6 +524,7 @@ export function renderAionisHookContext(args) {
   addBullets(lines, "Task Start Guidance", contextSummary.first);
 
   const projectResume = summarizePack(projectAgentResume, "resume");
+  addBullets(lines, "Project Direct Handoff", projectHandoffSummary);
   addBullets(lines, "Project Continuity Pack", projectResume);
 
   const projectReview = summarizePack(projectAgentReview, "review");

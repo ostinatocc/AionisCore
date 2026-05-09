@@ -374,6 +374,22 @@ async function sleep(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function terminateRuntimeProcessGroup(child) {
+  try {
+    if (process.platform !== "win32" && child.pid) {
+      process.kill(-child.pid, "SIGTERM");
+      return;
+    }
+  } catch {
+    // Fall through to the direct child kill below.
+  }
+  try {
+    if (!child.killed) child.kill("SIGTERM");
+  } catch {
+    // Ignore cleanup failures. The health timeout is the actionable error.
+  }
+}
+
 async function waitForRuntimeHealth(config, child, timeoutMs) {
   let lastError = null;
   let processError = null;
@@ -402,11 +418,7 @@ async function waitForRuntimeHealth(config, child, timeoutMs) {
     await sleep(350);
   }
 
-  try {
-    if (!child.killed) child.kill("SIGTERM");
-  } catch {
-    // Ignore cleanup failures. The health timeout is the actionable error.
-  }
+  terminateRuntimeProcessGroup(child);
 
   const error = new Error(`Aionis Runtime did not become healthy at ${config.baseUrl}`);
   error.cause = lastError;
