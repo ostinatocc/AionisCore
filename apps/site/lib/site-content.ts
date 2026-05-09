@@ -91,7 +91,7 @@ export const metrics = [
 ] as const;
 
 export const heroSignals = [
-  { label: "Runtime package", value: "0.2.1", tone: "cyan" },
+  { label: "Runtime package", value: "0.2.3", tone: "cyan" },
   { label: "SDK package", value: "0.4.0", tone: "amber" },
   { label: "GitHub Release", value: "v0.4.0", tone: "cyan" },
   { label: "Reproducible proofs", value: "6", tone: "amber" },
@@ -112,6 +112,16 @@ export const releaseSummary = {
 
 export const changelogEntries = [
   {
+    version: "runtime 0.2.3",
+    date: "2026-05-09",
+    title: "Codex automatic Runtime context",
+    bullets: [
+      "Published @ostinato/aionis-runtime@0.2.3 with Codex managed hooks installed from the standalone runtime package",
+      "Added packaged status checks for bundled plugin, installed plugin, managed hooks, watchdog, and runtime health",
+      "Verified latest npm install exposes the Codex plugin hooks manifest and installer from the published tarball",
+    ],
+  },
+  {
     version: "runtime 0.2.1",
     date: "2026-05-08",
     title: "Runtime package startup fix",
@@ -126,7 +136,7 @@ export const changelogEntries = [
     date: "2026-04-27",
     title: "Lite Developer Preview readiness",
     bullets: [
-      "Prepared @ostinato/aionis@0.4.0 and @ostinato/aionis-runtime@0.2.1",
+      "Prepared @ostinato/aionis@0.4.0 and the local-first @ostinato/aionis-runtime release line",
       "Hardened Runtime boundaries across Contract Compiler, Trust Gate, Orchestrator, Learning Loop, route, host, and Lite store seams",
       "Documented release readiness after build, Lite tests, package release checks, docs build, and smoke all passed",
     ],

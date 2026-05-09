@@ -56,3 +56,63 @@ test("renderAionisHookContext includes core runtime binding and planner data", (
   assert.match(text, /src\/example\.ts/);
   assert.match(text, /npm test/);
 });
+
+test("renderAionisHookContext suppresses generic tool-only candidate patterns", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-2",
+    runId: "run-2",
+    prompt: "Update release copy",
+    runtimeStatus: { ok: true, started: false },
+    contextAssemble: {
+      assembly_summary: { planner_explanation: "stale release copy found" },
+      planner_packet: {
+        sections: {
+          candidate_patterns: [
+            "candidate pattern: prefer Bash; Candidate pattern: for Codex Bash completed with success, prefer Bash after one successful tool selection.",
+            "candidate pattern: release copy workflow; task_family=release_docs; target_files=README.md; next_action=update README version",
+          ],
+        },
+      },
+      runtime_tool_hints: [
+        {
+          tool_name: "rehydrate_payload",
+          anchor: {
+            anchor_kind: "pattern",
+            title: "Pattern: prefer Bash for Codex Bash completed with success",
+            summary: "Candidate pattern: for Codex Bash completed with success, prefer Bash after one successful tool selection.",
+            selected_tool: "Bash",
+          },
+        },
+        {
+          tool_name: "rehydrate_payload",
+          anchor: {
+            anchor_kind: "workflow",
+            title: "Release docs workflow",
+            summary: "Update README release copy and rerun site build.",
+            target_files: ["README.md"],
+          },
+        },
+      ],
+      layered_context: {
+        layers: {
+          facts: {
+            items: [
+              "Candidate pattern: for Codex Bash completed with success, prefer Bash after one successful tool selection.",
+              "runtime package latest is 0.2.3",
+            ],
+          },
+        },
+      },
+    },
+  });
+
+  assert.match(text, /suppressed_generic_tool_patterns=/);
+  assert.doesNotMatch(text, /one successful tool selection/);
+  assert.doesNotMatch(text, /Pattern: prefer Bash/);
+  assert.match(text, /release_docs/);
+  assert.match(text, /target_files=README\.md/);
+  assert.match(text, /runtime package latest is 0\.2\.3/);
+  assert.match(text, /Release docs workflow/);
+});

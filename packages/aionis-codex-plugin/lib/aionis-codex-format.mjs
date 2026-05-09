@@ -18,6 +18,87 @@ function readPath(object, path) {
   return cursor;
 }
 
+function isActionablePatternContext(text) {
+  return /\b(task_family|task_signature|workflow_signature|file_path|target_files|acceptance_checks|next_action|policy_memory_id)\b/i.test(text);
+}
+
+function isGenericToolOnlyPatternText(value) {
+  if (typeof value !== "string" || !value.trim()) return false;
+  const text = value.trim();
+  const lower = text.toLowerCase();
+  const patternLike = lower.includes("candidate pattern") || lower.includes("pattern: prefer ");
+  const genericToolSignal =
+    lower.includes(" after one successful tool selection")
+    || lower.includes(" completed with success")
+    || /prefer\s+[a-z0-9_.:-]+/.test(lower);
+  return patternLike && genericToolSignal && !isActionablePatternContext(text);
+}
+
+function recordHasActionablePatternContext(record) {
+  if (!record || typeof record !== "object") return false;
+  if (
+    record.task_family
+    || record.task_signature
+    || record.workflow_signature
+    || record.file_path
+    || record.next_action
+    || record.policy_memory_id
+  ) {
+    return true;
+  }
+  if (stringList(record.target_files).length > 0 || stringList(record.acceptance_checks).length > 0) return true;
+  const contract = asRecord(record.execution_contract_v1) || asRecord(record.execution_contract);
+  if (contract) return recordHasActionablePatternContext(contract);
+  const anchor = asRecord(record.anchor);
+  if (anchor) return recordHasActionablePatternContext(anchor);
+  return false;
+}
+
+function shouldDropDisplayValue(value) {
+  if (isGenericToolOnlyPatternText(value)) return true;
+  const record = asRecord(value);
+  if (!record) return false;
+  const anchor = asRecord(record.anchor);
+  const text = [
+    record.title,
+    record.summary,
+    record.text_summary,
+    anchor?.title,
+    anchor?.summary,
+    anchor?.text_summary,
+  ].filter((entry) => typeof entry === "string").join(" ");
+  const isPatternObject =
+    record.anchor_kind === "pattern"
+    || record.target_kind === "pattern"
+    || anchor?.anchor_kind === "pattern"
+    || anchor?.target_kind === "pattern"
+    || isGenericToolOnlyPatternText(text);
+  return isPatternObject && isGenericToolOnlyPatternText(text) && !recordHasActionablePatternContext(record);
+}
+
+function scrubDisplayPayload(value, stats = { suppressedGenericToolPatterns: 0 }) {
+  if (shouldDropDisplayValue(value)) {
+    stats.suppressedGenericToolPatterns += 1;
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    const out = [];
+    for (const entry of value) {
+      const scrubbed = scrubDisplayPayload(entry, stats);
+      if (scrubbed !== undefined) out.push(scrubbed);
+    }
+    return out;
+  }
+  const record = asRecord(value);
+  if (!record) return value;
+  const out = {};
+  for (const [key, entry] of Object.entries(record)) {
+    const scrubbed = scrubDisplayPayload(entry, stats);
+    if (scrubbed !== undefined) out[key] = scrubbed;
+  }
+  return out;
+}
+
 function addJsonSection(lines, title, value, limit) {
   if (value === undefined || value === null) return;
   const text = compactJson(value, limit);
@@ -124,6 +205,11 @@ export function renderAionisHookContext(args) {
   ]);
 
   const contextSummary = summarizeContextAssemble(contextAssemble);
+  const displayStats = { suppressedGenericToolPatterns: 0 };
+  const displayPlannerPacket = scrubDisplayPayload(contextSummary.plannerPacket, displayStats);
+  const displayOperatorProjection = scrubDisplayPayload(contextSummary.operatorProjection, displayStats);
+  const displayRuntimeToolHints = scrubDisplayPayload(contextSummary.runtimeToolHints, displayStats);
+  const displayLayeredContext = scrubDisplayPayload(contextSummary.layeredContext, displayStats);
   addBullets(lines, "Task Start Guidance", contextSummary.first);
 
   const projectResume = summarizePack(projectAgentResume, "resume");
@@ -138,11 +224,16 @@ export function renderAionisHookContext(args) {
   if (errors.length > 0) {
     addBullets(lines, "Aionis Non-Fatal Errors", errors.map((error) => String(error.message || error)));
   }
+  if (displayStats.suppressedGenericToolPatterns > 0) {
+    addBullets(lines, "Display Filtering", [
+      `suppressed_generic_tool_patterns=${displayStats.suppressedGenericToolPatterns}`,
+    ]);
+  }
 
-  addJsonSection(lines, "Planner Packet", contextSummary.plannerPacket, 2600);
-  addJsonSection(lines, "Operator Projection", contextSummary.operatorProjection, 2400);
-  addJsonSection(lines, "Runtime Tool Hints", contextSummary.runtimeToolHints, 1800);
-  addJsonSection(lines, "Layered Context", contextSummary.layeredContext, 4600);
+  addJsonSection(lines, "Planner Packet", displayPlannerPacket, 2600);
+  addJsonSection(lines, "Operator Projection", displayOperatorProjection, 2400);
+  addJsonSection(lines, "Runtime Tool Hints", displayRuntimeToolHints, 1800);
+  addJsonSection(lines, "Layered Context", displayLayeredContext, 4600);
   addJsonSection(lines, "Cost Signals", contextSummary.costSignals, 1400);
   addJsonSection(lines, "Recall Observability", contextSummary.recallObservability, 1600);
 

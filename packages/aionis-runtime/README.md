@@ -2,7 +2,7 @@
 
 Standalone local-first Aionis Runtime package.
 
-Current release line: `0.2.2` for the Aionis Lite Developer Preview.
+Current release line: `0.2.3` for the Aionis Lite Developer Preview.
 
 ## Start
 
