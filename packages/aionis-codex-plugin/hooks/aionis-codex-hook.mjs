@@ -217,6 +217,54 @@ function hasTimeoutError(errors, label) {
   });
 }
 
+function normalizeStopText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function isStatusOrCommandPrompt(value) {
+  const text = normalizeStopText(value);
+  if (!text) return false;
+  return [
+    /\u73b0\u5728.*(\u6574\u4f53|\u72b6\u6001|\u600e\u4e48\u6837)/i,
+    /(\u6574\u4f53|\u72b6\u6001).*(\u600e\u4e48\u6837|\u548b\u6837)/i,
+    /\u7ed9\u6211\u547d\u4ee4|\u6211\u81ea\u5df1\u53d1|\u53d1\u5b8c\u4e86/i,
+    /^\s*(\u63d0\u4ea4\u5427|\u5148\u63d0\u4ea4\u5427)\s*$/i,
+    /^\s*(status|overall)\b/i,
+    /\b(give me.*command|publish command)\b/i,
+    /^\s*(published|released|done)\s*$/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+function isCommandInstructionOnly(value) {
+  const text = normalizeStopText(value);
+  if (!text) return false;
+  if (/^\u7528\u8fd9\u7ec4\u547d\u4ee4/.test(text)) return true;
+  return text.includes("```bash")
+    && /\b(npm publish|git push|npm --prefix|npm view|npx --yes)\b/.test(text)
+    && !/\b(verified|implemented|fixed|passed|PASS|committed|released)\b/i.test(text);
+}
+
+function isStatusOnlyAssistantText(value) {
+  const text = normalizeStopText(value);
+  if (!text) return false;
+  return [
+    /^\u6574\u4f53\u73b0\u5728/,
+    /^\u73b0\u5728\u72b6\u6001/,
+    /^\u786e\u8ba4\u5b8c\u4e86/,
+    /^Current status\b/i,
+    /^Overall\b/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+function shouldStoreStopHandoff(args) {
+  const summary = normalizeStopText(args.summary);
+  if (!summary) return false;
+  if (isStatusOrCommandPrompt(args.prompt)) return false;
+  if (isCommandInstructionOnly(summary)) return false;
+  if (isStatusOnlyAssistantText(summary)) return false;
+  return true;
+}
+
 async function handleSessionStart(input) {
   const config = resolveConfig(input);
   recordActiveProject(config, "SessionStart");
@@ -530,24 +578,26 @@ async function handleStop(input, eventName = "Stop") {
         summary,
         metadata: { turn_id: turnId, run_id: runId, phase: eventName },
       }), []);
-    await safeRuntimeCall(config, "handoff_store", () =>
-      runtimePost(config, "/v1/handoff/store", {
-        ...commonRuntimeFields(config),
-        handoff_kind: "task_handoff",
-        anchor: `${config.cwd}#${sessionId}:${turnId}`,
-        summary: summary.slice(0, 1800),
-        handoff_text: summary,
-        repo_root: config.cwd,
-        next_action: "Resume from the latest Codex/Aionis runtime context and verify against the current repository state.",
-        tags: ["codex", "aionis-runtime", eventName],
-        execution_result_summary: {
-          host: "codex",
-          event: eventName,
-          run_id: runId,
-          turn_id: turnId,
-          prompt: turn.prompt || null,
-        },
-      }), []);
+    if (shouldStoreStopHandoff({ prompt: turn.prompt, summary, eventName })) {
+      await safeRuntimeCall(config, "handoff_store", () =>
+        runtimePost(config, "/v1/handoff/store", {
+          ...commonRuntimeFields(config),
+          handoff_kind: "task_handoff",
+          anchor: `${config.cwd}#${sessionId}:${turnId}`,
+          summary: summary.slice(0, 1800),
+          handoff_text: summary,
+          repo_root: config.cwd,
+          next_action: "Resume from the latest Codex/Aionis runtime context and verify against the current repository state.",
+          tags: ["codex", "aionis-runtime", eventName],
+          execution_result_summary: {
+            host: "codex",
+            event: eventName,
+            run_id: runId,
+            turn_id: turnId,
+            prompt: turn.prompt || null,
+          },
+        }), []);
+    }
     await safeRuntimeCall(config, "replay_run_end", () =>
       runtimePost(config, "/v1/memory/replay/run/end", {
         ...commonRuntimeFields(config),

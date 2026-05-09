@@ -137,3 +137,61 @@ test("UserPromptSubmit skips blocking planning context when project handoff is a
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("Stop hook does not store status-only assistant replies as task handoffs", async () => {
+  const routes = [];
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    req.resume();
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "status-turn",
+      cwd: pluginRoot,
+      last_assistant_message: "整体现在是一个比较健康的状态。Git 和 npm 都已经对齐，Codex status 全 PASS。",
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/memory/events"), true);
+    assert.equal(routes.includes("/v1/memory/replay/run/end"), true);
+    assert.equal(routes.includes("/v1/handoff/store"), false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Stop hook still stores implementation summaries as task handoffs", async () => {
+  const routes = [];
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    req.resume();
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "implementation-turn",
+      cwd: pluginRoot,
+      last_assistant_message: "Implemented the Codex Stop hook handoff suppression fix and verified npm run -s codex-plugin:test passes.",
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/handoff/store"), true);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
