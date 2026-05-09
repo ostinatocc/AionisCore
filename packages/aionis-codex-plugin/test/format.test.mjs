@@ -420,3 +420,30 @@ test("renderAionisHookContext compacts noisy planner and layered display payload
   assert.doesNotMatch(text, /latest_task_handoff=.*\n\.\.\. \[truncated/);
   assert.match(text, /0\.2\.6 package is installed and runtime status is PASS/);
 });
+
+test("renderAionisHookContext compacts markdown task handoffs and avoids duplicate latest handoff", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-8",
+    runId: "run-8",
+    prompt: "推进吧",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      handoff: {
+        summary: "这一步已经推进完，修的是第二个真实 dogfood 问题：**下一步怎么推进的纯策略回答不应该覆盖 latest_task_handoff**。 改动很小： - [aionis-codex-hook.mjs](/Volumes/ziel/AionisRuntime/packages/aionis-codex-plugin/hooks/aionis-codex-hook.mjs:259) 增加 planning advice suppression。 - [hook.test.mjs](/Volumes/ziel/AionisRuntime/packages/aionis-codex-plugin/test/hook.test.mjs:198) 新增回归测试。 验证结果： - npm run -s codex-plugin:test：24 pass - npm --prefix packages/aionis-runtime run test：7 pass - npm --prefix packages/aionis-runtime run pack:dry-run：通过 - Codex status：PASS。",
+        next_action: "Continue dogfood by improving task-start context display quality.",
+        uri: "aionis://local-codex/codex%3Aproject/event/planning-noise",
+      },
+    },
+  });
+
+  const latestMatches = text.match(/latest_task_handoff=/g) || [];
+  assert.equal(latestMatches.length, 1);
+  assert.match(text, /latest_task_handoff=这一步已经推进完/);
+  assert.match(text, /evidence: tests=24 pass, 7 pass; pack_dry_run=pass; codex_status=pass/);
+  assert.doesNotMatch(text, /\[aionis-codex-hook\.mjs\]\(/);
+  assert.doesNotMatch(text, /hook\.test\.mjs.*新增回归测试/);
+  assert.match(text, /## Project Direct Handoff/);
+  assert.match(text, /next_action=Continue dogfood by improving task-start context display quality/);
+});

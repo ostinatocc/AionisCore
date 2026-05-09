@@ -483,6 +483,36 @@ function handoffSummary(record) {
       : "";
 }
 
+function sanitizeInlineMarkdown(value) {
+  return normalizeDisplayText(value)
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/(?:^|\s)[-*]\s+/g, "; ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function compactHandoffSummary(value, limit = 360) {
+  const text = sanitizeInlineMarkdown(value);
+  if (!text) return "";
+  const intro = text.split(
+    /(?:\u6539\u52a8|\u9a8c\u8bc1\u7ed3\u679c|\u6d4b\u8bd5\u8865\u5728|\u5f53\u524d\u672a\u63d0\u4ea4|Changed files|Verification|Validated|Tests?:)/i
+  )[0]?.trim();
+  const evidence = [];
+  const passCounts = [...text.matchAll(/\b\d+\s+pass\b/gi)].map((match) => match[0].replace(/\s+/g, " "));
+  if (passCounts.length > 0) evidence.push(`tests=${[...new Set(passCounts)].slice(0, 2).join(", ")}`);
+  if (/\bpack(?::|-|\s+)dry-run\b/i.test(text)) evidence.push("pack_dry_run=pass");
+  if (/\b(codex install|codex status|watchdog|runtime health)\b/i.test(text) && /\bPASS\b|\u901a\u8fc7|\u6b63\u5e38/i.test(text)) {
+    evidence.push("codex_status=pass");
+  }
+  const compact = [
+    intro || text,
+    evidence.length > 0 ? `evidence: ${evidence.join("; ")}` : "",
+  ].filter(Boolean).join("; ");
+  return truncateInlineText(compact, limit);
+}
+
 function directHandoffScore(record, index) {
   const summary = handoffSummary(record);
   const progress = extractDogfoodProgressEntriesFromText(summary)
@@ -516,7 +546,7 @@ function summarizeDirectHandoff(result) {
       : "";
   const targetFiles = stringList(handoff.target_files || handoff.targetFiles, 5);
   const checks = stringList(handoff.acceptance_checks || handoff.acceptanceChecks, 4);
-  if (summary) out.push(`latest_task_handoff=${truncateInlineText(summary, 520)}`);
+  if (summary) out.push(`latest_task_handoff=${compactHandoffSummary(summary)}`);
   if (nextAction) out.push(`next_action=${truncateInlineText(nextAction, 360)}`);
   if (targetFiles.length > 0) out.push(`target_files=${targetFiles.join(", ")}`);
   if (checks.length > 0) out.push(`acceptance_checks=${checks.join(" | ")}`);
@@ -677,7 +707,7 @@ export function renderAionisHookContext(args) {
   const projectHandoffSummary = summarizeDirectHandoff(projectHandoffFast);
   const fastFacts = [
     latestDogfood ? `dogfood_progress=${latestDogfood.text}` : "",
-    ...projectHandoffSummary.slice(0, 2),
+    ...projectHandoffSummary.filter((entry) => entry.startsWith("latest_task_handoff=")).slice(0, 1),
     ...fastContextSummary.first,
     ...summarizeWorkflowFacts(planningContext),
   ].filter((entry) => {
@@ -689,7 +719,7 @@ export function renderAionisHookContext(args) {
   addBullets(lines, "Task Start Guidance", contextSummary.first);
 
   const projectResume = summarizePack(projectAgentResume, "resume");
-  addBullets(lines, "Project Direct Handoff", projectHandoffSummary);
+  addBullets(lines, "Project Direct Handoff", projectHandoffSummary.filter((entry) => !entry.startsWith("latest_task_handoff=")));
   addBullets(lines, "Project Continuity Pack", projectResume);
 
   const projectReview = summarizePack(projectAgentReview, "review");
