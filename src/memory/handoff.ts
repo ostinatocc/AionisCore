@@ -946,8 +946,8 @@ export async function recoverHandoff(args: {
   const normalizedFilePath = normalizeOptionalString(parsed.file_path);
   const normalizedRepoRoot = normalizeOptionalString(parsed.repo_root);
   const normalizedSymbol = normalizeOptionalString(parsed.symbol);
-  const consumerAgentId = normalizeOptionalString(args.consumerAgentId ?? undefined) ?? null;
-  const consumerTeamId = normalizeOptionalString(args.consumerTeamId ?? undefined) ?? null;
+  const consumerAgentId = normalizeOptionalString(args.consumerAgentId ?? parsed.consumer_agent_id) ?? null;
+  const consumerTeamId = normalizeOptionalString(args.consumerTeamId ?? parsed.consumer_team_id) ?? null;
   let matchedNodes = 0;
   let resolvedScope = parsed.scope ?? args.defaultScope;
   let resolvedTenantId = parsed.tenant_id ?? args.defaultTenantId;

@@ -3114,6 +3114,8 @@ export type HandoffStoreInput = z.infer<typeof HandoffStoreRequest>;
 export const HandoffRecoverRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
   handoff_id: z.string().min(1).optional(),
   handoff_uri: z.string().min(1).optional(),
   anchor: z.string().min(1).optional(),

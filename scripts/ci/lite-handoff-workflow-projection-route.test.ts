@@ -271,6 +271,57 @@ function buildHandoffPayload(args: {
   };
 }
 
+test("handoff/recover uses request consumer identity for private lite handoffs", async () => {
+  const dbPath = tmpDbPath("handoff-recover-private");
+  const app = Fastify();
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  try {
+    registerApp({
+      app,
+      liteWriteStore,
+      liteRecallStore,
+    });
+
+    const payload = buildHandoffPayload({
+      stateId: `state:${randomUUID()}`,
+      title: "Private task handoff",
+      summary: "Resume a private task handoff by explicit anchor",
+      filePath: "src/routes/private-task.ts",
+    });
+
+    const store = await app.inject({
+      method: "POST",
+      url: "/v1/handoff/store",
+      payload,
+    });
+    assert.equal(store.statusCode, 200);
+
+    const recover = await app.inject({
+      method: "POST",
+      url: "/v1/handoff/recover",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        consumer_agent_id: "local-user",
+        handoff_kind: "patch_handoff",
+        anchor: payload.anchor,
+        repo_root: payload.repo_root,
+        file_path: payload.file_path,
+      },
+    });
+    assert.equal(recover.statusCode, 200);
+    const body = recover.json();
+    assert.equal(body.handoff.anchor, payload.anchor);
+    assert.equal(body.handoff.file_path, payload.file_path);
+    assert.equal(body.handoff.next_action, "Patch src/routes/private-task.ts and rerun export tests");
+    assert.deepEqual(body.execution_ready_handoff.target_files, ["src/routes/private-task.ts"]);
+  } finally {
+    await app.close();
+    await liteWriteStore.close();
+  }
+});
+
 test("handoff/store projects workflow memory into planner guidance through the generic Lite producer", async () => {
   const dbPath = tmpDbPath("handoff-projection");
   const app = Fastify();
