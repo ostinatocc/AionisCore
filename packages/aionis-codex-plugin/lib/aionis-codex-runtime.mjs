@@ -165,10 +165,44 @@ function buildRuntimeHeaders() {
 
 function abortAfter(ms) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, ms);
   return {
     signal: controller.signal,
+    timedOut: () => timedOut,
     clear: () => clearTimeout(timer),
+  };
+}
+
+function runtimeError(message, details, cause) {
+  const error = new Error(message);
+  if (cause !== undefined) error.cause = cause;
+  error.aionis_runtime_error = details;
+  error.code = details.code;
+  error.category = details.category;
+  error.status = details.status;
+  error.method = details.method;
+  error.routePath = details.route_path;
+  error.durationMs = details.duration_ms;
+  error.timeoutMs = details.timeout_ms;
+  error.payload = details.payload;
+  return error;
+}
+
+function runtimeErrorDetails(args) {
+  return {
+    code: args.code,
+    category: args.category,
+    method: args.method,
+    route_path: args.routePath,
+    status: args.status,
+    duration_ms: Math.max(0, Math.round(args.durationMs)),
+    timeout_ms: args.timeoutMs,
+    message: args.message,
+    payload: args.payload,
   };
 }
 
@@ -191,19 +225,61 @@ export async function runtimeRequest(config, method, routePath, payloadOrQuery) 
     options.body = JSON.stringify(payloadOrQuery || {});
   }
 
+  const startedAt = performance.now();
   const abort = abortAfter(config.timeoutMs);
   try {
     const response = await fetch(url, { ...options, signal: abort.signal });
     const text = await response.text();
-    const body = text ? JSON.parse(text) : null;
+    let body = null;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch (error) {
+      const details = runtimeErrorDetails({
+        code: "runtime_response_parse_error",
+        category: "response_parse",
+        method,
+        routePath,
+        durationMs: performance.now() - startedAt,
+        timeoutMs: config.timeoutMs,
+        message: `invalid JSON response from Aionis Runtime: ${String(error.message || error)}`,
+      });
+      throw runtimeError(`Aionis Runtime ${method} ${routePath} returned invalid JSON`, details, error);
+    }
     if (!response.ok) {
       const message = body && typeof body === "object" ? body.message || body.error || response.statusText : response.statusText;
-      const error = new Error(`Aionis Runtime ${method} ${routePath} failed: ${response.status} ${message}`);
-      error.status = response.status;
-      error.payload = body;
-      throw error;
+      const details = runtimeErrorDetails({
+        code: `runtime_http_${response.status}`,
+        category: "http",
+        method,
+        routePath,
+        status: response.status,
+        durationMs: performance.now() - startedAt,
+        timeoutMs: config.timeoutMs,
+        message: `${response.status} ${message}`,
+        payload: body,
+      });
+      throw runtimeError(`Aionis Runtime ${method} ${routePath} failed: ${details.message}`, details);
     }
     return body;
+  } catch (error) {
+    if (error?.aionis_runtime_error) throw error;
+    const durationMs = performance.now() - startedAt;
+    const aborted = error?.name === "AbortError" || abort.timedOut();
+    const category = aborted ? "timeout" : error instanceof TypeError ? "network" : "request";
+    const code = aborted ? "runtime_request_timeout" : category === "network" ? "runtime_network_error" : "runtime_request_error";
+    const message = aborted
+      ? `timed out after ${config.timeoutMs}ms`
+      : String(error?.message || error);
+    const details = runtimeErrorDetails({
+      code,
+      category,
+      method,
+      routePath,
+      durationMs,
+      timeoutMs: config.timeoutMs,
+      message,
+    });
+    throw runtimeError(`Aionis Runtime ${method} ${routePath} ${message}`, details, error);
   } finally {
     abort.clear();
   }

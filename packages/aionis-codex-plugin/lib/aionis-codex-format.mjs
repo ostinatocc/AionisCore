@@ -116,6 +116,22 @@ function addBullets(lines, title, entries) {
   for (const entry of present) lines.push(`- ${entry}`);
 }
 
+function formatNonFatalError(error) {
+  const detail = error?.aionis_non_fatal || error?.aionis_runtime_error;
+  if (!detail || typeof detail !== "object") return String(error?.message || error);
+  const label = detail.label || "runtime_call";
+  const message = detail.message || String(error?.message || error);
+  const parts = [];
+  if (detail.category) parts.push(`category=${detail.category}`);
+  if (detail.code) parts.push(`code=${detail.code}`);
+  if (detail.status) parts.push(`status=${detail.status}`);
+  if (detail.method) parts.push(`method=${detail.method}`);
+  if (detail.route_path) parts.push(`route=${detail.route_path}`);
+  if (typeof detail.duration_ms === "number") parts.push(`duration_ms=${detail.duration_ms}`);
+  if (typeof detail.timeout_ms === "number") parts.push(`timeout_ms=${detail.timeout_ms}`);
+  return parts.length > 0 ? `${label}: ${message} (${parts.join("; ")})` : `${label}: ${message}`;
+}
+
 function summarizePack(pack, kind) {
   const record = asRecord(pack) || {};
   const summary = asRecord(record[`agent_memory_${kind}_pack`]) || asRecord(record.agent_memory_review_pack) || {};
@@ -222,7 +238,7 @@ export function renderAionisHookContext(args) {
   addBullets(lines, "Global User Memory Pack", globalResume);
 
   if (errors.length > 0) {
-    addBullets(lines, "Aionis Non-Fatal Errors", errors.map((error) => String(error.message || error)));
+    addBullets(lines, "Aionis Non-Fatal Errors", errors.map(formatNonFatalError));
   }
   if (displayStats.suppressedGenericToolPatterns > 0) {
     addBullets(lines, "Display Filtering", [
@@ -297,7 +313,7 @@ export function renderSessionStartContext(args) {
   }
   if (errors.length > 0) {
     lines.push("## Aionis Non-Fatal Errors");
-    for (const error of errors) lines.push(`- ${String(error.message || error)}`);
+    for (const error of errors) lines.push(`- ${formatNonFatalError(error)}`);
   }
   return truncateText(lines.join("\n"), Math.min(config.contextCharLimit, 7000));
 }

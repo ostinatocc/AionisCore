@@ -116,3 +116,36 @@ test("renderAionisHookContext suppresses generic tool-only candidate patterns", 
   assert.match(text, /runtime package latest is 0\.2\.3/);
   assert.match(text, /Release docs workflow/);
 });
+
+test("renderAionisHookContext renders structured non-fatal error diagnostics", () => {
+  const error = new Error("context_assemble: timed out after 3000ms");
+  error.aionis_non_fatal = {
+    label: "context_assemble",
+    category: "timeout",
+    code: "runtime_request_timeout",
+    method: "POST",
+    route_path: "/v1/memory/context/assemble",
+    duration_ms: 3004,
+    timeout_ms: 3000,
+    message: "timed out after 3000ms",
+  };
+
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-3",
+    runId: "run-3",
+    prompt: "Continue dogfood",
+    runtimeStatus: { ok: true, started: false },
+    contextAssemble: null,
+    errors: [error],
+  });
+
+  assert.match(text, /context_assemble: timed out after 3000ms/);
+  assert.match(text, /category=timeout/);
+  assert.match(text, /code=runtime_request_timeout/);
+  assert.match(text, /method=POST/);
+  assert.match(text, /route=\/v1\/memory\/context\/assemble/);
+  assert.match(text, /duration_ms=3004/);
+  assert.match(text, /timeout_ms=3000/);
+});

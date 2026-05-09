@@ -52,7 +52,23 @@ function inferHookEvent(input) {
   return "SessionStart";
 }
 
+function classifyRuntimeCallFailure(label, error, durationMs) {
+  const detail = error?.aionis_runtime_error || {};
+  return {
+    label,
+    code: detail.code || error?.code || "runtime_call_failed",
+    category: detail.category || error?.category || "runtime_call",
+    method: detail.method || error?.method || null,
+    route_path: detail.route_path || error?.routePath || null,
+    status: detail.status || error?.status || null,
+    duration_ms: typeof detail.duration_ms === "number" ? detail.duration_ms : Math.max(0, Math.round(durationMs)),
+    timeout_ms: typeof detail.timeout_ms === "number" ? detail.timeout_ms : null,
+    message: detail.message || String(error?.message || error),
+  };
+}
+
 async function safeRuntimeCall(config, label, fn, errors) {
+  const startedAt = performance.now();
   try {
     return await fn();
   } catch (error) {
@@ -60,7 +76,10 @@ async function safeRuntimeCall(config, label, fn, errors) {
       stderrDebug(config, `${label} returned empty state`, error.payload || error.message || error);
       return null;
     }
-    errors.push(new Error(`${label}: ${String(error.message || error)}`));
+    const detail = classifyRuntimeCallFailure(label, error, performance.now() - startedAt);
+    const nonFatal = new Error(`${label}: ${detail.message}`);
+    nonFatal.aionis_non_fatal = detail;
+    errors.push(nonFatal);
     stderrDebug(config, `${label} failed`, error.payload || error.message || error);
     return null;
   }
