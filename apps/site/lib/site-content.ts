@@ -91,7 +91,7 @@ export const metrics = [
 ] as const;
 
 export const heroSignals = [
-  { label: "Runtime package", value: "0.2.4", tone: "cyan" },
+  { label: "Runtime package", value: "0.2.5", tone: "cyan" },
   { label: "SDK package", value: "0.4.0", tone: "amber" },
   { label: "GitHub Release", value: "v0.4.0", tone: "cyan" },
   { label: "Reproducible proofs", value: "6", tone: "amber" },
@@ -111,6 +111,16 @@ export const releaseSummary = {
 } as const;
 
 export const changelogEntries = [
+  {
+    version: "runtime 0.2.5",
+    date: "2026-05-09",
+    title: "Codex repo-level handoff recovery",
+    bullets: [
+      "Promoted the latest dogfood progress into Codex Fast Task Facts while suppressing stale lower-progress workflow entries",
+      "Removed fake cwd anchors from Codex agent-pack requests so repo-level handoffs can recover by repo_root",
+      "Allowed repo_root/file_path/symbol handoff recovery while keeping missing implicit repo handoffs non-fatal",
+    ],
+  },
   {
     version: "runtime 0.2.4",
     date: "2026-05-09",

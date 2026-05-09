@@ -2,7 +2,7 @@
 
 Standalone local-first Aionis Runtime package.
 
-Current release line: `0.2.4` for the Aionis Lite Developer Preview.
+Current release line: `0.2.5` for the Aionis Lite Developer Preview.
 
 ## Start
 
@@ -38,6 +38,7 @@ npx @ostinato/aionis-runtime@latest codex logs
 - keeps the Codex Runtime process online through a macOS LaunchAgent watchdog
 - injects compact Codex task-start facts before heavier Runtime context payloads
 - recovers private task handoffs in local/auth-off Codex installs using request consumer identity
+- recovers the latest repo-level Codex handoff without requiring a fake cwd anchor
 - binds to `127.0.0.1` by default
 - uses SQLite paths under the current working directory
 - keeps source-clone startup optional instead of required
