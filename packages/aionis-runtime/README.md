@@ -2,7 +2,7 @@
 
 Standalone local-first Aionis Runtime package.
 
-Current release line: `0.2.1` for the Aionis Lite Developer Preview.
+Current release line: `0.2.2` for the Aionis Lite Developer Preview.
 
 ## Start
 
@@ -10,9 +10,31 @@ Current release line: `0.2.1` for the Aionis Lite Developer Preview.
 npx @ostinato/aionis-runtime@latest start
 ```
 
+## Codex
+
+Install Aionis Runtime into Codex with the bundled plugin:
+
+```bash
+npx @ostinato/aionis-runtime@latest codex install
+```
+
+This copies the bundled Codex plugin into `~/.aionis/codex/plugin`, enables the
+local Codex plugin entry, enables `codex_hooks`, installs the macOS Runtime
+watchdog, and runs the doctor.
+
+Useful checks:
+
+```bash
+npx @ostinato/aionis-runtime@latest codex status
+npx @ostinato/aionis-runtime@latest codex doctor
+npx @ostinato/aionis-runtime@latest codex logs
+```
+
 ## What it does
 
 - starts the Lite runtime shell with local-safe defaults
+- installs the Codex plugin from the Runtime package with one command
+- keeps the Codex Runtime process online through a macOS LaunchAgent watchdog
 - binds to `127.0.0.1` by default
 - uses SQLite paths under the current working directory
 - keeps source-clone startup optional instead of required

@@ -8,6 +8,8 @@ const distDir = path.join(packageDir, "dist");
 const runtimeDir = path.join(distDir, "runtime");
 const binDir = path.join(distDir, "bin");
 const packageBinDir = path.join(packageDir, "bin");
+const codexPluginDir = path.join(distDir, "codex-plugin");
+const codexPluginSourceDir = path.join(rootDir, "packages", "aionis-codex-plugin");
 
 await rm(distDir, { recursive: true, force: true });
 await rm(packageBinDir, { recursive: true, force: true });
@@ -20,6 +22,11 @@ await cp(path.join(rootDir, "src"), path.join(runtimeDir, "src"), {
 });
 
 await cp(path.join(packageDir, "src", "cli.mjs"), path.join(binDir, "aionis-runtime.mjs"));
+for (const entry of [".codex-plugin", ".mcp.json", "hooks", "lib", "mcp", "scripts", "skills", "README.md", "package.json"]) {
+  await cp(path.join(codexPluginSourceDir, entry), path.join(codexPluginDir, entry), {
+    recursive: true,
+  });
+}
 await writeFile(
   path.join(packageBinDir, "aionis-runtime"),
   "#!/usr/bin/env node\nimport(\"../dist/bin/aionis-runtime.mjs\");\n",

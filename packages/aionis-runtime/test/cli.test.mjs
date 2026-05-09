@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { mkdirSync, readFileSync } from "node:fs";
+import os from "node:os";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +16,7 @@ test("runtime cli prints help", () => {
 
   assert.equal(result.status, 0);
   assert.match(result.stdout, /aionis-runtime start/);
+  assert.match(result.stdout, /aionis-runtime codex install/);
 });
 
 test("runtime cli prints package version", () => {
@@ -75,4 +77,37 @@ test("runtime cli starts the executable runtime entrypoint", () => {
 
   assert.match(source, /src", "index\.ts"/);
   assert.doesNotMatch(source, /src", "runtime-entry\.ts"/);
+});
+
+test("runtime cli bundles and installs the Codex plugin into a stable home directory", () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const env = {
+    ...process.env,
+    HOME: home,
+    AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+  };
+
+  assert.ok(existsSync(path.join(packageDir, "dist", "codex-plugin", ".codex-plugin", "plugin.json")));
+
+  const install = spawnSync(process.execPath, [cliPath, "codex", "install", "--no-watchdog", "--skip-doctor"], {
+    encoding: "utf8",
+    env,
+  });
+  assert.equal(install.status, 0, install.stderr);
+  assert.match(install.stdout, /Aionis Codex plugin materialized/);
+
+  const pluginDir = path.join(runtimeHome, "plugin");
+  assert.ok(existsSync(path.join(pluginDir, ".codex-plugin", "plugin.json")));
+  assert.ok(existsSync(path.join(home, "plugins", "aionis-codex")));
+  assert.match(readFileSync(path.join(home, ".codex", "config.toml"), "utf8"), /codex_hooks = true/);
+  assert.match(readFileSync(path.join(home, ".agents", "plugins", "marketplace.json"), "utf8"), /aionis-codex/);
+
+  const status = spawnSync(process.execPath, [cliPath, "codex", "status", "--no-runtime", "--no-watchdog"], {
+    encoding: "utf8",
+    env,
+  });
+  assert.equal(status.status, 0, `${status.stdout}\n${status.stderr}`);
+  assert.match(status.stdout, /PASS installed plugin/);
+  assert.match(status.stdout, /PASS Codex plugin symlink/);
 });

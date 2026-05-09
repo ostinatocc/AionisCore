@@ -145,4 +145,4 @@ process.stdout.write([
   watchdog.options?.plistPath ? `watchdog_plist=${watchdog.options.plistPath}` : null,
   watchdog.options?.runtimeHome ? `runtime_home=${watchdog.options.runtimeHome}` : null,
   "",
-].filter(Boolean).join("\n"));
+].filter(Boolean).join("\n") + "\n");

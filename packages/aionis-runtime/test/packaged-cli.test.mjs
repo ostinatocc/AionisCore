@@ -53,6 +53,7 @@ test("published tarball CLI resolves package metadata and starts through tsx", a
   assert.ok(packInfo.files.some((file) => file.path === "package.json"), "package.json must be included by npm");
   assert.ok(packInfo.files.some((file) => file.path === "dist/bin/aionis-runtime.mjs"), "dist CLI must be included");
   assert.ok(packInfo.files.some((file) => file.path === "dist/runtime/src/index.ts"), "runtime source entry must be included");
+  assert.ok(packInfo.files.some((file) => file.path === "dist/codex-plugin/.codex-plugin/plugin.json"), "Codex plugin must be bundled");
 
   const install = run("npm", ["install", "--package-lock=false", "--no-audit", "--ignore-scripts", "--prefer-offline", "--cache", sharedNpmCache, tarball], {
     cwd: appDir,
@@ -72,6 +73,27 @@ test("published tarball CLI resolves package metadata and starts through tsx", a
   assert.equal(env.AIONIS_MODE, "local");
   assert.match(env.LITE_REPLAY_SQLITE_PATH, /aionis-lite-replay\.sqlite$/);
   assert.match(env.LITE_WRITE_SQLITE_PATH, /aionis-lite-write\.sqlite$/);
+
+  const home = path.join(workdir, "home");
+  mkdirSync(home, { recursive: true });
+  const codexEnv = {
+    ...process.env,
+    HOME: home,
+    AIONIS_CODEX_RUNTIME_HOME: path.join(home, ".aionis", "codex"),
+  };
+  const codexInstall = run(bin, ["codex", "install", "--no-watchdog", "--skip-doctor"], {
+    cwd: appDir,
+    env: codexEnv,
+  });
+  assert.equal(codexInstall.status, 0, codexInstall.stderr);
+  assert.match(codexInstall.stdout, /Aionis Codex plugin materialized/);
+
+  const codexStatus = run(bin, ["codex", "status", "--no-runtime", "--no-watchdog"], {
+    cwd: appDir,
+    env: codexEnv,
+  });
+  assert.equal(codexStatus.status, 0, `${codexStatus.stdout}\n${codexStatus.stderr}`);
+  assert.match(codexStatus.stdout, /PASS installed plugin/);
 
   const port = String(randomPort());
   const stdout = [];
