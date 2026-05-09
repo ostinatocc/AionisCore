@@ -1,6 +1,6 @@
 ---
 name: aionis-runtime
-description: Use Aionis Runtime as Codex execution memory: recall task context, inspect continuity, record handoffs, replay tool traces, and apply learned workflow/tool policy.
+description: "Use Aionis Runtime as Codex execution memory: recall task context, inspect continuity, record handoffs, replay tool traces, and apply learned workflow/tool policy."
 ---
 
 # Aionis Runtime Skill

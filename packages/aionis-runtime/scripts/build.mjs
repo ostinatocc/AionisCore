@@ -22,7 +22,7 @@ await cp(path.join(rootDir, "src"), path.join(runtimeDir, "src"), {
 });
 
 await cp(path.join(packageDir, "src", "cli.mjs"), path.join(binDir, "aionis-runtime.mjs"));
-for (const entry of [".codex-plugin", ".mcp.json", "hooks", "lib", "mcp", "scripts", "skills", "README.md", "package.json"]) {
+for (const entry of [".codex-plugin", ".mcp.json", "hooks.json", "hooks", "lib", "mcp", "scripts", "skills", "README.md", "package.json"]) {
   await cp(path.join(codexPluginSourceDir, entry), path.join(codexPluginDir, entry), {
     recursive: true,
   });

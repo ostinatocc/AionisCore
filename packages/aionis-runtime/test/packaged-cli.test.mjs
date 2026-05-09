@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import os from "node:os";
-import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -54,6 +54,7 @@ test("published tarball CLI resolves package metadata and starts through tsx", a
   assert.ok(packInfo.files.some((file) => file.path === "dist/bin/aionis-runtime.mjs"), "dist CLI must be included");
   assert.ok(packInfo.files.some((file) => file.path === "dist/runtime/src/index.ts"), "runtime source entry must be included");
   assert.ok(packInfo.files.some((file) => file.path === "dist/codex-plugin/.codex-plugin/plugin.json"), "Codex plugin must be bundled");
+  assert.ok(packInfo.files.some((file) => file.path === "dist/codex-plugin/hooks.json"), "root Codex hooks manifest must be bundled");
 
   const install = run("npm", ["install", "--package-lock=false", "--no-audit", "--ignore-scripts", "--prefer-offline", "--cache", sharedNpmCache, tarball], {
     cwd: appDir,
@@ -87,6 +88,13 @@ test("published tarball CLI resolves package metadata and starts through tsx", a
   });
   assert.equal(codexInstall.status, 0, codexInstall.stderr);
   assert.match(codexInstall.stdout, /Aionis Codex plugin materialized/);
+  assert.match(codexInstall.stdout, /plugin_cache=/);
+  assert.match(codexInstall.stdout, /managed_hooks=aionis-codex installed/);
+  assert.ok(existsSync(path.join(home, ".codex", "plugins", "cache", "local", "aionis-codex", "0.1.0", "hooks.json")));
+  const codexConfig = readFileSync(path.join(home, ".codex", "config.toml"), "utf8");
+  assert.match(codexConfig, /\[hooks\]/);
+  assert.match(codexConfig, /UserPromptSubmit\s*=/);
+  assert.match(codexConfig, /aionis-codex-hook\.mjs/);
 
   const codexStatus = run(bin, ["codex", "status", "--no-runtime", "--no-watchdog"], {
     cwd: appDir,
@@ -94,6 +102,18 @@ test("published tarball CLI resolves package metadata and starts through tsx", a
   });
   assert.equal(codexStatus.status, 0, `${codexStatus.stdout}\n${codexStatus.stderr}`);
   assert.match(codexStatus.stdout, /PASS installed plugin/);
+  assert.match(codexStatus.stdout, /PASS managed hooks/);
+
+  const codexStatusJson = run(bin, ["codex", "status", "--json", "--no-runtime", "--no-watchdog"], {
+    cwd: appDir,
+    env: codexEnv,
+  });
+  assert.equal(codexStatusJson.status, 0, `${codexStatusJson.stdout}\n${codexStatusJson.stderr}`);
+  const codexStatusPayload = JSON.parse(codexStatusJson.stdout);
+  assert.equal(codexStatusPayload.ok, true);
+  assert.equal(codexStatusPayload.runtime_home, path.join(home, ".aionis", "codex"));
+  assert.ok(codexStatusPayload.checks.some((check) => check.name === "Codex plugin symlink" && check.ok));
+  assert.ok(codexStatusPayload.checks.some((check) => check.name === "managed hooks" && check.ok));
 
   const port = String(randomPort());
   const stdout = [];

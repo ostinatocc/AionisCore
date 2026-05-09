@@ -13,8 +13,18 @@ const localPluginsDir = path.join(home, "plugins");
 const localPluginLink = path.join(localPluginsDir, "aionis-codex");
 const marketplacePath = path.join(agentsPluginsRoot, "marketplace.json");
 const codexConfigPath = path.join(home, ".codex", "config.toml");
+const codexPluginCacheRoot = path.join(home, ".codex", "plugins", "cache", "local", "aionis-codex");
 const installWatchdog = !process.argv.includes("--no-watchdog");
 const loadWatchdog = !process.argv.includes("--no-load-watchdog");
+const cacheEntries = [".codex-plugin", ".mcp.json", "hooks.json", "hooks", "lib", "mcp", "scripts", "skills", "README.md", "package.json"];
+const codexHookEvents = [
+  ["SessionStart", "startup|resume|clear|compact", "Aionis preparing execution memory"],
+  ["UserPromptSubmit", ".*", "Aionis assembling runtime context"],
+  ["PreToolUse", ".*", "Aionis recording tool intent"],
+  ["PostToolUse", ".*", "Aionis recording tool outcome"],
+  ["Stop", ".*", "Aionis storing turn handoff"],
+  ["PermissionRequest", ".*", "Aionis recording permission boundary"],
+];
 
 function readJson(filePath, fallback) {
   try {
@@ -27,6 +37,11 @@ function readJson(filePath, fallback) {
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function readPluginVersion() {
+  const manifest = readJson(path.join(pluginRoot, ".codex-plugin", "plugin.json"), {});
+  return String(manifest.version || "0.1.0");
 }
 
 function ensureSymlink() {
@@ -76,10 +91,32 @@ function ensureMarketplace() {
   writeJson(marketplacePath, marketplace);
 }
 
+function ensureCodexPluginCache() {
+  const cachePluginRoot = path.join(codexPluginCacheRoot, readPluginVersion());
+  fs.rmSync(cachePluginRoot, { recursive: true, force: true });
+  fs.mkdirSync(cachePluginRoot, { recursive: true });
+  for (const entry of cacheEntries) {
+    const source = path.join(pluginRoot, entry);
+    if (!fs.existsSync(source)) continue;
+    fs.cpSync(source, path.join(cachePluginRoot, entry), { recursive: true });
+  }
+  return cachePluginRoot;
+}
+
 function codexHooksEnabled() {
   try {
     const config = fs.readFileSync(codexConfigPath, "utf8");
     return /^\s*codex_hooks\s*=\s*true\s*$/m.test(config);
+  } catch {
+    return false;
+  }
+}
+
+function aionisManagedHooksConfigured() {
+  try {
+    const config = fs.readFileSync(codexConfigPath, "utf8");
+    return config.includes("aionis-codex-hook.mjs")
+      && codexHookEvents.every(([event]) => new RegExp(`^\\s*${event}\\s*=`, "m").test(config));
   } catch {
     return false;
   }
@@ -92,6 +129,120 @@ function replaceOrInsertTable(text, tableHeader, body) {
     return text.replace(tableRegex, `$1$2${body.replace(/\n?$/, "\n")}`);
   }
   return `${text.replace(/\s*$/, "\n\n")}[${tableHeader}]\n${body.replace(/\n?$/, "\n")}`;
+}
+
+function findTable(text, tableHeader) {
+  const escapedHeader = tableHeader.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(^|\\n)(\\[${escapedHeader}\\]\\n)([\\s\\S]*?)(?=\\n\\[|$)`);
+  const match = regex.exec(text);
+  if (!match) return null;
+  return {
+    start: match.index + match[1].length,
+    bodyStart: match.index + match[1].length + match[2].length,
+    bodyEnd: match.index + match[0].length,
+    body: match[3],
+  };
+}
+
+function findTomlArrayAssignment(body, key) {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(^|\\n)(\\s*${escapedKey}\\s*=\\s*)`, "m");
+  const match = regex.exec(body);
+  if (!match) return null;
+  let valueStart = match.index + match[1].length + match[2].length;
+  while (/\s/.test(body[valueStart] || "")) valueStart += 1;
+  if (body[valueStart] !== "[") return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = valueStart; index < body.length; index += 1) {
+    const char = body[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === "\"") inString = false;
+      continue;
+    }
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+    if (char === "[") depth += 1;
+    if (char === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        return { valueStart, valueEnd: index + 1 };
+      }
+    }
+  }
+  return null;
+}
+
+function tomlString(value) {
+  return JSON.stringify(String(value));
+}
+
+function hookCommand() {
+  return `node ${JSON.stringify(path.join(pluginRoot, "hooks", "aionis-codex-hook.mjs"))}`;
+}
+
+function hookMatcherGroupToml(event, matcher, statusMessage) {
+  return [
+    "[",
+    "  {",
+    `    matcher = ${tomlString(matcher)},`,
+    "    hooks = [",
+    "      {",
+    '        type = "command",',
+    `        command = ${tomlString(hookCommand())},`,
+    "        async = false,",
+    "        timeoutSec = 20,",
+    `        statusMessage = ${tomlString(statusMessage)},`,
+    "      },",
+    "    ],",
+    "  },",
+    "]",
+  ].join("\n");
+}
+
+function mergeTomlArray(existingArray, itemArray) {
+  const existingInner = existingArray.trim().slice(1, -1).trim();
+  const itemInner = itemArray.trim().slice(1, -1).trim();
+  if (!existingInner) return itemArray;
+  const comma = existingInner.endsWith(",") ? "" : ",";
+  return `[\n${existingInner}${comma}\n${itemInner}\n]`;
+}
+
+function ensureHooksTable(text) {
+  const table = findTable(text, "hooks");
+  if (!table) {
+    const body = codexHookEvents
+      .map(([event, matcher, statusMessage]) => `${event} = ${hookMatcherGroupToml(event, matcher, statusMessage)}`)
+      .join("\n\n");
+    return `${text.replace(/\s*$/, "\n\n")}[hooks]\n${body}\n`;
+  }
+
+  let body = table.body;
+  for (const [event, matcher, statusMessage] of codexHookEvents) {
+    const assignment = findTomlArrayAssignment(body, event);
+    const aionisHook = hookMatcherGroupToml(event, matcher, statusMessage);
+    if (!assignment) {
+      body = `${body.replace(/\s*$/, "\n\n")}${event} = ${aionisHook}\n`;
+      continue;
+    }
+    const currentValue = body.slice(assignment.valueStart, assignment.valueEnd);
+    if (currentValue.includes("aionis-codex-hook.mjs")) {
+      if (!currentValue.includes("async = false,")) {
+        body = `${body.slice(0, assignment.valueStart)}${aionisHook}${body.slice(assignment.valueEnd)}`;
+      }
+      continue;
+    }
+    const merged = mergeTomlArray(currentValue, aionisHook);
+    body = `${body.slice(0, assignment.valueStart)}${merged}${body.slice(assignment.valueEnd)}`;
+  }
+
+  return `${text.slice(0, table.bodyStart)}${body.replace(/\s*$/, "\n")}${text.slice(table.bodyEnd)}`;
 }
 
 function ensureFeaturesConfig(text) {
@@ -107,6 +258,7 @@ function ensureFeaturesConfig(text) {
 
 function ensurePluginEnabledConfig(text) {
   let next = ensureFeaturesConfig(text);
+  next = ensureHooksTable(next);
   next = replaceOrInsertTable(next, "marketplaces.local", [
     'source_type = "local"',
     `source = ${JSON.stringify(home)}`,
@@ -129,6 +281,7 @@ function ensureCodexConfig() {
 ensureSymlink();
 ensureMarketplace();
 ensureCodexConfig();
+const cachePluginRoot = ensureCodexPluginCache();
 const watchdog = installWatchdog
   ? installLaunchAgent(pluginRoot, { load: loadWatchdog })
   : { supported: process.platform === "darwin", loaded: false, message: "LaunchAgent watchdog install skipped." };
@@ -136,10 +289,14 @@ const watchdog = installWatchdog
 process.stdout.write([
   "Aionis Codex plugin installed locally.",
   `plugin_link=${localPluginLink}`,
+  `plugin_cache=${cachePluginRoot}`,
   `marketplace=${marketplacePath}`,
   codexHooksEnabled()
     ? "codex_hooks=true is enabled."
     : `codex_hooks could not be confirmed in ${codexConfigPath}`,
+  aionisManagedHooksConfigured()
+    ? "managed_hooks=aionis-codex installed."
+    : `managed_hooks could not be confirmed in ${codexConfigPath}`,
   'plugin_config=[plugins."aionis-codex@local"] enabled=true',
   `watchdog=${watchdog.supported ? watchdog.message : "unsupported on this OS"}`,
   watchdog.options?.plistPath ? `watchdog_plist=${watchdog.options.plistPath}` : null,

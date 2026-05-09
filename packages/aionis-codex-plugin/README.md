@@ -7,7 +7,7 @@ It is intentionally not a side CLI. The plugin uses Codex lifecycle hooks and MC
 - `SessionStart`: checks or starts local Aionis Runtime and injects resume context.
 - `UserPromptSubmit`: assembles task-start context through Runtime recall, rules, tool selection, planner packets, continuity packs, and governance packs.
 - `PreToolUse` / `PostToolUse`: records replay steps and tool feedback.
-- `Stop` / `SessionEnd`: stores session events, handoffs, replay end state, and optional playbook compilation.
+- `Stop`: stores session events, handoffs, replay end state, and optional playbook compilation.
 - MCP: exposes high-level Aionis tools plus `aionis_runtime_call` for the full Runtime HTTP API.
 
 ## Local Install

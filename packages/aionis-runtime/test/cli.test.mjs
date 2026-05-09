@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import os from "node:os";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -98,9 +98,17 @@ test("runtime cli bundles and installs the Codex plugin into a stable home direc
   assert.match(install.stdout, /Aionis Codex plugin materialized/);
 
   const pluginDir = path.join(runtimeHome, "plugin");
+  const pluginCacheDir = path.join(home, ".codex", "plugins", "cache", "local", "aionis-codex", "0.1.0");
   assert.ok(existsSync(path.join(pluginDir, ".codex-plugin", "plugin.json")));
+  assert.ok(existsSync(path.join(pluginCacheDir, "hooks.json")));
+  assert.ok(existsSync(path.join(pluginCacheDir, "skills", "aionis-runtime", "SKILL.md")));
   assert.ok(existsSync(path.join(home, "plugins", "aionis-codex")));
-  assert.match(readFileSync(path.join(home, ".codex", "config.toml"), "utf8"), /codex_hooks = true/);
+  const codexConfig = readFileSync(path.join(home, ".codex", "config.toml"), "utf8");
+  assert.match(codexConfig, /codex_hooks = true/);
+  assert.match(codexConfig, /\[hooks\]/);
+  assert.match(codexConfig, /UserPromptSubmit\s*=/);
+  assert.match(codexConfig, /PostToolUse\s*=/);
+  assert.match(codexConfig, /aionis-codex-hook\.mjs/);
   assert.match(readFileSync(path.join(home, ".agents", "plugins", "marketplace.json"), "utf8"), /aionis-codex/);
 
   const status = spawnSync(process.execPath, [cliPath, "codex", "status", "--no-runtime", "--no-watchdog"], {
@@ -110,4 +118,43 @@ test("runtime cli bundles and installs the Codex plugin into a stable home direc
   assert.equal(status.status, 0, `${status.stdout}\n${status.stderr}`);
   assert.match(status.stdout, /PASS installed plugin/);
   assert.match(status.stdout, /PASS Codex plugin symlink/);
+  assert.match(status.stdout, /PASS managed hooks/);
+
+  const jsonStatus = spawnSync(process.execPath, [cliPath, "codex", "status", "--json", "--no-runtime", "--no-watchdog"], {
+    encoding: "utf8",
+    env,
+  });
+  assert.equal(jsonStatus.status, 0, `${jsonStatus.stdout}\n${jsonStatus.stderr}`);
+  const parsed = JSON.parse(jsonStatus.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.runtime_home, runtimeHome);
+  assert.equal(parsed.plugin_dir, pluginDir);
+  assert.ok(parsed.checks.some((check) => check.name === "installed plugin" && check.ok));
+  assert.ok(parsed.checks.some((check) => check.name === "managed hooks" && check.ok));
+
+  mkdirSync(path.join(runtimeHome, "state"), { recursive: true });
+  writeFileSync(path.join(runtimeHome, "state", "watchdog-status.json"), JSON.stringify({
+    ok: true,
+    health: {
+      ok: true,
+      runtime: {
+        edition: "lite",
+      },
+    },
+    updated_at: new Date().toISOString(),
+  }));
+  const sandboxLikeStatus = spawnSync(process.execPath, [cliPath, "codex", "status", "--json", "--no-watchdog"], {
+    encoding: "utf8",
+    env: {
+      ...env,
+      AIONIS_CODEX_BASE_URL: "http://127.0.0.1:9",
+    },
+  });
+  assert.equal(sandboxLikeStatus.status, 0, `${sandboxLikeStatus.stdout}\n${sandboxLikeStatus.stderr}`);
+  const sandboxLikeParsed = JSON.parse(sandboxLikeStatus.stdout);
+  assert.equal(sandboxLikeParsed.ok, true);
+  assert.match(
+    sandboxLikeParsed.checks.find((check) => check.name === "runtime health").details,
+    /via watchdog status/,
+  );
 });

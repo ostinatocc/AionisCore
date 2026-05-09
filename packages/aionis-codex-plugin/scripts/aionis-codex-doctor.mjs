@@ -10,6 +10,7 @@ import { inspectLaunchAgent } from "../lib/aionis-codex-watchdog.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pluginRoot = path.resolve(__dirname, "..");
 const checks = [];
+const codexHookEvents = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "PermissionRequest"];
 
 function check(name, ok, details = "") {
   checks.push({ name, ok, details });
@@ -59,7 +60,8 @@ function runMcpProbe() {
 }
 
 check("plugin manifest", exists(".codex-plugin/plugin.json"));
-check("hooks config", exists("hooks/hooks.json"));
+check("root hooks config", exists("hooks.json"));
+check("legacy hooks config", exists("hooks/hooks.json"));
 check("hook script", exists("hooks/aionis-codex-hook.mjs"));
 check("mcp config", exists(".mcp.json"));
 check("mcp server", exists("mcp/aionis-codex-mcp.mjs"));
@@ -67,20 +69,28 @@ check("skill", exists("skills/aionis-runtime/SKILL.md"));
 check("watchdog daemon", exists("scripts/aionis-codex-runtime-daemon.mjs"));
 
 try {
-  const hooks = JSON.parse(read(path.join(pluginRoot, "hooks", "hooks.json")));
+  const hooks = JSON.parse(read(path.join(pluginRoot, "hooks.json")));
   const events = Object.keys(hooks.hooks || {});
   for (const event of ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]) {
     check(`hook event ${event}`, events.includes(event));
   }
 } catch (error) {
-  check("hooks parse", false, error.message);
+  check("root hooks parse", false, error.message);
 }
 
 const codexConfig = path.join(os.homedir(), ".codex", "config.toml");
 if (fs.existsSync(codexConfig)) {
   const text = read(codexConfig);
   check("codex config exists", true, codexConfig);
-  check("codex_hooks feature", /^\s*codex_hooks\s*=\s*true\s*$/m.test(text), "Add [features] codex_hooks = true if false.");
+  const codexHooks = /^\s*codex_hooks\s*=\s*true\s*$/m.test(text);
+  check("codex_hooks feature", codexHooks, codexHooks ? codexConfig : "Add [features] codex_hooks = true if false.");
+  const managedHooks = text.includes("aionis-codex-hook.mjs")
+    && codexHookEvents.every((event) => new RegExp(`^\\s*${event}\\s*=`, "m").test(text));
+  check(
+    "managed Aionis hooks",
+    managedHooks,
+    managedHooks ? codexConfig : "Run aionis-runtime codex install to write Codex managed hooks.",
+  );
 } else {
   check("codex config exists", false, codexConfig);
 }
@@ -105,7 +115,19 @@ if (process.argv.includes("--start-runtime")) {
     await runtimeHealth(config);
     check("runtime health", true, config.baseUrl);
   } catch (error) {
-    check("runtime health", false, `${config.baseUrl} (${error.message}); pass --start-runtime to autostart.`);
+    const statusPath = path.join(config.stateDir, "watchdog-status.json");
+    try {
+      const status = JSON.parse(read(statusPath));
+      const updatedAt = Date.parse(status.updated_at || "");
+      const ageMs = Number.isFinite(updatedAt) ? Date.now() - updatedAt : Number.POSITIVE_INFINITY;
+      if (status.ok === true && status.health?.ok === true && ageMs >= 0 && ageMs <= 120000) {
+        check("runtime health", true, `${config.baseUrl} via watchdog status (${Math.round(ageMs / 1000)}s old)`);
+      } else {
+        check("runtime health", false, `${config.baseUrl} (${error.message}); watchdog status is stale or unhealthy.`);
+      }
+    } catch {
+      check("runtime health", false, `${config.baseUrl} (${error.message}); pass --start-runtime to autostart.`);
+    }
   }
 }
 

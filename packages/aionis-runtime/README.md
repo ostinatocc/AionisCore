@@ -26,6 +26,7 @@ Useful checks:
 
 ```bash
 npx @ostinato/aionis-runtime@latest codex status
+npx @ostinato/aionis-runtime@latest codex status --json
 npx @ostinato/aionis-runtime@latest codex doctor
 npx @ostinato/aionis-runtime@latest codex logs
 ```

@@ -18,7 +18,7 @@ const bundledCodexPluginDir = path.join(distDir, "codex-plugin");
 const cwd = process.cwd();
 
 function printHelp() {
-  process.stdout.write(`Aionis Runtime\n\nUsage:\n  aionis-runtime start [--print-env] [node args...]\n  aionis-runtime codex install [--no-watchdog] [--no-load-watchdog] [--skip-doctor]\n  aionis-runtime codex status [--no-runtime] [--no-watchdog]\n  aionis-runtime codex doctor [--no-start-runtime]\n  aionis-runtime codex logs [runtime|watchdog|all] [--lines N]\n  aionis-runtime --help\n  aionis-runtime --version\n\nCommands:\n  start          Start the Lite runtime with standalone package defaults.\n  codex install  Install the bundled Aionis Codex plugin and Runtime watchdog.\n  codex status   Check Codex plugin, watchdog, and local Runtime state.\n  codex doctor   Run the full Codex plugin doctor.\n  codex logs     Print recent Runtime and watchdog logs.\n\nFlags:\n  --print-env        Print the effective runtime env as JSON and exit.\n  --no-watchdog      Skip LaunchAgent watchdog install or status check.\n  --no-load-watchdog Write the watchdog plist without loading it.\n  --skip-doctor      Skip the post-install doctor run.\n  --no-start-runtime Do not autostart Runtime during doctor.\n  --no-runtime       Skip Runtime health check in status.\n  --help             Show this help.\n  --version          Show the package version.\n`);
+  process.stdout.write(`Aionis Runtime\n\nUsage:\n  aionis-runtime start [--print-env] [node args...]\n  aionis-runtime codex install [--no-watchdog] [--no-load-watchdog] [--skip-doctor]\n  aionis-runtime codex status [--json] [--no-runtime] [--no-watchdog]\n  aionis-runtime codex doctor [--no-start-runtime]\n  aionis-runtime codex logs [runtime|watchdog|all] [--lines N]\n  aionis-runtime --help\n  aionis-runtime --version\n\nCommands:\n  start          Start the Lite runtime with standalone package defaults.\n  codex install  Install the bundled Aionis Codex plugin and Runtime watchdog.\n  codex status   Check Codex plugin, watchdog, and local Runtime state.\n  codex doctor   Run the full Codex plugin doctor.\n  codex logs     Print recent Runtime and watchdog logs.\n\nFlags:\n  --print-env        Print the effective runtime env as JSON and exit.\n  --json             Print machine-readable JSON for supported commands.\n  --no-watchdog      Skip LaunchAgent watchdog install or status check.\n  --no-load-watchdog Write the watchdog plist without loading it.\n  --skip-doctor      Skip the post-install doctor run.\n  --no-start-runtime Do not autostart Runtime during doctor.\n  --no-runtime       Skip Runtime health check in status.\n  --help             Show this help.\n  --version          Show the package version.\n`);
 }
 
 function printVersion() {
@@ -317,16 +317,42 @@ function readSymlinkTarget(linkPath) {
   }
 }
 
-async function runtimeHealthStatus(baseUrl) {
+function watchdogRuntimeHealthStatus(paths, cause) {
+  const statusPath = path.join(paths.runtimeHome, "state", "watchdog-status.json");
+  try {
+    const status = JSON.parse(fs.readFileSync(statusPath, "utf8"));
+    const updatedAt = Date.parse(status.updated_at || "");
+    const ageMs = Number.isFinite(updatedAt) ? Date.now() - updatedAt : Number.POSITIVE_INFINITY;
+    if (status.ok === true && status.health?.ok === true && ageMs >= 0 && ageMs <= 120000) {
+      const ageSeconds = Math.round(ageMs / 1000);
+      const edition = status.health?.runtime?.edition ? ` ${status.health.runtime.edition}` : "";
+      return {
+        ok: true,
+        details: `${paths.baseUrl}${edition} via watchdog status (${ageSeconds}s old)`,
+      };
+    }
+    return {
+      ok: false,
+      details: `${paths.baseUrl} ${cause.message || cause}; watchdog status is stale or unhealthy`,
+    };
+  } catch {
+    return {
+      ok: false,
+      details: `${paths.baseUrl} ${cause.message || cause}`,
+    };
+  }
+}
+
+async function runtimeHealthStatus(paths) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 2500);
   try {
-    const response = await fetch(`${baseUrl}/health`, { signal: controller.signal });
-    if (!response.ok) return { ok: false, details: `${baseUrl}/health returned ${response.status}` };
+    const response = await fetch(`${paths.baseUrl}/health`, { signal: controller.signal });
+    if (!response.ok) return { ok: false, details: `${paths.baseUrl}/health returned ${response.status}` };
     const body = await response.json();
-    return { ok: body?.ok === true, details: `${baseUrl} ${body?.runtime?.edition || ""}`.trim() };
+    return { ok: body?.ok === true, details: `${paths.baseUrl} ${body?.runtime?.edition || ""}`.trim() };
   } catch (error) {
-    return { ok: false, details: `${baseUrl} ${error.message || error}` };
+    return watchdogRuntimeHealthStatus(paths, error);
   } finally {
     clearTimeout(timer);
   }
@@ -355,10 +381,17 @@ function marketplaceHasAionis(marketplacePath) {
   }
 }
 
+function codexManagedAionisHooksConfigured(codexConfig) {
+  const events = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "PermissionRequest"];
+  return codexConfig.includes("aionis-codex-hook.mjs")
+    && events.every((event) => new RegExp(`^\\s*${event}\\s*=`, "m").test(codexConfig));
+}
+
 async function codexStatus(args) {
-  validateFlags(args, new Set(["--no-runtime", "--no-watchdog"]));
+  validateFlags(args, new Set(["--no-runtime", "--no-watchdog", "--json"]));
   const skipRuntime = args.includes("--no-runtime");
   const skipWatchdog = args.includes("--no-watchdog");
+  const json = args.includes("--json");
   const paths = codexHomePaths();
   const checks = [];
   const codexConfig = readTextIfExists(paths.codexConfigPath);
@@ -369,6 +402,7 @@ async function codexStatus(args) {
   checkLine(checks, "Codex plugin symlink", symlink.ok, `${paths.localPluginLink} -> ${symlink.details}`);
   checkLine(checks, "local marketplace", marketplaceHasAionis(paths.marketplacePath), paths.marketplacePath);
   checkLine(checks, "codex_hooks", /^\s*codex_hooks\s*=\s*true\s*$/m.test(codexConfig), paths.codexConfigPath);
+  checkLine(checks, "managed hooks", codexManagedAionisHooksConfigured(codexConfig), paths.codexConfigPath);
   checkLine(checks, "plugin enabled", /^\s*\[plugins\."aionis-codex@local"\]\s*$/m.test(codexConfig) && /^\s*enabled\s*=\s*true\s*$/m.test(codexConfig), paths.codexConfigPath);
 
   if (!skipWatchdog) {
@@ -378,16 +412,27 @@ async function codexStatus(args) {
   }
 
   if (!skipRuntime) {
-    const health = await runtimeHealthStatus(paths.baseUrl);
+    const health = await runtimeHealthStatus(paths);
     checkLine(checks, "runtime health", health.ok, health.details);
   }
 
-  process.stdout.write("Aionis Codex status\n");
-  for (const item of checks) {
-    process.stdout.write(`${item.ok ? "PASS" : "FAIL"} ${item.name}${item.details ? ` - ${item.details}` : ""}\n`);
+  const ok = !checks.some((item) => !item.ok);
+  if (json) {
+    process.stdout.write(`${JSON.stringify({
+      ok,
+      base_url: paths.baseUrl,
+      runtime_home: paths.runtimeHome,
+      plugin_dir: paths.pluginDir,
+      checks,
+    }, null, 2)}\n`);
+  } else {
+    process.stdout.write("Aionis Codex status\n");
+    for (const item of checks) {
+      process.stdout.write(`${item.ok ? "PASS" : "FAIL"} ${item.name}${item.details ? ` - ${item.details}` : ""}\n`);
+    }
   }
 
-  return exitWithCode(checks.some((item) => !item.ok) ? 1 : 0);
+  return exitWithCode(ok ? 0 : 1);
 }
 
 async function codexDoctor(args) {
@@ -443,7 +488,7 @@ async function codexLogs(args) {
 }
 
 function printCodexHelp() {
-  process.stdout.write(`Aionis Runtime Codex integration\n\nUsage:\n  aionis-runtime codex install [--no-watchdog] [--no-load-watchdog] [--skip-doctor]\n  aionis-runtime codex status [--no-runtime] [--no-watchdog]\n  aionis-runtime codex doctor [--no-start-runtime]\n  aionis-runtime codex logs [runtime|watchdog|all] [--lines N]\n`);
+  process.stdout.write(`Aionis Runtime Codex integration\n\nUsage:\n  aionis-runtime codex install [--no-watchdog] [--no-load-watchdog] [--skip-doctor]\n  aionis-runtime codex status [--json] [--no-runtime] [--no-watchdog]\n  aionis-runtime codex doctor [--no-start-runtime]\n  aionis-runtime codex logs [runtime|watchdog|all] [--lines N]\n`);
 }
 
 async function handleCodex(args) {

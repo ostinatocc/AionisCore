@@ -56,6 +56,16 @@ test("UserPromptSubmit hook degrades with explicit Aionis-unavailable context", 
   assert.match(output.hookSpecificOutput.additionalContext, /could not reach/);
 });
 
+test("root hooks manifest exposes Codex lifecycle hooks", () => {
+  const rootHooks = JSON.parse(fs.readFileSync(path.join(pluginRoot, "hooks.json"), "utf8"));
+  const legacyHooks = JSON.parse(fs.readFileSync(path.join(pluginRoot, "hooks", "hooks.json"), "utf8"));
+
+  assert.deepEqual(rootHooks, legacyHooks);
+  for (const event of ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]) {
+    assert.ok(Array.isArray(rootHooks.hooks[event]), `${event} hook should be configured`);
+  }
+});
+
 test("PreToolUse hook stays non-blocking when runtime is unavailable", async () => {
   const result = await runHook({
     hook_event_name: "PreToolUse",

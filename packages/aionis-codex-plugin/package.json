@@ -7,6 +7,7 @@
   "files": [
     ".codex-plugin",
     ".mcp.json",
+    "hooks.json",
     "hooks",
     "lib",
     "mcp",
