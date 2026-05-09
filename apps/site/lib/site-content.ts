@@ -91,7 +91,7 @@ export const metrics = [
 ] as const;
 
 export const heroSignals = [
-  { label: "Runtime package", value: "0.2.5", tone: "cyan" },
+  { label: "Runtime package", value: "0.2.6", tone: "cyan" },
   { label: "SDK package", value: "0.4.0", tone: "amber" },
   { label: "GitHub Release", value: "v0.4.0", tone: "cyan" },
   { label: "Reproducible proofs", value: "6", tone: "amber" },
@@ -111,6 +111,16 @@ export const releaseSummary = {
 } as const;
 
 export const changelogEntries = [
+  {
+    version: "runtime 0.2.6",
+    date: "2026-05-09",
+    title: "Codex fast handoff reliability",
+    bullets: [
+      "Added a lightweight project handoff fast path so Codex still sees the most important continuity when heavier context endpoints time out",
+      "Ranked repo-level handoff candidates by high-signal task progress so newer generic summaries do not hide the active dogfood state",
+      "Cleaned up Runtime watchdog timeout handling by terminating the spawned process group instead of only the wrapper process",
+    ],
+  },
   {
     version: "runtime 0.2.5",
     date: "2026-05-09",
