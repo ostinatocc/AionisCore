@@ -717,6 +717,7 @@ test("runtime cli codex release stores a structured release outcome handoff", as
   const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-release-home-"));
   const runtimeHome = path.join(home, ".aionis", "codex");
   const requests = [];
+  const handoffUri = "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release-0.2.19";
   const server = createServer((req, res) => {
     let body = "";
     req.setEncoding("utf8");
@@ -726,12 +727,30 @@ test("runtime cli codex release stores a structured release outcome handoff", as
     req.on("end", () => {
       requests.push({ method: req.method, url: req.url, body: body ? JSON.parse(body) : null });
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({
-        ok: true,
-        handoff: {
-          uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release-0.2.19",
-        },
-      }));
+      if (req.url === "/v1/handoff/store") {
+        res.end(JSON.stringify({
+          ok: true,
+          handoff: {
+            uri: handoffUri,
+          },
+        }));
+        return;
+      }
+      if (req.url === "/v1/memory/find") {
+        res.end(JSON.stringify({
+          nodes: [
+            {
+              uri: handoffUri,
+              slots: {
+                anchor: `${packageDir}#release:0.2.19`,
+                repo_root: packageDir,
+              },
+            },
+          ],
+        }));
+        return;
+      }
+      res.end(JSON.stringify({ ok: true }));
     });
   });
 
@@ -744,9 +763,11 @@ test("runtime cli codex release stores a structured release outcome handoff", as
       "0.2.19",
       "--summary",
       "0.2.19 published and verified.",
+      "--cwd",
+      packageDir,
       "--json",
     ], {
-      cwd: packageDir,
+      cwd: os.tmpdir(),
       env: {
         ...process.env,
         HOME: home,
@@ -756,12 +777,18 @@ test("runtime cli codex release stores a structured release outcome handoff", as
     });
     assert.equal(release.status, 0, `${release.stdout}\n${release.stderr}`);
     const parsed = JSON.parse(release.stdout);
+    assert.equal(parsed.project.cwd, packageDir);
     assert.equal(parsed.stored.release_outcome, true);
     assert.equal(parsed.stored.version, "0.2.19");
     assert.equal(parsed.stored.handoff_quality.category, "release_outcome");
-    assert.equal(parsed.stored.uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release-0.2.19");
+    assert.equal(parsed.stored.uri, handoffUri);
+    assert.equal(parsed.audit_visibility.ok, true);
+    assert.equal(parsed.audit_visibility.project_cwd, packageDir);
+    assert.equal(parsed.audit_visibility.scope, parsed.project.scope);
+    assert.equal(parsed.audit_visibility.repo_root, packageDir);
+    assert.match(parsed.audit_visibility.audit_command, /aionis-runtime codex audit --limit 8/);
 
-    assert.equal(requests.length, 1);
+    assert.equal(requests.length, 2);
     assert.equal(requests[0].method, "POST");
     assert.equal(requests[0].url, "/v1/handoff/store");
     assert.equal(requests[0].body.anchor, `${packageDir}#release:0.2.19`);
@@ -772,6 +799,15 @@ test("runtime cli codex release stores a structured release outcome handoff", as
     assert.equal(requests[0].body.execution_result_summary.handoff_quality.category, "release_outcome");
     assert.ok(requests[0].body.tags.includes("release_outcome"));
     assert.ok(requests[0].body.tags.includes("0.2.19"));
+    assert.equal(requests[1].method, "POST");
+    assert.equal(requests[1].url, "/v1/memory/find");
+    assert.equal(requests[1].body.scope, parsed.project.scope);
+    assert.deepEqual(requests[1].body.slots_contains, {
+      summary_kind: "handoff",
+      handoff_kind: "task_handoff",
+      repo_root: packageDir,
+      anchor: `${packageDir}#release:0.2.19`,
+    });
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -781,6 +817,7 @@ test("runtime cli codex handoff stores a structured task outcome handoff", async
   const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-handoff-home-"));
   const runtimeHome = path.join(home, ".aionis", "codex");
   const requests = [];
+  const handoffUri = "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/task-handoff";
   const server = createServer((req, res) => {
     let body = "";
     req.setEncoding("utf8");
@@ -790,12 +827,28 @@ test("runtime cli codex handoff stores a structured task outcome handoff", async
     req.on("end", () => {
       requests.push({ method: req.method, url: req.url, body: body ? JSON.parse(body) : null });
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({
-        ok: true,
-        handoff: {
-          uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/task-handoff",
-        },
-      }));
+      if (req.url === "/v1/handoff/store") {
+        res.end(JSON.stringify({
+          ok: true,
+          handoff: {
+            uri: handoffUri,
+          },
+        }));
+        return;
+      }
+      if (req.url === "/v1/memory/find") {
+        const parsedBody = body ? JSON.parse(body) : {};
+        res.end(JSON.stringify({
+          nodes: [
+            {
+              uri: handoffUri,
+              slots: parsedBody.slots_contains,
+            },
+          ],
+        }));
+        return;
+      }
+      res.end(JSON.stringify({ ok: true }));
     });
   });
 
@@ -829,8 +882,10 @@ test("runtime cli codex handoff stores a structured task outcome handoff", async
     const parsed = JSON.parse(handoff.stdout);
     assert.equal(parsed.stored.release_outcome, false);
     assert.equal(parsed.stored.handoff_quality.category, "execution_outcome");
+    assert.equal(parsed.audit_visibility.ok, true);
+    assert.equal(parsed.audit_visibility.uri, handoffUri);
 
-    assert.equal(requests.length, 1);
+    assert.equal(requests.length, 2);
     assert.equal(requests[0].method, "POST");
     assert.equal(requests[0].url, "/v1/handoff/store");
     assert.match(requests[0].body.anchor, new RegExp(`^${packageDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}#handoff:`));
@@ -841,6 +896,74 @@ test("runtime cli codex handoff stores a structured task outcome handoff", async
     assert.deepEqual(requests[0].body.acceptance_checks, ["runtime CLI tests pass"]);
     assert.ok(requests[0].body.tags.includes("manual_handoff"));
     assert.ok(requests[0].body.tags.includes("dogfood"));
+    assert.equal(requests[1].url, "/v1/memory/find");
+    assert.equal(requests[1].body.slots_contains.repo_root, packageDir);
+    assert.equal(requests[1].body.slots_contains.anchor, requests[0].body.anchor);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runtime cli codex handoff warns when audit cannot see the stored uri", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-handoff-mismatch-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const storedUri = "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/new-task-handoff";
+  const staleUri = "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/stale-task-handoff";
+  const server = createServer((req, res) => {
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      if (req.url === "/v1/handoff/store") {
+        res.end(JSON.stringify({
+          ok: true,
+          handoff: {
+            uri: storedUri,
+          },
+        }));
+        return;
+      }
+      if (req.url === "/v1/memory/find") {
+        res.end(JSON.stringify({
+          nodes: [
+            {
+              uri: staleUri,
+            },
+          ],
+        }));
+        return;
+      }
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const handoff = await spawnCli([
+      "codex",
+      "handoff",
+      "--summary",
+      "Stored uri visibility should not pass on stale audit nodes.",
+      "--json",
+    ], {
+      cwd: packageDir,
+      env: {
+        ...process.env,
+        HOME: home,
+        AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+        AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+      },
+    });
+    assert.equal(handoff.status, 0, `${handoff.stdout}\n${handoff.stderr}`);
+    const parsed = JSON.parse(handoff.stdout);
+    assert.equal(parsed.stored.uri, storedUri);
+    assert.equal(parsed.audit_visibility.ok, false);
+    assert.equal(parsed.audit_visibility.node_count, 1);
+    assert.equal(parsed.audit_visibility.uri, null);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
