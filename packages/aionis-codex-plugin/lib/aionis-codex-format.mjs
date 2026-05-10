@@ -585,6 +585,7 @@ function isStatusOrDiscussionLead(text) {
     /^\u73b0\u5728\u72b6\u6001/,
     /^\u53d1\u5e03\u88ab\s*npm\s*\u62e6\u4f4f/,
     /^\u4f60\u8fd9\u4e2a\u8d28\u7591/,
+    /^\u6211\u4e0d\u662f\u628a/,
     /^\u8fd9\u91cc\u8981\u5206\u6e05/,
     /^\u672c\u8d28\u4e0a/,
     /^\u6211\u7684\u771f\u5b9e\u7ed3\u8bba/,

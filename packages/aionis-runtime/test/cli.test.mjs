@@ -2,12 +2,34 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import os from "node:os";
+import { createServer } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const packageDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = path.join(packageDir, "dist", "bin", "aionis-runtime.mjs");
+
+function spawnCli(args, options = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [cliPath, ...args], {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("close", (status) => resolve({ status, stdout, stderr }));
+  });
+}
 
 test("runtime cli prints help", () => {
   const result = spawnSync(process.execPath, [cliPath, "--help"], {
@@ -216,4 +238,134 @@ test("runtime cli audits local Codex state without Runtime", () => {
   assert.equal(parsed.session.active_turn_id, turnId);
   assert.equal(parsed.session.step_count, 1);
   assert.match(parsed.session.latest_prompt, /Audit the Aionis Codex context quality/);
+  assert.deepEqual(parsed.remediations, []);
+});
+
+test("runtime cli audit reports remediation for filtered historical handoffs", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-remediation-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const sessionId = "audit-remediation-session";
+  const turnId = "audit-remediation-turn";
+  const runId = "audit-remediation-run";
+  const pollutedSummary =
+    "接下来不要再盲目加功能了。现在最应该推进的是把 Aionis 的 context 质量继续打磨。我建议按这个顺序走。";
+  const legacyExplainerSummary =
+    "我不是把这些内容完全不记录，而是做了两层隔离。Stop hook 还是会写普通 session event，但只有真正有执行结果的内容才会升级成 handoff。";
+  const quality = {
+    store_handoff: true,
+    category: "execution_outcome",
+    confidence: 0.82,
+    reasons: ["task_handoff_evidence"],
+  };
+
+  mkdirSync(path.join(runtimeHome, "state", "sessions"), { recursive: true });
+  writeFileSync(path.join(runtimeHome, "state", "active-project.json"), JSON.stringify({
+    cwd: packageDir,
+    project_name: "aionis-runtime",
+    project_hash: "testhash",
+    scope: "codex:aionis-runtime:testhash",
+    global_scope: "codex:global",
+    tenant_id: "local-codex",
+    consumer_agent_id: "codex",
+    consumer_team_id: "local-codex",
+    updated_at: new Date().toISOString(),
+  }));
+  writeFileSync(path.join(runtimeHome, "state", "sessions", `${sessionId}.json`), JSON.stringify({
+    session_id: sessionId,
+    active_turn_id: turnId,
+    active_run_id: runId,
+    turns: {
+      [turnId]: {
+        turn_id: turnId,
+        run_id: runId,
+        prompt: "Audit filtered historical context.",
+      },
+    },
+    steps: {},
+    updated_at: new Date().toISOString(),
+  }));
+
+  const server = createServer((req, res) => {
+    const url = new URL(req.url, "http://127.0.0.1");
+    res.setHeader("content-type", "application/json");
+    if (req.method === "GET" && url.pathname === "/health") {
+      res.end(JSON.stringify({ ok: true, runtime: { edition: "lite" } }));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === `/v1/memory/sessions/${sessionId}/events`) {
+      res.end(JSON.stringify({
+        events: [
+          {
+            title: "Codex turn ended",
+            created_at: new Date().toISOString(),
+            text_summary: pollutedSummary,
+            slots: {
+              phase: "Stop",
+              turn_id: turnId,
+              run_id: runId,
+              handoff_quality: quality,
+            },
+          },
+        ],
+      }));
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/v1/memory/find") {
+      req.resume();
+      req.on("end", () => {
+        res.end(JSON.stringify({
+          nodes: [
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/polluted",
+              created_at: new Date().toISOString(),
+              text_summary: pollutedSummary,
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: quality,
+                },
+              },
+            },
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/legacy-explainer",
+              created_at: new Date().toISOString(),
+              text_summary: legacyExplainerSummary,
+              slots: {},
+            },
+          ],
+        }));
+      });
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const audit = await spawnCli(["codex", "audit", "--json", "--session", sessionId, "--limit", "4"], {
+      cwd: packageDir,
+      env: {
+        ...process.env,
+        HOME: home,
+        AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+        AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+      },
+    });
+    assert.equal(audit.status, 0, `${audit.stdout}\n${audit.stderr}`);
+    const parsed = JSON.parse(audit.stdout);
+
+    assert.equal(parsed.quality_summary.accepted, 1);
+    assert.equal(parsed.quality_summary.filtered_by_current_policy, 1);
+    assert.equal(parsed.handoff_display_summary.filtered, 2);
+    assert.equal(parsed.remediations.length, 2);
+    assert.equal(parsed.remediations[0].kind, "filtered_historical_handoff");
+    assert.equal(parsed.remediations[0].action, "keep_hidden_from_task_start_context");
+    assert.equal(parsed.remediations[0].uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/polluted");
+    assert.deepEqual(parsed.remediations[0].reasons, ["planning_advice_without_execution_evidence"]);
+    assert.equal(parsed.remediations[1].uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/legacy-explainer");
+    assert.deepEqual(parsed.remediations[1].reasons, ["status_or_discussion_lead"]);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });

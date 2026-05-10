@@ -585,19 +585,23 @@ function auditStatusOrDiscussionLead(text) {
     /^\u73b0\u5728\u6574\u4f53/,
     /^\u73b0\u5728\u72b6\u6001/,
     /^\u4f60\u8fd9\u4e2a\u8d28\u7591/,
+    /^\u6211\u4e0d\u662f\u628a/,
     /^\u4f1a\u3002\u4e00\u5b9a\u4f1a/,
     /^Current status\b/i,
     /^Overall\b/i,
   ].some((pattern) => pattern.test(text));
 }
 
-function auditDisplayDecision(summary, quality) {
+function auditDisplayDecision(summary, quality, options = {}) {
   const text = String(summary || "").replace(/\s+/g, " ").trim();
   if (!text) return { decision: "filtered", reasons: ["empty_summary"] };
   if (quality?.category === "release_outcome") return { decision: "visible", reasons: ["release_outcome"] };
   if (auditStatusOrDiscussionLead(text)) return { decision: "filtered", reasons: ["status_or_discussion_lead"] };
   if (auditPlanningAdviceLead(text) && !auditHasConcreteOutcomeSignal(text)) {
     return { decision: "filtered", reasons: ["planning_advice_without_execution_evidence"] };
+  }
+  if (options.legacyHandoff && !quality && !auditHasConcreteOutcomeSignal(text)) {
+    return { decision: "filtered", reasons: ["legacy_handoff_without_execution_evidence"] };
   }
   return { decision: "visible", reasons: [] };
 }
@@ -610,12 +614,12 @@ function summarizeQualityRows(rows) {
   let missing = 0;
   let filteredByCurrentPolicy = 0;
   for (const row of rows) {
-    if (row.display?.decision === "filtered") filteredByCurrentPolicy += 1;
     const quality = asObject(row.handoff_quality);
     if (!quality || !Object.keys(quality).length) {
       missing += 1;
       continue;
     }
+    if (row.display?.decision === "filtered") filteredByCurrentPolicy += 1;
     if (quality.store_handoff === true) accepted += 1;
     else rejected += 1;
     const category = String(quality.category || "unknown");
@@ -635,6 +639,41 @@ function summarizeDisplayRows(rows) {
     else visible += 1;
   }
   return { visible, filtered };
+}
+
+function remediationSummary(row) {
+  return String(row.summary || "").replace(/\s+/g, " ").trim();
+}
+
+function buildAuditRemediations(args) {
+  const remediations = [];
+  for (const handoff of args.handoffs) {
+    if (handoff.display?.decision !== "filtered") continue;
+    remediations.push({
+      kind: "filtered_historical_handoff",
+      severity: "medium",
+      action: "keep_hidden_from_task_start_context",
+      uri: handoff.uri || null,
+      reasons: Array.isArray(handoff.display.reasons) ? handoff.display.reasons : [],
+      summary: remediationSummary(handoff),
+      note: "This handoff was stored by an older decision but current display policy would suppress it.",
+    });
+  }
+  const longAccepted = args.events.find(
+    (row) => row.handoff_quality?.store_handoff === true && row.summary_chars > 1200 && row.display?.decision !== "filtered",
+  );
+  if (longAccepted) {
+    remediations.push({
+      kind: "oversized_visible_handoff",
+      severity: "low",
+      action: "compress_before_task_start_context",
+      uri: null,
+      reasons: ["summary_too_long"],
+      summary: remediationSummary(longAccepted),
+      note: "Visible handoff text is long enough to dilute task-start context.",
+    });
+  }
+  return remediations;
 }
 
 function buildAuditWarnings(args) {
@@ -749,7 +788,7 @@ async function codexAudit(args) {
         const slots = asObject(node.slots);
         const summary = String(node.text_summary || slots.handoff_text || "");
         const quality = qualityFromHandoff(node);
-        const display = auditDisplayDecision(summary, quality);
+        const display = auditDisplayDecision(summary, quality, { legacyHandoff: true });
         return {
           uri: node.uri || null,
           created_at: node.created_at || null,
@@ -789,6 +828,7 @@ async function codexAudit(args) {
     quality_summary: summarizeQualityRows(events),
     handoff_display_summary: summarizeDisplayRows(handoffs),
   };
+  payload.remediations = buildAuditRemediations({ events, handoffs });
   payload.warnings = buildAuditWarnings({ project, session, runtime, events, handoffs });
 
   if (json) {
@@ -829,6 +869,14 @@ async function codexAudit(args) {
   if (payload.warnings.length) {
     process.stdout.write("warnings\n");
     for (const warning of payload.warnings) process.stdout.write(`- ${warning}\n`);
+  }
+  if (payload.remediations.length) {
+    process.stdout.write("remediation\n");
+    for (const remediation of payload.remediations) {
+      const target = remediation.uri ? ` uri=${remediation.uri}` : "";
+      const reasons = remediation.reasons?.length ? ` reasons=${remediation.reasons.join(",")}` : "";
+      process.stdout.write(`- ${remediation.action}${target}${reasons} ${remediation.summary}\n`);
+    }
   }
   return exitWithCode(payload.ok ? 0 : 1);
 }
