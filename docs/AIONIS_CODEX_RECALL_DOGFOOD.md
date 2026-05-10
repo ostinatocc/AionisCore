@@ -59,9 +59,10 @@ Garbage context:
 9. Agent resume continuity was artificially narrowed by a fake cwd anchor. Task 9 makes repo-level handoff recovery possible without breaking repos that have no handoff yet.
 10. Release completion is a special status class. Task 10 showed that suppressing status-only assistant replies prevents noise, but it can also drop externally visible outcomes such as a completed npm publish. The Codex Stop hook now stores those as compact `release_outcome` handoffs keyed by version.
 11. The first live prompt after publishing `0.2.10` recovered the release completion, but fast facts compressed away `npm latest`, clean `npx`, and clean install evidence. Release outcome display needs evidence-aware compression, not just outcome storage.
+12. The next live prompt showed a second display issue: a newer source-change handoff can cover the latest release outcome. Fast facts now need both `latest_task_handoff` and a separate `latest_release_outcome` so current task continuity does not hide published package state.
 
 ## Next Fix Targets
 
-1. Keep release outcome evidence visible in `Fast Task Facts`: `npm_latest`, `clean_npx`, `clean_install`, and `codex_status`.
-2. Use the next live Codex prompt to check whether `Fast Task Facts` surfaces publish/install evidence through the resume pack, not only through raw command revalidation.
+1. Use the next live Codex prompt to check whether `Fast Task Facts` shows both the latest source task and `latest_release_outcome` with `npm_latest`, `clean_npx`, and `clean_install`.
+2. If the live prompt is correct, release the `0.2.11` Codex display fix and reinstall from npm.
 3. Run the same Codex recall loop on a second repository to check whether the improvements generalize beyond AionisRuntime.

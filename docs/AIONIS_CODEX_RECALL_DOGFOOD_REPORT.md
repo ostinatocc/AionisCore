@@ -22,6 +22,7 @@ Aionis is harmful or distracting when it surfaces generic or stale context:
 3. flat non-fatal errors without route, timeout, or recovery detail
 4. status-only suppression that drops important external outcomes such as an npm publish
 5. compact summaries that omit the actual release/install evidence behind a "done" claim
+6. newer task handoffs that hide the latest release outcome from the first screen
 
 ## What Helped
 
@@ -59,7 +60,7 @@ That is directionally correct, but the visible fast fact still compressed away t
 3. clean HOME Codex install returned `ok: true`
 4. live Codex doctor passed
 
-This means release outcome capture works, but release outcome display still needs evidence-aware compression.
+This means release outcome capture works, but release outcome display still needs evidence-aware compression. The next live prompt exposed the remaining shape: after a source-change handoff, the first screen still needs a separate `latest_release_outcome` line so published package state remains visible beside the newest task handoff.
 
 ## Product Conclusion
 
@@ -74,7 +75,7 @@ That is enough to justify continuing the Codex integration for real development 
 
 ## Next Cuts
 
-1. Keep release outcome evidence visible in `Fast Task Facts`: `npm_latest`, `clean_npx`, `clean_install`, and `codex_status`.
-2. Re-run the next live prompt and verify the fast fact includes the release evidence, not just a generic completion sentence.
+1. Keep release outcome evidence visible in `Fast Task Facts`: `latest_release_outcome`, `npm_latest`, `clean_npx`, `clean_install`, and `codex_status`.
+2. Re-run the next live prompt and verify the first screen includes both current task continuity and the latest release outcome.
 3. Run the same Codex recall loop on a second repository to check whether the improvements generalize beyond AionisRuntime.
 4. Keep suppressing generic memory. Aionis should earn visible space only when it changes the first action or validation boundary.

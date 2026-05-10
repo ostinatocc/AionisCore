@@ -477,6 +477,46 @@ test("renderAionisHookContext keeps release outcome evidence visible", () => {
   assert.match(text, /codex_status=pass/);
 });
 
+test("renderAionisHookContext keeps release outcome visible when a newer task handoff exists", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-release-after-source",
+    runId: "run-release-after-source",
+    prompt: "继续推进吧",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      handoff: {
+        summary: "这轮继续推进完了，新增 dogfood 总结报告并修了 Fast Facts 发布证据显示。提交 7862d4f。验证：codex-plugin:test 32 pass，runtime test 7 pass，pack dry-run 通过。",
+        uri: "aionis://local-codex/codex%3Aproject/event/source-0.2.11",
+      },
+      nodes: [
+        {
+          summary: [
+            "0.2.10 发布闭环完成了。",
+            "npm latest：@ostinato/aionis-runtime@0.2.10。",
+            "clean npx --yes @ostinato/aionis-runtime@0.2.10 --version 返回 0.2.10。",
+            "隔离 HOME 新用户安装验证：codex status --json 返回 ok: true。",
+            "Codex install / watchdog / runtime health：PASS。",
+          ].join(" "),
+          tags: ["codex", "release", "release_outcome", "0.2.10"],
+          execution_result_summary: {
+            release_outcome: true,
+            version: "0.2.10",
+          },
+          uri: "aionis://local-codex/codex%3Aproject/event/release-0.2.10",
+        },
+      ],
+    },
+  });
+
+  assert.match(text, /latest_task_handoff=这轮继续推进完了/);
+  assert.match(text, /latest_release_outcome=0\.2\.10 发布闭环完成了/);
+  assert.match(text, /npm_latest=0\.2\.10/);
+  assert.match(text, /clean_npx=0\.2\.10/);
+  assert.match(text, /clean_install=pass/);
+});
+
 test("renderAionisHookContext keeps commit-heavy handoff summaries untruncated", () => {
   const text = renderAionisHookContext({
     config,
