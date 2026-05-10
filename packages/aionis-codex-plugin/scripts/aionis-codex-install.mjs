@@ -14,6 +14,8 @@ const localPluginLink = path.join(localPluginsDir, "aionis-codex");
 const marketplacePath = path.join(agentsPluginsRoot, "marketplace.json");
 const codexConfigPath = path.join(home, ".codex", "config.toml");
 const codexPluginCacheRoot = path.join(home, ".codex", "plugins", "cache", "local", "aionis-codex");
+const runtimeHome = path.resolve(expandHome(process.env.AIONIS_CODEX_RUNTIME_HOME || path.join(home, ".aionis", "codex")));
+const installedPluginDir = path.resolve(expandHome(process.env.AIONIS_CODEX_PLUGIN_DIR || path.join(runtimeHome, "plugin")));
 const installWatchdog = !process.argv.includes("--no-watchdog");
 const loadWatchdog = !process.argv.includes("--no-load-watchdog");
 const cacheEntries = [".codex-plugin", ".mcp.json", "hooks.json", "hooks", "lib", "mcp", "scripts", "skills", "README.md", "package.json"];
@@ -37,6 +39,22 @@ function readJson(filePath, fallback) {
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function expandHome(value) {
+  const text = String(value);
+  if (text === "~") return home;
+  if (text.startsWith("~/")) return path.join(home, text.slice(2));
+  return text;
+}
+
+function sameFilesystemPath(left, right) {
+  if (path.resolve(left) === path.resolve(right)) return true;
+  try {
+    return fs.realpathSync(left) === fs.realpathSync(right);
+  } catch {
+    return false;
+  }
 }
 
 function readPluginVersion() {
@@ -93,14 +111,24 @@ function ensureMarketplace() {
 
 function ensureCodexPluginCache() {
   const cachePluginRoot = path.join(codexPluginCacheRoot, readPluginVersion());
-  fs.rmSync(cachePluginRoot, { recursive: true, force: true });
-  fs.mkdirSync(cachePluginRoot, { recursive: true });
+  copyPluginEntries(cachePluginRoot);
+  return cachePluginRoot;
+}
+
+function copyPluginEntries(targetDir) {
+  fs.rmSync(targetDir, { recursive: true, force: true });
+  fs.mkdirSync(targetDir, { recursive: true });
   for (const entry of cacheEntries) {
     const source = path.join(pluginRoot, entry);
     if (!fs.existsSync(source)) continue;
-    fs.cpSync(source, path.join(cachePluginRoot, entry), { recursive: true });
+    fs.cpSync(source, path.join(targetDir, entry), { recursive: true });
   }
-  return cachePluginRoot;
+  return targetDir;
+}
+
+function ensureInstalledPluginDir() {
+  if (sameFilesystemPath(pluginRoot, installedPluginDir)) return installedPluginDir;
+  return copyPluginEntries(installedPluginDir);
 }
 
 function codexHooksEnabled() {
@@ -184,7 +212,7 @@ function tomlString(value) {
 }
 
 function hookCommand() {
-  return `node ${JSON.stringify(path.join(pluginRoot, "hooks", "aionis-codex-hook.mjs"))}`;
+  return `node ${JSON.stringify(path.join(installedPluginDir, "hooks", "aionis-codex-hook.mjs"))}`;
 }
 
 function hookMatcherGroupToml(event, matcher, statusMessage) {
@@ -280,15 +308,17 @@ function ensureCodexConfig() {
 
 ensureSymlink();
 ensureMarketplace();
+const actualPluginRoot = ensureInstalledPluginDir();
 ensureCodexConfig();
 const cachePluginRoot = ensureCodexPluginCache();
 const watchdog = installWatchdog
-  ? installLaunchAgent(pluginRoot, { load: loadWatchdog })
+  ? installLaunchAgent(actualPluginRoot, { load: loadWatchdog, runtimeHome })
   : { supported: process.platform === "darwin", loaded: false, message: "LaunchAgent watchdog install skipped." };
 
 process.stdout.write([
   "Aionis Codex plugin installed locally.",
   `plugin_link=${localPluginLink}`,
+  `plugin_dir=${actualPluginRoot}`,
   `plugin_cache=${cachePluginRoot}`,
   `marketplace=${marketplacePath}`,
   codexHooksEnabled()
