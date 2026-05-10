@@ -140,10 +140,19 @@ test("UserPromptSubmit skips blocking planning context when project handoff is a
 
 test("Stop hook does not store status-only assistant replies as task handoffs", async () => {
   const routes = [];
+  const bodies = {};
   const server = http.createServer((req, res) => {
     routes.push(req.url);
-    req.resume();
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
     req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: true }));
     });
@@ -163,6 +172,9 @@ test("Stop hook does not store status-only assistant replies as task handoffs", 
     assert.equal(routes.includes("/v1/memory/events"), true);
     assert.equal(routes.includes("/v1/memory/replay/run/end"), true);
     assert.equal(routes.includes("/v1/handoff/store"), false);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.store_handoff, false);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.category, "status_report");
+    assert.ok(bodies["/v1/memory/events"][0].metadata.handoff_quality.reasons.includes("status_only_assistant_text"));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -216,10 +228,19 @@ test("Stop hook does not store release-looking overall status as release outcome
 
 test("Stop hook does not store conceptual product answers as task handoffs", async () => {
   const routes = [];
+  const bodies = {};
   const server = http.createServer((req, res) => {
     routes.push(req.url);
-    req.resume();
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
     req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: true }));
     });
@@ -246,6 +267,9 @@ test("Stop hook does not store conceptual product answers as task handoffs", asy
     assert.equal(routes.includes("/v1/memory/events"), true);
     assert.equal(routes.includes("/v1/memory/replay/run/end"), true);
     assert.equal(routes.includes("/v1/handoff/store"), false);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.store_handoff, false);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.category, "conceptual_answer");
+    assert.ok(bodies["/v1/memory/events"][0].metadata.handoff_quality.reasons.includes("conceptual_discussion_only"));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -253,10 +277,19 @@ test("Stop hook does not store conceptual product answers as task handoffs", asy
 
 test("Stop hook still stores implementation summaries as task handoffs", async () => {
   const routes = [];
+  const bodies = {};
   const server = http.createServer((req, res) => {
     routes.push(req.url);
-    req.resume();
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
     req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: true }));
     });
@@ -274,6 +307,10 @@ test("Stop hook still stores implementation summaries as task handoffs", async (
     });
     assert.deepEqual(JSON.parse(result.stdout), {});
     assert.equal(routes.includes("/v1/handoff/store"), true);
+    const handoff = bodies["/v1/handoff/store"][0];
+    assert.equal(handoff.execution_result_summary.handoff_quality.store_handoff, true);
+    assert.equal(handoff.execution_result_summary.handoff_quality.category, "execution_outcome");
+    assert.ok(handoff.execution_result_summary.handoff_quality.reasons.includes("task_handoff_evidence"));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -322,6 +359,9 @@ test("Stop hook stores verified release outcomes even when the reply is status-s
     assert.ok(handoff.tags.includes("release_outcome"));
     assert.equal(handoff.execution_result_summary.release_outcome, true);
     assert.equal(handoff.execution_result_summary.version, "0.2.9");
+    assert.equal(handoff.execution_result_summary.handoff_quality.category, "release_outcome");
+    assert.equal(handoff.execution_result_summary.handoff_quality.store_handoff, true);
+    assert.ok(handoff.execution_result_summary.handoff_quality.reasons.includes("release_completion_signal"));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

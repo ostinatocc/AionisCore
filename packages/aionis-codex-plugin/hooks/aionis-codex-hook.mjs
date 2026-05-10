@@ -397,22 +397,65 @@ function isReleaseOutcomeSummary(value, prompt = "") {
   return hasExternalSurface && hasSuccessSignal;
 }
 
-function shouldStoreStopHandoff(args) {
+function handoffQualityDecision(args) {
   const summary = normalizeStopText(args.summary);
-  if (!summary) return false;
-  if (isReleaseOutcomeSummary(summary, args.prompt)) return true;
-  if (isStatusOrCommandPrompt(args.prompt)) return false;
-  if (isCommandInstructionOnly(summary)) return false;
-  if (isStatusOnlyAssistantText(summary)) return false;
-  if (isNextStepPlanningPrompt(args.prompt) && isPlanningAdviceOnly(summary)) return false;
-  if (isPlanningAdviceOnly(summary)) return false;
-  if (isConceptualDiscussionPrompt(args.prompt) && isConceptualDiscussionOnly(summary)) return false;
-  return true;
+  const prompt = normalizeStopText(args.prompt);
+  const reasons = [];
+  if (!summary) {
+    return { store_handoff: false, category: "empty", confidence: 1, reasons: ["empty_summary"] };
+  }
+  if (isReleaseOutcomeSummary(summary, prompt)) {
+    return {
+      store_handoff: true,
+      category: "release_outcome",
+      confidence: 0.95,
+      reasons: ["release_version", "release_completion_signal", "external_release_surface"],
+    };
+  }
+  if (isStatusOrCommandPrompt(prompt)) reasons.push("status_or_command_prompt");
+  if (isCommandInstructionOnly(summary)) reasons.push("command_instruction_only");
+  if (isStatusOnlyAssistantText(summary)) reasons.push("status_only_assistant_text");
+  if (isNextStepPlanningPrompt(prompt) && isPlanningAdviceOnly(summary)) reasons.push("next_step_planning_advice");
+  else if (isPlanningAdviceOnly(summary)) reasons.push("planning_advice_only");
+  if (isConceptualDiscussionPrompt(prompt) && isConceptualDiscussionOnly(summary)) reasons.push("conceptual_discussion_only");
+  if (reasons.length > 0) {
+    return {
+      store_handoff: false,
+      category: reasons.includes("conceptual_discussion_only")
+        ? "conceptual_answer"
+        : reasons.includes("next_step_planning_advice") || reasons.includes("planning_advice_only")
+          ? "planning_advice"
+          : reasons.includes("command_instruction_only")
+            ? "command_instruction"
+            : "status_report",
+      confidence: 0.9,
+      reasons,
+    };
+  }
+  if (hasTaskHandoffEvidence(summary)) {
+    return {
+      store_handoff: true,
+      category: "execution_outcome",
+      confidence: 0.82,
+      reasons: ["task_handoff_evidence"],
+    };
+  }
+  return {
+    store_handoff: true,
+    category: "execution_outcome",
+    confidence: 0.62,
+    reasons: ["default_task_handoff_candidate"],
+  };
 }
 
-function buildStopHandoffPayload(config, sessionId, turnId, runId, turn, summary, eventName) {
+function shouldStoreStopHandoff(args) {
+  return handoffQualityDecision(args).store_handoff;
+}
+
+function buildStopHandoffPayload(config, sessionId, turnId, runId, turn, summary, eventName, qualityDecision = null) {
   const releaseVersion = releaseOutcomeVersion(summary);
-  const isReleaseOutcome = isReleaseOutcomeSummary(summary, turn.prompt || "");
+  const decision = qualityDecision || handoffQualityDecision({ prompt: turn.prompt, summary, eventName });
+  const isReleaseOutcome = decision.category === "release_outcome";
   return {
     ...commonRuntimeFields(config),
     handoff_kind: "task_handoff",
@@ -437,6 +480,7 @@ function buildStopHandoffPayload(config, sessionId, turnId, runId, turn, summary
       run_id: runId,
       turn_id: turnId,
       prompt: turn.prompt || null,
+      handoff_quality: decision,
       ...(isReleaseOutcome ? { release_outcome: true, version: releaseVersion } : {}),
     },
   };
@@ -751,6 +795,7 @@ async function handleStop(input, eventName = "Stop") {
     || ""
   ).trim();
   const summary = assistantText || `Codex turn ${turnId} ended`;
+  const handoffQuality = handoffQualityDecision({ prompt: turn.prompt, summary, eventName });
 
   const runtimeStatus = await ensureRuntime(config);
   if (runtimeStatus.ok) {
@@ -759,9 +804,9 @@ async function handleStop(input, eventName = "Stop") {
         title: eventName === "SessionEnd" ? "Codex session ended" : "Codex turn ended",
         eventText: summary,
         summary,
-        metadata: { turn_id: turnId, run_id: runId, phase: eventName },
+        metadata: { turn_id: turnId, run_id: runId, phase: eventName, handoff_quality: handoffQuality },
     }), []);
-    if (shouldStoreStopHandoff({ prompt: turn.prompt, summary, eventName })) {
+    if (handoffQuality.store_handoff) {
       await safeRuntimeCall(config, "handoff_store", () =>
         runtimePost(config, "/v1/handoff/store", buildStopHandoffPayload(
           config,
@@ -771,6 +816,7 @@ async function handleStop(input, eventName = "Stop") {
           turn,
           summary,
           eventName,
+          handoffQuality,
         )), []);
     }
     await safeRuntimeCall(config, "replay_run_end", () =>
