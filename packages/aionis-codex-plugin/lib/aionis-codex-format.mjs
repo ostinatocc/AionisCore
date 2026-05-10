@@ -594,7 +594,8 @@ function isStatusOrDiscussionLead(text) {
     /^Overall\b/i,
     /^The key point\b/i,
     /^\u4f1a\u3002\u4e00\u5b9a\u4f1a/,
-    /\bEOTP\b|\bone-time password\b|\u4e00\u6b21\u6027\u9a8c\u8bc1\u7801/i,
+    /^\s*(?:npm\s+)?(?:error\s+code\s+)?EOTP\b/i,
+    /^\s*(?:one-time password|\u4e00\u6b21\u6027\u9a8c\u8bc1\u7801)/i,
   ].some((pattern) => pattern.test(text));
 }
 

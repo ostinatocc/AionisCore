@@ -313,6 +313,43 @@ test("renderAionisHookContext prefers newer dogfood follow-up over old completed
   assert.doesNotMatch(text, /latest_task_handoff=Aionis Codex recall dogfood loop: 10 of 10/);
 });
 
+test("renderAionisHookContext keeps execution handoffs that mention EOTP after verified work", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-eotp-execution",
+    runId: "run-eotp-execution",
+    prompt: "Continue dogfood",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      nodes: [
+        {
+          title: "Handoff /repo#newer",
+          text_summary: [
+            "继续推进完了。",
+            "源码已经推到公共 main，现在远端包含两个关键提交：7e9e6b4 和 2e219e2。",
+            "验证结果：Codex plugin test 38 pass，Runtime test 9 pass，codex status 全 PASS。",
+            "npm 发布还没完成：npm 返回 EOTP，要求一次性验证码。",
+          ].join(" "),
+          uri: "aionis://local-codex/codex%3Aproject/event/newer-eotp",
+        },
+        {
+          title: "Handoff /repo#older",
+          text_summary: "已继续推进并提交：7e9e6b4 Add Codex context audit command。验证过：Codex plugin test 38 pass，Runtime test 8 pass，codex status 全 PASS。",
+          uri: "aionis://local-codex/codex%3Aproject/event/older",
+        },
+      ],
+    },
+    planningContext: null,
+    contextAssemble: null,
+  });
+
+  assert.match(text, /latest_task_handoff=继续推进完了/);
+  assert.match(text, /commits=7e9e6b4,2e219e2/);
+  assert.match(text, /handoff_uri=aionis:\/\/local-codex\/codex%3Aproject\/event\/newer-eotp/);
+  assert.doesNotMatch(text, /latest_task_handoff=已继续推进并提交/);
+});
+
 test("renderAionisHookContext promotes latest dogfood progress and suppresses stale workflow entries", () => {
   const text = renderAionisHookContext({
     config,
