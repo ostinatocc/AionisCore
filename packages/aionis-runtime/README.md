@@ -2,7 +2,7 @@
 
 Standalone local-first Aionis Runtime package.
 
-Current release line: `0.2.18` for the Aionis Lite Developer Preview.
+Current release line: `0.2.19` for the Aionis Lite Developer Preview.
 
 ## Start
 
@@ -29,6 +29,8 @@ npx @ostinato/aionis-runtime@latest codex status
 npx @ostinato/aionis-runtime@latest codex status --json
 npx @ostinato/aionis-runtime@latest codex audit
 npx @ostinato/aionis-runtime@latest codex audit --json
+npx @ostinato/aionis-runtime@latest codex handoff --summary "Implemented the task and verified tests."
+npx @ostinato/aionis-runtime@latest codex release 0.2.19 --summary "0.2.19 published and verified."
 npx @ostinato/aionis-runtime@latest codex doctor
 npx @ostinato/aionis-runtime@latest codex logs
 ```
@@ -39,6 +41,7 @@ npx @ostinato/aionis-runtime@latest codex logs
 - installs the Codex plugin from the Runtime package with one command
 - keeps the Codex Runtime process online through a macOS LaunchAgent watchdog
 - audits recent Codex context and handoff-quality decisions with `codex audit`
+- stores explicit task and release handoffs with `codex handoff` and `codex release`
 - injects compact Codex task-start facts before heavier Runtime context payloads
 - recovers private task handoffs in local/auth-off Codex installs using request consumer identity
 - recovers the latest repo-level Codex handoff without requiring a fake cwd anchor

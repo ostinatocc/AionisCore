@@ -19,7 +19,7 @@ const bundledCodexPluginDir = path.join(distDir, "codex-plugin");
 const cwd = process.cwd();
 
 function printHelp() {
-  process.stdout.write(`Aionis Runtime\n\nUsage:\n  aionis-runtime start [--print-env] [node args...]\n  aionis-runtime codex install [--no-watchdog] [--no-load-watchdog] [--skip-doctor]\n  aionis-runtime codex status [--json] [--no-runtime] [--no-watchdog]\n  aionis-runtime codex audit [--json] [--limit N] [--session SESSION_ID] [--no-runtime]\n  aionis-runtime codex doctor [--no-start-runtime]\n  aionis-runtime codex logs [runtime|watchdog|all] [--lines N]\n  aionis-runtime --help\n  aionis-runtime --version\n\nCommands:\n  start          Start the Lite runtime with standalone package defaults.\n  codex install  Install the bundled Aionis Codex plugin and Runtime watchdog.\n  codex status   Check Codex plugin, watchdog, and local Runtime state.\n  codex audit    Inspect recent Aionis context and handoff-quality decisions.\n  codex doctor   Run the full Codex plugin doctor.\n  codex logs     Print recent Runtime and watchdog logs.\n\nFlags:\n  --print-env        Print the effective runtime env as JSON and exit.\n  --json             Print machine-readable JSON for supported commands.\n  --limit N          Limit audit rows.\n  --session ID       Audit a specific Codex session id.\n  --no-watchdog      Skip LaunchAgent watchdog install or status check.\n  --no-load-watchdog Write the watchdog plist without loading it.\n  --skip-doctor      Skip the post-install doctor run.\n  --no-start-runtime Do not autostart Runtime during doctor.\n  --no-runtime       Skip Runtime health check in status/audit.\n  --help             Show this help.\n  --version          Show the package version.\n`);
+  process.stdout.write(`Aionis Runtime\n\nUsage:\n  aionis-runtime start [--print-env] [node args...]\n  aionis-runtime codex install [--no-watchdog] [--no-load-watchdog] [--skip-doctor]\n  aionis-runtime codex status [--json] [--no-runtime] [--no-watchdog]\n  aionis-runtime codex audit [--json] [--limit N] [--session SESSION_ID] [--no-runtime]\n  aionis-runtime codex handoff --summary TEXT [--next-action TEXT]\n  aionis-runtime codex release VERSION [--summary TEXT]\n  aionis-runtime codex doctor [--no-start-runtime]\n  aionis-runtime codex logs [runtime|watchdog|all] [--lines N]\n  aionis-runtime --help\n  aionis-runtime --version\n\nCommands:\n  start          Start the Lite runtime with standalone package defaults.\n  codex install  Install the bundled Aionis Codex plugin and Runtime watchdog.\n  codex status   Check Codex plugin, watchdog, and local Runtime state.\n  codex audit    Inspect recent Aionis context and handoff-quality decisions.\n  codex handoff  Store a structured Codex task handoff in Runtime memory.\n  codex release  Store a structured Codex release outcome in Runtime memory.\n  codex doctor   Run the full Codex plugin doctor.\n  codex logs     Print recent Runtime and watchdog logs.\n\nFlags:\n  --print-env        Print the effective runtime env as JSON and exit.\n  --json             Print machine-readable JSON for supported commands.\n  --limit N          Limit audit rows.\n  --session ID       Audit a specific Codex session id.\n  --summary TEXT     Handoff or release summary text.\n  --text TEXT        Full handoff text. Defaults to --summary.\n  --next-action TEXT Next action for the following Codex turn.\n  --no-watchdog      Skip LaunchAgent watchdog install or status check.\n  --no-load-watchdog Write the watchdog plist without loading it.\n  --skip-doctor      Skip the post-install doctor run.\n  --no-start-runtime Do not autostart Runtime during doctor.\n  --no-runtime       Skip Runtime health check in status/audit.\n  --help             Show this help.\n  --version          Show the package version.\n`);
 }
 
 function printVersion() {
@@ -134,6 +134,29 @@ function optionValue(args, name, fallback = null) {
   const index = args.findIndex((arg) => arg === name || arg.startsWith(`${name}=`));
   if (index < 0) return fallback;
   return args[index] === name ? (args[index + 1] ?? fallback) : args[index].slice(name.length + 1);
+}
+
+function optionTextValue(args, name, fallback = null) {
+  const index = args.findIndex((arg) => arg === name || arg.startsWith(`${name}=`));
+  if (index < 0) return fallback;
+  if (args[index].startsWith(`${name}=`)) return args[index].slice(name.length + 1);
+  const value = args[index + 1];
+  if (value === undefined || value.startsWith("--")) return fallback;
+  return value;
+}
+
+function optionValues(args, name) {
+  const values = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === name) {
+      if (args[i + 1] !== undefined && !args[i + 1].startsWith("--")) values.push(args[i + 1]);
+      i += 1;
+    } else if (arg.startsWith(`${name}=`)) {
+      values.push(arg.slice(name.length + 1));
+    }
+  }
+  return values;
 }
 
 function runNodeScript(scriptPath, args, options = {}) {
@@ -484,6 +507,20 @@ function projectDefaults(paths) {
   };
 }
 
+function codexRuntimeIdentity(project) {
+  return {
+    tenant_id: project.tenant_id,
+    scope: project.scope,
+    actor: process.env.AIONIS_CODEX_ACTOR || "codex",
+    consumer_agent_id: project.consumer_agent_id,
+    consumer_team_id: project.consumer_team_id,
+    memory_lane: "private",
+    producer_agent_id: project.consumer_agent_id,
+    owner_agent_id: project.consumer_agent_id,
+    owner_team_id: project.consumer_team_id,
+  };
+}
+
 function latestSessionState(paths) {
   const dir = path.join(paths.runtimeHome, "state", "sessions");
   let best = null;
@@ -511,6 +548,7 @@ function sessionStateForAudit(paths, sessionId) {
 
 const CODEX_AUDIT_DEFAULT_TIMEOUT_MS = 3000;
 const CODEX_AUDIT_HANDOFF_FIND_TIMEOUT_MS = 10000;
+const CODEX_HANDOFF_STORE_TIMEOUT_MS = 10000;
 
 async function codexRuntimeJson(paths, method, routePath, payloadOrQuery, timeoutMs = CODEX_AUDIT_DEFAULT_TIMEOUT_MS) {
   const configuredTimeoutMs = Number(process.env.AIONIS_CODEX_AUDIT_TIMEOUT_MS || timeoutMs);
@@ -1081,6 +1119,165 @@ async function codexAudit(args) {
   return exitWithCode(payload.ok ? 0 : 1);
 }
 
+function compactList(values) {
+  return values
+    .flatMap((value) => String(value || "").split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function positionalArgs(args) {
+  const valueFlags = new Set([
+    "--summary",
+    "--text",
+    "--next-action",
+    "--anchor",
+    "--file",
+    "--repo-root",
+    "--target-file",
+    "--acceptance-check",
+    "--tag",
+    "--release",
+    "--version",
+  ]);
+  const values = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg.startsWith("--")) {
+      const name = arg.includes("=") ? arg.slice(0, arg.indexOf("=")) : arg;
+      if (!arg.includes("=") && valueFlags.has(name)) i += 1;
+      continue;
+    }
+    values.push(arg);
+  }
+  return values;
+}
+
+function firstPositional(args) {
+  return positionalArgs(args)[0] || null;
+}
+
+function defaultHandoffAnchor(repoRoot, summary, now = new Date()) {
+  return `${repoRoot}#handoff:${now.toISOString().replace(/[:.]/g, "-")}:${sha12(summary)}`;
+}
+
+function buildCodexHandoffPayload(project, args, options = {}) {
+  const repoRoot = path.resolve(optionTextValue(args, "--repo-root", project.cwd));
+  const summary = String(optionTextValue(args, "--summary", firstPositional(args) || "") || "").trim();
+  if (!summary) throw new Error("codex handoff requires --summary TEXT");
+  const text = String(optionTextValue(args, "--text", summary) || summary).trim();
+  const releaseVersion = String(options.releaseVersion || optionTextValue(args, "--release", "") || "").trim();
+  const isReleaseOutcome = Boolean(releaseVersion || options.releaseOutcome);
+  const anchor = String(optionTextValue(
+    args,
+    "--anchor",
+    isReleaseOutcome ? `${repoRoot}#release:${releaseVersion}` : defaultHandoffAnchor(repoRoot, summary),
+  )).trim();
+  const filePath = optionTextValue(args, "--file", null);
+  const targetFiles = compactList(optionValues(args, "--target-file"));
+  const acceptanceChecks = compactList(optionValues(args, "--acceptance-check"));
+  const tags = [
+    "codex",
+    "aionis-runtime",
+    ...(isReleaseOutcome ? ["release", "release_outcome", releaseVersion] : ["manual_handoff"]),
+    ...compactList(optionValues(args, "--tag")),
+  ].filter(Boolean);
+  const nextAction = optionTextValue(
+    args,
+    "--next-action",
+    isReleaseOutcome
+      ? "Resume from the latest verified release, publish, push, and install state; re-check registry and git state before publishing again."
+      : "Resume from this structured Codex handoff and verify against the current repository state.",
+  );
+
+  return {
+    ...codexRuntimeIdentity(project),
+    handoff_kind: "task_handoff",
+    anchor,
+    summary: summary.slice(0, 1800),
+    handoff_text: text,
+    repo_root: repoRoot,
+    ...(filePath ? { file_path: filePath } : {}),
+    ...(targetFiles.length ? { target_files: targetFiles } : {}),
+    ...(acceptanceChecks.length ? { acceptance_checks: acceptanceChecks } : {}),
+    next_action: nextAction,
+    tags,
+    execution_result_summary: {
+      host: "codex",
+      event: isReleaseOutcome ? "manual_release_handoff" : "manual_task_handoff",
+      prompt: null,
+      handoff_quality: {
+        store_handoff: true,
+        category: isReleaseOutcome ? "release_outcome" : "execution_outcome",
+        confidence: isReleaseOutcome ? 0.98 : 0.92,
+        reasons: isReleaseOutcome
+          ? ["explicit_cli_release", "release_completion_signal"]
+          : ["explicit_cli_handoff", "task_handoff_evidence"],
+      },
+      ...(isReleaseOutcome ? { release_outcome: true, version: releaseVersion } : {}),
+    },
+  };
+}
+
+async function storeCodexHandoff(args, options = {}) {
+  validateFlags(args, new Set([
+    "--json",
+    "--summary",
+    "--text",
+    "--next-action",
+    "--anchor",
+    "--file",
+    "--repo-root",
+    "--target-file",
+    "--acceptance-check",
+    "--tag",
+    "--release",
+    "--version",
+  ]));
+  const json = args.includes("--json");
+  const paths = codexHomePaths();
+  const project = projectDefaults(paths);
+  const payload = buildCodexHandoffPayload(project, args, options);
+  const result = await codexRuntimeJson(paths, "POST", "/v1/handoff/store", payload, CODEX_HANDOFF_STORE_TIMEOUT_MS);
+  if (json) {
+    process.stdout.write(`${JSON.stringify({
+      ok: true,
+      project,
+      stored: {
+        anchor: payload.anchor,
+        repo_root: payload.repo_root,
+        summary: payload.summary,
+        release_outcome: payload.execution_result_summary.release_outcome === true,
+        version: payload.execution_result_summary.version || null,
+        handoff_quality: payload.execution_result_summary.handoff_quality,
+        uri: result?.handoff?.uri || result?.handoff_uri || null,
+      },
+      result,
+    }, null, 2)}\n`);
+  } else {
+    const kind = payload.execution_result_summary.release_outcome ? "release" : "task";
+    process.stdout.write(`Stored Aionis Codex ${kind} handoff\n`);
+    process.stdout.write(`anchor - ${payload.anchor}\n`);
+    process.stdout.write(`scope - ${payload.scope}\n`);
+    if (result?.handoff?.uri || result?.handoff_uri) process.stdout.write(`uri - ${result?.handoff?.uri || result?.handoff_uri}\n`);
+    process.stdout.write(`summary - ${payload.summary}\n`);
+  }
+  return exitWithCode(0);
+}
+
+async function codexHandoff(args) {
+  return storeCodexHandoff(args);
+}
+
+async function codexRelease(args) {
+  const version = String(optionTextValue(args, "--version", firstPositional(args) || "") || "").trim();
+  if (!version) throw new Error("codex release requires VERSION");
+  const releaseArgs = args.some((arg) => arg === "--summary" || arg.startsWith("--summary="))
+    ? args
+    : [...args, "--summary", `Release ${version} verified.`];
+  return storeCodexHandoff(releaseArgs, { releaseOutcome: true, releaseVersion: version });
+}
+
 async function codexDoctor(args) {
   validateFlags(args, new Set(["--no-start-runtime", "--start-runtime", "--local"]));
   const pluginDir = exists(path.join(installedCodexPluginDir(), ".codex-plugin", "plugin.json"))
@@ -1134,7 +1331,7 @@ async function codexLogs(args) {
 }
 
 function printCodexHelp() {
-  process.stdout.write(`Aionis Runtime Codex integration\n\nUsage:\n  aionis-runtime codex install [--no-watchdog] [--no-load-watchdog] [--skip-doctor]\n  aionis-runtime codex status [--json] [--no-runtime] [--no-watchdog]\n  aionis-runtime codex audit [--json] [--limit N] [--session SESSION_ID] [--no-runtime]\n  aionis-runtime codex doctor [--no-start-runtime]\n  aionis-runtime codex logs [runtime|watchdog|all] [--lines N]\n`);
+  process.stdout.write(`Aionis Runtime Codex integration\n\nUsage:\n  aionis-runtime codex install [--no-watchdog] [--no-load-watchdog] [--skip-doctor]\n  aionis-runtime codex status [--json] [--no-runtime] [--no-watchdog]\n  aionis-runtime codex audit [--json] [--limit N] [--session SESSION_ID] [--no-runtime]\n  aionis-runtime codex handoff --summary TEXT [--next-action TEXT]\n  aionis-runtime codex release VERSION [--summary TEXT]\n  aionis-runtime codex doctor [--no-start-runtime]\n  aionis-runtime codex logs [runtime|watchdog|all] [--lines N]\n`);
 }
 
 async function handleCodex(args) {
@@ -1146,6 +1343,8 @@ async function handleCodex(args) {
   if (subcommand === "install") return codexInstall(subArgs);
   if (subcommand === "status") return codexStatus(subArgs);
   if (subcommand === "audit") return codexAudit(subArgs);
+  if (subcommand === "handoff") return codexHandoff(subArgs);
+  if (subcommand === "release") return codexRelease(subArgs);
   if (subcommand === "doctor") return codexDoctor(subArgs);
   if (subcommand === "logs") return codexLogs(subArgs);
   throw new Error(`Unknown codex command: ${subcommand}`);

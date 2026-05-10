@@ -549,6 +549,152 @@ test("runtime cli audit emits a context quality report for a healthy handoff mix
   }
 });
 
+test("runtime cli codex release stores a structured release outcome handoff", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-release-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const requests = [];
+  const server = createServer((req, res) => {
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      requests.push({ method: req.method, url: req.url, body: body ? JSON.parse(body) : null });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true,
+        handoff: {
+          uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release-0.2.19",
+        },
+      }));
+    });
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const release = await spawnCli([
+      "codex",
+      "release",
+      "0.2.19",
+      "--summary",
+      "0.2.19 published and verified.",
+      "--json",
+    ], {
+      cwd: packageDir,
+      env: {
+        ...process.env,
+        HOME: home,
+        AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+        AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+      },
+    });
+    assert.equal(release.status, 0, `${release.stdout}\n${release.stderr}`);
+    const parsed = JSON.parse(release.stdout);
+    assert.equal(parsed.stored.release_outcome, true);
+    assert.equal(parsed.stored.version, "0.2.19");
+    assert.equal(parsed.stored.handoff_quality.category, "release_outcome");
+    assert.equal(parsed.stored.uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release-0.2.19");
+
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].method, "POST");
+    assert.equal(requests[0].url, "/v1/handoff/store");
+    assert.equal(requests[0].body.anchor, `${packageDir}#release:0.2.19`);
+    assert.equal(requests[0].body.repo_root, packageDir);
+    assert.equal(requests[0].body.execution_result_summary.release_outcome, true);
+    assert.equal(requests[0].body.execution_result_summary.version, "0.2.19");
+    assert.equal(requests[0].body.execution_result_summary.handoff_quality.store_handoff, true);
+    assert.equal(requests[0].body.execution_result_summary.handoff_quality.category, "release_outcome");
+    assert.ok(requests[0].body.tags.includes("release_outcome"));
+    assert.ok(requests[0].body.tags.includes("0.2.19"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runtime cli codex handoff stores a structured task outcome handoff", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-handoff-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const requests = [];
+  const server = createServer((req, res) => {
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      requests.push({ method: req.method, url: req.url, body: body ? JSON.parse(body) : null });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        ok: true,
+        handoff: {
+          uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/task-handoff",
+        },
+      }));
+    });
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const handoff = await spawnCli([
+      "codex",
+      "handoff",
+      "--summary",
+      "Implemented the explicit Codex handoff CLI and verified the request payload.",
+      "--next-action",
+      "Run the runtime CLI tests and package dry-run before publishing.",
+      "--target-file",
+      "packages/aionis-runtime/src/cli.mjs",
+      "--acceptance-check",
+      "runtime CLI tests pass",
+      "--tag",
+      "dogfood",
+      "--json",
+    ], {
+      cwd: packageDir,
+      env: {
+        ...process.env,
+        HOME: home,
+        AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+        AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+      },
+    });
+    assert.equal(handoff.status, 0, `${handoff.stdout}\n${handoff.stderr}`);
+    const parsed = JSON.parse(handoff.stdout);
+    assert.equal(parsed.stored.release_outcome, false);
+    assert.equal(parsed.stored.handoff_quality.category, "execution_outcome");
+
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].method, "POST");
+    assert.equal(requests[0].url, "/v1/handoff/store");
+    assert.match(requests[0].body.anchor, new RegExp(`^${packageDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}#handoff:`));
+    assert.equal(requests[0].body.execution_result_summary.release_outcome, undefined);
+    assert.equal(requests[0].body.execution_result_summary.handoff_quality.store_handoff, true);
+    assert.equal(requests[0].body.execution_result_summary.handoff_quality.category, "execution_outcome");
+    assert.deepEqual(requests[0].body.target_files, ["packages/aionis-runtime/src/cli.mjs"]);
+    assert.deepEqual(requests[0].body.acceptance_checks, ["runtime CLI tests pass"]);
+    assert.ok(requests[0].body.tags.includes("manual_handoff"));
+    assert.ok(requests[0].body.tags.includes("dogfood"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runtime cli codex handoff rejects a missing summary value before Runtime calls", async () => {
+  const handoff = await spawnCli(["codex", "handoff", "--summary", "--json"], {
+    cwd: packageDir,
+    env: {
+      ...process.env,
+      AIONIS_CODEX_BASE_URL: "http://127.0.0.1:9",
+    },
+  });
+
+  assert.equal(handoff.status, 1);
+  assert.match(handoff.stderr, /codex handoff requires --summary TEXT/);
+});
+
 test("runtime cli audit reports remediation for filtered historical handoffs", async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-remediation-home-"));
   const runtimeHome = path.join(home, ".aionis", "codex");
