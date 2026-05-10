@@ -277,6 +277,18 @@ function isStatusOnlyAssistantText(value) {
   ].some((pattern) => pattern.test(text));
 }
 
+function isOverallStatusSummary(value) {
+  const text = normalizeStopText(value);
+  if (!text) return false;
+  return [
+    /^\u6574\u4f53\u73b0\u5728/,
+    /^\u73b0\u5728\u6574\u4f53/,
+    /^\u73b0\u5728\u72b6\u6001/,
+    /^Current status\b/i,
+    /^Overall\b/i,
+  ].some((pattern) => pattern.test(text));
+}
+
 function isNextStepPlanningPrompt(value) {
   const text = normalizeStopText(value);
   if (!text) return false;
@@ -381,6 +393,7 @@ function hasReleaseCompletionSignal(value) {
 function isReleaseOutcomeSummary(value, prompt = "") {
   const text = normalizeStopText(value);
   if (!text || !releaseOutcomeVersion(text)) return false;
+  if (isOverallStatusSummary(text)) return false;
   if (isUnpublishedReleaseStatusSummary(text)) return false;
   if (!hasReleaseCompletionSignal(`${text} ${normalizeStopText(prompt)}`)) return false;
   const hasExternalSurface = [

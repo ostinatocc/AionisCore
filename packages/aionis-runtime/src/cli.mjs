@@ -439,9 +439,23 @@ async function codexStatus(args) {
   const skipWatchdog = args.includes("--no-watchdog");
   const json = args.includes("--json");
   const paths = codexHomePaths();
+  const project = projectDefaults(paths);
+  const session = latestSessionState(paths);
+  const turns = asObject(session.state?.turns);
+  const steps = asObject(session.state?.steps);
+  const statusWarnings = [];
   const checks = [];
   const codexConfig = readTextIfExists(paths.codexConfigPath);
   const symlink = readSymlinkTarget(paths.localPluginLink);
+
+  if (!project.activeProject) {
+    statusWarnings.push(`no active project state found at ${project.activeProjectPath}`);
+  } else if (!project.active_matches_cwd) {
+    statusWarnings.push(`active project cwd differs from current cwd: ${project.activeProject.cwd}`);
+  }
+  if (!session.state) {
+    statusWarnings.push("no local Codex session state found");
+  }
 
   checkLine(checks, "bundled plugin", exists(path.join(sourceCodexPluginDir(), ".codex-plugin", "plugin.json")), sourceCodexPluginDir());
   checkLine(checks, "installed plugin", exists(path.join(paths.pluginDir, ".codex-plugin", "plugin.json")), paths.pluginDir);
@@ -463,18 +477,54 @@ async function codexStatus(args) {
   }
 
   const ok = !checks.some((item) => !item.ok);
+  const projectStatus = {
+    cwd: project.cwd,
+    scope: project.scope,
+    tenant_id: project.tenant_id,
+    active_project_path: project.activeProjectPath,
+    active_project_cwd: project.activeProject?.cwd || null,
+    active_matches_cwd: project.active_matches_cwd,
+    updated_at: project.activeProject?.updated_at || null,
+  };
+  const sessionStatus = {
+    state_path: session.path,
+    session_id: session.state?.session_id || null,
+    active_turn_id: session.state?.active_turn_id || null,
+    active_run_id: session.state?.active_run_id || null,
+    turn_count: Object.keys(turns).length,
+    step_count: Object.keys(steps).length,
+    latest_prompt: session.state?.active_turn_id ? compactText(turns[session.state.active_turn_id]?.prompt, 120) : "",
+    updated_at: session.state?.updated_at || null,
+  };
+
   if (json) {
     process.stdout.write(`${JSON.stringify({
       ok,
       base_url: paths.baseUrl,
       runtime_home: paths.runtimeHome,
       plugin_dir: paths.pluginDir,
+      project: projectStatus,
+      session: sessionStatus,
+      warnings: statusWarnings,
       checks,
     }, null, 2)}\n`);
   } else {
     process.stdout.write("Aionis Codex status\n");
+    process.stdout.write(`project - ${projectStatus.scope} (${projectStatus.cwd})\n`);
+    process.stdout.write(
+      `active_project - ${projectStatus.active_matches_cwd ? "MATCH" : projectStatus.active_project_cwd ? "MISMATCH" : "MISSING"} ` +
+        `${projectStatus.active_project_cwd || projectStatus.active_project_path}\n`,
+    );
+    process.stdout.write(
+      `session - ${sessionStatus.session_id || "missing"} turns=${sessionStatus.turn_count} steps=${sessionStatus.step_count}\n`,
+    );
+    if (sessionStatus.latest_prompt) process.stdout.write(`latest_prompt - ${sessionStatus.latest_prompt}\n`);
     for (const item of checks) {
       process.stdout.write(`${item.ok ? "PASS" : "FAIL"} ${item.name}${item.details ? ` - ${item.details}` : ""}\n`);
+    }
+    if (statusWarnings.length) {
+      process.stdout.write("warnings\n");
+      for (const warning of statusWarnings) process.stdout.write(`- ${warning}\n`);
     }
   }
 
@@ -649,6 +699,9 @@ function auditStatusOrDiscussionLead(text) {
 function auditDisplayDecision(summary, quality, options = {}) {
   const text = String(summary || "").replace(/\s+/g, " ").trim();
   if (!text) return { decision: "filtered", reasons: ["empty_summary"] };
+  if (quality?.category === "release_outcome" && auditStatusOrDiscussionLead(text)) {
+    return { decision: "filtered", reasons: ["release_outcome_status_lead"] };
+  }
   if (quality?.category === "release_outcome") return { decision: "visible", reasons: ["release_outcome"] };
   if (auditStatusOrDiscussionLead(text)) return { decision: "filtered", reasons: ["status_or_discussion_lead"] };
   if (auditPlanningAdviceLead(text) && !auditHasConcreteOutcomeSignal(text)) {

@@ -221,6 +221,57 @@ test("Stop hook does not store release-looking overall status as release outcome
     assert.equal(routes.includes("/v1/memory/replay/run/end"), true);
     assert.equal(routes.includes("/v1/handoff/store"), false);
     assert.equal(bodies["/v1/handoff/store"], undefined);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.store_handoff, false);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.category, "status_report");
+    assert.ok(bodies["/v1/memory/events"][0].metadata.handoff_quality.reasons.includes("status_only_assistant_text"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Stop hook does not store overall release-closed status as release outcome", async () => {
+  const routes = [];
+  const bodies = {};
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "overall-closed-status-turn",
+      cwd: pluginRoot,
+      prompt: "现在整体怎么样了？",
+      last_assistant_message: [
+        "现在整体状态是：AionisRuntime 这一条线已经稳定到可以继续 dogfood。",
+        "npm latest：@ostinato/aionis-runtime@0.2.22。",
+        "本地 package：0.2.22。",
+        "0.2.22 发布闭环成立，Runtime 在线，codex audit PASS。",
+      ].join(" "),
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/memory/events"), true);
+    assert.equal(routes.includes("/v1/handoff/store"), false);
+    assert.equal(bodies["/v1/handoff/store"], undefined);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.store_handoff, false);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.category, "status_report");
+    assert.ok(bodies["/v1/memory/events"][0].metadata.handoff_quality.reasons.includes("status_or_command_prompt"));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

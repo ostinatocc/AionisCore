@@ -133,16 +133,54 @@ test("runtime cli bundles and installs the Codex plugin into a stable home direc
   assert.match(codexConfig, /aionis-codex-hook\.mjs/);
   assert.match(readFileSync(path.join(home, ".agents", "plugins", "marketplace.json"), "utf8"), /aionis-codex/);
 
+  const sessionId = "status-session";
+  const turnId = "status-turn";
+  mkdirSync(path.join(runtimeHome, "state", "sessions"), { recursive: true });
+  writeFileSync(path.join(runtimeHome, "state", "active-project.json"), JSON.stringify({
+    cwd: packageDir,
+    project_name: "aionis-runtime",
+    project_hash: "testhash",
+    scope: "codex:aionis-runtime:testhash",
+    global_scope: "codex:global",
+    tenant_id: "local-codex",
+    updated_at: new Date().toISOString(),
+  }));
+  writeFileSync(path.join(runtimeHome, "state", "sessions", `${sessionId}.json`), JSON.stringify({
+    session_id: sessionId,
+    active_turn_id: turnId,
+    active_run_id: "status-run",
+    turns: {
+      [turnId]: {
+        turn_id: turnId,
+        run_id: "status-run",
+        prompt: "Check Aionis Codex status.",
+      },
+    },
+    steps: {
+      "status-step": {
+        step_id: "status-step",
+        run_id: "status-run",
+      },
+    },
+    updated_at: new Date().toISOString(),
+  }));
+
   const status = spawnSync(process.execPath, [cliPath, "codex", "status", "--no-runtime", "--no-watchdog"], {
+    cwd: packageDir,
     encoding: "utf8",
     env,
   });
   assert.equal(status.status, 0, `${status.stdout}\n${status.stderr}`);
+  assert.match(status.stdout, /project - codex:aionis-runtime:testhash/);
+  assert.match(status.stdout, /active_project - MATCH/);
+  assert.match(status.stdout, /session - status-session turns=1 steps=1/);
+  assert.match(status.stdout, /latest_prompt - Check Aionis Codex status\./);
   assert.match(status.stdout, /PASS installed plugin/);
   assert.match(status.stdout, /PASS Codex plugin symlink/);
   assert.match(status.stdout, /PASS managed hooks/);
 
   const jsonStatus = spawnSync(process.execPath, [cliPath, "codex", "status", "--json", "--no-runtime", "--no-watchdog"], {
+    cwd: packageDir,
     encoding: "utf8",
     env,
   });
@@ -151,10 +189,16 @@ test("runtime cli bundles and installs the Codex plugin into a stable home direc
   assert.equal(parsed.ok, true);
   assert.equal(parsed.runtime_home, runtimeHome);
   assert.equal(parsed.plugin_dir, pluginDir);
+  assert.equal(parsed.project.cwd, packageDir);
+  assert.equal(parsed.project.scope, "codex:aionis-runtime:testhash");
+  assert.equal(parsed.project.active_matches_cwd, true);
+  assert.equal(parsed.session.session_id, sessionId);
+  assert.equal(parsed.session.turn_count, 1);
+  assert.equal(parsed.session.step_count, 1);
+  assert.deepEqual(parsed.warnings, []);
   assert.ok(parsed.checks.some((check) => check.name === "installed plugin" && check.ok));
   assert.ok(parsed.checks.some((check) => check.name === "managed hooks" && check.ok));
 
-  mkdirSync(path.join(runtimeHome, "state"), { recursive: true });
   writeFileSync(path.join(runtimeHome, "state", "watchdog-status.json"), JSON.stringify({
     ok: true,
     health: {
@@ -166,6 +210,7 @@ test("runtime cli bundles and installs the Codex plugin into a stable home direc
     updated_at: new Date().toISOString(),
   }));
   const sandboxLikeStatus = spawnSync(process.execPath, [cliPath, "codex", "status", "--json", "--no-watchdog"], {
+    cwd: packageDir,
     encoding: "utf8",
     env: {
       ...env,
@@ -860,6 +905,136 @@ test("runtime cli audit does not warn historical debt for transient event-only n
     assert.equal(textAudit.status, 0, `${textAudit.stdout}\n${textAudit.stderr}`);
     assert.match(textAudit.stdout, /Context Quality Report - PASS score=100 debt=PASS debt_score=100/);
     assert.match(textAudit.stdout, /PASS filtered_noise: Only transient recent events would be hidden/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runtime cli audit excludes release-looking status reports from latest release outcome", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-release-status-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const sessionId = "audit-release-status-session";
+  const turnId = "audit-release-status-turn";
+  const runId = "audit-release-status-run";
+  const taskQuality = {
+    store_handoff: true,
+    category: "execution_outcome",
+    confidence: 0.92,
+    reasons: ["explicit_cli_handoff", "task_handoff_evidence"],
+  };
+  const releaseQuality = {
+    store_handoff: true,
+    category: "release_outcome",
+    confidence: 0.98,
+    reasons: ["explicit_cli_release", "release_completion_signal"],
+  };
+
+  mkdirSync(path.join(runtimeHome, "state", "sessions"), { recursive: true });
+  writeFileSync(path.join(runtimeHome, "state", "active-project.json"), JSON.stringify({
+    cwd: packageDir,
+    project_name: "aionis-runtime",
+    project_hash: "testhash",
+    scope: "codex:aionis-runtime:testhash",
+    global_scope: "codex:global",
+    tenant_id: "local-codex",
+    updated_at: new Date().toISOString(),
+  }));
+  writeFileSync(path.join(runtimeHome, "state", "sessions", `${sessionId}.json`), JSON.stringify({
+    session_id: sessionId,
+    active_turn_id: turnId,
+    active_run_id: runId,
+    turns: {
+      [turnId]: {
+        turn_id: turnId,
+        run_id: runId,
+        prompt: "Audit should exclude release-looking status reports.",
+      },
+    },
+    steps: {},
+    updated_at: new Date().toISOString(),
+  }));
+
+  const server = createServer((req, res) => {
+    const url = new URL(req.url, "http://127.0.0.1");
+    res.setHeader("content-type", "application/json");
+    if (req.method === "GET" && url.pathname === "/health") {
+      res.end(JSON.stringify({ ok: true, runtime: { edition: "lite" } }));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === `/v1/memory/sessions/${sessionId}/events`) {
+      res.end(JSON.stringify({ events: [] }));
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/v1/memory/find") {
+      req.resume();
+      req.on("end", () => {
+        res.end(JSON.stringify({
+          nodes: [
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/status-release",
+              created_at: "2026-05-10T20:05:00.000Z",
+              text_summary: "现在整体状态是：AionisRuntime 已可继续 dogfood。npm latest：@ostinato/aionis-runtime@0.2.22。0.2.22 发布闭环成立。",
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: releaseQuality,
+                  release_outcome: true,
+                  version: "0.2.22",
+                },
+              },
+            },
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release",
+              created_at: "2026-05-10T20:00:00.000Z",
+              text_summary: "0.2.22 published and verified. codex audit now treats transient event-only filtered noise as non-debt.",
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: releaseQuality,
+                  release_outcome: true,
+                  version: "0.2.22",
+                },
+              },
+            },
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/task",
+              created_at: "2026-05-10T19:58:00.000Z",
+              text_summary: "Implemented strict audit visibility verification and verified tests plus pack dry-run.",
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: taskQuality,
+                },
+              },
+            },
+          ],
+        }));
+      });
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const env = {
+      ...process.env,
+      HOME: home,
+      AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+      AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+    };
+    const audit = await spawnCli(["codex", "audit", "--json", "--session", sessionId, "--limit", "4"], {
+      cwd: packageDir,
+      env,
+    });
+    assert.equal(audit.status, 0, `${audit.stdout}\n${audit.stderr}`);
+    const parsed = JSON.parse(audit.stdout);
+
+    assert.equal(parsed.context_quality_report.latest.release_outcome.uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release");
+    assert.equal(parsed.context_quality_report.counts.visible_release_outcomes, 1);
+    assert.equal(parsed.context_quality_report.counts.filtered_handoffs, 1);
+    assert.ok(parsed.remediations.some((remediation) =>
+      remediation.uri === "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/status-release" &&
+      remediation.reasons.includes("release_outcome_status_lead")));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
