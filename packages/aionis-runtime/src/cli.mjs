@@ -735,6 +735,15 @@ function contextQualityStatus(checks) {
   return "pass";
 }
 
+function contextQualitySection(checks) {
+  return {
+    status: contextQualityStatus(checks),
+    score: contextQualityScore(checks),
+    checks,
+    issues: checks.filter((check) => check.status === "warn" || check.status === "fail"),
+  };
+}
+
 function buildContextQualityReport(args) {
   const events = Array.isArray(args.events) ? args.events : [];
   const handoffs = Array.isArray(args.handoffs) ? args.handoffs : [];
@@ -745,7 +754,7 @@ function buildContextQualityReport(args) {
   const releaseHandoffs = visibleAcceptedHandoffsByCategory(handoffs, "release_outcome");
   const visibleMissingQuality = handoffs.filter((row) =>
     row.display?.decision !== "filtered" && !row.handoff_quality);
-  const oversizedVisible = [...events, ...handoffs].filter((row) =>
+  const oversizedVisible = accepted.filter((row) =>
     row.display?.decision !== "filtered" && row.summary_chars > 1200);
   const releaseCloseoutAsExecution = handoffs.filter((row) =>
     row.display?.decision !== "filtered" &&
@@ -753,9 +762,11 @@ function buildContextQualityReport(args) {
     auditLooksLikeReleaseCloseout(row.summary));
   const latestTask = taskHandoffs[0] || null;
   const latestRelease = releaseHandoffs[0] || null;
+  const latestTaskReleaseConflict = latestTask && auditLooksLikeReleaseCloseout(latestTask.summary);
+  const historicalReleaseCloseoutDebt = releaseCloseoutAsExecution.filter((row) => row !== latestTask);
 
-  const checks = [];
-  checks.push(contextQualityCheck(
+  const currentChecks = [];
+  currentChecks.push(contextQualityCheck(
     "runtime_health",
     args.runtime?.skipped ? "skip" : args.runtime?.ok === true ? "pass" : "warn",
     "high",
@@ -766,37 +777,28 @@ function buildContextQualityReport(args) {
         : `Runtime is unavailable: ${args.runtime?.error || "unknown error"}`,
     { base_url: args.baseUrl || null },
   ));
-  checks.push(contextQualityCheck(
+  currentChecks.push(contextQualityCheck(
     "session_state",
     args.session?.state ? "pass" : "warn",
     "high",
     args.session?.state ? "Local Codex session state is available." : "No local Codex session state found.",
     { session_id: args.sessionId || null },
   ));
-  checks.push(contextQualityCheck(
+  currentChecks.push(contextQualityCheck(
     "visible_task_handoff",
     latestTask ? "pass" : "warn",
     "medium",
     latestTask ? "Latest visible task handoff is available." : "No visible execution handoff is available for task-start context.",
     { uri: latestTask?.uri || null, created_at: latestTask?.created_at || null },
   ));
-  checks.push(contextQualityCheck(
+  currentChecks.push(contextQualityCheck(
     "visible_release_outcome",
     latestRelease ? "pass" : "skip",
     "info",
     latestRelease ? "Latest visible release outcome is available." : "No release outcome is present in the current audit window.",
     { uri: latestRelease?.uri || null, created_at: latestRelease?.created_at || null },
   ));
-  checks.push(contextQualityCheck(
-    "filtered_noise",
-    filteredHandoffs.length || filteredEvents.length ? "warn" : "pass",
-    "medium",
-    filteredHandoffs.length || filteredEvents.length
-      ? "Some stored or recent context would be hidden by current display policy."
-      : "No filtered context noise detected in the audit window.",
-    { handoffs: filteredHandoffs.length, events: filteredEvents.length },
-  ));
-  checks.push(contextQualityCheck(
+  currentChecks.push(contextQualityCheck(
     "oversized_visible_context",
     oversizedVisible.length ? "warn" : "pass",
     "low",
@@ -805,7 +807,7 @@ function buildContextQualityReport(args) {
       : "Visible context length is within the audit threshold.",
     { count: oversizedVisible.length, threshold_chars: 1200 },
   ));
-  checks.push(contextQualityCheck(
+  currentChecks.push(contextQualityCheck(
     "legacy_missing_quality",
     visibleMissingQuality.length ? "warn" : "pass",
     "low",
@@ -814,20 +816,45 @@ function buildContextQualityReport(args) {
       : "Visible handoffs carry handoff_quality metadata.",
     { count: visibleMissingQuality.length },
   ));
-  checks.push(contextQualityCheck(
+  currentChecks.push(contextQualityCheck(
     "release_task_classification",
-    releaseCloseoutAsExecution.length ? "warn" : "pass",
+    latestTaskReleaseConflict ? "warn" : "pass",
     "medium",
-    releaseCloseoutAsExecution.length
-      ? "Release closeout-shaped handoffs are stored as execution_outcome."
-      : "No release closeout-shaped execution handoff conflict detected.",
-    { count: releaseCloseoutAsExecution.length, uri: releaseCloseoutAsExecution[0]?.uri || null },
+    latestTaskReleaseConflict
+      ? "Latest visible task handoff looks like a release closeout stored as execution_outcome."
+      : "Latest visible task handoff is not a release closeout classification conflict.",
+    { uri: latestTaskReleaseConflict ? latestTask.uri || null : null },
   ));
 
-  const score = contextQualityScore(checks);
+  const debtChecks = [];
+  debtChecks.push(contextQualityCheck(
+    "filtered_noise",
+    filteredHandoffs.length || filteredEvents.length ? "warn" : "pass",
+    "medium",
+    filteredHandoffs.length || filteredEvents.length
+      ? "Historical stored or recent context would be hidden by current display policy."
+      : "No filtered context noise detected in the audit window.",
+    { handoffs: filteredHandoffs.length, events: filteredEvents.length },
+  ));
+  debtChecks.push(contextQualityCheck(
+    "historical_release_task_classification",
+    historicalReleaseCloseoutDebt.length ? "warn" : "pass",
+    "low",
+    historicalReleaseCloseoutDebt.length
+      ? "Older visible execution handoffs look like release closeouts."
+      : "No older release closeout-shaped execution handoff debt detected.",
+    { count: historicalReleaseCloseoutDebt.length, uri: historicalReleaseCloseoutDebt[0]?.uri || null },
+  ));
+
+  const currentContext = contextQualitySection(currentChecks);
+  const historicalDebt = contextQualitySection(debtChecks);
   return {
-    status: contextQualityStatus(checks),
-    score,
+    status: currentContext.status,
+    score: currentContext.score,
+    debt_status: historicalDebt.status,
+    debt_score: historicalDebt.score,
+    current_context: currentContext,
+    historical_debt: historicalDebt,
     latest: {
       task_handoff: latestTask
         ? {
@@ -854,9 +881,11 @@ function buildContextQualityReport(args) {
       filtered_events: filteredEvents.length,
       visible_missing_quality: visibleMissingQuality.length,
       oversized_visible: oversizedVisible.length,
+      historical_release_task_classification: historicalReleaseCloseoutDebt.length,
     },
-    checks,
-    issues: checks.filter((check) => check.status === "warn" || check.status === "fail"),
+    checks: [...currentChecks, ...debtChecks],
+    issues: currentContext.issues,
+    debt_issues: historicalDebt.issues,
   };
 }
 
@@ -1100,8 +1129,16 @@ async function codexAudit(args) {
       `current_filtered=${summary.filtered_by_current_policy} stored_filtered=${payload.handoff_display_summary.filtered}\n`,
   );
   const report = payload.context_quality_report;
-  process.stdout.write(`\nContext Quality Report - ${report.status.toUpperCase()} score=${report.score}\n`);
-  for (const check of report.checks) {
+  process.stdout.write(
+    `\nContext Quality Report - ${report.status.toUpperCase()} score=${report.score} ` +
+      `debt=${report.debt_status.toUpperCase()} debt_score=${report.debt_score}\n`,
+  );
+  process.stdout.write("Current Context\n");
+  for (const check of report.current_context.checks) {
+    process.stdout.write(`- ${check.status.toUpperCase()} ${check.id}: ${check.message}\n`);
+  }
+  process.stdout.write("Historical Debt\n");
+  for (const check of report.historical_debt.checks) {
     process.stdout.write(`- ${check.status.toUpperCase()} ${check.id}: ${check.message}\n`);
   }
   if (payload.warnings.length) {

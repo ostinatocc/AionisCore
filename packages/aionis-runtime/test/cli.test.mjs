@@ -531,6 +531,8 @@ test("runtime cli audit emits a context quality report for a healthy handoff mix
 
     assert.equal(parsed.context_quality_report.status, "pass");
     assert.equal(parsed.context_quality_report.score, 100);
+    assert.equal(parsed.context_quality_report.current_context.status, "pass");
+    assert.equal(parsed.context_quality_report.historical_debt.status, "pass");
     assert.equal(parsed.context_quality_report.latest.task_handoff.uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/execution");
     assert.equal(parsed.context_quality_report.latest.release_outcome.uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release");
     assert.equal(parsed.context_quality_report.counts.visible_task_handoffs, 1);
@@ -544,6 +546,168 @@ test("runtime cli audit emits a context quality report for a healthy handoff mix
     assert.equal(textAudit.status, 0, `${textAudit.stdout}\n${textAudit.stderr}`);
     assert.match(textAudit.stdout, /Context Quality Report - PASS score=100/);
     assert.match(textAudit.stdout, /PASS visible_task_handoff/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runtime cli audit separates current context quality from historical debt", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-debt-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const sessionId = "audit-debt-session";
+  const turnId = "audit-debt-turn";
+  const runId = "audit-debt-run";
+  const taskQuality = {
+    store_handoff: true,
+    category: "execution_outcome",
+    confidence: 0.92,
+    reasons: ["explicit_cli_handoff", "task_handoff_evidence"],
+  };
+  const releaseQuality = {
+    store_handoff: true,
+    category: "release_outcome",
+    confidence: 0.98,
+    reasons: ["explicit_cli_release", "release_completion_signal"],
+  };
+  const noisyQuality = {
+    store_handoff: true,
+    category: "execution_outcome",
+    confidence: 0.82,
+    reasons: ["task_handoff_evidence"],
+  };
+  const noisySummary = "接下来不要再盲目加功能了。我建议按这个顺序走，把 context 质量继续打磨。";
+
+  mkdirSync(path.join(runtimeHome, "state", "sessions"), { recursive: true });
+  writeFileSync(path.join(runtimeHome, "state", "active-project.json"), JSON.stringify({
+    cwd: packageDir,
+    project_name: "aionis-runtime",
+    project_hash: "testhash",
+    scope: "codex:aionis-runtime:testhash",
+    global_scope: "codex:global",
+    tenant_id: "local-codex",
+    consumer_agent_id: "codex",
+    consumer_team_id: "local-codex",
+    updated_at: new Date().toISOString(),
+  }));
+  writeFileSync(path.join(runtimeHome, "state", "sessions", `${sessionId}.json`), JSON.stringify({
+    session_id: sessionId,
+    active_turn_id: turnId,
+    active_run_id: runId,
+    turns: {
+      [turnId]: {
+        turn_id: turnId,
+        run_id: runId,
+        prompt: "Audit should separate current quality from historical debt.",
+      },
+    },
+    steps: {},
+    updated_at: new Date().toISOString(),
+  }));
+
+  const server = createServer((req, res) => {
+    const url = new URL(req.url, "http://127.0.0.1");
+    res.setHeader("content-type", "application/json");
+    if (req.method === "GET" && url.pathname === "/health") {
+      res.end(JSON.stringify({ ok: true, runtime: { edition: "lite" } }));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === `/v1/memory/sessions/${sessionId}/events`) {
+      res.end(JSON.stringify({
+        events: [
+          {
+            title: "Codex turn ended",
+            created_at: new Date().toISOString(),
+            text_summary: noisySummary,
+            slots: {
+              phase: "Stop",
+              turn_id: turnId,
+              run_id: runId,
+              handoff_quality: noisyQuality,
+            },
+          },
+        ],
+      }));
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/v1/memory/find") {
+      req.resume();
+      req.on("end", () => {
+        res.end(JSON.stringify({
+          nodes: [
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release",
+              created_at: "2026-05-10T19:24:00.000Z",
+              text_summary: "0.2.19 published and verified.",
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: releaseQuality,
+                  release_outcome: true,
+                  version: "0.2.19",
+                },
+              },
+            },
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/task",
+              created_at: "2026-05-10T19:20:00.000Z",
+              text_summary: "Implemented explicit Codex handoff commands and verified tests plus pack dry-run.",
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: taskQuality,
+                },
+              },
+            },
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/noise",
+              created_at: "2026-05-10T18:00:00.000Z",
+              text_summary: noisySummary,
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: noisyQuality,
+                },
+              },
+            },
+          ],
+        }));
+      });
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const env = {
+      ...process.env,
+      HOME: home,
+      AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+      AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+    };
+    const audit = await spawnCli(["codex", "audit", "--json", "--session", sessionId, "--limit", "4"], {
+      cwd: packageDir,
+      env,
+    });
+    assert.equal(audit.status, 0, `${audit.stdout}\n${audit.stderr}`);
+    const parsed = JSON.parse(audit.stdout);
+
+    assert.equal(parsed.context_quality_report.status, "pass");
+    assert.equal(parsed.context_quality_report.score, 100);
+    assert.deepEqual(parsed.context_quality_report.issues, []);
+    assert.equal(parsed.context_quality_report.current_context.status, "pass");
+    assert.equal(parsed.context_quality_report.historical_debt.status, "warn");
+    assert.ok(parsed.context_quality_report.debt_issues.some((issue) => issue.id === "filtered_noise"));
+    assert.equal(parsed.context_quality_report.counts.filtered_handoffs, 1);
+    assert.equal(parsed.context_quality_report.counts.filtered_events, 1);
+
+    const textAudit = await spawnCli(["codex", "audit", "--session", sessionId, "--limit", "4"], {
+      cwd: packageDir,
+      env,
+    });
+    assert.equal(textAudit.status, 0, `${textAudit.stdout}\n${textAudit.stderr}`);
+    assert.match(textAudit.stdout, /Context Quality Report - PASS score=100 debt=WARN/);
+    assert.match(textAudit.stdout, /Current Context/);
+    assert.match(textAudit.stdout, /Historical Debt/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -820,8 +984,10 @@ test("runtime cli audit reports remediation for filtered historical handoffs", a
     assert.equal(parsed.remediations[1].uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/legacy-explainer");
     assert.deepEqual(parsed.remediations[1].reasons, ["status_or_discussion_lead"]);
     assert.equal(parsed.context_quality_report.status, "warn");
-    assert.ok(parsed.context_quality_report.issues.some((issue) => issue.id === "filtered_noise"));
+    assert.equal(parsed.context_quality_report.current_context.status, "warn");
+    assert.equal(parsed.context_quality_report.historical_debt.status, "warn");
     assert.ok(parsed.context_quality_report.issues.some((issue) => issue.id === "visible_task_handoff"));
+    assert.ok(parsed.context_quality_report.debt_issues.some((issue) => issue.id === "filtered_noise"));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
