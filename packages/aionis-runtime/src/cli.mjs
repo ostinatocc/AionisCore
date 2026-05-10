@@ -653,6 +653,175 @@ function summarizeDisplayRows(rows) {
   return { visible, filtered };
 }
 
+function visibleAcceptedHandoffsByCategory(handoffs, category) {
+  return handoffs.filter((row) =>
+    row.display?.decision !== "filtered" &&
+    row.handoff_quality?.store_handoff === true &&
+    row.handoff_quality?.category === category);
+}
+
+function visibleAcceptedHandoffs(handoffs) {
+  return handoffs.filter((row) =>
+    row.display?.decision !== "filtered" &&
+    row.handoff_quality?.store_handoff === true);
+}
+
+function auditLooksLikeReleaseCloseout(text) {
+  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return false;
+  const lead = normalized.slice(0, 180);
+  return [
+    /^(?:`?\d+\.\d+\.\d+`?\s*)?\u53d1\u5e03\u95ed\u73af.*(\u5b8c\u6210|\u6210\u7acb|\u786e\u8ba4)/,
+    /^(?:\u5df2)?\u786e\u8ba4[^\u3002.!！]{0,16}(\u53d1\u5e03|\u53d1\u5305)[^\u3002.!！]{0,10}(\u5b8c\u6210|\u6210\u529f)/,
+    /\bnpm\s+(?:latest|view)\b.*\bnpx\b.*\b(?:shasum|integrity|PASS)\b/i,
+  ].some((pattern) => pattern.test(lead));
+}
+
+function contextQualityCheck(id, status, severity, message, evidence = {}) {
+  return { id, status, severity, message, evidence };
+}
+
+function contextQualityScore(checks) {
+  const weights = { critical: 35, high: 25, medium: 15, low: 5, info: 0 };
+  let score = 100;
+  for (const check of checks) {
+    if (check.status === "pass" || check.status === "skip") continue;
+    score -= weights[check.severity] ?? 10;
+  }
+  return Math.max(0, score);
+}
+
+function contextQualityStatus(checks) {
+  if (checks.some((check) => check.status === "fail")) return "fail";
+  if (checks.some((check) => check.status === "warn")) return "warn";
+  return "pass";
+}
+
+function buildContextQualityReport(args) {
+  const events = Array.isArray(args.events) ? args.events : [];
+  const handoffs = Array.isArray(args.handoffs) ? args.handoffs : [];
+  const filteredHandoffs = handoffs.filter((row) => row.display?.decision === "filtered");
+  const filteredEvents = events.filter((row) => row.display?.decision === "filtered");
+  const accepted = visibleAcceptedHandoffs(handoffs);
+  const taskHandoffs = visibleAcceptedHandoffsByCategory(handoffs, "execution_outcome");
+  const releaseHandoffs = visibleAcceptedHandoffsByCategory(handoffs, "release_outcome");
+  const visibleMissingQuality = handoffs.filter((row) =>
+    row.display?.decision !== "filtered" && !row.handoff_quality);
+  const oversizedVisible = [...events, ...handoffs].filter((row) =>
+    row.display?.decision !== "filtered" && row.summary_chars > 1200);
+  const releaseCloseoutAsExecution = handoffs.filter((row) =>
+    row.display?.decision !== "filtered" &&
+    row.handoff_quality?.category === "execution_outcome" &&
+    auditLooksLikeReleaseCloseout(row.summary));
+  const latestTask = taskHandoffs[0] || null;
+  const latestRelease = releaseHandoffs[0] || null;
+
+  const checks = [];
+  checks.push(contextQualityCheck(
+    "runtime_health",
+    args.runtime?.skipped ? "skip" : args.runtime?.ok === true ? "pass" : "warn",
+    "high",
+    args.runtime?.skipped
+      ? "Runtime check skipped."
+      : args.runtime?.ok === true
+        ? "Runtime is reachable."
+        : `Runtime is unavailable: ${args.runtime?.error || "unknown error"}`,
+    { base_url: args.baseUrl || null },
+  ));
+  checks.push(contextQualityCheck(
+    "session_state",
+    args.session?.state ? "pass" : "warn",
+    "high",
+    args.session?.state ? "Local Codex session state is available." : "No local Codex session state found.",
+    { session_id: args.sessionId || null },
+  ));
+  checks.push(contextQualityCheck(
+    "visible_task_handoff",
+    latestTask ? "pass" : "warn",
+    "medium",
+    latestTask ? "Latest visible task handoff is available." : "No visible execution handoff is available for task-start context.",
+    { uri: latestTask?.uri || null, created_at: latestTask?.created_at || null },
+  ));
+  checks.push(contextQualityCheck(
+    "visible_release_outcome",
+    latestRelease ? "pass" : "skip",
+    "info",
+    latestRelease ? "Latest visible release outcome is available." : "No release outcome is present in the current audit window.",
+    { uri: latestRelease?.uri || null, created_at: latestRelease?.created_at || null },
+  ));
+  checks.push(contextQualityCheck(
+    "filtered_noise",
+    filteredHandoffs.length || filteredEvents.length ? "warn" : "pass",
+    "medium",
+    filteredHandoffs.length || filteredEvents.length
+      ? "Some stored or recent context would be hidden by current display policy."
+      : "No filtered context noise detected in the audit window.",
+    { handoffs: filteredHandoffs.length, events: filteredEvents.length },
+  ));
+  checks.push(contextQualityCheck(
+    "oversized_visible_context",
+    oversizedVisible.length ? "warn" : "pass",
+    "low",
+    oversizedVisible.length
+      ? "Some visible context is long enough to dilute task-start context."
+      : "Visible context length is within the audit threshold.",
+    { count: oversizedVisible.length, threshold_chars: 1200 },
+  ));
+  checks.push(contextQualityCheck(
+    "legacy_missing_quality",
+    visibleMissingQuality.length ? "warn" : "pass",
+    "low",
+    visibleMissingQuality.length
+      ? "Some visible handoffs do not carry handoff_quality metadata."
+      : "Visible handoffs carry handoff_quality metadata.",
+    { count: visibleMissingQuality.length },
+  ));
+  checks.push(contextQualityCheck(
+    "release_task_classification",
+    releaseCloseoutAsExecution.length ? "warn" : "pass",
+    "medium",
+    releaseCloseoutAsExecution.length
+      ? "Release closeout-shaped handoffs are stored as execution_outcome."
+      : "No release closeout-shaped execution handoff conflict detected.",
+    { count: releaseCloseoutAsExecution.length, uri: releaseCloseoutAsExecution[0]?.uri || null },
+  ));
+
+  const score = contextQualityScore(checks);
+  return {
+    status: contextQualityStatus(checks),
+    score,
+    latest: {
+      task_handoff: latestTask
+        ? {
+            uri: latestTask.uri || null,
+            created_at: latestTask.created_at || null,
+            summary: latestTask.summary || "",
+          }
+        : null,
+      release_outcome: latestRelease
+        ? {
+            uri: latestRelease.uri || null,
+            created_at: latestRelease.created_at || null,
+            summary: latestRelease.summary || "",
+          }
+        : null,
+    },
+    counts: {
+      recent_events: events.length,
+      stored_handoffs: handoffs.length,
+      visible_accepted_handoffs: accepted.length,
+      visible_task_handoffs: taskHandoffs.length,
+      visible_release_outcomes: releaseHandoffs.length,
+      filtered_handoffs: filteredHandoffs.length,
+      filtered_events: filteredEvents.length,
+      visible_missing_quality: visibleMissingQuality.length,
+      oversized_visible: oversizedVisible.length,
+    },
+    checks,
+    issues: checks.filter((check) => check.status === "warn" || check.status === "fail"),
+  };
+}
+
 function remediationSummary(row) {
   return String(row.summary || "").replace(/\s+/g, " ").trim();
 }
@@ -846,6 +1015,14 @@ async function codexAudit(args) {
     quality_summary: summarizeQualityRows(events),
     handoff_display_summary: summarizeDisplayRows(handoffs),
   };
+  payload.context_quality_report = buildContextQualityReport({
+    baseUrl: paths.baseUrl,
+    runtime,
+    session,
+    sessionId,
+    events,
+    handoffs,
+  });
   payload.remediations = buildAuditRemediations({ events, handoffs });
   payload.warnings = buildAuditWarnings({ project, session, runtime, events, handoffs });
 
@@ -884,6 +1061,11 @@ async function codexAudit(args) {
     `\nsummary - accepted=${summary.accepted} rejected=${summary.rejected} missing=${summary.missing} ` +
       `current_filtered=${summary.filtered_by_current_policy} stored_filtered=${payload.handoff_display_summary.filtered}\n`,
   );
+  const report = payload.context_quality_report;
+  process.stdout.write(`\nContext Quality Report - ${report.status.toUpperCase()} score=${report.score}\n`);
+  for (const check of report.checks) {
+    process.stdout.write(`- ${check.status.toUpperCase()} ${check.id}: ${check.message}\n`);
+  }
   if (payload.warnings.length) {
     process.stdout.write("warnings\n");
     for (const warning of payload.warnings) process.stdout.write(`- ${warning}\n`);

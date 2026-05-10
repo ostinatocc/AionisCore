@@ -406,6 +406,149 @@ test("runtime cli audit gives handoff lookup more time than fast health checks",
   }
 });
 
+test("runtime cli audit emits a context quality report for a healthy handoff mix", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-quality-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const sessionId = "audit-quality-session";
+  const turnId = "audit-quality-turn";
+  const runId = "audit-quality-run";
+
+  mkdirSync(path.join(runtimeHome, "state", "sessions"), { recursive: true });
+  writeFileSync(path.join(runtimeHome, "state", "active-project.json"), JSON.stringify({
+    cwd: packageDir,
+    project_name: "aionis-runtime",
+    project_hash: "testhash",
+    scope: "codex:aionis-runtime:testhash",
+    global_scope: "codex:global",
+    tenant_id: "local-codex",
+    consumer_agent_id: "codex",
+    consumer_team_id: "local-codex",
+    updated_at: new Date().toISOString(),
+  }));
+  writeFileSync(path.join(runtimeHome, "state", "sessions", `${sessionId}.json`), JSON.stringify({
+    session_id: sessionId,
+    active_turn_id: turnId,
+    active_run_id: runId,
+    turns: {
+      [turnId]: {
+        turn_id: turnId,
+        run_id: runId,
+        prompt: "Audit healthy context quality.",
+      },
+    },
+    steps: {},
+    updated_at: new Date().toISOString(),
+  }));
+
+  const executionQuality = {
+    store_handoff: true,
+    category: "execution_outcome",
+    confidence: 0.82,
+    reasons: ["task_handoff_evidence"],
+  };
+  const releaseQuality = {
+    store_handoff: true,
+    category: "release_outcome",
+    confidence: 0.95,
+    reasons: ["release_version", "release_completion_signal", "external_release_surface"],
+  };
+  const server = createServer((req, res) => {
+    const url = new URL(req.url, "http://127.0.0.1");
+    res.setHeader("content-type", "application/json");
+    if (req.method === "GET" && url.pathname === "/health") {
+      res.end(JSON.stringify({ ok: true, runtime: { edition: "lite" } }));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === `/v1/memory/sessions/${sessionId}/events`) {
+      res.end(JSON.stringify({
+        events: [
+          {
+            title: "Codex turn ended",
+            created_at: new Date().toISOString(),
+            text_summary: "继续推进完了，修复 context quality report。验证：runtime test 12 pass，pack dry-run 通过。",
+            slots: {
+              phase: "Stop",
+              turn_id: turnId,
+              run_id: runId,
+              handoff_quality: executionQuality,
+            },
+          },
+        ],
+      }));
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/v1/memory/find") {
+      req.resume();
+      req.on("end", () => {
+        res.end(JSON.stringify({
+          nodes: [
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/execution",
+              created_at: "2026-05-10T18:20:00.000Z",
+              text_summary: "继续推进完了，修复 context quality report。验证：runtime test 12 pass，pack dry-run 通过。",
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: executionQuality,
+                },
+              },
+            },
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release",
+              created_at: "2026-05-10T18:10:00.000Z",
+              text_summary: "0.2.17 发布闭环确认完成。npm latest：@ostinato/aionis-runtime@0.2.17。干净 npx 返回 0.2.17。",
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: releaseQuality,
+                  release_outcome: true,
+                  version: "0.2.17",
+                },
+              },
+            },
+          ],
+        }));
+      });
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const env = {
+      ...process.env,
+      HOME: home,
+      AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+      AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+    };
+    const audit = await spawnCli(["codex", "audit", "--json", "--session", sessionId, "--limit", "4"], {
+      cwd: packageDir,
+      env,
+    });
+    assert.equal(audit.status, 0, `${audit.stdout}\n${audit.stderr}`);
+    const parsed = JSON.parse(audit.stdout);
+
+    assert.equal(parsed.context_quality_report.status, "pass");
+    assert.equal(parsed.context_quality_report.score, 100);
+    assert.equal(parsed.context_quality_report.latest.task_handoff.uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/execution");
+    assert.equal(parsed.context_quality_report.latest.release_outcome.uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release");
+    assert.equal(parsed.context_quality_report.counts.visible_task_handoffs, 1);
+    assert.equal(parsed.context_quality_report.counts.visible_release_outcomes, 1);
+    assert.deepEqual(parsed.context_quality_report.issues, []);
+
+    const textAudit = await spawnCli(["codex", "audit", "--session", sessionId, "--limit", "4"], {
+      cwd: packageDir,
+      env,
+    });
+    assert.equal(textAudit.status, 0, `${textAudit.stdout}\n${textAudit.stderr}`);
+    assert.match(textAudit.stdout, /Context Quality Report - PASS score=100/);
+    assert.match(textAudit.stdout, /PASS visible_task_handoff/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("runtime cli audit reports remediation for filtered historical handoffs", async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-remediation-home-"));
   const runtimeHome = path.join(home, ".aionis", "codex");
@@ -530,6 +673,9 @@ test("runtime cli audit reports remediation for filtered historical handoffs", a
     assert.deepEqual(parsed.remediations[0].reasons, ["planning_advice_without_execution_evidence"]);
     assert.equal(parsed.remediations[1].uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/legacy-explainer");
     assert.deepEqual(parsed.remediations[1].reasons, ["status_or_discussion_lead"]);
+    assert.equal(parsed.context_quality_report.status, "warn");
+    assert.ok(parsed.context_quality_report.issues.some((issue) => issue.id === "filtered_noise"));
+    assert.ok(parsed.context_quality_report.issues.some((issue) => issue.id === "visible_task_handoff"));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
