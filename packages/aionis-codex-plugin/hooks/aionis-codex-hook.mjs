@@ -175,7 +175,7 @@ async function findProjectTaskHandoffs(config) {
     type: "event",
     memory_lane: "private",
     include_meta: false,
-    include_slots: false,
+    include_slots: true,
     include_slots_preview: false,
     limit: 8,
     slots_contains: {

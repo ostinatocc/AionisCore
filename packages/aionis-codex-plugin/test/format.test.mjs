@@ -543,6 +543,75 @@ test("renderAionisHookContext treats confirmed publish closeouts as release outc
   assert.match(text, /clean_npx=0\.2\.15/);
 });
 
+test("renderAionisHookContext keeps quality-marked execution handoffs that discuss releases", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-release-quality",
+    runId: "run-release-quality",
+    prompt: "继续推进吧",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      nodes: [
+        {
+          summary: "`0.2.16` 发布闭环确认完成。npm latest：@ostinato/aionis-runtime@0.2.16。干净 npx 拉取：返回 0.2.16。",
+          slots: {
+            execution_result_summary: {
+              handoff_quality: {
+                store_handoff: true,
+                category: "release_outcome",
+                confidence: 0.95,
+                reasons: ["release_completion_signal"],
+              },
+              release_outcome: true,
+              version: "0.2.16",
+            },
+          },
+          uri: "aionis://local-codex/codex%3Aproject/event/release-0.2.16",
+        },
+        {
+          summary: [
+            "继续推进完了，并已提交推到 public main。",
+            "这轮修的是两个真实 dogfood 问题：确认发布成功，0.2.15 闭环成立 这种收口以后会被识别成 release_outcome。",
+            "npm 线上现在还是 0.2.15，要发 0.2.16。",
+            "验证：codex-plugin:test 41 pass，runtime test 11 pass，pack dry-run 通过，commit 7ad94f3。",
+          ].join(" "),
+          slots: {
+            execution_result_summary: {
+              handoff_quality: {
+                store_handoff: true,
+                category: "execution_outcome",
+                confidence: 0.82,
+                reasons: ["task_handoff_evidence"],
+              },
+            },
+          },
+          uri: "aionis://local-codex/codex%3Aproject/event/release-context-fix",
+        },
+        {
+          summary: "已继续推进并提交到公共 main。修复 codex audit timeout diagnostics。验证：runtime test 10 pass，pack dry-run 通过，commit 18413c5。",
+          slots: {
+            execution_result_summary: {
+              handoff_quality: {
+                store_handoff: true,
+                category: "execution_outcome",
+                confidence: 0.82,
+                reasons: ["task_handoff_evidence"],
+              },
+            },
+          },
+          uri: "aionis://local-codex/codex%3Aproject/event/old-timeout-fix",
+        },
+      ],
+    },
+  });
+
+  assert.match(text, /latest_task_handoff=继续推进完了，并已提交推到 public main/);
+  assert.match(text, /latest_release_outcome=0\.2\.16 发布闭环确认完成/);
+  assert.match(text, /handoff_uri=aionis:\/\/local-codex\/codex%3Aproject\/event\/release-context-fix/);
+  assert.doesNotMatch(text, /handoff_uri=aionis:\/\/local-codex\/codex%3Aproject\/event\/old-timeout-fix/);
+});
+
 test("renderAionisHookContext keeps release outcome visible when a newer task handoff exists", () => {
   const text = renderAionisHookContext({
     config,

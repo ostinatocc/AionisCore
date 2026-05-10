@@ -483,6 +483,13 @@ function handoffSummary(record) {
       : "";
 }
 
+function executionResultSummaryFromRecord(record) {
+  const direct = asRecord(record?.execution_result_summary) || asRecord(record?.executionResultSummary);
+  if (direct) return direct;
+  const slots = asRecord(record?.slots);
+  return asRecord(slots?.execution_result_summary) || asRecord(slots?.executionResultSummary);
+}
+
 function sanitizeInlineMarkdown(value) {
   return normalizeDisplayText(value)
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
@@ -630,7 +637,7 @@ function versionRank(value) {
 }
 
 function releaseOutcomeVersionFromRecord(record) {
-  const result = asRecord(record?.execution_result_summary) || asRecord(record?.executionResultSummary);
+  const result = executionResultSummaryFromRecord(record);
   const resultVersion = typeof result?.version === "string" ? result.version : "";
   if (resultVersion) return resultVersion;
   const summary = handoffSummary(record);
@@ -643,7 +650,9 @@ function isReleaseOutcomeRecord(record) {
   if (isUnpublishedReleaseStatusText(text)) return false;
   if (!hasReleaseCompletionSignal(text)) return false;
   const tags = Array.isArray(record?.tags) ? record.tags : [];
-  const result = asRecord(record?.execution_result_summary) || asRecord(record?.executionResultSummary);
+  const result = executionResultSummaryFromRecord(record);
+  const quality = asRecord(result?.handoff_quality);
+  if (quality?.category && quality.category !== "release_outcome") return false;
   if (tags.includes("release_outcome") || result?.release_outcome === true) return true;
   return releaseEvidenceFromHandoff(text).length > 0 && /\bnpm\s+(?:publish|view|latest)\b|\bnpx\b|\bclean\s+(?:npm\s+)?install\b|\u53d1\u5e03|\u53d1\u5305/i.test(text);
 }
