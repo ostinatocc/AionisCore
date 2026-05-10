@@ -490,7 +490,22 @@ test("renderAionisHookContext keeps release outcome visible when a newer task ha
         summary: "这轮继续推进完了，新增 dogfood 总结报告并修了 Fast Facts 发布证据显示。提交 7862d4f。验证：codex-plugin:test 32 pass，runtime test 7 pass，pack dry-run 通过。",
         uri: "aionis://local-codex/codex%3Aproject/event/source-0.2.11",
       },
+    },
+    projectReleaseOutcomeFast: {
       nodes: [
+        {
+          summary: [
+            "源码是 0.2.11 候选。",
+            "npm latest 仍是 @ostinato/aionis-runtime@0.2.10。",
+            "没有误发包，下一步验证通过后再发布。",
+          ].join(" "),
+          tags: ["codex", "release", "release_outcome", "0.2.10"],
+          execution_result_summary: {
+            release_outcome: true,
+            version: "0.2.10",
+          },
+          uri: "aionis://local-codex/codex%3Aproject/event/false-release-0.2.10",
+        },
         {
           summary: [
             "0.2.10 发布闭环完成了。",
@@ -515,6 +530,7 @@ test("renderAionisHookContext keeps release outcome visible when a newer task ha
   assert.match(text, /npm_latest=0\.2\.10/);
   assert.match(text, /clean_npx=0\.2\.10/);
   assert.match(text, /clean_install=pass/);
+  assert.doesNotMatch(text, /没有误发包/);
 });
 
 test("renderAionisHookContext keeps commit-heavy handoff summaries untruncated", () => {

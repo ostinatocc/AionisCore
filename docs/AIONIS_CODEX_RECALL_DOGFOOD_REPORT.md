@@ -23,6 +23,7 @@ Aionis is harmful or distracting when it surfaces generic or stale context:
 4. status-only suppression that drops important external outcomes such as an npm publish
 5. compact summaries that omit the actual release/install evidence behind a "done" claim
 6. newer task handoffs that hide the latest release outcome from the first screen
+7. false release outcomes from candidate/unpublished summaries that mention npm latest
 
 ## What Helped
 
@@ -62,6 +63,8 @@ That is directionally correct, but the visible fast fact still compressed away t
 
 This means release outcome capture works, but release outcome display still needs evidence-aware compression. The next live prompt exposed the remaining shape: after a source-change handoff, the first screen still needs a separate `latest_release_outcome` line so published package state remains visible beside the newest task handoff.
 
+A follow-up live query exposed one more write-side bug: summaries saying "0.2.11 candidate; npm latest still 0.2.10; no accidental publish" had enough npm/version tokens to be misclassified as a `release_outcome`. The release classifier now treats candidate, unpublished, still-latest, and no-accidental-publish language as negative evidence, and display filtering ignores already-written false positives.
+
 ## Product Conclusion
 
 Aionis Runtime is not a general "make the AI smarter" feature yet. In Codex, its current value is narrower and more concrete:
@@ -76,6 +79,6 @@ That is enough to justify continuing the Codex integration for real development 
 ## Next Cuts
 
 1. Keep release outcome evidence visible in `Fast Task Facts`: `latest_release_outcome`, `npm_latest`, `clean_npx`, `clean_install`, and `codex_status`.
-2. Re-run the next live prompt and verify the first screen includes both current task continuity and the latest release outcome.
+2. Re-run the next live prompt and verify the first screen includes both current task continuity and the true latest release outcome, while ignoring candidate/unpublished false positives.
 3. Run the same Codex recall loop on a second repository to check whether the improvements generalize beyond AionisRuntime.
 4. Keep suppressing generic memory. Aionis should earn visible space only when it changes the first action or validation boundary.

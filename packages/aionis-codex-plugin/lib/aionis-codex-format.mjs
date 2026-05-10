@@ -547,6 +547,16 @@ function releaseEvidenceFromHandoff(text) {
   return evidence;
 }
 
+function isUnpublishedReleaseStatusText(text) {
+  return [
+    /\bnpm\s+latest\b[^\n。.;]*(?:still|remains|is still)\b/i,
+    /\bnpm\s+latest\b[^\n。.;]*(?:\u4ecd\u662f|\u8fd8\u662f|\u4ecd\u7136\u662f)/i,
+    /\bnot\s+(?:yet\s+)?(?:published|released)\b/i,
+    /\b(?:unpublished|not-published|candidate)\b/i,
+    /\u6ca1\u6709\u8bef\u53d1\u5305|\u672a\u53d1(?:\u5305|\u5e03)|\u8fd8\u6ca1\u53d1|\u5c1a\u672a\u53d1|\u5019\u9009/i,
+  ].some((pattern) => pattern.test(text));
+}
+
 function versionRank(value) {
   const match = String(value || "").match(/^(\d+)\.(\d+)\.(\d+)/);
   if (!match) return 0;
@@ -562,11 +572,12 @@ function releaseOutcomeVersionFromRecord(record) {
 }
 
 function isReleaseOutcomeRecord(record) {
+  const summary = handoffSummary(record);
+  const text = sanitizeInlineMarkdown(summary);
+  if (isUnpublishedReleaseStatusText(text)) return false;
   const tags = Array.isArray(record?.tags) ? record.tags : [];
   const result = asRecord(record?.execution_result_summary) || asRecord(record?.executionResultSummary);
   if (tags.includes("release_outcome") || result?.release_outcome === true) return true;
-  const summary = handoffSummary(record);
-  const text = sanitizeInlineMarkdown(summary);
   return releaseEvidenceFromHandoff(text).length > 0 && /\bnpm\s+(?:publish|view|latest)\b|\bnpx\b|\bclean\s+(?:npm\s+)?install\b|\u53d1\u5e03|\u53d1\u5305/i.test(text);
 }
 
@@ -628,7 +639,7 @@ function directHandoffScore(record, index) {
     + progressSignal;
 }
 
-function summarizeDirectHandoff(result) {
+function summarizeDirectHandoff(result, releaseResult = null) {
   const records = directHandoffRecords(result);
   if (records.length === 0) return [];
   const ranked = records
@@ -646,7 +657,7 @@ function summarizeDirectHandoff(result) {
   const targetFiles = stringList(handoff.target_files || handoff.targetFiles, 5);
   const checks = stringList(handoff.acceptance_checks || handoff.acceptanceChecks, 4);
   if (summary) out.push(`latest_task_handoff=${compactHandoffSummary(summary)}`);
-  const releaseRecord = latestReleaseOutcomeRecord(records);
+  const releaseRecord = latestReleaseOutcomeRecord([...records, ...directHandoffRecords(releaseResult)]);
   const releaseSummary = releaseRecord && releaseRecord !== handoff ? handoffSummary(releaseRecord) : "";
   if (releaseSummary) out.push(`latest_release_outcome=${compactHandoffSummary(releaseSummary)}`);
   if (nextAction) out.push(`next_action=${truncateInlineText(nextAction, 360)}`);
@@ -758,6 +769,7 @@ export function renderAionisHookContext(args) {
     prompt,
     runtimeStatus,
     projectHandoffFast,
+    projectReleaseOutcomeFast,
     planningContext,
     contextAssemble,
     projectAgentResume,
@@ -806,7 +818,7 @@ export function renderAionisHookContext(args) {
   const displayFastPlannerPacket = plannerPacketHasDisplayContent(scrubbedFastPlannerPacket) ? scrubbedFastPlannerPacket : undefined;
   const displayPlannerPacket = plannerPacketHasDisplayContent(scrubbedPlannerPacket) ? scrubbedPlannerPacket : undefined;
   const displayLayeredContext = layeredContextHasDisplayContent(scrubbedLayeredContext) ? scrubbedLayeredContext : undefined;
-  const projectHandoffSummary = summarizeDirectHandoff(projectHandoffFast);
+  const projectHandoffSummary = summarizeDirectHandoff(projectHandoffFast, projectReleaseOutcomeFast);
   const fastFacts = [
     latestDogfood ? `dogfood_progress=${latestDogfood.text}` : "",
     ...projectHandoffSummary.filter((entry) => entry.startsWith("latest_task_handoff=")).slice(0, 1),

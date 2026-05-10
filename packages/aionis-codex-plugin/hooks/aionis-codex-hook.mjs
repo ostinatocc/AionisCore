@@ -186,6 +186,26 @@ async function findProjectTaskHandoffs(config) {
   });
 }
 
+async function findProjectReleaseOutcomeHandoffs(config) {
+  return runtimePost(config, "/v1/memory/find", {
+    ...commonRuntimeFields(config),
+    type: "event",
+    memory_lane: "private",
+    include_meta: false,
+    include_slots: true,
+    include_slots_preview: false,
+    limit: 8,
+    slots_contains: {
+      summary_kind: "handoff",
+      handoff_kind: "task_handoff",
+      repo_root: config.cwd,
+      execution_result_summary: {
+        release_outcome: true,
+      },
+    },
+  });
+}
+
 function projectTaskHandoffRecords(result) {
   if (!result || typeof result !== "object" || Array.isArray(result)) return [];
   const records = [];
@@ -301,9 +321,22 @@ function releaseOutcomeVersion(value) {
   return null;
 }
 
+function isUnpublishedReleaseStatusSummary(value) {
+  const text = normalizeStopText(value);
+  if (!text) return false;
+  return [
+    /\bnpm\s+latest\b[^\n。.;]*(?:still|remains|is still)\b/i,
+    /\bnpm\s+latest\b[^\n。.;]*(?:\u4ecd\u662f|\u8fd8\u662f|\u4ecd\u7136\u662f)/i,
+    /\bnot\s+(?:yet\s+)?(?:published|released)\b/i,
+    /\b(?:unpublished|not-published|candidate)\b/i,
+    /\u6ca1\u6709\u8bef\u53d1\u5305|\u672a\u53d1(?:\u5305|\u5e03)|\u8fd8\u6ca1\u53d1|\u5c1a\u672a\u53d1|\u5019\u9009/i,
+  ].some((pattern) => pattern.test(text));
+}
+
 function isReleaseOutcomeSummary(value) {
   const text = normalizeStopText(value);
   if (!text || !releaseOutcomeVersion(text)) return false;
+  if (isUnpublishedReleaseStatusSummary(text)) return false;
   const hasExternalSurface = [
     /\bnpm\s+(?:publish|view)\b/i,
     /\bdist-tags?\b/i,
@@ -445,6 +478,8 @@ async function handleUserPrompt(input) {
 
   const projectHandoffFast = await safeRuntimeCall(config, "project_handoff_fast", () =>
     findProjectTaskHandoffs(config), errors);
+  const projectReleaseOutcomeFast = await safeRuntimeCall(config, "project_release_outcome_fast", () =>
+    findProjectReleaseOutcomeHandoffs(config), errors);
 
   const hasFastProjectHandoff = hasUsableProjectTaskHandoff(projectHandoffFast);
   const planningContext = hasFastProjectHandoff
@@ -534,6 +569,7 @@ async function handleUserPrompt(input) {
     prompt,
     runtimeStatus,
     projectHandoffFast,
+    projectReleaseOutcomeFast,
     planningContext,
     contextAssemble,
     projectAgentResume,

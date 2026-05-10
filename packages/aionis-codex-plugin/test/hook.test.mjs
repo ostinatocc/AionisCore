@@ -244,6 +244,53 @@ test("Stop hook stores verified release outcomes even when the reply is status-s
   }
 });
 
+test("Stop hook does not mark unpublished release status as release outcome", async () => {
+  const routes = [];
+  const bodies = {};
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "candidate-turn",
+      cwd: pluginRoot,
+      prompt: "继续推进吧",
+      last_assistant_message: [
+        "这轮继续推进完了。",
+        "源码是 0.2.11 候选，npm latest 仍是 @ostinato/aionis-runtime@0.2.10。",
+        "没有误发包，下一步真实启动验证通过后再发布 0.2.11。",
+        "验证：codex-plugin:test 33 pass，runtime test 7 pass。",
+      ].join(" "),
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/handoff/store"), true);
+    const handoff = bodies["/v1/handoff/store"][0];
+    assert.doesNotMatch(handoff.anchor, /#release:0\.2\.10$/);
+    assert.equal(handoff.tags.includes("release_outcome"), false);
+    assert.equal(handoff.execution_result_summary.release_outcome, undefined);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("Stop hook does not store next-step planning advice as task handoffs", async () => {
   const routes = [];
   const server = http.createServer((req, res) => {
