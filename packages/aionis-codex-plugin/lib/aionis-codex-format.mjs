@@ -557,6 +557,53 @@ function isUnpublishedReleaseStatusText(text) {
   ].some((pattern) => pattern.test(text));
 }
 
+function hasReleaseCompletionSignal(text) {
+  return [
+    /\u53d1\u5e03\u95ed\u73af.*(\u5b8c\u6210|\u6210\u7acb|\u901a\u8fc7)/,
+    /(?:^|[\s\u3002.!！])(\u53d1\u5e03|\u53d1\u5305)(\u5df2\u7ecf)?(\u5b8c\u6210|\u6210\u529f)(?:[\s\u3002.!！]|$)/,
+    /\u5df2\u7ecf\u6210\u529f\u53d1\u5230\s*npm/i,
+    /\u53d1\u5b8c\u4e86|\u5df2\u7ecf\u662f\s*\d+\.\d+\.\d+/,
+    /\b(?:publish|release)\s+(?:completed|succeeded|verified|closed)\b/i,
+    /\bpublished\s+(?:to\s+)?npm\b/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+function hasConcreteTaskOutcomeSignal(text) {
+  return [
+    /\b(implemented|fixed|updated|changed|added|removed|verified|tested|passed|committed|installed|validated|created|refactored)\b/i,
+    /(?:\u5df2|\u5df2\u7ecf).*(\u5b9e\u73b0|\u4fee\u590d|\u66f4\u65b0|\u63d0\u4ea4|\u9a8c\u8bc1|\u5b89\u88c5|\u5b8c\u6210|\u8dd1\u8fc7|\u901a\u8fc7)/,
+    /\b[0-9a-f]{7,12}\b/,
+    /\b\d+\s+pass\b/i,
+    /\bpack(?::|-|\s+)dry-run\b/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+function isStatusOrDiscussionLead(text) {
+  return [
+    /^\u6574\u4f53\u73b0\u5728/,
+    /^\u73b0\u5728\u6574\u4f53/,
+    /^\u73b0\u5728\u72b6\u6001/,
+    /^\u53d1\u5e03\u88ab\s*npm\s*\u62e6\u4f4f/,
+    /^\u4f60\u8fd9\u4e2a\u8d28\u7591/,
+    /^\u8fd9\u91cc\u8981\u5206\u6e05/,
+    /^\u672c\u8d28\u4e0a/,
+    /^\u6211\u7684\u771f\u5b9e\u7ed3\u8bba/,
+    /Aionis\s+\u4e0d\u662f.*\u800c\u662f/i,
+    /^Current status\b/i,
+    /^Overall\b/i,
+    /^The key point\b/i,
+    /\bEOTP\b|\bone-time password\b|\u4e00\u6b21\u6027\u9a8c\u8bc1\u7801/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+function isLowSignalTaskHandoffText(text) {
+  if (!text) return true;
+  if (hasReleaseCompletionSignal(text)) return false;
+  if (isStatusOrDiscussionLead(text)) return true;
+  if (hasConcreteTaskOutcomeSignal(text)) return false;
+  return false;
+}
+
 function versionRank(value) {
   const match = String(value || "").match(/^(\d+)\.(\d+)\.(\d+)/);
   if (!match) return 0;
@@ -575,6 +622,7 @@ function isReleaseOutcomeRecord(record) {
   const summary = handoffSummary(record);
   const text = sanitizeInlineMarkdown(summary);
   if (isUnpublishedReleaseStatusText(text)) return false;
+  if (!hasReleaseCompletionSignal(text)) return false;
   const tags = Array.isArray(record?.tags) ? record.tags : [];
   const result = asRecord(record?.execution_result_summary) || asRecord(record?.executionResultSummary);
   if (tags.includes("release_outcome") || result?.release_outcome === true) return true;
@@ -641,29 +689,32 @@ function directHandoffScore(record, index) {
 
 function summarizeDirectHandoff(result, releaseResult = null) {
   const records = directHandoffRecords(result);
-  if (records.length === 0) return [];
-  const ranked = records
+  const taskRecords = records.filter((record) => {
+    if (isReleaseOutcomeRecord(record)) return false;
+    return !isLowSignalTaskHandoffText(sanitizeInlineMarkdown(handoffSummary(record)));
+  });
+  const ranked = taskRecords
     .map((record, index) => ({ record, score: directHandoffScore(record, index) }))
     .sort((a, b) => b.score - a.score)
     .map((entry) => entry.record);
-  const handoff = ranked[0];
+  const handoff = ranked[0] ?? null;
   const out = [];
-  const summary = handoffSummary(handoff);
-  const nextAction = typeof handoff.next_action === "string"
+  const summary = handoff ? handoffSummary(handoff) : "";
+  const nextAction = handoff && typeof handoff.next_action === "string"
     ? handoff.next_action
-    : typeof handoff.nextAction === "string"
+    : handoff && typeof handoff.nextAction === "string"
       ? handoff.nextAction
       : "";
-  const targetFiles = stringList(handoff.target_files || handoff.targetFiles, 5);
-  const checks = stringList(handoff.acceptance_checks || handoff.acceptanceChecks, 4);
+  const targetFiles = handoff ? stringList(handoff.target_files || handoff.targetFiles, 5) : [];
+  const checks = handoff ? stringList(handoff.acceptance_checks || handoff.acceptanceChecks, 4) : [];
   if (summary) out.push(`latest_task_handoff=${compactHandoffSummary(summary)}`);
   const releaseRecord = latestReleaseOutcomeRecord([...records, ...directHandoffRecords(releaseResult)]);
-  const releaseSummary = releaseRecord && releaseRecord !== handoff ? handoffSummary(releaseRecord) : "";
+  const releaseSummary = releaseRecord ? handoffSummary(releaseRecord) : "";
   if (releaseSummary) out.push(`latest_release_outcome=${compactHandoffSummary(releaseSummary)}`);
   if (nextAction) out.push(`next_action=${truncateInlineText(nextAction, 360)}`);
   if (targetFiles.length > 0) out.push(`target_files=${targetFiles.join(", ")}`);
   if (checks.length > 0) out.push(`acceptance_checks=${checks.join(" | ")}`);
-  if (typeof handoff.uri === "string") out.push(`handoff_uri=${handoff.uri}`);
+  if (handoff && typeof handoff.uri === "string") out.push(`handoff_uri=${handoff.uri}`);
   return out;
 }
 

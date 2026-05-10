@@ -269,6 +269,7 @@ function isStatusOnlyAssistantText(value) {
   if (!text) return false;
   return [
     /^\u6574\u4f53\u73b0\u5728/,
+    /^\u73b0\u5728\u6574\u4f53/,
     /^\u73b0\u5728\u72b6\u6001/,
     /^\u786e\u8ba4\u5b8c\u4e86/,
     /^Current status\b/i,
@@ -310,6 +311,33 @@ function isPlanningAdviceOnly(value) {
   ].some((pattern) => pattern.test(text));
 }
 
+function isConceptualDiscussionPrompt(value) {
+  const text = normalizeStopText(value);
+  if (!text) return false;
+  return [
+    /\u4e3a\u4ec0\u4e48/,
+    /\u662f.*\u4e0d\u662f/,
+    /\u4e0d\u884c\u5417/,
+    /\u6709\u6ca1\u6709\u4ef7\u503c|\u4ec0\u4e48\u4ef7\u503c/,
+    /\u4f60\u89c9\u5f97/,
+    /\u5230\u5e95.*(\u662f\u4ec0\u4e48|\u600e\u4e48\u56de\u4e8b|\u5565\u60c5\u51b5)/,
+    /\b(why|what is|is .* good|does .* work|is .* worth)\b/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+function isConceptualDiscussionOnly(value) {
+  const text = normalizeStopText(value);
+  if (!text || hasTaskHandoffEvidence(text)) return false;
+  return [
+    /^\u4f60\u8fd9\u4e2a\u8d28\u7591/,
+    /^\u8fd9\u91cc\u8981\u5206\u6e05/,
+    /^\u672c\u8d28\u4e0a/,
+    /^\u6211\u7684\u771f\u5b9e\u7ed3\u8bba/,
+    /Aionis\s+\u4e0d\u662f.*\u800c\u662f/i,
+    /^The key point\b/i,
+  ].some((pattern) => pattern.test(text));
+}
+
 function releaseOutcomeVersion(value) {
   const text = normalizeStopText(value);
   const scopedPackageVersion = text.match(/@[a-z0-9_.-]+\/[a-z0-9_.-]+@(\d+\.\d+\.\d+(?:[-+][a-z0-9_.-]+)?)/i);
@@ -333,10 +361,24 @@ function isUnpublishedReleaseStatusSummary(value) {
   ].some((pattern) => pattern.test(text));
 }
 
-function isReleaseOutcomeSummary(value) {
+function hasReleaseCompletionSignal(value) {
+  const text = normalizeStopText(value);
+  if (!text) return false;
+  return [
+    /\u53d1\u5e03\u95ed\u73af.*(\u5b8c\u6210|\u6210\u7acb|\u901a\u8fc7)/,
+    /(?:^|[\s\u3002.!！])(\u53d1\u5e03|\u53d1\u5305)(\u5df2\u7ecf)?(\u5b8c\u6210|\u6210\u529f)(?:[\s\u3002.!！]|$)/,
+    /\u5df2\u7ecf\u6210\u529f\u53d1\u5230\s*npm/i,
+    /\u53d1\u5b8c\u4e86|\u5df2\u7ecf\u662f\s*\d+\.\d+\.\d+/,
+    /\b(?:publish|release)\s+(?:completed|succeeded|verified|closed)\b/i,
+    /\bpublished\s+(?:to\s+)?npm\b/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+function isReleaseOutcomeSummary(value, prompt = "") {
   const text = normalizeStopText(value);
   if (!text || !releaseOutcomeVersion(text)) return false;
   if (isUnpublishedReleaseStatusSummary(text)) return false;
+  if (!hasReleaseCompletionSignal(`${text} ${normalizeStopText(prompt)}`)) return false;
   const hasExternalSurface = [
     /\bnpm\s+(?:publish|view)\b/i,
     /\bdist-tags?\b/i,
@@ -358,18 +400,19 @@ function isReleaseOutcomeSummary(value) {
 function shouldStoreStopHandoff(args) {
   const summary = normalizeStopText(args.summary);
   if (!summary) return false;
-  if (isReleaseOutcomeSummary(summary)) return true;
+  if (isReleaseOutcomeSummary(summary, args.prompt)) return true;
   if (isStatusOrCommandPrompt(args.prompt)) return false;
   if (isCommandInstructionOnly(summary)) return false;
   if (isStatusOnlyAssistantText(summary)) return false;
   if (isNextStepPlanningPrompt(args.prompt) && isPlanningAdviceOnly(summary)) return false;
   if (isPlanningAdviceOnly(summary)) return false;
+  if (isConceptualDiscussionPrompt(args.prompt) && isConceptualDiscussionOnly(summary)) return false;
   return true;
 }
 
 function buildStopHandoffPayload(config, sessionId, turnId, runId, turn, summary, eventName) {
   const releaseVersion = releaseOutcomeVersion(summary);
-  const isReleaseOutcome = isReleaseOutcomeSummary(summary);
+  const isReleaseOutcome = isReleaseOutcomeSummary(summary, turn.prompt || "");
   return {
     ...commonRuntimeFields(config),
     handoff_kind: "task_handoff",
@@ -695,7 +738,10 @@ async function handleStop(input, eventName = "Stop") {
   const state = loadState(config, sessionId);
   const turnId = state.active_turn_id || getTurnId(input);
   const runId = state.active_run_id || buildTurnRunId(sessionId, turnId);
-  const turn = state.turns?.[turnId] || {};
+  const turn = {
+    ...(state.turns?.[turnId] || {}),
+    prompt: state.turns?.[turnId]?.prompt || extractPrompt(input) || null,
+  };
   const assistantText = String(
     input.last_assistant_message
     || input.lastAssistantMessage

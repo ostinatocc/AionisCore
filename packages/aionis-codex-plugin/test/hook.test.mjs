@@ -168,6 +168,89 @@ test("Stop hook does not store status-only assistant replies as task handoffs", 
   }
 });
 
+test("Stop hook does not store release-looking overall status as release outcome", async () => {
+  const routes = [];
+  const bodies = {};
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "overall-status-turn",
+      cwd: pluginRoot,
+      prompt: "现在整体怎么样了？",
+      last_assistant_message: [
+        "整体现在是：终于进入能真实用、能公开试用的状态了，但还不是成熟产品。",
+        "npm latest 已经是 @ostinato/aionis-runtime@0.2.11。",
+        "本地源码版本也是 0.2.11，Codex status 全 PASS。",
+        "之前那个真实 hook 目录 stale 的问题已经修掉并发布了。",
+      ].join(" "),
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/memory/events"), true);
+    assert.equal(routes.includes("/v1/memory/replay/run/end"), true);
+    assert.equal(routes.includes("/v1/handoff/store"), false);
+    assert.equal(bodies["/v1/handoff/store"], undefined);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Stop hook does not store conceptual product answers as task handoffs", async () => {
+  const routes = [];
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    req.resume();
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "conceptual-turn",
+      cwd: pluginRoot,
+      prompt: "这些不是Aionis本身的能力吗？是Aionis不行吗？",
+      last_assistant_message: [
+        "你这个质疑是对的：context 质量就是 Aionis 的核心能力，不是外围小问题。",
+        "Aionis 不是不行，而是现在刚进入真实使用校准阶段。",
+        "它还需要避免把待发布状态误判成发布完成。",
+        "release outcome 只是分类名，不代表真的完成发布。",
+        "本质上 Aionis 有三层：存储能力、召回能力、展示能力。",
+      ].join(" "),
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/memory/events"), true);
+    assert.equal(routes.includes("/v1/memory/replay/run/end"), true);
+    assert.equal(routes.includes("/v1/handoff/store"), false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("Stop hook still stores implementation summaries as task handoffs", async () => {
   const routes = [];
   const server = http.createServer((req, res) => {

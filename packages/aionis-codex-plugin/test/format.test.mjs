@@ -470,7 +470,8 @@ test("renderAionisHookContext keeps release outcome evidence visible", () => {
     },
   });
 
-  assert.match(text, /latest_task_handoff=0\.2\.10 发布闭环完成了/);
+  assert.doesNotMatch(text, /latest_task_handoff=0\.2\.10 发布闭环完成了/);
+  assert.match(text, /latest_release_outcome=0\.2\.10 发布闭环完成了/);
   assert.match(text, /npm_latest=0\.2\.10/);
   assert.match(text, /clean_npx=0\.2\.10/);
   assert.match(text, /clean_install=pass/);
@@ -531,6 +532,79 @@ test("renderAionisHookContext keeps release outcome visible when a newer task ha
   assert.match(text, /clean_npx=0\.2\.10/);
   assert.match(text, /clean_install=pass/);
   assert.doesNotMatch(text, /没有误发包/);
+});
+
+test("renderAionisHookContext suppresses low-signal status and conceptual handoffs", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-low-signal",
+    runId: "run-low-signal",
+    prompt: "继续推进吧",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      nodes: [
+        {
+          summary: [
+            "你这个质疑是对的：context 质量就是 Aionis 的核心能力，不是外围小问题。",
+            "Aionis 不是不行，而是现在刚进入真实使用校准阶段。",
+            "它还需要避免把待发布状态误判成发布完成。",
+            "release outcome 只是分类名，不代表真的完成发布。",
+          ].join(" "),
+          uri: "aionis://local-codex/codex%3Aproject/event/conceptual",
+        },
+        {
+          summary: [
+            "整体现在是：终于进入能真实用、能公开试用的状态了，但还不是成熟产品。",
+            "npm latest 已经是 @ostinato/aionis-runtime@0.2.11。",
+            "Codex status 全 PASS。",
+          ].join(" "),
+          tags: ["codex", "release", "release_outcome", "0.2.11"],
+          execution_result_summary: {
+            release_outcome: true,
+            version: "0.2.11",
+          },
+          uri: "aionis://local-codex/codex%3Aproject/event/status",
+        },
+        {
+          summary: [
+            "发布被 npm 拦住了，不是代码问题。",
+            "npm error code EOTP，需要一次性验证码。",
+            "给了用户 npm publish --access public --otp=你的6位验证码。",
+          ].join(" "),
+          uri: "aionis://local-codex/codex%3Aproject/event/eotp",
+        },
+        {
+          summary: "修复了 Codex context 质量过滤：状态问答不再覆盖 latest_task_handoff，release outcome 必须有明确发布闭环信号。验证：codex-plugin:test 36 pass。",
+          uri: "aionis://local-codex/codex%3Aproject/event/actionable",
+        },
+      ],
+    },
+    projectReleaseOutcomeFast: {
+      nodes: [
+        {
+          summary: [
+            "0.2.11 发布闭环完成了。",
+            "npm latest：@ostinato/aionis-runtime@0.2.11。",
+            "clean npx --yes @ostinato/aionis-runtime@latest --version 返回 0.2.11。",
+            "隔离 HOME 新用户安装验证：codex status --json 返回 ok: true。",
+          ].join(" "),
+          tags: ["codex", "release", "release_outcome", "0.2.11"],
+          execution_result_summary: {
+            release_outcome: true,
+            version: "0.2.11",
+          },
+          uri: "aionis://local-codex/codex%3Aproject/event/release",
+        },
+      ],
+    },
+  });
+
+  assert.match(text, /latest_task_handoff=修复了 Codex context 质量过滤/);
+  assert.match(text, /latest_release_outcome=0\.2\.11 发布闭环完成了/);
+  assert.doesNotMatch(text, /latest_task_handoff=你这个质疑/);
+  assert.doesNotMatch(text, /latest_task_handoff=发布被 npm 拦住/);
+  assert.doesNotMatch(text, /latest_release_outcome=整体现在是/);
 });
 
 test("renderAionisHookContext keeps commit-heavy handoff summaries untruncated", () => {
