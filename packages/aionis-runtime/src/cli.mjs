@@ -510,6 +510,10 @@ function sessionStateForAudit(paths, sessionId) {
 }
 
 async function codexRuntimeJson(paths, method, routePath, payloadOrQuery, timeoutMs = 3000) {
+  const configuredTimeoutMs = Number(process.env.AIONIS_CODEX_AUDIT_TIMEOUT_MS || timeoutMs);
+  const requestTimeoutMs = Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
+    ? Math.trunc(configuredTimeoutMs)
+    : timeoutMs;
   const url = new URL(`${paths.baseUrl}${routePath}`);
   const options = { method, headers: {} };
   if (method === "GET") {
@@ -522,13 +526,18 @@ async function codexRuntimeJson(paths, method, routePath, payloadOrQuery, timeou
     options.body = JSON.stringify(payloadOrQuery || {});
   }
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
   try {
     const response = await fetch(url, { ...options, signal: controller.signal });
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
     if (!response.ok) throw new Error(`${response.status} ${body?.message || body?.error || response.statusText}`);
     return body;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`${method} ${routePath} timed out after ${requestTimeoutMs}ms`);
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }

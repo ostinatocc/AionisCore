@@ -241,6 +241,72 @@ test("runtime cli audits local Codex state without Runtime", () => {
   assert.deepEqual(parsed.remediations, []);
 });
 
+test("runtime cli audit reports actionable Runtime timeout diagnostics", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-timeout-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const sessionId = "audit-timeout-session";
+  const turnId = "audit-timeout-turn";
+
+  mkdirSync(path.join(runtimeHome, "state", "sessions"), { recursive: true });
+  writeFileSync(path.join(runtimeHome, "state", "active-project.json"), JSON.stringify({
+    cwd: packageDir,
+    project_name: "aionis-runtime",
+    project_hash: "testhash",
+    scope: "codex:aionis-runtime:testhash",
+    global_scope: "codex:global",
+    tenant_id: "local-codex",
+    updated_at: new Date().toISOString(),
+  }));
+  writeFileSync(path.join(runtimeHome, "state", "sessions", `${sessionId}.json`), JSON.stringify({
+    session_id: sessionId,
+    active_turn_id: turnId,
+    turns: {
+      [turnId]: {
+        turn_id: turnId,
+        run_id: "audit-timeout-run",
+        prompt: "Audit should explain timeout failures.",
+      },
+    },
+    steps: {},
+    updated_at: new Date().toISOString(),
+  }));
+
+  const server = createServer((req, res) => {
+    if (req.url === "/health") {
+      setTimeout(() => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      }, 200);
+      return;
+    }
+    res.writeHead(404, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const audit = await spawnCli(["codex", "audit", "--json", "--session", sessionId], {
+      cwd: packageDir,
+      env: {
+        ...process.env,
+        HOME: home,
+        AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+        AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+        AIONIS_CODEX_AUDIT_TIMEOUT_MS: "25",
+      },
+    });
+    assert.equal(audit.status, 0, `${audit.stdout}\n${audit.stderr}`);
+    const parsed = JSON.parse(audit.stdout);
+
+    assert.equal(parsed.runtime.ok, false);
+    assert.equal(parsed.runtime.error, "GET /health timed out after 25ms");
+    assert.ok(parsed.warnings.includes("runtime unavailable: GET /health timed out after 25ms"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("runtime cli audit reports remediation for filtered historical handoffs", async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-remediation-home-"));
   const runtimeHome = path.join(home, ".aionis", "codex");
