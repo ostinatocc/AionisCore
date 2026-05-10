@@ -575,6 +575,13 @@ test("renderAionisHookContext suppresses low-signal status and conceptual handof
           uri: "aionis://local-codex/codex%3Aproject/event/eotp",
         },
         {
+          summary: [
+            "接下来不要再盲目加功能了。现在最应该推进的是把 Aionis 从能接入 Codex 打磨成用户每天用时能明确感到有帮助。",
+            "我建议按这个顺序走：做 Context Quality Audit，继续做 10 个真实任务 dogfood，压缩展示质量。",
+          ].join(" "),
+          uri: "aionis://local-codex/codex%3Aproject/event/planning-advice",
+        },
+        {
           summary: "修复了 Codex context 质量过滤：状态问答不再覆盖 latest_task_handoff，release outcome 必须有明确发布闭环信号。验证：codex-plugin:test 36 pass。",
           uri: "aionis://local-codex/codex%3Aproject/event/actionable",
         },
@@ -604,6 +611,7 @@ test("renderAionisHookContext suppresses low-signal status and conceptual handof
   assert.match(text, /latest_release_outcome=0\.2\.11 发布闭环完成了/);
   assert.doesNotMatch(text, /latest_task_handoff=你这个质疑/);
   assert.doesNotMatch(text, /latest_task_handoff=发布被 npm 拦住/);
+  assert.doesNotMatch(text, /latest_task_handoff=接下来不要再盲目加功能/);
   assert.doesNotMatch(text, /latest_release_outcome=整体现在是/);
 });
 

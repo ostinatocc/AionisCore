@@ -158,3 +158,62 @@ test("runtime cli bundles and installs the Codex plugin into a stable home direc
     /via watchdog status/,
   );
 });
+
+test("runtime cli audits local Codex state without Runtime", () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const sessionId = "audit-session";
+  const turnId = "audit-turn";
+  const runId = "audit-run";
+  const env = {
+    ...process.env,
+    HOME: home,
+    AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+  };
+
+  mkdirSync(path.join(runtimeHome, "state", "sessions"), { recursive: true });
+  writeFileSync(path.join(runtimeHome, "state", "active-project.json"), JSON.stringify({
+    cwd: packageDir,
+    project_name: "aionis-runtime",
+    project_hash: "testhash",
+    scope: "codex:aionis-runtime:testhash",
+    global_scope: "codex:global",
+    tenant_id: "local-codex",
+    updated_at: new Date().toISOString(),
+  }));
+  writeFileSync(path.join(runtimeHome, "state", "sessions", `${sessionId}.json`), JSON.stringify({
+    session_id: sessionId,
+    active_turn_id: turnId,
+    active_run_id: runId,
+    turns: {
+      [turnId]: {
+        turn_id: turnId,
+        run_id: runId,
+        prompt: "Audit the Aionis Codex context quality.",
+      },
+    },
+    steps: {
+      "step-1": {
+        step_id: "step-1",
+        run_id: runId,
+        tool_name: "Bash",
+      },
+    },
+    updated_at: new Date().toISOString(),
+  }));
+
+  const audit = spawnSync(process.execPath, [cliPath, "codex", "audit", "--json", "--no-runtime", "--session", sessionId], {
+    cwd: packageDir,
+    encoding: "utf8",
+    env,
+  });
+  assert.equal(audit.status, 0, `${audit.stdout}\n${audit.stderr}`);
+  const parsed = JSON.parse(audit.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.runtime.skipped, true);
+  assert.equal(parsed.project.scope, "codex:aionis-runtime:testhash");
+  assert.equal(parsed.session.session_id, sessionId);
+  assert.equal(parsed.session.active_turn_id, turnId);
+  assert.equal(parsed.session.step_count, 1);
+  assert.match(parsed.session.latest_prompt, /Audit the Aionis Codex context quality/);
+});

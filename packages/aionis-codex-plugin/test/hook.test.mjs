@@ -444,3 +444,52 @@ test("Stop hook does not store next-step planning advice as task handoffs", asyn
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("Stop hook does not store rich next-step audit plans as task handoffs", async () => {
+  const routes = [];
+  const bodies = {};
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "rich-planning-advice-turn",
+      cwd: pluginRoot,
+      prompt: "接下来应该怎么继续推进？",
+      last_assistant_message: [
+        "接下来不要再盲目加功能了。现在最应该推进的是把 Aionis 从能接入 Codex 打磨成用户每天用时能明确感到有帮助。",
+        "我建议按这个顺序走：",
+        "1. 做 Context Quality Audit，增加命令 `npx @ostinato/aionis-runtime codex audit`。",
+        "2. 继续做 10 个真实任务 dogfood。",
+        "3. 压缩展示质量，release 信息只保留版本、结果、证据。",
+      ].join(" "),
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/memory/events"), true);
+    assert.equal(routes.includes("/v1/memory/replay/run/end"), true);
+    assert.equal(routes.includes("/v1/handoff/store"), false);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.store_handoff, false);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.category, "planning_advice");
+    assert.ok(bodies["/v1/memory/events"][0].metadata.handoff_quality.reasons.includes("next_step_planning_advice"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

@@ -292,7 +292,7 @@ function hasTaskHandoffEvidence(value) {
   if (!text) return false;
   return [
     /\b(implemented|fixed|updated|changed|added|removed|verified|tested|passed|committed|released|published|installed|validated|created|refactored)\b/i,
-    /(?:\u5df2|\u5df2\u7ecf).*(\u5b9e\u73b0|\u4fee\u590d|\u66f4\u65b0|\u63d0\u4ea4|\u53d1\u5e03|\u9a8c\u8bc1|\u5b89\u88c5|\u5b8c\u6210|\u8dd1\u8fc7|\u901a\u8fc7)/,
+    /(?:\u5df2|\u5df2\u7ecf)[^\n\u3002\uff1b;]{0,40}(\u5b9e\u73b0|\u4fee\u590d|\u66f4\u65b0|\u63d0\u4ea4|\u53d1\u5e03|\u9a8c\u8bc1|\u5b89\u88c5|\u5b8c\u6210|\u8dd1\u8fc7|\u901a\u8fc7)/,
     /\bPASS\b/,
   ].some((pattern) => pattern.test(text));
 }
@@ -306,7 +306,10 @@ function isPlanningAdviceOnly(value) {
     /^\u6211\u7684\u5efa\u8bae/,
     /\u5efa\u8bae\u987a\u5e8f/,
     /\u4e0d\u8981\u518d\u5f00\u65b0\u5751/,
+    /\u4e0d\u8981\u518d\u76f2\u76ee\u52a0\u529f\u80fd/,
     /\u6700\u8be5\u505a/,
+    /\u6700\u5e94\u8be5\u63a8\u8fdb/,
+    /\u6211\u5efa\u8bae.*\u987a\u5e8f/,
     /^\s*(next steps|recommendation|i recommend)\b/i,
   ].some((pattern) => pattern.test(text));
 }

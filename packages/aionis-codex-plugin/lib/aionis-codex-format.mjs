@@ -571,7 +571,7 @@ function hasReleaseCompletionSignal(text) {
 function hasConcreteTaskOutcomeSignal(text) {
   return [
     /\b(implemented|fixed|updated|changed|added|removed|verified|tested|passed|committed|installed|validated|created|refactored)\b/i,
-    /(?:\u5df2|\u5df2\u7ecf).*(\u5b9e\u73b0|\u4fee\u590d|\u66f4\u65b0|\u63d0\u4ea4|\u9a8c\u8bc1|\u5b89\u88c5|\u5b8c\u6210|\u8dd1\u8fc7|\u901a\u8fc7)/,
+    /(?:\u5df2|\u5df2\u7ecf)[^\n\u3002\uff1b;]{0,40}(\u5b9e\u73b0|\u4fee\u590d|\u66f4\u65b0|\u63d0\u4ea4|\u9a8c\u8bc1|\u5b89\u88c5|\u5b8c\u6210|\u8dd1\u8fc7|\u901a\u8fc7)/,
     /\b[0-9a-f]{7,12}\b/,
     /\b\d+\s+pass\b/i,
     /\bpack(?::|-|\s+)dry-run\b/i,
@@ -592,7 +592,22 @@ function isStatusOrDiscussionLead(text) {
     /^Current status\b/i,
     /^Overall\b/i,
     /^The key point\b/i,
+    /^\u4f1a\u3002\u4e00\u5b9a\u4f1a/,
     /\bEOTP\b|\bone-time password\b|\u4e00\u6b21\u6027\u9a8c\u8bc1\u7801/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+function isPlanningAdviceLead(text) {
+  return [
+    /^\u63a5\u4e0b\u6765/,
+    /^\u4e0b\u4e00\u6b65/,
+    /^\u6211\u7684\u5efa\u8bae/,
+    /\u4e0d\u8981\u518d\u5f00\u65b0\u5751/,
+    /\u4e0d\u8981\u518d\u76f2\u76ee\u52a0\u529f\u80fd/,
+    /\u6700\u8be5\u505a/,
+    /\u6700\u5e94\u8be5\u63a8\u8fdb/,
+    /\u6211\u5efa\u8bae.*\u987a\u5e8f/,
+    /^\s*(next steps|recommendation|i recommend)\b/i,
   ].some((pattern) => pattern.test(text));
 }
 
@@ -600,6 +615,7 @@ function isLowSignalTaskHandoffText(text) {
   if (!text) return true;
   if (hasReleaseCompletionSignal(text)) return false;
   if (isStatusOrDiscussionLead(text)) return true;
+  if (isPlanningAdviceLead(text) && !hasConcreteTaskOutcomeSignal(text)) return true;
   if (hasConcreteTaskOutcomeSignal(text)) return false;
   return false;
 }
