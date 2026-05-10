@@ -4,6 +4,8 @@ Last updated: 2026-05-10
 
 Goal: use Aionis inside Codex for 10 real repository tasks, then improve recall, compaction, and display quality based on observed value rather than imagined product claims.
 
+Compact report: [AIONIS_CODEX_RECALL_DOGFOOD_REPORT.md](AIONIS_CODEX_RECALL_DOGFOOD_REPORT.md)
+
 ## Success Criteria
 
 1. Complete 10 real tasks in this repository with Aionis hooks enabled.
@@ -56,9 +58,10 @@ Garbage context:
 8. Task-start display still needs recency-aware compression, not just more recall. Task 8 keeps the latest dogfood progress visible as a fast fact and removes older dogfood progress candidates from the rendered planner packet.
 9. Agent resume continuity was artificially narrowed by a fake cwd anchor. Task 9 makes repo-level handoff recovery possible without breaking repos that have no handoff yet.
 10. Release completion is a special status class. Task 10 showed that suppressing status-only assistant replies prevents noise, but it can also drop externally visible outcomes such as a completed npm publish. The Codex Stop hook now stores those as compact `release_outcome` handoffs keyed by version.
+11. The first live prompt after publishing `0.2.10` recovered the release completion, but fast facts compressed away `npm latest`, clean `npx`, and clean install evidence. Release outcome display needs evidence-aware compression, not just outcome storage.
 
 ## Next Fix Targets
 
-1. Add a compact dogfood summary command or report now that ten real Codex tasks have observations.
-2. Use the next live Codex prompt to check whether `Fast Task Facts` surfaces publish/push/install evidence through the resume pack, not only through raw command revalidation.
-3. Release the `0.2.10` Codex release-outcome fix after one clean source review, then reinstall from npm and verify the live watchdog package version.
+1. Keep release outcome evidence visible in `Fast Task Facts`: `npm_latest`, `clean_npx`, `clean_install`, and `codex_status`.
+2. Use the next live Codex prompt to check whether `Fast Task Facts` surfaces publish/install evidence through the resume pack, not only through raw command revalidation.
+3. Run the same Codex recall loop on a second repository to check whether the improvements generalize beyond AionisRuntime.

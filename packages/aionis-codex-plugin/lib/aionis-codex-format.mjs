@@ -506,6 +506,47 @@ function uniqueStrings(values, limit = 4) {
   return out;
 }
 
+function extractRuntimeReleaseVersion(text) {
+  const patterns = [
+    /@ostinato\/aionis-runtime@(\d+\.\d+\.\d+(?:[-+][a-z0-9_.-]+)?)/i,
+    /\bnpm\s+view\s+@ostinato\/aionis-runtime\s+version[^\d]*(\d+\.\d+\.\d+(?:[-+][a-z0-9_.-]+)?)/i,
+    /\bnpm\s+latest[^\d]*(\d+\.\d+\.\d+(?:[-+][a-z0-9_.-]+)?)/i,
+    /\blatest[^\d]*(\d+\.\d+\.\d+(?:[-+][a-z0-9_.-]+)?)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return "";
+}
+
+function releaseEvidenceFromHandoff(text) {
+  const version = extractRuntimeReleaseVersion(text);
+  if (!version) return [];
+  const evidence = [];
+  const hasNpmLatestSignal =
+    /\bnpm\s+(?:view|latest|publish)\b/i.test(text)
+    || /\bdist-tags?\b/i.test(text)
+    || /\bpublished|released\b/i.test(text)
+    || /\u53d1\u5e03|\u53d1\u5305|\u53d1\u5b8c/i.test(text);
+  if (hasNpmLatestSignal) evidence.push(`npm_latest=${version}`);
+  const hasCleanNpxSignal =
+    /\bnpx\b/i.test(text)
+    && (
+      /\bclean\b|\b--yes\b|\bnew user\b/i.test(text)
+      || /\u9694\u79bb|\u65b0\u7528\u6237|\u5e72\u51c0/i.test(text)
+    );
+  if (hasCleanNpxSignal) evidence.push(`clean_npx=${version}`);
+  const hasCleanInstallSignal =
+    /\bclean\s+(?:npm\s+)?install\b/i.test(text)
+    || /\bcodex\s+status\s+--json\b/i.test(text)
+    || /\u9694\u79bb\s*HOME|\u65b0\u7528\u6237\u5b89\u88c5|\u5b89\u88c5\u9a8c\u8bc1/i.test(text);
+  if (hasCleanInstallSignal && /\bok\s*[:=]\s*true\b|\bPASS\b|\u8fd4\u56de\s*ok\s*[:=]\s*true|\u901a\u8fc7|\u6b63\u5e38/i.test(text)) {
+    evidence.push("clean_install=pass");
+  }
+  return evidence;
+}
+
 function compactHandoffIntro(text) {
   const intro = text.split(
     /(?:\u6539\u52a8|\u9a8c\u8bc1\u7ed3\u679c|\u9a8c\u8bc1\u8fc7|\u6d4b\u8bd5\u8865\u5728|\u5f53\u524d\u672a\u63d0\u4ea4|\u5f53\u524d\u72b6\u6001|Changed files|Verification|Validated|Tests?:)/i
@@ -522,6 +563,7 @@ function compactHandoffSummary(value, limit = 360) {
   if (!text) return "";
   const intro = compactHandoffIntro(text);
   const evidence = [];
+  evidence.push(...releaseEvidenceFromHandoff(text));
   const commitRefs = uniqueStrings([...text.matchAll(/\b[0-9a-f]{7,12}\b/g)].map((match) => match[0]), 3);
   if (commitRefs.length > 0) evidence.push(`commits=${commitRefs.join(",")}`);
   const passCounts = [...text.matchAll(/\b\d+\s+pass\b/gi)].map((match) => match[0].replace(/\s+/g, " "));

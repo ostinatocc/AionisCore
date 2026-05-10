@@ -448,6 +448,35 @@ test("renderAionisHookContext compacts markdown task handoffs and avoids duplica
   assert.match(text, /next_action=Continue dogfood by improving task-start context display quality/);
 });
 
+test("renderAionisHookContext keeps release outcome evidence visible", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-release",
+    runId: "run-release",
+    prompt: "继续推进吧",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      handoff: {
+        summary: [
+          "0.2.10 发布闭环完成了。",
+          "npm latest：@ostinato/aionis-runtime@0.2.10。",
+          "clean npx --yes @ostinato/aionis-runtime@0.2.10 --version 返回 0.2.10。",
+          "隔离 HOME 新用户安装验证：codex status --json 返回 ok: true。",
+          "Codex install / watchdog / runtime health：PASS。",
+        ].join(" "),
+        uri: "aionis://local-codex/codex%3Aproject/event/release-0.2.10",
+      },
+    },
+  });
+
+  assert.match(text, /latest_task_handoff=0\.2\.10 发布闭环完成了/);
+  assert.match(text, /npm_latest=0\.2\.10/);
+  assert.match(text, /clean_npx=0\.2\.10/);
+  assert.match(text, /clean_install=pass/);
+  assert.match(text, /codex_status=pass/);
+});
+
 test("renderAionisHookContext keeps commit-heavy handoff summaries untruncated", () => {
   const text = renderAionisHookContext({
     config,
