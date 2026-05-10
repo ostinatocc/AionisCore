@@ -369,6 +369,7 @@ function hasReleaseCompletionSignal(value) {
   if (!text) return false;
   return [
     /\u53d1\u5e03\u95ed\u73af.*(\u5b8c\u6210|\u6210\u7acb|\u901a\u8fc7)/,
+    /(?:^|[\s\u3002.!！,，:：])(?:\u5df2)?\u786e\u8ba4[^\n\u3002.!！]{0,16}(\u53d1\u5e03|\u53d1\u5305)[^\n\u3002.!！]{0,10}(\u5b8c\u6210|\u6210\u529f)/,
     /(?:^|[\s\u3002.!！])(\u53d1\u5e03|\u53d1\u5305)(\u5df2\u7ecf)?(\u5b8c\u6210|\u6210\u529f)(?:[\s\u3002.!！]|$)/,
     /\u5df2\u7ecf\u6210\u529f\u53d1\u5230\s*npm/i,
     /\u53d1\u5b8c\u4e86|\u5df2\u7ecf\u662f\s*\d+\.\d+\.\d+/,

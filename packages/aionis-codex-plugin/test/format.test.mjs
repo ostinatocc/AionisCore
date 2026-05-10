@@ -515,6 +515,34 @@ test("renderAionisHookContext keeps release outcome evidence visible", () => {
   assert.match(text, /codex_status=pass/);
 });
 
+test("renderAionisHookContext treats confirmed publish closeouts as release outcomes", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-release-closeout",
+    runId: "run-release-closeout",
+    prompt: "发布好了",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      handoff: {
+        summary: [
+          "确认发布成功，0.2.15 闭环成立。",
+          "验证结果：",
+          "npm latest：@ostinato/aionis-runtime@0.2.15。",
+          "干净 npx 拉取：返回 0.2.15。",
+          "codex audit：Runtime PASS，当前会话正常。",
+        ].join(" "),
+        uri: "aionis://local-codex/codex%3Aproject/event/release-0.2.15-closeout",
+      },
+    },
+  });
+
+  assert.doesNotMatch(text, /latest_task_handoff=确认发布成功/);
+  assert.match(text, /latest_release_outcome=确认发布成功，0\.2\.15 闭环成立/);
+  assert.match(text, /npm_latest=0\.2\.15/);
+  assert.match(text, /clean_npx=0\.2\.15/);
+});
+
 test("renderAionisHookContext keeps release outcome visible when a newer task handoff exists", () => {
   const text = renderAionisHookContext({
     config,

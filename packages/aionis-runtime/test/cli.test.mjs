@@ -307,6 +307,105 @@ test("runtime cli audit reports actionable Runtime timeout diagnostics", async (
   }
 });
 
+test("runtime cli audit gives handoff lookup more time than fast health checks", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-find-timeout-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const sessionId = "audit-slow-find-session";
+  const turnId = "audit-slow-find-turn";
+
+  mkdirSync(path.join(runtimeHome, "state", "sessions"), { recursive: true });
+  writeFileSync(path.join(runtimeHome, "state", "active-project.json"), JSON.stringify({
+    cwd: packageDir,
+    project_name: "aionis-runtime",
+    project_hash: "testhash",
+    scope: "codex:aionis-runtime:testhash",
+    global_scope: "codex:global",
+    tenant_id: "local-codex",
+    updated_at: new Date().toISOString(),
+  }));
+  writeFileSync(path.join(runtimeHome, "state", "sessions", `${sessionId}.json`), JSON.stringify({
+    session_id: sessionId,
+    active_turn_id: turnId,
+    turns: {
+      [turnId]: {
+        turn_id: turnId,
+        run_id: "audit-slow-find-run",
+        prompt: "Audit should tolerate slower handoff lookup.",
+      },
+    },
+    steps: {},
+    updated_at: new Date().toISOString(),
+  }));
+
+  const server = createServer((req, res) => {
+    if (req.url === "/health") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (req.url?.startsWith(`/v1/memory/sessions/${sessionId}/events`)) {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ events: [] }));
+      return;
+    }
+    if (req.url === "/v1/memory/find") {
+      req.resume();
+      req.on("end", () => {
+        setTimeout(() => {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({
+            nodes: [
+              {
+                uri: "aionis://local-codex/test/slow-handoff",
+                text_summary: "确认发布成功，0.2.16 闭环成立。npm latest：@ostinato/aionis-runtime@0.2.16。干净 npx 拉取：返回 0.2.16。",
+                slots: {
+                  handoff_text: "确认发布成功，0.2.16 闭环成立。",
+                  execution_result_summary: {
+                    handoff_quality: {
+                      store_handoff: true,
+                      category: "release_outcome",
+                      confidence: 0.95,
+                      reasons: ["release_completion_signal"],
+                    },
+                    release_outcome: true,
+                    version: "0.2.16",
+                  },
+                },
+              },
+            ],
+          }));
+        }, 3300);
+      });
+      return;
+    }
+    res.writeHead(404, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const audit = await spawnCli(["codex", "audit", "--json", "--session", sessionId], {
+      cwd: packageDir,
+      env: {
+        ...process.env,
+        HOME: home,
+        AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+        AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+      },
+    });
+    assert.equal(audit.status, 0, `${audit.stdout}\n${audit.stderr}`);
+    const parsed = JSON.parse(audit.stdout);
+
+    assert.equal(parsed.runtime.ok, true);
+    assert.equal(parsed.runtime.error, null);
+    assert.equal(parsed.handoffs.length, 1);
+    assert.equal(parsed.handoffs[0].handoff_quality.category, "release_outcome");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("runtime cli audit reports remediation for filtered historical handoffs", async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-remediation-home-"));
   const runtimeHome = path.join(home, ".aionis", "codex");

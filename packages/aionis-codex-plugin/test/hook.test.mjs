@@ -367,6 +367,56 @@ test("Stop hook stores verified release outcomes even when the reply is status-s
   }
 });
 
+test("Stop hook marks confirmed publish closeout summaries as release outcomes", async () => {
+  const routes = [];
+  const bodies = {};
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "release-closeout-turn",
+      cwd: pluginRoot,
+      prompt: "发布好了",
+      last_assistant_message: [
+        "确认发布成功，`0.2.15` 闭环成立。",
+        "验证结果：",
+        "- npm latest：`@ostinato/aionis-runtime@0.2.15`",
+        "- 干净 npx 拉取：返回 `0.2.15`",
+        "- `codex audit`：Runtime PASS，当前会话正常",
+      ].join(" "),
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/handoff/store"), true);
+    const handoff = bodies["/v1/handoff/store"][0];
+    assert.match(handoff.anchor, /#release:0\.2\.15$/);
+    assert.ok(handoff.tags.includes("release_outcome"));
+    assert.equal(handoff.execution_result_summary.release_outcome, true);
+    assert.equal(handoff.execution_result_summary.version, "0.2.15");
+    assert.equal(handoff.execution_result_summary.handoff_quality.category, "release_outcome");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("Stop hook does not mark unpublished release status as release outcome", async () => {
   const routes = [];
   const bodies = {};

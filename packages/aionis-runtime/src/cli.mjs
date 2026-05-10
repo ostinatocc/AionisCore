@@ -509,7 +509,10 @@ function sessionStateForAudit(paths, sessionId) {
   return latestSessionState(paths);
 }
 
-async function codexRuntimeJson(paths, method, routePath, payloadOrQuery, timeoutMs = 3000) {
+const CODEX_AUDIT_DEFAULT_TIMEOUT_MS = 3000;
+const CODEX_AUDIT_HANDOFF_FIND_TIMEOUT_MS = 10000;
+
+async function codexRuntimeJson(paths, method, routePath, payloadOrQuery, timeoutMs = CODEX_AUDIT_DEFAULT_TIMEOUT_MS) {
   const configuredTimeoutMs = Number(process.env.AIONIS_CODEX_AUDIT_TIMEOUT_MS || timeoutMs);
   const requestTimeoutMs = Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
     ? Math.trunc(configuredTimeoutMs)
@@ -749,22 +752,28 @@ async function codexAudit(args) {
         });
       }
       if (runtime.ok) {
-        handoffPayload = await codexRuntimeJson(paths, "POST", "/v1/memory/find", {
-          tenant_id: project.tenant_id,
-          scope: project.scope,
-          consumer_agent_id: project.consumer_agent_id,
-          consumer_team_id: project.consumer_team_id,
-          type: "event",
-          memory_lane: "private",
-          include_meta: true,
-          include_slots: true,
-          limit: Math.min(limit, 8),
-          slots_contains: {
-            summary_kind: "handoff",
-            handoff_kind: "task_handoff",
-            repo_root: project.cwd,
+        handoffPayload = await codexRuntimeJson(
+          paths,
+          "POST",
+          "/v1/memory/find",
+          {
+            tenant_id: project.tenant_id,
+            scope: project.scope,
+            consumer_agent_id: project.consumer_agent_id,
+            consumer_team_id: project.consumer_team_id,
+            type: "event",
+            memory_lane: "private",
+            include_meta: true,
+            include_slots: true,
+            limit: Math.min(limit, 8),
+            slots_contains: {
+              summary_kind: "handoff",
+              handoff_kind: "task_handoff",
+              repo_root: project.cwd,
+            },
           },
-        });
+          CODEX_AUDIT_HANDOFF_FIND_TIMEOUT_MS,
+        );
       }
     } catch (error) {
       runtime.ok = false;
