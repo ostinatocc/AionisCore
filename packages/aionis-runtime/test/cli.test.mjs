@@ -713,6 +713,158 @@ test("runtime cli audit separates current context quality from historical debt",
   }
 });
 
+test("runtime cli audit does not warn historical debt for transient event-only noise", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-event-noise-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const sessionId = "audit-event-noise-session";
+  const turnId = "audit-event-noise-turn";
+  const runId = "audit-event-noise-run";
+  const taskQuality = {
+    store_handoff: true,
+    category: "execution_outcome",
+    confidence: 0.92,
+    reasons: ["explicit_cli_handoff", "task_handoff_evidence"],
+  };
+  const releaseQuality = {
+    store_handoff: true,
+    category: "release_outcome",
+    confidence: 0.98,
+    reasons: ["explicit_cli_release", "release_completion_signal"],
+  };
+  const noisyQuality = {
+    store_handoff: false,
+    category: "planning_advice",
+    confidence: 0.9,
+    reasons: ["next_step_planning_advice"],
+  };
+
+  mkdirSync(path.join(runtimeHome, "state", "sessions"), { recursive: true });
+  writeFileSync(path.join(runtimeHome, "state", "active-project.json"), JSON.stringify({
+    cwd: packageDir,
+    project_name: "aionis-runtime",
+    project_hash: "testhash",
+    scope: "codex:aionis-runtime:testhash",
+    global_scope: "codex:global",
+    tenant_id: "local-codex",
+    consumer_agent_id: "codex",
+    consumer_team_id: "local-codex",
+    updated_at: new Date().toISOString(),
+  }));
+  writeFileSync(path.join(runtimeHome, "state", "sessions", `${sessionId}.json`), JSON.stringify({
+    session_id: sessionId,
+    active_turn_id: turnId,
+    active_run_id: runId,
+    turns: {
+      [turnId]: {
+        turn_id: turnId,
+        run_id: runId,
+        prompt: "Audit should keep event-only noise out of historical debt.",
+      },
+    },
+    steps: {},
+    updated_at: new Date().toISOString(),
+  }));
+
+  const server = createServer((req, res) => {
+    const url = new URL(req.url, "http://127.0.0.1");
+    res.setHeader("content-type", "application/json");
+    if (req.method === "GET" && url.pathname === "/health") {
+      res.end(JSON.stringify({ ok: true, runtime: { edition: "lite" } }));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === `/v1/memory/sessions/${sessionId}/events`) {
+      res.end(JSON.stringify({
+        events: [
+          {
+            title: "Codex turn ended",
+            created_at: new Date().toISOString(),
+            text_summary: "接下来不要再盲目加功能了。我建议按这个顺序走，把 context 质量继续打磨。",
+            slots: {
+              phase: "Stop",
+              turn_id: turnId,
+              run_id: runId,
+              handoff_quality: noisyQuality,
+            },
+          },
+        ],
+      }));
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/v1/memory/find") {
+      req.resume();
+      req.on("end", () => {
+        res.end(JSON.stringify({
+          nodes: [
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release",
+              created_at: "2026-05-10T20:00:00.000Z",
+              text_summary: "0.2.21 published and verified.",
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: releaseQuality,
+                  release_outcome: true,
+                  version: "0.2.21",
+                },
+              },
+            },
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/task",
+              created_at: "2026-05-10T19:58:00.000Z",
+              text_summary: "Implemented strict audit visibility verification and verified tests plus pack dry-run.",
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: taskQuality,
+                },
+              },
+            },
+          ],
+        }));
+      });
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const env = {
+      ...process.env,
+      HOME: home,
+      AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+      AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+    };
+    const audit = await spawnCli(["codex", "audit", "--json", "--session", sessionId, "--limit", "4"], {
+      cwd: packageDir,
+      env,
+    });
+    assert.equal(audit.status, 0, `${audit.stdout}\n${audit.stderr}`);
+    const parsed = JSON.parse(audit.stdout);
+    const filteredNoise = parsed.context_quality_report.historical_debt.checks.find((check) => check.id === "filtered_noise");
+
+    assert.equal(parsed.context_quality_report.status, "pass");
+    assert.equal(parsed.context_quality_report.current_context.status, "pass");
+    assert.equal(parsed.context_quality_report.historical_debt.status, "pass");
+    assert.equal(parsed.context_quality_report.debt_score, 100);
+    assert.equal(parsed.context_quality_report.counts.filtered_handoffs, 0);
+    assert.equal(parsed.context_quality_report.counts.filtered_events, 1);
+    assert.equal(filteredNoise.status, "pass");
+    assert.equal(filteredNoise.evidence.stored_handoff_debt, 0);
+    assert.equal(filteredNoise.evidence.transient_event_noise, 1);
+
+    const textAudit = await spawnCli(["codex", "audit", "--session", sessionId, "--limit", "4"], {
+      cwd: packageDir,
+      env,
+    });
+    assert.equal(textAudit.status, 0, `${textAudit.stdout}\n${textAudit.stderr}`);
+    assert.match(textAudit.stdout, /Context Quality Report - PASS score=100 debt=PASS debt_score=100/);
+    assert.match(textAudit.stdout, /PASS filtered_noise: Only transient recent events would be hidden/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("runtime cli codex release stores a structured release outcome handoff", async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-release-home-"));
   const runtimeHome = path.join(home, ".aionis", "codex");

@@ -833,12 +833,19 @@ function buildContextQualityReport(args) {
   const debtChecks = [];
   debtChecks.push(contextQualityCheck(
     "filtered_noise",
-    filteredHandoffs.length || filteredEvents.length ? "warn" : "pass",
+    filteredHandoffs.length ? "warn" : "pass",
     "medium",
-    filteredHandoffs.length || filteredEvents.length
-      ? "Historical stored or recent context would be hidden by current display policy."
-      : "No filtered context noise detected in the audit window.",
-    { handoffs: filteredHandoffs.length, events: filteredEvents.length },
+    filteredHandoffs.length
+      ? "Historical stored handoffs would be hidden by current display policy."
+      : filteredEvents.length
+        ? "Only transient recent events would be hidden by current display policy; stored handoff context is clean."
+        : "No filtered context noise detected in the audit window.",
+    {
+      handoffs: filteredHandoffs.length,
+      events: filteredEvents.length,
+      stored_handoff_debt: filteredHandoffs.length,
+      transient_event_noise: filteredEvents.length,
+    },
   ));
   debtChecks.push(contextQualityCheck(
     "historical_release_task_classification",
@@ -1118,7 +1125,7 @@ async function codexAudit(args) {
     }
   }
 
-  process.stdout.write("\nLatest stored task handoffs\n");
+  process.stdout.write("\nLatest stored handoffs\n");
   if (!handoffs.length) {
     process.stdout.write(skipRuntime ? "skipped with --no-runtime\n" : "none found\n");
   } else {
