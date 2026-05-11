@@ -138,6 +138,7 @@ export function resolveConfig(input = {}) {
     consumerTeamId: process.env.AIONIS_CODEX_TEAM_ID || "local",
     autostart: boolEnv("AIONIS_CODEX_AUTOSTART", true),
     timeoutMs: intEnv("AIONIS_CODEX_TIMEOUT_MS", DEFAULT_TIMEOUT_MS, 250, 30000),
+    fastTimeoutMs: intEnv("AIONIS_CODEX_FAST_TIMEOUT_MS", 1200, 250, 10000),
     startupTimeoutMs: intEnv("AIONIS_CODEX_STARTUP_TIMEOUT_MS", 12000, 1000, 120000),
     contextCharLimit: intEnv("AIONIS_CODEX_CONTEXT_CHAR_LIMIT", DEFAULT_CONTEXT_CHAR_LIMIT, 2000, 80000),
     postToolContext: boolEnv("AIONIS_CODEX_POST_TOOL_CONTEXT", true),

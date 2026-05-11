@@ -138,6 +138,91 @@ test("UserPromptSubmit skips blocking planning context when project handoff is a
   }
 });
 
+test("UserPromptSubmit bounds fast lookup timeout and skips planning after task handoff timeout", async () => {
+  const routes = [];
+  const findBodies = [];
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      res.setHeader("content-type", "application/json");
+      if (req.url === "/health") {
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (req.url === "/v1/memory/find") {
+        const parsed = body ? JSON.parse(body) : {};
+        findBodies.push(parsed);
+        const releaseLookup = parsed.slots_contains?.execution_result_summary?.release_outcome === true;
+        if (releaseLookup) {
+          res.end(JSON.stringify({
+            nodes: [
+              {
+                uri: "aionis://local-codex/test/release",
+                text_summary: "0.2.24 release completed and verified. npm latest is @ostinato/aionis-runtime@0.2.24.",
+                slots: {
+                  execution_result_summary: {
+                    release_outcome: true,
+                    version: "0.2.24",
+                    handoff_quality: {
+                      store_handoff: true,
+                      category: "release_outcome",
+                      confidence: 0.98,
+                      reasons: ["explicit_cli_release", "release_completion_signal"],
+                    },
+                  },
+                },
+              },
+            ],
+          }));
+          return;
+        }
+        setTimeout(() => {
+          try {
+            res.end(JSON.stringify({ nodes: [] }));
+          } catch {
+            // The client should have timed out and moved on.
+          }
+        }, 700);
+        return;
+      }
+      if (req.url === "/v1/memory/planning/context") {
+        res.end(JSON.stringify({ planning_summary: { planner_explanation: "should not be requested" } }));
+        return;
+      }
+      res.end(JSON.stringify({ ok: true, body: body ? JSON.parse(body) : null }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "UserPromptSubmit",
+      session_id: "test-session",
+      turn_id: "fast-timeout-turn",
+      cwd: pluginRoot,
+      prompt: "Continue dogfood",
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      env: {
+        AIONIS_CODEX_FAST_TIMEOUT_MS: "250",
+      },
+    });
+    const output = JSON.parse(result.stdout);
+    const text = output.hookSpecificOutput.additionalContext;
+    assert.equal(findBodies.length, 2);
+    assert.match(text, /latest_release_outcome=0\.2\.24 release completed and verified/);
+    assert.match(text, /project_handoff_fast: timed out after 250ms/);
+    assert.doesNotMatch(text, /planning_context_fast/);
+    assert.equal(routes.includes("/v1/memory/planning/context"), false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("Stop hook does not store status-only assistant replies as task handoffs", async () => {
   const routes = [];
   const bodies = {};

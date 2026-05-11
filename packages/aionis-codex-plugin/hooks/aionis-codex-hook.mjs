@@ -237,6 +237,11 @@ function hasTimeoutError(errors, label) {
   });
 }
 
+function fastRuntimeConfig(config) {
+  const timeoutMs = Math.min(config.timeoutMs, config.fastTimeoutMs || config.timeoutMs);
+  return { ...config, timeoutMs };
+}
+
 function normalizeStopText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
@@ -634,16 +639,18 @@ async function handleUserPrompt(input) {
       metadata: context,
     }), errors);
 
-  const projectHandoffFast = await safeRuntimeCall(config, "project_handoff_fast", () =>
-    findProjectTaskHandoffs(config), errors);
-  const projectReleaseOutcomeFast = await safeRuntimeCall(config, "project_release_outcome_fast", () =>
-    findProjectReleaseOutcomeHandoffs(config), errors);
+  const fastConfig = fastRuntimeConfig(config);
+  const [projectHandoffFast, projectReleaseOutcomeFast] = await Promise.all([
+    safeRuntimeCall(fastConfig, "project_handoff_fast", () => findProjectTaskHandoffs(fastConfig), errors),
+    safeRuntimeCall(fastConfig, "project_release_outcome_fast", () => findProjectReleaseOutcomeHandoffs(fastConfig), errors),
+  ]);
 
   const hasFastProjectHandoff = hasUsableProjectTaskHandoff(projectHandoffFast);
-  const planningContext = hasFastProjectHandoff
+  const taskHandoffTimedOut = hasTimeoutError(errors, "project_handoff_fast");
+  const planningContext = hasFastProjectHandoff || taskHandoffTimedOut
     ? null
-    : await safeRuntimeCall(config, "planning_context_fast", () =>
-        runtimePost(config, "/v1/memory/planning/context", taskStartContextRequest(config, prompt, context, runId, {
+    : await safeRuntimeCall(fastConfig, "planning_context_fast", () =>
+        runtimePost(fastConfig, "/v1/memory/planning/context", taskStartContextRequest(config, prompt, context, runId, {
           limit: 4,
           neighborhood_hops: 1,
           max_nodes: 12,
