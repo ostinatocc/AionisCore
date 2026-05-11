@@ -150,6 +150,115 @@ test("renderAionisHookContext renders structured non-fatal error diagnostics", (
   assert.match(text, /timeout_ms=3000/);
 });
 
+test("renderAionisHookContext keeps first new-repo prompt compact when only bootstrap context exists", () => {
+  const prompt = "Inspect this Cognitive demo repo and identify the first useful task to improve it with Aionis enabled.";
+  const text = renderAionisHookContext({
+    config: {
+      ...config,
+      scope: "codex:cognitive-demo:7be3716f",
+      cwd: "/Users/lucio/Desktop/cognitve/cognitive-demo",
+    },
+    sessionId: "dogfood-v2-cognitive-demo",
+    turnId: "dogfood-v2-task2-first-context",
+    runId: "run-cognitive",
+    prompt,
+    runtimeStatus: { ok: true, started: true },
+    contextAssemble: {
+      planning_summary: {
+        first_step_recommendation: {
+          next_action: "Inspect the current context before starting with functions.exec_command.",
+          selected_tool: "functions.exec_command",
+        },
+      },
+      tools: { selection: { selected: "functions.exec_command" } },
+      planner_packet: {
+        packet_version: "planner_packet_v1",
+        sections: {
+          recommended_workflows: [],
+          candidate_workflows: [],
+          candidate_patterns: [],
+          trusted_patterns: [],
+          contested_patterns: [],
+          rehydration_candidates: [],
+          supporting_knowledge: [
+            "Codex session dogfood-v2-cognitive-demo in cognitive-demo",
+            prompt,
+          ],
+        },
+      },
+      operator_projection: {
+        delegation_learning: {
+          learning_summary: {
+            matched_records: 0,
+            recommendation_count: 0,
+          },
+          learning_recommendations: [],
+        },
+        action_retrieval_gate: {
+          gate_action: "widen_recall",
+          rehydration_candidate_count: 0,
+          preferred_rehydration: null,
+        },
+        action_hints: [
+          {
+            action: "widen_recall",
+            selected_tool: "functions.exec_command",
+            execution_contract_v1: {
+              selected_tool: "functions.exec_command",
+              target_files: [],
+              outcome: { acceptance_checks: [] },
+              provenance: { notes: ["tool_selection_only"] },
+            },
+          },
+        ],
+      },
+      layered_context: {
+        layers: {
+          facts: {
+            items: ["Codex session dogfood-v2-cognitive-demo in cognitive-demo (uri:aionis://local-codex/codex%3Acognitive-demo%3A7be3716f/topic/session)"],
+          },
+          episodes: {
+            items: [`${prompt} (uri:aionis://local-codex/codex%3Acognitive-demo%3A7be3716f/event/prompt)`],
+          },
+        },
+      },
+      runtime_tool_hints: [],
+      cost_signals: {
+        context_est_tokens: 102,
+        retrieved_memory_layers: ["L0"],
+      },
+      recall: {
+        observability: {
+          memory_layers: {
+            retrieved_layers: ["L0"],
+          },
+        },
+      },
+    },
+    globalRecall: {
+      seeds: [],
+      context: {
+        text: "",
+        items: [],
+        citations: [],
+      },
+      runtime_tool_hints: [],
+    },
+  });
+
+  assert.match(text, /project_scope=codex:cognitive-demo:7be3716f/);
+  assert.match(text, /next_action=Inspect the current context before starting with functions\.exec_command/);
+  assert.match(text, /## Current User Prompt/);
+  assert.match(text, new RegExp(prompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(text, /## Planner Packet/);
+  assert.doesNotMatch(text, /## Operator Projection/);
+  assert.doesNotMatch(text, /## Layered Context/);
+  assert.doesNotMatch(text, /## Cost Signals/);
+  assert.doesNotMatch(text, /## Recall Observability/);
+  assert.doesNotMatch(text, /## Global Recall/);
+  assert.doesNotMatch(text, /Codex session dogfood-v2-cognitive-demo in cognitive-demo/);
+});
+
 test("renderAionisHookContext keeps fast planning facts visible when full assembly fails", () => {
   const error = new Error("context_assemble: timed out after 3000ms");
   error.aionis_non_fatal = {

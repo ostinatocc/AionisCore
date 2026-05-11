@@ -48,8 +48,8 @@ Planned task queue:
 | # | Task | Product question | Status |
 | --- | --- | --- | --- |
 | 1 | Verify the published `@ostinato/aionis-runtime@0.2.27` package path with fresh npm cache, Codex status, and Codex audit. | Does the user-installed package expose the same usable state as local source? | done |
-| 2 | Start a second-repository Codex session and inspect the first Aionis context. | Does context generalize outside AionisRuntime, or is it self-referential? | next |
-| 3 | Implement a small feature in the second repository with Aionis enabled. | Does Aionis change the first action or just add noise? | planned |
+| 2 | Start a second-repository Codex session and inspect the first Aionis context. | Does context generalize outside AionisRuntime, or is it self-referential? | done |
+| 3 | Implement a small feature in the second repository with Aionis enabled. | Does Aionis change the first action or just add noise? | next |
 | 4 | Interrupt and resume a real bug fix across turns. | Does handoff recovery preserve the actual next step? | planned |
 | 5 | Re-run npm release verification after a source change. | Does release outcome stay visible beside current task work? | planned |
 | 6 | Ask status/planning-only questions between coding tasks. | Do those turns avoid polluting `latest_task_handoff`? | planned |
@@ -63,6 +63,7 @@ Planned task queue:
 | # | Task | Aionis context that helped | Garbage / weakness observed | Fix candidate | Status |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Published-package smoke for `@ostinato/aionis-runtime@0.2.27`: fresh `npm exec --version`, `codex status --no-watchdog --json`, and `codex audit --limit 12 --json`. | Fresh npm package returned `0.2.27`; Codex status passed all checks; audit found clean current context with separate visible task handoff and visible release outcome. | The actual task-start injected context showed `used_release_outcome_snapshot=true` but did not render a separate `latest_release_outcome=0.2.27...` line. The Runtime had the structured release snapshot; the formatter rejected it because the text said "published and verified" instead of matching a narrower completion phrase. A local reinstall also showed a transient doctor `runtime health` failure while immediate `curl /health` and `codex status` passed, so install health wait may still be flaky. | Trust structured `release_outcome=true` snapshot records when they include a version and are not candidate/unpublished/status-lead text; keep existing false-positive filters. Track install doctor health timing as a follow-up if it repeats. | fixed in 0.2.28 candidate |
+| 2 | Second-repo first context using `/Users/lucio/Desktop/cognitve/cognitive-demo` with the Codex hook and prompt `Inspect this Cognitive demo repo...`. | The project scope correctly changed to `codex:cognitive-demo:7be3716f`, and no AionisRuntime task or release handoff leaked into the Cognitive context. The hook correctly said there was no learned workflow yet and recommended inspecting with `functions.exec_command`. | Because the repo had no useful history, the first screen still expanded large low-value Planner/Operator/Layered/Cost/Recall JSON from the current prompt/session itself. That made a clean first-run experience feel noisy even though there was no cross-project contamination. | Suppress prompt/session echo records from supporting knowledge and layered context, hide non-actionable operator projection, skip empty JSON sections, and only show cost/recall diagnostics when expanded context has real display content. | fixed in 0.2.29 candidate |
 
 ## Task Ledger
 

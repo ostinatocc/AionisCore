@@ -71,14 +71,20 @@ function isLowSignalDisplayText(value) {
   if (!text) return true;
   if (/^ok\b/i.test(text) || /^ok[，,\s]/i.test(text)) return true;
   if (/^(开始|继续)?继续推进吧[。.!！]*$/i.test(text)) return true;
-  if (/^Codex session [A-Za-z0-9:-]+ in AionisRuntime(?:\s*\(.+\))?$/i.test(text)) return true;
-  if (/^manual-verify-[\w-]+ in AionisRuntime(?:\s*\(.+\))?$/i.test(text)) return true;
-  if (/^dogfood-live-task\d+ in AionisRuntime(?:\s*\(.+\))?$/i.test(text)) return true;
+  if (/^Codex session [A-Za-z0-9:_-]+ in [\w .@/-]+(?:\s*\(.+\))?$/i.test(text)) return true;
+  if (/^manual-verify-[\w-]+ in [\w .@/-]+(?:\s*\(.+\))?$/i.test(text)) return true;
+  if (/^dogfood-live-task\d+ in [\w .@/-]+(?:\s*\(.+\))?$/i.test(text)) return true;
   if (/^selected tool:\s*[\w.:-]+$/i.test(text)) return true;
   if (/^decision selected_tool:\s*[\w.:-]+$/i.test(text)) return true;
   if (/^tool ranking:\s*/i.test(text)) return true;
   if (/^decision_id:\s*/i.test(text)) return true;
   return false;
+}
+
+function isPromptEchoText(value, prompt) {
+  const promptText = normalizeDisplayText(prompt);
+  if (promptText.length < 24) return false;
+  return stripDisplayPrefix(value).includes(promptText);
 }
 
 function extractDogfoodProgressEntriesFromText(value) {
@@ -278,6 +284,9 @@ function shouldDropDisplayValueWithOptions(value, options, path = []) {
   if (typeof value === "string" && (isSupportingKnowledgePath(path) || isLayerItemPath(path)) && isLowSignalDisplayText(value)) {
     return "low_signal_context";
   }
+  if (typeof value === "string" && (isSupportingKnowledgePath(path) || isLayerItemPath(path)) && isPromptEchoText(value, options.promptText)) {
+    return "low_signal_context";
+  }
   if (isGenericToolOnlyPatternText(value)) return true;
   const record = asRecord(value);
   if (!record) return false;
@@ -392,6 +401,8 @@ function filterDisplayEntries(entries, stats, options) {
 
 function addJsonSection(lines, title, value, limit) {
   if (value === undefined || value === null) return;
+  if (Array.isArray(value) && value.length === 0) return;
+  if (asRecord(value) && Object.keys(value).length === 0) return;
   const text = compactJson(value, limit);
   if (!text.trim()) return;
   lines.push(`## ${title}`);
@@ -424,6 +435,30 @@ function layeredContextHasDisplayContent(layeredContext) {
     const signals = Array.isArray(record.workflow_signals) ? record.workflow_signals : [];
     return items.length > 0 || signals.length > 0;
   });
+}
+
+function operatorProjectionHasActionableContent(projection) {
+  const record = asRecord(projection);
+  if (!record) return false;
+  const learning = asRecord(asRecord(record.delegation_learning)?.learning_summary);
+  if (Number(learning?.matched_records || 0) > 0 || Number(learning?.recommendation_count || 0) > 0) return true;
+  const recommendations = asRecord(record.delegation_learning)?.learning_recommendations;
+  if (Array.isArray(recommendations) && recommendations.length > 0) return true;
+  const gate = asRecord(record.action_retrieval_gate);
+  if (Number(gate?.rehydration_candidate_count || 0) > 0 || gate?.preferred_rehydration) return true;
+  const hints = Array.isArray(record.action_hints) ? record.action_hints : [];
+  return hints.some((hint) => recordHasActionablePatternContext(hint));
+}
+
+function globalRecallHasDisplayContent(globalRecall) {
+  const record = asRecord(globalRecall);
+  if (!record) return false;
+  if (Array.isArray(record.seeds) && record.seeds.length > 0) return true;
+  if (Array.isArray(record.runtime_tool_hints) && record.runtime_tool_hints.length > 0) return true;
+  const context = asRecord(record.context);
+  if (!context) return false;
+  if (typeof context.text === "string" && context.text.trim()) return true;
+  return ["items", "citations"].some((key) => Array.isArray(context[key]) && context[key].length > 0);
 }
 
 function formatNonFatalError(error) {
@@ -891,7 +926,7 @@ export function renderAionisHookContext(args) {
     globalRecall,
   );
   const displayStats = { suppressedGenericToolPatterns: 0, suppressedStaleDogfoodWorkflows: 0 };
-  const displayOptions = { latestDogfoodCompleted: latestDogfood?.completed };
+  const displayOptions = { latestDogfoodCompleted: latestDogfood?.completed, promptText: prompt };
   const scrubbedFastPlannerPacket = contextSummary.plannerPacket
     ? undefined
     : scrubDisplayPayload(fastContextSummary.plannerPacket, displayStats, displayOptions);
@@ -902,6 +937,13 @@ export function renderAionisHookContext(args) {
   const displayFastPlannerPacket = plannerPacketHasDisplayContent(scrubbedFastPlannerPacket) ? scrubbedFastPlannerPacket : undefined;
   const displayPlannerPacket = plannerPacketHasDisplayContent(scrubbedPlannerPacket) ? scrubbedPlannerPacket : undefined;
   const displayLayeredContext = layeredContextHasDisplayContent(scrubbedLayeredContext) ? scrubbedLayeredContext : undefined;
+  const displayHasExpandedContext = Boolean(
+    displayFastPlannerPacket
+    || displayPlannerPacket
+    || displayLayeredContext
+    || (Array.isArray(displayRuntimeToolHints) ? displayRuntimeToolHints.length > 0 : displayRuntimeToolHints)
+    || operatorProjectionHasActionableContent(displayOperatorProjection)
+  );
   const projectHandoffSummary = summarizeDirectHandoff(projectHandoffFast, projectReleaseOutcomeFast);
   addBullets(lines, "Local Context Snapshot", [
     localContextSnapshot?.used_task_handoff
@@ -957,13 +999,17 @@ export function renderAionisHookContext(args) {
 
   addJsonSection(lines, "Fast Planner Packet", displayFastPlannerPacket, 1800);
   addJsonSection(lines, "Planner Packet", displayPlannerPacket, 2600);
-  addJsonSection(lines, "Operator Projection", displayOperatorProjection, 2400);
+  if (operatorProjectionHasActionableContent(displayOperatorProjection)) {
+    addJsonSection(lines, "Operator Projection", displayOperatorProjection, 2400);
+  }
   addJsonSection(lines, "Runtime Tool Hints", displayRuntimeToolHints, 1800);
   addJsonSection(lines, "Layered Context", displayLayeredContext, 4600);
-  addJsonSection(lines, "Cost Signals", contextSummary.costSignals, 1400);
-  addJsonSection(lines, "Recall Observability", contextSummary.recallObservability, 1600);
+  if (displayHasExpandedContext) {
+    addJsonSection(lines, "Cost Signals", contextSummary.costSignals, 1400);
+    addJsonSection(lines, "Recall Observability", contextSummary.recallObservability, 1600);
+  }
 
-  if (globalRecall) {
+  if (globalRecallHasDisplayContent(globalRecall)) {
     addJsonSection(lines, "Global Recall", {
       seeds: globalRecall.seeds,
       context: globalRecall.context,
