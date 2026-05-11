@@ -463,6 +463,7 @@ test("UserPromptSubmit uses local release snapshot before slow release lookup", 
 test("UserPromptSubmit uses task and release snapshots without fast find requests", async () => {
   const runtimeHome = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-codex-hook-full-snapshot-test-"));
   const routes = [];
+  const slowLookupRoutes = [];
   const server = http.createServer((req, res) => {
     routes.push(req.url);
     let body = "";
@@ -476,8 +477,21 @@ test("UserPromptSubmit uses task and release snapshots without fast find request
         res.end(JSON.stringify({ ok: true }));
         return;
       }
-      if (req.url === "/v1/memory/find") {
-        res.end(JSON.stringify({ nodes: [] }));
+      if (
+        req.url === "/v1/memory/find"
+        || req.url === "/v1/memory/planning/context"
+        || req.url === "/v1/memory/context/assemble"
+        || req.url === "/v1/memory/agent/resume-pack"
+        || req.url === "/v1/memory/agent/review-pack"
+      ) {
+        slowLookupRoutes.push(req.url);
+        setTimeout(() => {
+          try {
+            res.end(JSON.stringify({ nodes: [] }));
+          } catch {
+            // Snapshot mode should not wait on any slow lookup route.
+          }
+        }, 1200);
         return;
       }
       res.end(JSON.stringify({ ok: true, body: body ? JSON.parse(body) : null }));
@@ -526,13 +540,34 @@ test("UserPromptSubmit uses task and release snapshots without fast find request
     });
     const output = JSON.parse(promptResult.stdout);
     const text = output.hookSpecificOutput.additionalContext;
-    assert.equal(routes.includes("/v1/memory/find"), false);
-    assert.equal(routes.includes("/v1/memory/planning/context"), false);
+    assert.deepEqual(slowLookupRoutes, []);
     assert.match(text, /used_task_handoff_snapshot=true/);
     assert.match(text, /used_release_outcome_snapshot=true/);
     assert.match(text, /latest_task_handoff=Implemented full snapshot fast path/);
     assert.match(text, /latest_release_outcome=0\.2\.27 publish completed and verified/);
     assert.doesNotMatch(text, /Aionis Non-Fatal Errors/);
+
+    const secondPromptResult = await runHook({
+      hook_event_name: "UserPromptSubmit",
+      session_id: "full-snapshot-session",
+      turn_id: "full-snapshot-second-prompt",
+      cwd: pluginRoot,
+      prompt: "Continue dogfood again while Runtime lookup is slow",
+    }, {
+      baseUrl,
+      runtimeHome,
+      env: {
+        AIONIS_CODEX_FAST_TIMEOUT_MS: "1000",
+      },
+    });
+    const secondOutput = JSON.parse(secondPromptResult.stdout);
+    const secondText = secondOutput.hookSpecificOutput.additionalContext;
+    assert.deepEqual(slowLookupRoutes, []);
+    assert.match(secondText, /used_task_handoff_snapshot=true/);
+    assert.match(secondText, /used_release_outcome_snapshot=true/);
+    assert.match(secondText, /latest_task_handoff=Implemented full snapshot fast path/);
+    assert.match(secondText, /latest_release_outcome=0\.2\.27 publish completed and verified/);
+    assert.doesNotMatch(secondText, /Aionis Non-Fatal Errors/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
