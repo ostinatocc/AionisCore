@@ -367,6 +367,70 @@ test("Stop hook still stores implementation summaries as task handoffs", async (
   }
 });
 
+test("Stop hook compacts long automatic handoff summaries while preserving full text", async () => {
+  const routes = [];
+  const bodies = {};
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  const filler = Array.from({ length: 30 }, (_, index) =>
+    `Additional implementation detail ${index + 1}: this explanatory note should remain in handoff_text but should not bloat the stored summary.`
+  ).join("\n");
+  const longMessage = [
+    "Implemented compact Stop hook handoff summaries and verified the direct hook behavior.",
+    "- Updated packages/aionis-codex-plugin/hooks/aionis-codex-hook.mjs.",
+    "- Verification: npm --prefix packages/aionis-codex-plugin run test passed.",
+    "- Commit readiness: git diff --check passed.",
+    filler,
+  ].join("\n");
+
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "long-implementation-turn",
+      cwd: pluginRoot,
+      last_assistant_message: longMessage,
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/memory/events"), true);
+    assert.equal(routes.includes("/v1/handoff/store"), true);
+    assert.equal(routes.includes("/v1/memory/replay/run/end"), true);
+
+    const event = bodies["/v1/memory/events"][0];
+    const handoff = bodies["/v1/handoff/store"][0];
+    const replayEnd = bodies["/v1/memory/replay/run/end"][0];
+    assert.equal(event.metadata.handoff_quality.store_handoff, true);
+    assert.equal(handoff.execution_result_summary.handoff_quality.category, "execution_outcome");
+    assert.ok(handoff.summary.length <= 900);
+    assert.ok(event.text_summary.length <= 900);
+    assert.ok(replayEnd.summary.length <= 900);
+    assert.equal(handoff.handoff_text, longMessage);
+    assert.equal(event.event_text, longMessage);
+    assert.match(handoff.summary, /Implemented compact Stop hook handoff summaries/);
+    assert.match(handoff.summary, /Verification: npm --prefix packages\/aionis-codex-plugin run test passed/);
+    assert.doesNotMatch(handoff.summary, /Additional implementation detail 30/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("Stop hook stores verified release outcomes even when the reply is status-shaped", async () => {
   const routes = [];
   const bodies = {};

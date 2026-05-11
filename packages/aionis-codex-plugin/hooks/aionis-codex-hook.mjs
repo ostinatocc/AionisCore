@@ -241,6 +241,59 @@ function normalizeStopText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+function cleanStopSummaryLine(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/^\s*[-*]\s+/, "")
+    .trim();
+}
+
+function stopSummaryLineHasSignal(value) {
+  const text = cleanStopSummaryLine(value);
+  if (!text) return false;
+  return [
+    /\b(implemented|fixed|updated|changed|added|removed|verified|tested|passed|committed|pushed|published|released|installed|validated|created|refactored)\b/i,
+    /\b(PASS|npm|npx|codex|runtime|watchdog|pack(?:\s|-|:)dry-run|git|commit|push)\b/i,
+    /(?:\u5df2|\u5df2\u7ecf)[^\n\u3002\uff1b;]{0,48}(\u5b9e\u73b0|\u4fee\u590d|\u66f4\u65b0|\u63d0\u4ea4|\u63a8\u9001|\u53d1\u5e03|\u53d1\u5305|\u9a8c\u8bc1|\u5b89\u88c5|\u5b8c\u6210|\u8dd1\u8fc7|\u901a\u8fc7)/,
+    /(\u9a8c\u8bc1|\u6d4b\u8bd5|\u53d1\u5e03|\u53d1\u5305|\u63d0\u4ea4|\u63a8\u9001|\u4fee\u590d|\u5b9e\u73b0|\u66f4\u65b0)/,
+    /packages\/|\.mjs\b|\.ts\b|\.json\b|README\b/,
+  ].some((pattern) => pattern.test(text));
+}
+
+function compactStopSummary(value, limit = 900) {
+  const raw = String(value || "").replace(/\r\n?/g, "\n").trim();
+  const normalized = normalizeStopText(raw);
+  if (!normalized || normalized.length <= limit) return normalized;
+
+  const lines = raw.split(/\n+/).map(cleanStopSummaryLine).filter(Boolean);
+  const selected = [];
+  const seen = new Set();
+  const pushLine = (line) => {
+    const cleaned = cleanStopSummaryLine(line);
+    if (!cleaned || seen.has(cleaned)) return;
+    seen.add(cleaned);
+    selected.push(cleaned);
+  };
+
+  pushLine(lines[0]);
+  for (const line of lines.slice(1)) {
+    if (selected.length >= 8) break;
+    if (stopSummaryLineHasSignal(line)) pushLine(line);
+  }
+  if (selected.length < 3) {
+    for (const line of lines.slice(1)) {
+      if (selected.length >= 4) break;
+      pushLine(line);
+    }
+  }
+
+  const compact = normalizeStopText(selected.join(" "));
+  const fallback = compact || normalized;
+  if (fallback.length <= limit) return fallback;
+  const marker = ` ... [full_text_chars=${normalized.length}]`;
+  return `${fallback.slice(0, Math.max(0, limit - marker.length)).trim()}${marker}`;
+}
+
 function isStatusOrCommandPrompt(value) {
   const text = normalizeStopText(value);
   if (!text) return false;
@@ -473,13 +526,14 @@ function buildStopHandoffPayload(config, sessionId, turnId, runId, turn, summary
   const releaseVersion = releaseOutcomeVersion(summary);
   const decision = qualityDecision || handoffQualityDecision({ prompt: turn.prompt, summary, eventName });
   const isReleaseOutcome = decision.category === "release_outcome";
+  const compactSummary = compactStopSummary(summary, isReleaseOutcome ? 720 : 900);
   return {
     ...commonRuntimeFields(config),
     handoff_kind: "task_handoff",
     anchor: isReleaseOutcome && releaseVersion
       ? `${config.cwd}#release:${releaseVersion}`
       : `${config.cwd}#${sessionId}:${turnId}`,
-    summary: summary.slice(0, 1800),
+    summary: compactSummary,
     handoff_text: summary,
     repo_root: config.cwd,
     next_action: isReleaseOutcome
@@ -812,6 +866,7 @@ async function handleStop(input, eventName = "Stop") {
     || ""
   ).trim();
   const summary = assistantText || `Codex turn ${turnId} ended`;
+  const compactSummary = compactStopSummary(summary);
   const handoffQuality = handoffQualityDecision({ prompt: turn.prompt, summary, eventName });
 
   const runtimeStatus = await ensureRuntime(config);
@@ -820,7 +875,7 @@ async function handleStop(input, eventName = "Stop") {
       writeSessionEvent(config, sessionId, input, {
         title: eventName === "SessionEnd" ? "Codex session ended" : "Codex turn ended",
         eventText: summary,
-        summary,
+        summary: compactSummary,
         metadata: { turn_id: turnId, run_id: runId, phase: eventName, handoff_quality: handoffQuality },
     }), []);
     if (handoffQuality.store_handoff) {
@@ -841,7 +896,7 @@ async function handleStop(input, eventName = "Stop") {
         ...commonRuntimeFields(config),
         run_id: runId,
         status: "partial",
-        summary: summary.slice(0, 1800),
+        summary: compactSummary,
         metadata: {
           ...baseContext(config, sessionId, input),
           turn_id: turnId,

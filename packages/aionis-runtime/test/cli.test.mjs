@@ -497,6 +497,12 @@ test("runtime cli audit emits a context quality report for a healthy handoff mix
     confidence: 0.95,
     reasons: ["release_version", "release_completion_signal", "external_release_surface"],
   };
+  const oldLongSummary = [
+    "Implemented an older broad context-quality pass and verified runtime test coverage.",
+    ...Array.from({ length: 28 }, (_, index) =>
+      `Historical detail ${index + 1}: this older handoff is intentionally verbose but should not count as current task-start context.`
+    ),
+  ].join(" ");
   const server = createServer((req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
     res.setHeader("content-type", "application/json");
@@ -549,6 +555,16 @@ test("runtime cli audit emits a context quality report for a healthy handoff mix
                 },
               },
             },
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/old-long-execution",
+              created_at: "2026-05-10T18:00:00.000Z",
+              text_summary: oldLongSummary,
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: executionQuality,
+                },
+              },
+            },
           ],
         }));
       });
@@ -580,8 +596,9 @@ test("runtime cli audit emits a context quality report for a healthy handoff mix
     assert.equal(parsed.context_quality_report.historical_debt.status, "pass");
     assert.equal(parsed.context_quality_report.latest.task_handoff.uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/execution");
     assert.equal(parsed.context_quality_report.latest.release_outcome.uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release");
-    assert.equal(parsed.context_quality_report.counts.visible_task_handoffs, 1);
+    assert.equal(parsed.context_quality_report.counts.visible_task_handoffs, 2);
     assert.equal(parsed.context_quality_report.counts.visible_release_outcomes, 1);
+    assert.equal(parsed.context_quality_report.counts.oversized_visible, 0);
     assert.deepEqual(parsed.context_quality_report.issues, []);
 
     const textAudit = await spawnCli(["codex", "audit", "--session", sessionId, "--limit", "4"], {

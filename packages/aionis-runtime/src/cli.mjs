@@ -811,14 +811,14 @@ function buildContextQualityReport(args) {
   const releaseHandoffs = visibleAcceptedHandoffsByCategory(handoffs, "release_outcome");
   const visibleMissingQuality = handoffs.filter((row) =>
     row.display?.decision !== "filtered" && !row.handoff_quality);
-  const oversizedVisible = accepted.filter((row) =>
-    row.display?.decision !== "filtered" && row.summary_chars > 1200);
   const releaseCloseoutAsExecution = handoffs.filter((row) =>
     row.display?.decision !== "filtered" &&
     row.handoff_quality?.category === "execution_outcome" &&
     auditLooksLikeReleaseCloseout(row.summary));
   const latestTask = taskHandoffs[0] || null;
   const latestRelease = releaseHandoffs[0] || null;
+  const oversizedVisible = [latestTask, latestRelease].filter((row) =>
+    row && row.display?.decision !== "filtered" && row.summary_chars > 1200);
   const latestTaskReleaseConflict = latestTask && auditLooksLikeReleaseCloseout(latestTask.summary);
   const historicalReleaseCloseoutDebt = releaseCloseoutAsExecution.filter((row) => row !== latestTask);
 
@@ -971,7 +971,9 @@ function buildAuditRemediations(args) {
       note: "This handoff was stored by an older decision but current display policy would suppress it.",
     });
   }
-  const longAccepted = args.events.find(
+  const longAccepted = args.handoffs.find(
+    (row) => row.handoff_quality?.store_handoff === true && row.summary_chars > 1200 && row.display?.decision !== "filtered",
+  ) || args.events.find(
     (row) => row.handoff_quality?.store_handoff === true && row.summary_chars > 1200 && row.display?.decision !== "filtered",
   );
   if (longAccepted) {
@@ -979,7 +981,7 @@ function buildAuditRemediations(args) {
       kind: "oversized_visible_handoff",
       severity: "low",
       action: "compress_before_task_start_context",
-      uri: null,
+      uri: longAccepted.uri || null,
       reasons: ["summary_too_long"],
       summary: remediationSummary(longAccepted),
       note: "Visible handoff text is long enough to dilute task-start context.",
@@ -995,9 +997,11 @@ function buildAuditWarnings(args) {
   }
   if (!args.session.state) warnings.push("no local Codex session state found");
   if (args.runtime?.ok === false) warnings.push(`runtime unavailable: ${args.runtime.error}`);
-  const latestAccepted = args.events.find((row) => row.handoff_quality?.store_handoff === true);
-  if (latestAccepted && latestAccepted.summary_chars > 1200) {
-    warnings.push(`latest accepted Stop event is long: ${latestAccepted.summary_chars} chars`);
+  const latestTask = visibleAcceptedHandoffsByCategory(args.handoffs, "execution_outcome")[0] || null;
+  const latestRelease = visibleAcceptedHandoffsByCategory(args.handoffs, "release_outcome")[0] || null;
+  const latestOversized = [latestTask, latestRelease].find((row) => row && row.summary_chars > 1200);
+  if (latestOversized) {
+    warnings.push(`latest task-start handoff is long: ${latestOversized.summary_chars} chars`);
   }
   const filteredHandoff = args.handoffs.find((row) => row.display?.decision === "filtered");
   if (filteredHandoff) {
