@@ -223,6 +223,78 @@ test("UserPromptSubmit bounds fast lookup timeout and skips planning after task 
   }
 });
 
+test("UserPromptSubmit keeps lifecycle telemetry timeouts out of rendered context", async () => {
+  const routes = [];
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      res.setHeader("content-type", "application/json");
+      if (req.url === "/health") {
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (req.url === "/v1/memory/find") {
+        const parsed = body ? JSON.parse(body) : {};
+        const releaseLookup = parsed.slots_contains?.execution_result_summary?.release_outcome === true;
+        res.end(JSON.stringify({
+          nodes: releaseLookup
+            ? []
+            : [
+                {
+                  title: "Task 4 telemetry timeout fix",
+                  text_summary: "Task 4 mid-task handoff: fix UserPromptSubmit lifecycle telemetry writes so slow event writes do not block or pollute task-start context.",
+                  uri: "aionis://local-codex/test/task-4-telemetry",
+                },
+              ],
+        }));
+        return;
+      }
+      if (req.url === "/v1/memory/sessions" || req.url === "/v1/memory/events" || req.url === "/v1/memory/replay/run/start") {
+        setTimeout(() => {
+          try {
+            res.end(JSON.stringify({ ok: true, body: body ? JSON.parse(body) : null }));
+          } catch {
+            // The hook should have timed out lifecycle telemetry and moved on.
+          }
+        }, 500);
+        return;
+      }
+      res.end(JSON.stringify({ ok: true, body: body ? JSON.parse(body) : null }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "UserPromptSubmit",
+      session_id: "telemetry-timeout-session",
+      turn_id: "telemetry-timeout-turn",
+      cwd: pluginRoot,
+      prompt: "Continue dogfood",
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      env: {
+        AIONIS_CODEX_EVENT_TIMEOUT_MS: "100",
+      },
+    });
+    const output = JSON.parse(result.stdout);
+    const text = output.hookSpecificOutput.additionalContext;
+    assert.match(text, /latest_task_handoff=Task 4 mid-task handoff/);
+    assert.doesNotMatch(text, /^- session_prompt_event:/m);
+    assert.doesNotMatch(text, /^- session_create:/m);
+    assert.doesNotMatch(text, /^- replay_run_start:/m);
+    assert.equal(routes.includes("/v1/memory/sessions"), true);
+    assert.equal(routes.includes("/v1/memory/events"), true);
+    assert.equal(routes.includes("/v1/memory/replay/run/start"), true);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("UserPromptSubmit uses local project snapshot before slow handoff lookup", async () => {
   const runtimeHome = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-codex-hook-snapshot-test-"));
   const routes = [];

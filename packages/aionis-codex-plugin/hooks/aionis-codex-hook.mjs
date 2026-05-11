@@ -312,6 +312,11 @@ function fastRuntimeConfig(config) {
   return { ...config, timeoutMs };
 }
 
+function lifecycleRuntimeConfig(config) {
+  const timeoutMs = Math.min(config.timeoutMs, config.eventTimeoutMs || config.fastTimeoutMs || config.timeoutMs);
+  return { ...config, timeoutMs };
+}
+
 function normalizeStopText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
@@ -693,22 +698,26 @@ async function handleUserPrompt(input) {
   };
   const projectContextSnapshot = loadProjectContextSnapshot(config);
 
-  await safeRuntimeCall(config, "session_create", () =>
-    createRuntimeSession(config, sessionId, input, `Codex session ${sessionId} in ${config.projectName}`), errors);
-  await safeRuntimeCall(config, "session_prompt_event", () =>
-    writeSessionEvent(config, sessionId, input, {
-      title: "Codex user prompt",
-      eventText: prompt || "Codex user prompt",
-      metadata: { turn_id: turnId, run_id: runId, phase: "user_prompt" },
-    }), errors);
-  await safeRuntimeCall(config, "replay_run_start", () =>
-    runtimePost(config, "/v1/memory/replay/run/start", {
-      ...commonRuntimeFields(config),
-      run_id: runId,
-      goal: prompt || `Codex turn ${turnId}`,
-      context_snapshot_ref: `codex:${sessionId}:${turnId}`,
-      metadata: context,
-    }), errors);
+  const lifecycleConfig = lifecycleRuntimeConfig(config);
+  const lifecycleErrors = [];
+  const lifecycleWrites = Promise.allSettled([
+    safeRuntimeCall(lifecycleConfig, "session_create", () =>
+      createRuntimeSession(lifecycleConfig, sessionId, input, `Codex session ${sessionId} in ${config.projectName}`), lifecycleErrors),
+    safeRuntimeCall(lifecycleConfig, "session_prompt_event", () =>
+      writeSessionEvent(lifecycleConfig, sessionId, input, {
+        title: "Codex user prompt",
+        eventText: prompt || "Codex user prompt",
+        metadata: { turn_id: turnId, run_id: runId, phase: "user_prompt" },
+      }), lifecycleErrors),
+    safeRuntimeCall(lifecycleConfig, "replay_run_start", () =>
+      runtimePost(lifecycleConfig, "/v1/memory/replay/run/start", {
+        ...commonRuntimeFields(lifecycleConfig),
+        run_id: runId,
+        goal: prompt || `Codex turn ${turnId}`,
+        context_snapshot_ref: `codex:${sessionId}:${turnId}`,
+        metadata: context,
+      }), lifecycleErrors),
+  ]);
 
   const fastConfig = fastRuntimeConfig(config);
   const projectHandoffSnapshot = projectContextSnapshot?.project_handoff_fast || null;
@@ -815,6 +824,12 @@ async function handleUserPrompt(input) {
           include_slots_preview: true,
         }), errors);
     }
+  }
+
+  await lifecycleWrites;
+  if (lifecycleErrors.length) {
+    stderrDebug(config, "UserPromptSubmit lifecycle telemetry failed without affecting rendered context",
+      lifecycleErrors.map((error) => error?.aionis_non_fatal || error?.message || String(error)));
   }
 
   state.turns[turnId].context_assembled_at = nowIso();

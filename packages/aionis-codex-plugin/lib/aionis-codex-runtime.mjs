@@ -140,6 +140,7 @@ export function resolveConfig(input = {}) {
     autostart: boolEnv("AIONIS_CODEX_AUTOSTART", true),
     timeoutMs: intEnv("AIONIS_CODEX_TIMEOUT_MS", DEFAULT_TIMEOUT_MS, 250, 30000),
     fastTimeoutMs: intEnv("AIONIS_CODEX_FAST_TIMEOUT_MS", 1200, 250, 10000),
+    eventTimeoutMs: intEnv("AIONIS_CODEX_EVENT_TIMEOUT_MS", 750, 100, 5000),
     startupTimeoutMs: intEnv("AIONIS_CODEX_STARTUP_TIMEOUT_MS", 12000, 1000, 120000),
     contextCharLimit: intEnv("AIONIS_CODEX_CONTEXT_CHAR_LIMIT", DEFAULT_CONTEXT_CHAR_LIMIT, 2000, 80000),
     contextSnapshotTtlMs: intEnv("AIONIS_CODEX_CONTEXT_SNAPSHOT_TTL_MS", DEFAULT_CONTEXT_SNAPSHOT_TTL_MS, 0, 30 * 24 * 60 * 60 * 1000),
