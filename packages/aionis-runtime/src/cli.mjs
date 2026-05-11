@@ -16,7 +16,7 @@ const runtimeDir = path.join(distDir, "runtime");
 const runtimeEntry = path.join(runtimeDir, "src", "index.ts");
 const inspectorDistDir = path.join(runtimeDir, "apps", "inspector", "dist");
 const bundledCodexPluginDir = path.join(distDir, "codex-plugin");
-const cwd = process.cwd();
+const cwd = canonicalPath(process.cwd());
 
 function printHelp() {
   process.stdout.write(`Aionis Runtime\n\nUsage:\n  aionis-runtime start [--print-env] [node args...]\n  aionis-runtime codex install [--no-watchdog] [--no-load-watchdog] [--skip-doctor]\n  aionis-runtime codex status [--json] [--no-runtime] [--no-watchdog]\n  aionis-runtime codex audit [--json] [--limit N] [--session SESSION_ID] [--no-runtime]\n  aionis-runtime codex handoff --summary TEXT [--next-action TEXT] [--cwd DIR]\n  aionis-runtime codex release VERSION [--summary TEXT] [--cwd DIR]\n  aionis-runtime codex doctor [--no-start-runtime]\n  aionis-runtime codex logs [runtime|watchdog|all] [--lines N]\n  aionis-runtime --help\n  aionis-runtime --version\n\nCommands:\n  start          Start the Lite runtime with standalone package defaults.\n  codex install  Install the bundled Aionis Codex plugin and Runtime watchdog.\n  codex status   Check Codex plugin, watchdog, and local Runtime state.\n  codex audit    Inspect recent Aionis context and handoff-quality decisions.\n  codex handoff  Store a structured Codex task handoff in Runtime memory.\n  codex release  Store a structured Codex release outcome in Runtime memory.\n  codex doctor   Run the full Codex plugin doctor.\n  codex logs     Print recent Runtime and watchdog logs.\n\nFlags:\n  --print-env        Print the effective runtime env as JSON and exit.\n  --json             Print machine-readable JSON for supported commands.\n  --limit N          Limit audit rows.\n  --session ID       Audit a specific Codex session id.\n  --cwd DIR          Resolve Codex project scope as if run from DIR.\n  --summary TEXT     Handoff or release summary text.\n  --text TEXT        Full handoff text. Defaults to --summary.\n  --next-action TEXT Next action for the following Codex turn.\n  --no-watchdog      Skip LaunchAgent watchdog install or status check.\n  --no-load-watchdog Write the watchdog plist without loading it.\n  --skip-doctor      Skip the post-install doctor run.\n  --no-start-runtime Do not autostart Runtime during doctor.\n  --no-runtime       Skip Runtime health check in status/audit.\n  --help             Show this help.\n  --version          Show the package version.\n`);
@@ -51,6 +51,15 @@ function expandHome(value) {
   if (value === "~") return os.homedir();
   if (value.startsWith("~/")) return path.join(os.homedir(), value.slice(2));
   return value;
+}
+
+function canonicalPath(value) {
+  const resolved = path.resolve(expandHome(String(value)));
+  try {
+    return fs.realpathSync.native ? fs.realpathSync.native(resolved) : fs.realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
 }
 
 function shellQuote(value) {
@@ -550,10 +559,10 @@ function parseAuditLimit(args) {
 function projectDefaults(paths, projectCwd = cwd) {
   const activeProjectPath = path.join(paths.runtimeHome, "state", "active-project.json");
   const activeProject = readJsonIfExists(activeProjectPath, null);
-  const currentCwd = path.resolve(expandHome(projectCwd));
+  const currentCwd = canonicalPath(projectCwd);
   const projectName = path.basename(currentCwd) || "workspace";
   const projectHash = sha12(currentCwd).slice(0, 8);
-  const activeCwd = typeof activeProject?.cwd === "string" ? path.resolve(activeProject.cwd) : null;
+  const activeCwd = typeof activeProject?.cwd === "string" ? canonicalPath(activeProject.cwd) : null;
   const activeMatchesCwd = activeCwd === currentCwd;
   return {
     activeProjectPath,
@@ -1356,7 +1365,7 @@ function defaultHandoffAnchor(repoRoot, summary, now = new Date()) {
 }
 
 function buildCodexHandoffPayload(project, args, options = {}) {
-  const repoRoot = path.resolve(optionTextValue(args, "--repo-root", project.cwd));
+  const repoRoot = canonicalPath(optionTextValue(args, "--repo-root", project.cwd));
   const summary = String(optionTextValue(args, "--summary", firstPositional(args) || "") || "").trim();
   if (!summary) throw new Error("codex handoff requires --summary TEXT");
   const text = String(optionTextValue(args, "--text", summary) || summary).trim();

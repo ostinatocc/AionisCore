@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
-import { runtimePost } from "../lib/aionis-codex-runtime.mjs";
+import { resolveConfig, runtimePost, sha12 } from "../lib/aionis-codex-runtime.mjs";
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -68,5 +71,33 @@ test("runtimePost classifies invalid JSON responses", async () => {
     );
   } finally {
     await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("resolveConfig canonicalizes explicit workspace cwd before deriving scope", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-codex-canonical-cwd-"));
+  const realWorkspace = path.join(root, "workspace");
+  const linkedWorkspace = path.join(root, "linked-workspace");
+  fs.mkdirSync(realWorkspace, { recursive: true });
+  fs.symlinkSync(realWorkspace, linkedWorkspace, "dir");
+  const expectedCwd = fs.realpathSync.native
+    ? fs.realpathSync.native(realWorkspace)
+    : fs.realpathSync(realWorkspace);
+  const previousScope = process.env.AIONIS_CODEX_SCOPE;
+  const previousCodeCwd = process.env.CODEX_CWD;
+  try {
+    delete process.env.AIONIS_CODEX_SCOPE;
+    delete process.env.CODEX_CWD;
+    const config = resolveConfig({ cwd: linkedWorkspace });
+    assert.equal(config.cwd, expectedCwd);
+    assert.equal(config.projectName, "workspace");
+    assert.equal(config.projectHash, sha12(expectedCwd).slice(0, 8));
+    assert.equal(config.scope, `codex:workspace:${sha12(expectedCwd).slice(0, 8)}`);
+  } finally {
+    if (previousScope === undefined) delete process.env.AIONIS_CODEX_SCOPE;
+    else process.env.AIONIS_CODEX_SCOPE = previousScope;
+    if (previousCodeCwd === undefined) delete process.env.CODEX_CWD;
+    else process.env.CODEX_CWD = previousCodeCwd;
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

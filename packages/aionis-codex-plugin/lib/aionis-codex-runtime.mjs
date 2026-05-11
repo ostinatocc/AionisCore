@@ -96,6 +96,15 @@ function expandHome(value) {
   return value;
 }
 
+function canonicalPath(value) {
+  const resolved = path.resolve(expandHome(String(value)));
+  try {
+    return fs.realpathSync.native ? fs.realpathSync.native(resolved) : fs.realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
 export function resolveConfig(input = {}) {
   const runtimeHome = path.resolve(expandHome(process.env.AIONIS_CODEX_RUNTIME_HOME || "~/.aionis/codex"));
   const explicitCwd = input.cwd || input.working_directory || process.env.CODEX_CWD || "";
@@ -104,7 +113,7 @@ export function resolveConfig(input = {}) {
   const cwdFromActiveProject = isPluginRuntimeCwd(processCwd) && typeof activeProject?.cwd === "string"
     ? activeProject.cwd
     : "";
-  const cwd = path.resolve(String(explicitCwd || cwdFromActiveProject || processCwd));
+  const cwd = canonicalPath(explicitCwd || cwdFromActiveProject || processCwd);
   const projectName = path.basename(cwd) || "workspace";
   const projectHash = sha12(cwd).slice(0, 8);
   const scopeMode = process.env.AIONIS_CODEX_SCOPE_MODE || "project";

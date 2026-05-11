@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import os from "node:os";
 import { createServer } from "node:http";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -1274,6 +1274,95 @@ test("runtime cli codex handoff stores a structured task outcome handoff", async
     assert.equal(requests[1].body.slots_contains.anchor, requests[0].body.anchor);
   } finally {
     await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("runtime cli codex handoff canonicalizes symlink cwd before deriving project scope", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "aionis-cli-canonical-cwd-"));
+  const realWorkspace = path.join(root, "workspace");
+  const linkedWorkspace = path.join(root, "linked-workspace");
+  mkdirSync(realWorkspace, { recursive: true });
+  symlinkSync(realWorkspace, linkedWorkspace, "dir");
+  const canonicalWorkspace = realpathSync.native
+    ? realpathSync.native(realWorkspace)
+    : realpathSync(realWorkspace);
+
+  const home = path.join(root, "home");
+  mkdirSync(home, { recursive: true });
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const requests = [];
+  const handoffUri = "aionis://local-codex/codex%3Aworkspace%3Acanonical/event/task-handoff";
+  const server = createServer((req, res) => {
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      requests.push({ method: req.method, url: req.url, body: body ? JSON.parse(body) : null });
+      res.writeHead(200, { "content-type": "application/json" });
+      if (req.url === "/v1/handoff/store") {
+        res.end(JSON.stringify({
+          ok: true,
+          handoff: {
+            uri: handoffUri,
+          },
+        }));
+        return;
+      }
+      if (req.url === "/v1/memory/find") {
+        const parsedBody = body ? JSON.parse(body) : {};
+        res.end(JSON.stringify({
+          nodes: [
+            {
+              uri: handoffUri,
+              slots: parsedBody.slots_contains,
+            },
+          ],
+        }));
+        return;
+      }
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const handoff = await spawnCli([
+      "codex",
+      "handoff",
+      "--summary",
+      "Verified canonical workspace paths for fresh install handoffs.",
+      "--cwd",
+      linkedWorkspace,
+      "--json",
+    ], {
+      cwd: root,
+      env: {
+        ...process.env,
+        HOME: home,
+        AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+        AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+      },
+    });
+    assert.equal(handoff.status, 0, `${handoff.stdout}\n${handoff.stderr}`);
+    const parsed = JSON.parse(handoff.stdout);
+    assert.equal(parsed.project.cwd, canonicalWorkspace);
+    assert.equal(parsed.stored.repo_root, canonicalWorkspace);
+    assert.match(parsed.stored.anchor, new RegExp(`^${canonicalWorkspace.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}#handoff:`));
+    assert.equal(parsed.audit_visibility.project_cwd, canonicalWorkspace);
+    assert.equal(parsed.audit_visibility.repo_root, canonicalWorkspace);
+
+    const snapshotPath = path.join(runtimeHome, "state", "project-context", `${safeSnapshotName(parsed.project.scope)}.json`);
+    const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+    assert.equal(snapshot.cwd, canonicalWorkspace);
+    assert.equal(snapshot.scope, parsed.project.scope);
+    assert.equal(requests[0].body.repo_root, canonicalWorkspace);
+    assert.equal(requests[1].body.slots_contains.repo_root, canonicalWorkspace);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
