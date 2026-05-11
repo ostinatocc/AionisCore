@@ -10,6 +10,10 @@ import { fileURLToPath } from "node:url";
 const packageDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = path.join(packageDir, "dist", "bin", "aionis-runtime.mjs");
 
+function safeSnapshotName(value) {
+  return String(value).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160) || "project";
+}
+
 function spawnCli(args, options = {}) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [cliPath, ...args], {
@@ -1126,11 +1130,24 @@ test("runtime cli codex release stores a structured release outcome handoff", as
     assert.equal(parsed.stored.version, "0.2.19");
     assert.equal(parsed.stored.handoff_quality.category, "release_outcome");
     assert.equal(parsed.stored.uri, handoffUri);
+    assert.equal(parsed.project_context_snapshot.ok, true);
+    assert.equal(parsed.project_context_snapshot.release_outcome, true);
     assert.equal(parsed.audit_visibility.ok, true);
     assert.equal(parsed.audit_visibility.project_cwd, packageDir);
     assert.equal(parsed.audit_visibility.scope, parsed.project.scope);
     assert.equal(parsed.audit_visibility.repo_root, packageDir);
     assert.match(parsed.audit_visibility.audit_command, /aionis-runtime codex audit --limit 8/);
+
+    const snapshotPath = path.join(runtimeHome, "state", "project-context", `${safeSnapshotName(parsed.project.scope)}.json`);
+    assert.equal(parsed.project_context_snapshot.path, snapshotPath);
+    const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+    assert.equal(snapshot.cwd, packageDir);
+    assert.equal(snapshot.scope, parsed.project.scope);
+    assert.equal(snapshot.project_release_outcome_fast.nodes[0].uri, handoffUri);
+    assert.equal(snapshot.project_release_outcome_fast.nodes[0].summary, "0.2.19 published and verified.");
+    assert.equal(snapshot.project_release_outcome_fast.nodes[0].execution_result_summary.release_outcome, true);
+    assert.equal(snapshot.project_release_outcome_fast.nodes[0].execution_result_summary.version, "0.2.19");
+    assert.equal(snapshot.project_release_outcome_fast.nodes[0].slots.anchor, `${packageDir}#release:0.2.19`);
 
     assert.equal(requests.length, 2);
     assert.equal(requests[0].method, "POST");
@@ -1226,8 +1243,20 @@ test("runtime cli codex handoff stores a structured task outcome handoff", async
     const parsed = JSON.parse(handoff.stdout);
     assert.equal(parsed.stored.release_outcome, false);
     assert.equal(parsed.stored.handoff_quality.category, "execution_outcome");
+    assert.equal(parsed.project_context_snapshot.ok, true);
+    assert.equal(parsed.project_context_snapshot.release_outcome, false);
     assert.equal(parsed.audit_visibility.ok, true);
     assert.equal(parsed.audit_visibility.uri, handoffUri);
+
+    const snapshotPath = path.join(runtimeHome, "state", "project-context", `${safeSnapshotName(parsed.project.scope)}.json`);
+    assert.equal(parsed.project_context_snapshot.path, snapshotPath);
+    const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+    assert.equal(snapshot.cwd, packageDir);
+    assert.equal(snapshot.scope, parsed.project.scope);
+    assert.equal(snapshot.project_handoff_fast.nodes[0].uri, handoffUri);
+    assert.equal(snapshot.project_handoff_fast.nodes[0].summary, "Implemented the explicit Codex handoff CLI and verified the request payload.");
+    assert.equal(snapshot.project_handoff_fast.nodes[0].execution_result_summary.handoff_quality.category, "execution_outcome");
+    assert.equal(snapshot.project_handoff_fast.nodes[0].slots.anchor, requests[0].body.anchor);
 
     assert.equal(requests.length, 2);
     assert.equal(requests[0].method, "POST");

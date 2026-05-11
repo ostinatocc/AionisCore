@@ -2,7 +2,7 @@
 
 Standalone local-first Aionis Runtime package.
 
-Current release line: `0.2.26` for the Aionis Lite Developer Preview.
+Current release line: `0.2.27` for the Aionis Lite Developer Preview.
 
 ## Start
 
@@ -30,9 +30,16 @@ npx @ostinato/aionis-runtime@latest codex status --json
 npx @ostinato/aionis-runtime@latest codex audit
 npx @ostinato/aionis-runtime@latest codex audit --json
 npx @ostinato/aionis-runtime@latest codex handoff --summary "Implemented the task and verified tests."
-npx @ostinato/aionis-runtime@latest codex release 0.2.26 --summary "0.2.26 published and verified."
+npx @ostinato/aionis-runtime@latest codex release 0.2.27 --summary "0.2.27 published and verified."
 npx @ostinato/aionis-runtime@latest codex doctor
 npx @ostinato/aionis-runtime@latest codex logs
+```
+
+Use a fresh npm cache when verifying a just-published release:
+
+```bash
+npm view @ostinato/aionis-runtime version --registry=https://registry.npmjs.org/ --cache /tmp/aionis-fresh-npm-view --prefer-online
+npm exec --yes --package @ostinato/aionis-runtime@0.2.27 --cache /tmp/aionis-fresh-npm-exec --prefer-online -- aionis-runtime --version
 ```
 
 ## What it does

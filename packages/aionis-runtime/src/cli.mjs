@@ -82,8 +82,17 @@ function readJsonIfExists(filePath, fallback = null) {
   }
 }
 
+function writeJsonFile(filePath, value) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
 function sha12(value) {
   return crypto.createHash("sha256").update(String(value)).digest("hex").slice(0, 12);
+}
+
+function safeFileName(value) {
+  return String(value).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160) || "project";
 }
 
 function runtimeHome() {
@@ -572,6 +581,82 @@ function codexRuntimeIdentity(project) {
     producer_agent_id: project.consumer_agent_id,
     owner_agent_id: project.consumer_agent_id,
     owner_team_id: project.consumer_team_id,
+  };
+}
+
+function normalizeSnapshotText(value, limit = 1400) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, limit);
+}
+
+function projectContextSnapshotPath(paths, project) {
+  return path.join(paths.runtimeHome, "state", "project-context", `${safeFileName(project.scope || project.projectHash)}.json`);
+}
+
+function loadProjectContextSnapshot(paths, project) {
+  const snapshot = readJsonIfExists(projectContextSnapshotPath(paths, project), null);
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;
+  if (snapshot.cwd !== project.cwd || snapshot.scope !== project.scope) return null;
+  return snapshot;
+}
+
+function snapshotResultFromHandoffPayload(project, payload, source) {
+  const summary = normalizeSnapshotText(payload.summary || payload.handoff_text);
+  if (!summary) return null;
+  const result = payload.execution_result_summary || {};
+  const record = {
+    uri: payload.stored_uri || `aionis://local-codex/${encodeURIComponent(project.scope)}/snapshot/${sha12(payload.anchor || summary)}`,
+    title: result.release_outcome ? "Latest Codex release handoff" : "Latest Codex task handoff",
+    summary,
+    text_summary: summary,
+    handoff_text: normalizeSnapshotText(payload.handoff_text || summary, 2200),
+    next_action: normalizeSnapshotText(payload.next_action, 500),
+    target_files: Array.isArray(payload.target_files) ? payload.target_files.slice(0, 8) : [],
+    acceptance_checks: Array.isArray(payload.acceptance_checks) ? payload.acceptance_checks.slice(0, 8) : [],
+    tags: Array.isArray(payload.tags) ? payload.tags.slice(0, 12) : [],
+    execution_result_summary: result,
+    slots: {
+      summary_kind: "handoff",
+      handoff_kind: payload.handoff_kind || "task_handoff",
+      repo_root: payload.repo_root || project.cwd,
+      anchor: payload.anchor,
+      execution_result_summary: result,
+    },
+  };
+  return { nodes: [record], snapshot_source: source, snapshot_captured_at: new Date().toISOString() };
+}
+
+function updateProjectContextSnapshot(paths, project, payload) {
+  const snapshotResult = snapshotResultFromHandoffPayload(project, payload, "codex_cli");
+  if (!snapshotResult) return null;
+  const isReleaseOutcome = payload.execution_result_summary?.release_outcome === true;
+  const current = loadProjectContextSnapshot(paths, project) || {
+    version: 1,
+    cwd: project.cwd,
+    project_name: project.projectName,
+    project_hash: project.projectHash,
+    scope: project.scope,
+    tenant_id: project.tenant_id,
+    created_at: new Date().toISOString(),
+  };
+  const next = {
+    ...current,
+    ...(isReleaseOutcome ? { project_release_outcome_fast: snapshotResult } : { project_handoff_fast: snapshotResult }),
+    version: 1,
+    cwd: project.cwd,
+    project_name: project.projectName,
+    project_hash: project.projectHash,
+    scope: project.scope,
+    tenant_id: project.tenant_id,
+    updated_at: new Date().toISOString(),
+  };
+  const filePath = projectContextSnapshotPath(paths, project);
+  writeJsonFile(filePath, next);
+  return {
+    ok: true,
+    path: filePath,
+    source: "codex_cli",
+    release_outcome: isReleaseOutcome,
+    updated_at: next.updated_at,
   };
 }
 
@@ -1403,7 +1488,9 @@ async function storeCodexHandoff(args, options = {}) {
   const payload = buildCodexHandoffPayload(project, args, options);
   const result = await codexRuntimeJson(paths, "POST", "/v1/handoff/store", payload, CODEX_HANDOFF_STORE_TIMEOUT_MS);
   const storedUri = result?.handoff?.uri || result?.handoff_uri || null;
-  const visibility = await verifyStoredHandoffVisibility(paths, project, { ...payload, stored_uri: storedUri });
+  const storedPayload = { ...payload, stored_uri: storedUri };
+  const projectContextSnapshot = updateProjectContextSnapshot(paths, project, storedPayload);
+  const visibility = await verifyStoredHandoffVisibility(paths, project, storedPayload);
   if (json) {
     process.stdout.write(`${JSON.stringify({
       ok: true,
@@ -1417,6 +1504,7 @@ async function storeCodexHandoff(args, options = {}) {
         handoff_quality: payload.execution_result_summary.handoff_quality,
         uri: storedUri,
       },
+      project_context_snapshot: projectContextSnapshot,
       audit_visibility: visibility,
       result,
     }, null, 2)}\n`);
@@ -1429,6 +1517,7 @@ async function storeCodexHandoff(args, options = {}) {
     process.stdout.write(`repo_root - ${payload.repo_root}\n`);
     if (storedUri) process.stdout.write(`uri - ${storedUri}\n`);
     process.stdout.write(`summary - ${payload.summary}\n`);
+    if (projectContextSnapshot?.ok) process.stdout.write(`project_context_snapshot - updated ${projectContextSnapshot.path}\n`);
     process.stdout.write(`audit_visibility - ${visibility.ok ? "PASS" : "WARN"} node_count=${visibility.node_count}\n`);
     if (visibility.error) process.stdout.write(`audit_visibility_error - ${visibility.error}\n`);
     process.stdout.write(`audit_command - ${visibility.audit_command}\n`);

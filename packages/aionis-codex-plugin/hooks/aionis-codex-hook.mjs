@@ -285,12 +285,6 @@ function snapshotHasRecords(result) {
   return projectTaskHandoffRecords(result).length > 0;
 }
 
-function shouldUseSnapshotFallback(result, snapshotResult, errors, label) {
-  if (!snapshotHasRecords(snapshotResult)) return false;
-  if (snapshotHasRecords(result)) return false;
-  return hasTimeoutError(errors, label);
-}
-
 function updateProjectContextSnapshot(config, patch) {
   const cleaned = Object.fromEntries(Object.entries(patch).filter(([, value]) => value));
   if (Object.keys(cleaned).length === 0) return null;
@@ -717,33 +711,35 @@ async function handleUserPrompt(input) {
     }), errors);
 
   const fastConfig = fastRuntimeConfig(config);
+  const projectHandoffSnapshot = projectContextSnapshot?.project_handoff_fast || null;
+  const projectReleaseOutcomeSnapshot = projectContextSnapshot?.project_release_outcome_fast || null;
+  const useProjectHandoffSnapshot = snapshotHasRecords(projectHandoffSnapshot);
+  const useProjectReleaseOutcomeSnapshot = snapshotHasRecords(projectReleaseOutcomeSnapshot);
   const [projectHandoffFast, projectReleaseOutcomeFast] = await Promise.all([
-    safeRuntimeCall(fastConfig, "project_handoff_fast", () => findProjectTaskHandoffs(fastConfig), errors),
-    safeRuntimeCall(fastConfig, "project_release_outcome_fast", () => findProjectReleaseOutcomeHandoffs(fastConfig), errors),
+    useProjectHandoffSnapshot
+      ? projectHandoffSnapshot
+      : safeRuntimeCall(fastConfig, "project_handoff_fast", () => findProjectTaskHandoffs(fastConfig), errors),
+    useProjectReleaseOutcomeSnapshot
+      ? projectReleaseOutcomeSnapshot
+      : safeRuntimeCall(fastConfig, "project_release_outcome_fast", () => findProjectReleaseOutcomeHandoffs(fastConfig), errors),
   ]);
 
   updateProjectContextSnapshot(config, {
-    project_handoff_fast: hasUsableProjectTaskHandoff(projectHandoffFast)
+    project_handoff_fast: !useProjectHandoffSnapshot && hasUsableProjectTaskHandoff(projectHandoffFast)
       ? snapshotResultFromRuntimeResult(projectHandoffFast, "runtime_find")
       : null,
-    project_release_outcome_fast: snapshotHasRecords(projectReleaseOutcomeFast)
+    project_release_outcome_fast: !useProjectReleaseOutcomeSnapshot && snapshotHasRecords(projectReleaseOutcomeFast)
       ? snapshotResultFromRuntimeResult(projectReleaseOutcomeFast, "runtime_find")
       : null,
   });
 
   const snapshotUsage = {
     updated_at: projectContextSnapshot?.updated_at || null,
-    used_task_handoff: shouldUseSnapshotFallback(projectHandoffFast, projectContextSnapshot?.project_handoff_fast, errors, "project_handoff_fast"),
-    used_release_outcome: shouldUseSnapshotFallback(projectReleaseOutcomeFast, projectContextSnapshot?.project_release_outcome_fast, errors, "project_release_outcome_fast"),
+    used_task_handoff: useProjectHandoffSnapshot,
+    used_release_outcome: useProjectReleaseOutcomeSnapshot,
   };
-  const projectHandoffForRender = snapshotUsage.used_task_handoff
-    ? projectContextSnapshot.project_handoff_fast
-    : projectHandoffFast;
-  const projectReleaseOutcomeForRender = snapshotUsage.used_release_outcome
-    ? projectContextSnapshot.project_release_outcome_fast
-    : projectReleaseOutcomeFast;
 
-  const hasFastProjectHandoff = hasUsableProjectTaskHandoff(projectHandoffForRender);
+  const hasFastProjectHandoff = hasUsableProjectTaskHandoff(projectHandoffFast);
   const taskHandoffTimedOut = hasTimeoutError(errors, "project_handoff_fast");
   const planningContext = hasFastProjectHandoff || taskHandoffTimedOut
     ? null
@@ -831,8 +827,8 @@ async function handleUserPrompt(input) {
     runId,
     prompt,
     runtimeStatus,
-    projectHandoffFast: projectHandoffForRender,
-    projectReleaseOutcomeFast: projectReleaseOutcomeForRender,
+    projectHandoffFast,
+    projectReleaseOutcomeFast,
     localContextSnapshot: snapshotUsage,
     planningContext,
     contextAssemble,

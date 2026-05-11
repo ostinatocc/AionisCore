@@ -52,7 +52,7 @@ Override with environment variables:
 - `AIONIS_CODEX_CONTEXT_SNAPSHOT_TTL_MS`
 - `AIONIS_CODEX_COMPILE_PLAYBOOKS=false`
 
-`UserPromptSubmit` uses a short fast timeout for project handoff and release lookups. The `Stop` hook also writes a local project-context snapshot under `~/.aionis/codex/state`, so the next task can still receive the latest task or release context when Runtime find queries are slow.
+`UserPromptSubmit` uses local project-context snapshots before slow project handoff and release lookups. The `Stop` hook and Runtime CLI handoff/release commands write snapshots under `~/.aionis/codex/state`, so the next task can receive the latest task or release context without waiting for Runtime find queries.
 
 ## Doctor
 
