@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pluginRoot = path.resolve(__dirname, "..");
 
 function runHook(input, options = {}) {
-  const runtimeHome = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-codex-hook-test-"));
+  const runtimeHome = options.runtimeHome || fs.mkdtempSync(path.join(os.tmpdir(), "aionis-codex-hook-test-"));
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["hooks/aionis-codex-hook.mjs"], {
       cwd: pluginRoot,
@@ -216,6 +216,167 @@ test("UserPromptSubmit bounds fast lookup timeout and skips planning after task 
     assert.equal(findBodies.length, 2);
     assert.match(text, /latest_release_outcome=0\.2\.24 release completed and verified/);
     assert.match(text, /project_handoff_fast: timed out after 250ms/);
+    assert.doesNotMatch(text, /planning_context_fast/);
+    assert.equal(routes.includes("/v1/memory/planning/context"), false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("UserPromptSubmit falls back to local project snapshot when fast handoff lookup times out", async () => {
+  const runtimeHome = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-codex-hook-snapshot-test-"));
+  const routes = [];
+  const findBodies = [];
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      res.setHeader("content-type", "application/json");
+      if (req.url === "/health") {
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (req.url === "/v1/memory/find") {
+        findBodies.push(body ? JSON.parse(body) : {});
+        setTimeout(() => {
+          try {
+            res.end(JSON.stringify({ nodes: [] }));
+          } catch {
+            // The hook should have used the local snapshot and moved on.
+          }
+        }, 700);
+        return;
+      }
+      if (req.url === "/v1/memory/planning/context") {
+        res.end(JSON.stringify({ planning_summary: { planner_explanation: "should not be requested" } }));
+        return;
+      }
+      res.end(JSON.stringify({ ok: true, body: body ? JSON.parse(body) : null }));
+    });
+  });
+  const address = await listen(server);
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  try {
+    const stopResult = await runHook({
+      hook_event_name: "Stop",
+      session_id: "snapshot-session",
+      turn_id: "snapshot-stop-turn",
+      cwd: pluginRoot,
+      prompt: "Continue dogfood",
+      last_assistant_message: [
+        "Implemented local task-start snapshot fallback and verified the hook keeps useful context when Runtime find is slow.",
+        "Verification: npm --prefix packages/aionis-codex-plugin run test passed.",
+      ].join(" "),
+    }, {
+      baseUrl,
+      runtimeHome,
+    });
+    assert.deepEqual(JSON.parse(stopResult.stdout), {});
+
+    const promptResult = await runHook({
+      hook_event_name: "UserPromptSubmit",
+      session_id: "snapshot-session",
+      turn_id: "snapshot-prompt-turn",
+      cwd: pluginRoot,
+      prompt: "Continue dogfood",
+    }, {
+      baseUrl,
+      runtimeHome,
+      env: {
+        AIONIS_CODEX_FAST_TIMEOUT_MS: "250",
+      },
+    });
+    const output = JSON.parse(promptResult.stdout);
+    const text = output.hookSpecificOutput.additionalContext;
+    assert.equal(findBodies.length, 2);
+    assert.match(text, /used_task_handoff_snapshot=true/);
+    assert.match(text, /latest_task_handoff=Implemented local task-start snapshot fallback/);
+    assert.match(text, /project_handoff_fast: timed out after 250ms/);
+    assert.doesNotMatch(text, /planning_context_fast/);
+    assert.equal(routes.includes("/v1/memory/planning/context"), false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("UserPromptSubmit falls back to local release snapshot when release lookup times out", async () => {
+  const runtimeHome = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-codex-hook-release-snapshot-test-"));
+  const routes = [];
+  const findBodies = [];
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      res.setHeader("content-type", "application/json");
+      if (req.url === "/health") {
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (req.url === "/v1/memory/find") {
+        findBodies.push(body ? JSON.parse(body) : {});
+        setTimeout(() => {
+          try {
+            res.end(JSON.stringify({ nodes: [] }));
+          } catch {
+            // The hook should have used the local release snapshot and moved on.
+          }
+        }, 700);
+        return;
+      }
+      if (req.url === "/v1/memory/planning/context") {
+        res.end(JSON.stringify({ planning_summary: { planner_explanation: "should not be requested" } }));
+        return;
+      }
+      res.end(JSON.stringify({ ok: true, body: body ? JSON.parse(body) : null }));
+    });
+  });
+  const address = await listen(server);
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  try {
+    const stopResult = await runHook({
+      hook_event_name: "Stop",
+      session_id: "release-snapshot-session",
+      turn_id: "release-snapshot-stop-turn",
+      cwd: pluginRoot,
+      prompt: "发完了",
+      last_assistant_message: [
+        "0.2.26 publish completed and verified.",
+        "npm view @ostinato/aionis-runtime version returned 0.2.26.",
+        "npm exec --yes --package @ostinato/aionis-runtime@0.2.26 returned 0.2.26.",
+      ].join(" "),
+    }, {
+      baseUrl,
+      runtimeHome,
+    });
+    assert.deepEqual(JSON.parse(stopResult.stdout), {});
+
+    const promptResult = await runHook({
+      hook_event_name: "UserPromptSubmit",
+      session_id: "release-snapshot-session",
+      turn_id: "release-snapshot-prompt-turn",
+      cwd: pluginRoot,
+      prompt: "Continue dogfood",
+    }, {
+      baseUrl,
+      runtimeHome,
+      env: {
+        AIONIS_CODEX_FAST_TIMEOUT_MS: "250",
+      },
+    });
+    const output = JSON.parse(promptResult.stdout);
+    const text = output.hookSpecificOutput.additionalContext;
+    assert.equal(findBodies.length, 2);
+    assert.match(text, /used_release_outcome_snapshot=true/);
+    assert.match(text, /latest_release_outcome=0\.2\.26 publish completed and verified/);
+    assert.match(text, /project_release_outcome_fast: timed out after 250ms/);
     assert.doesNotMatch(text, /planning_context_fast/);
     assert.equal(routes.includes("/v1/memory/planning/context"), false);
   } finally {

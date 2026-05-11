@@ -14,6 +14,7 @@ const DEFAULT_TENANT_ID = "local-codex";
 const DEFAULT_ACTOR = "codex";
 const DEFAULT_TIMEOUT_MS = 3000;
 const DEFAULT_CONTEXT_CHAR_LIMIT = 14000;
+const DEFAULT_CONTEXT_SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function sha12(input) {
   return crypto.createHash("sha256").update(String(input)).digest("hex").slice(0, 12);
@@ -141,6 +142,7 @@ export function resolveConfig(input = {}) {
     fastTimeoutMs: intEnv("AIONIS_CODEX_FAST_TIMEOUT_MS", 1200, 250, 10000),
     startupTimeoutMs: intEnv("AIONIS_CODEX_STARTUP_TIMEOUT_MS", 12000, 1000, 120000),
     contextCharLimit: intEnv("AIONIS_CODEX_CONTEXT_CHAR_LIMIT", DEFAULT_CONTEXT_CHAR_LIMIT, 2000, 80000),
+    contextSnapshotTtlMs: intEnv("AIONIS_CODEX_CONTEXT_SNAPSHOT_TTL_MS", DEFAULT_CONTEXT_SNAPSHOT_TTL_MS, 0, 30 * 24 * 60 * 60 * 1000),
     postToolContext: boolEnv("AIONIS_CODEX_POST_TOOL_CONTEXT", true),
     compilePlaybooks: boolEnv("AIONIS_CODEX_COMPILE_PLAYBOOKS", true),
     verbose: boolEnv("AIONIS_CODEX_VERBOSE", false),
@@ -498,6 +500,46 @@ export function saveState(config, sessionId, state) {
     ...state,
     updated_at: nowIso(),
   });
+}
+
+export function projectContextSnapshotPath(config) {
+  return path.join(config.stateDir, "project-context", `${safeFileName(config.scope || config.projectHash)}.json`);
+}
+
+export function loadProjectContextSnapshot(config) {
+  const snapshot = readJsonFile(projectContextSnapshotPath(config), null);
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;
+  if (snapshot.cwd !== config.cwd || snapshot.scope !== config.scope) return null;
+  const updatedAt = Date.parse(snapshot.updated_at || snapshot.updatedAt || "");
+  if (config.contextSnapshotTtlMs > 0 && Number.isFinite(updatedAt)) {
+    if (Date.now() - updatedAt > config.contextSnapshotTtlMs) return null;
+  }
+  return snapshot;
+}
+
+export function saveProjectContextSnapshot(config, patch) {
+  const current = loadProjectContextSnapshot(config) || {
+    version: 1,
+    cwd: config.cwd,
+    project_name: config.projectName,
+    project_hash: config.projectHash,
+    scope: config.scope,
+    tenant_id: config.tenantId,
+    created_at: nowIso(),
+  };
+  const next = {
+    ...current,
+    ...patch,
+    version: 1,
+    cwd: config.cwd,
+    project_name: config.projectName,
+    project_hash: config.projectHash,
+    scope: config.scope,
+    tenant_id: config.tenantId,
+    updated_at: nowIso(),
+  };
+  writeJsonFile(projectContextSnapshotPath(config), next);
+  return next;
 }
 
 export function recordActiveProject(config, source = "hook") {

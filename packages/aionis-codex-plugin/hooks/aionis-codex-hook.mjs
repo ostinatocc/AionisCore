@@ -13,6 +13,7 @@ import {
   getSessionId,
   getTurnId,
   inferToolStatus,
+  loadProjectContextSnapshot,
   loadState,
   nowIso,
   readHookInput,
@@ -20,6 +21,7 @@ import {
   resolveConfig,
   runtimePost,
   runtimeUnavailableContext,
+  saveProjectContextSnapshot,
   saveState,
   uuidFromText,
 } from "../lib/aionis-codex-runtime.mjs";
@@ -219,6 +221,80 @@ function projectTaskHandoffRecords(result) {
     }
   }
   return records;
+}
+
+function normalizeSnapshotText(value, limit = 1400) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, limit);
+}
+
+function snapshotRecordFromRuntimeRecord(record) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) return null;
+  const summary = normalizeSnapshotText(record.summary || record.text_summary || record.handoff_text);
+  if (!summary) return null;
+  return {
+    uri: typeof record.uri === "string" ? record.uri : null,
+    title: normalizeSnapshotText(record.title, 240),
+    summary,
+    text_summary: summary,
+    handoff_text: normalizeSnapshotText(record.handoff_text || summary, 2200),
+    next_action: normalizeSnapshotText(record.next_action || record.nextAction, 500),
+    target_files: Array.isArray(record.target_files) ? record.target_files.slice(0, 8) : Array.isArray(record.targetFiles) ? record.targetFiles.slice(0, 8) : [],
+    acceptance_checks: Array.isArray(record.acceptance_checks) ? record.acceptance_checks.slice(0, 8) : Array.isArray(record.acceptanceChecks) ? record.acceptanceChecks.slice(0, 8) : [],
+    tags: Array.isArray(record.tags) ? record.tags.slice(0, 12) : [],
+    execution_result_summary: record.execution_result_summary || record.executionResultSummary || record.slots?.execution_result_summary || null,
+    slots: record.slots || null,
+  };
+}
+
+function snapshotResultFromRuntimeResult(result, source) {
+  const nodes = projectTaskHandoffRecords(result)
+    .map(snapshotRecordFromRuntimeRecord)
+    .filter(Boolean)
+    .slice(0, 6);
+  return nodes.length > 0
+    ? { nodes, snapshot_source: source, snapshot_captured_at: nowIso() }
+    : null;
+}
+
+function snapshotResultFromStopHandoffPayload(config, payload, source) {
+  if (!payload || typeof payload !== "object") return null;
+  const summary = normalizeSnapshotText(payload.summary || payload.handoff_text);
+  if (!summary) return null;
+  const record = {
+    uri: `aionis://local-codex/${encodeURIComponent(config.scope)}/snapshot/${uuidFromText(payload.anchor || summary)}`,
+    title: "Latest Codex Stop handoff",
+    summary,
+    text_summary: summary,
+    handoff_text: normalizeSnapshotText(payload.handoff_text || summary, 2200),
+    next_action: normalizeSnapshotText(payload.next_action, 500),
+    target_files: Array.isArray(payload.target_files) ? payload.target_files.slice(0, 8) : [],
+    acceptance_checks: Array.isArray(payload.acceptance_checks) ? payload.acceptance_checks.slice(0, 8) : [],
+    tags: Array.isArray(payload.tags) ? payload.tags.slice(0, 12) : [],
+    execution_result_summary: payload.execution_result_summary || null,
+    slots: {
+      summary_kind: "handoff",
+      handoff_kind: payload.handoff_kind || "task_handoff",
+      repo_root: payload.repo_root || config.cwd,
+      execution_result_summary: payload.execution_result_summary || null,
+    },
+  };
+  return { nodes: [record], snapshot_source: source, snapshot_captured_at: nowIso() };
+}
+
+function snapshotHasRecords(result) {
+  return projectTaskHandoffRecords(result).length > 0;
+}
+
+function shouldUseSnapshotFallback(result, snapshotResult, errors, label) {
+  if (!snapshotHasRecords(snapshotResult)) return false;
+  if (snapshotHasRecords(result)) return false;
+  return hasTimeoutError(errors, label);
+}
+
+function updateProjectContextSnapshot(config, patch) {
+  const cleaned = Object.fromEntries(Object.entries(patch).filter(([, value]) => value));
+  if (Object.keys(cleaned).length === 0) return null;
+  return saveProjectContextSnapshot(config, cleaned);
 }
 
 function hasUsableProjectTaskHandoff(result) {
@@ -621,6 +697,7 @@ async function handleUserPrompt(input) {
       project_hash: config.projectHash,
     },
   };
+  const projectContextSnapshot = loadProjectContextSnapshot(config);
 
   await safeRuntimeCall(config, "session_create", () =>
     createRuntimeSession(config, sessionId, input, `Codex session ${sessionId} in ${config.projectName}`), errors);
@@ -645,7 +722,28 @@ async function handleUserPrompt(input) {
     safeRuntimeCall(fastConfig, "project_release_outcome_fast", () => findProjectReleaseOutcomeHandoffs(fastConfig), errors),
   ]);
 
-  const hasFastProjectHandoff = hasUsableProjectTaskHandoff(projectHandoffFast);
+  updateProjectContextSnapshot(config, {
+    project_handoff_fast: hasUsableProjectTaskHandoff(projectHandoffFast)
+      ? snapshotResultFromRuntimeResult(projectHandoffFast, "runtime_find")
+      : null,
+    project_release_outcome_fast: snapshotHasRecords(projectReleaseOutcomeFast)
+      ? snapshotResultFromRuntimeResult(projectReleaseOutcomeFast, "runtime_find")
+      : null,
+  });
+
+  const snapshotUsage = {
+    updated_at: projectContextSnapshot?.updated_at || null,
+    used_task_handoff: shouldUseSnapshotFallback(projectHandoffFast, projectContextSnapshot?.project_handoff_fast, errors, "project_handoff_fast"),
+    used_release_outcome: shouldUseSnapshotFallback(projectReleaseOutcomeFast, projectContextSnapshot?.project_release_outcome_fast, errors, "project_release_outcome_fast"),
+  };
+  const projectHandoffForRender = snapshotUsage.used_task_handoff
+    ? projectContextSnapshot.project_handoff_fast
+    : projectHandoffFast;
+  const projectReleaseOutcomeForRender = snapshotUsage.used_release_outcome
+    ? projectContextSnapshot.project_release_outcome_fast
+    : projectReleaseOutcomeFast;
+
+  const hasFastProjectHandoff = hasUsableProjectTaskHandoff(projectHandoffForRender);
   const taskHandoffTimedOut = hasTimeoutError(errors, "project_handoff_fast");
   const planningContext = hasFastProjectHandoff || taskHandoffTimedOut
     ? null
@@ -733,8 +831,9 @@ async function handleUserPrompt(input) {
     runId,
     prompt,
     runtimeStatus,
-    projectHandoffFast,
-    projectReleaseOutcomeFast,
+    projectHandoffFast: projectHandoffForRender,
+    projectReleaseOutcomeFast: projectReleaseOutcomeForRender,
+    localContextSnapshot: snapshotUsage,
     planningContext,
     contextAssemble,
     projectAgentResume,
@@ -875,6 +974,16 @@ async function handleStop(input, eventName = "Stop") {
   const summary = assistantText || `Codex turn ${turnId} ended`;
   const compactSummary = compactStopSummary(summary);
   const handoffQuality = handoffQualityDecision({ prompt: turn.prompt, summary, eventName });
+  const stopHandoffPayload = handoffQuality.store_handoff
+    ? buildStopHandoffPayload(config, sessionId, turnId, runId, turn, summary, eventName, handoffQuality)
+    : null;
+  if (stopHandoffPayload) {
+    const snapshotResult = snapshotResultFromStopHandoffPayload(config, stopHandoffPayload, "stop_hook");
+    updateProjectContextSnapshot(config, {
+      project_handoff_fast: handoffQuality.category === "release_outcome" ? null : snapshotResult,
+      project_release_outcome_fast: handoffQuality.category === "release_outcome" ? snapshotResult : null,
+    });
+  }
 
   const runtimeStatus = await ensureRuntime(config);
   if (runtimeStatus.ok) {
@@ -887,16 +996,7 @@ async function handleStop(input, eventName = "Stop") {
     }), []);
     if (handoffQuality.store_handoff) {
       await safeRuntimeCall(config, "handoff_store", () =>
-        runtimePost(config, "/v1/handoff/store", buildStopHandoffPayload(
-          config,
-          sessionId,
-          turnId,
-          runId,
-          turn,
-          summary,
-          eventName,
-          handoffQuality,
-        )), []);
+        runtimePost(config, "/v1/handoff/store", stopHandoffPayload), []);
     }
     await safeRuntimeCall(config, "replay_run_end", () =>
       runtimePost(config, "/v1/memory/replay/run/end", {

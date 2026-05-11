@@ -849,6 +849,7 @@ export function renderAionisHookContext(args) {
     runtimeStatus,
     projectHandoffFast,
     projectReleaseOutcomeFast,
+    localContextSnapshot,
     planningContext,
     contextAssemble,
     projectAgentResume,
@@ -898,6 +899,14 @@ export function renderAionisHookContext(args) {
   const displayPlannerPacket = plannerPacketHasDisplayContent(scrubbedPlannerPacket) ? scrubbedPlannerPacket : undefined;
   const displayLayeredContext = layeredContextHasDisplayContent(scrubbedLayeredContext) ? scrubbedLayeredContext : undefined;
   const projectHandoffSummary = summarizeDirectHandoff(projectHandoffFast, projectReleaseOutcomeFast);
+  addBullets(lines, "Local Context Snapshot", [
+    localContextSnapshot?.used_task_handoff
+      ? `used_task_handoff_snapshot=true updated_at=${localContextSnapshot.updated_at || "unknown"}`
+      : "",
+    localContextSnapshot?.used_release_outcome
+      ? `used_release_outcome_snapshot=true updated_at=${localContextSnapshot.updated_at || "unknown"}`
+      : "",
+  ]);
   const fastFacts = [
     latestDogfood ? `dogfood_progress=${latestDogfood.text}` : "",
     ...projectHandoffSummary.filter((entry) => entry.startsWith("latest_task_handoff=")).slice(0, 1),
