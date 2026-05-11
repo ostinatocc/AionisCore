@@ -953,23 +953,25 @@ async function handlePostToolUse(input) {
           phase: "post_tool_use",
         },
       }), []);
-    await safeRuntimeCall(config, "tools_feedback", () =>
-      runtimePost(config, "/v1/memory/tools/feedback", {
-        ...commonRuntimeFields(config),
-        run_id: runId,
-        outcome: status === "success" ? "positive" : status === "failed" ? "negative" : "neutral",
-        context: {
-          ...baseContext(config, sessionId, input),
-          tool_name: toolName,
-          tool_input: extractToolInput(input),
-          tool_response: toolResponse,
-        },
-        candidates: defaultToolCandidates(),
-        selected_tool: toolName,
-        target: "tool",
-        note: `Codex ${toolName} completed with ${status}`,
-        input_text: compactJson(extractToolInput(input), 1200),
-      }), []);
+    if (config.toolFeedbackTelemetry) {
+      await safeRuntimeCall(config, "tools_feedback", () =>
+        runtimePost(config, "/v1/memory/tools/feedback", {
+          ...commonRuntimeFields(config),
+          run_id: runId,
+          outcome: status === "success" ? "positive" : status === "failed" ? "negative" : "neutral",
+          context: {
+            ...baseContext(config, sessionId, input),
+            tool_name: toolName,
+            tool_input: extractToolInput(input),
+            tool_response: toolResponse,
+          },
+          candidates: defaultToolCandidates(),
+          selected_tool: toolName,
+          target: "tool",
+          note: `Codex ${toolName} completed with ${status}`,
+          input_text: compactJson(extractToolInput(input), 1200),
+        }), []);
+    }
   }
 
   if (step) {

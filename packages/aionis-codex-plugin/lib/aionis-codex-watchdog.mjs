@@ -44,6 +44,7 @@ export function defaultLaunchAgentOptions(pluginRoot, overrides = {}) {
     intervalMs: overrides.intervalMs || Number(process.env.AIONIS_CODEX_WATCHDOG_INTERVAL_MS) || DEFAULT_WATCHDOG_INTERVAL_MS,
     pathEnv: overrides.pathEnv || process.env.PATH || "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
     npmCache: overrides.npmCache || path.join(runtimeHome, "npm-cache"),
+    runtimeCommand: overrides.runtimeCommand || process.env.AIONIS_CODEX_RUNTIME_COMMAND || "",
   };
 }
 
@@ -57,6 +58,9 @@ export function renderLaunchAgentPlist(options) {
     AIONIS_CODEX_WATCHDOG_INTERVAL_MS: String(options.intervalMs),
     npm_config_cache: options.npmCache,
   };
+  if (options.runtimeCommand) {
+    environment.AIONIS_CODEX_RUNTIME_COMMAND = options.runtimeCommand;
+  }
   const environmentEntries = Object.entries(environment)
     .map(([key, value]) => `    <key>${xmlEscape(key)}</key>\n    <string>${xmlEscape(value)}</string>`)
     .join("\n");

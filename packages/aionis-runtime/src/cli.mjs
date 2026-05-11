@@ -12,6 +12,8 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const cliDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(cliDir, "..");
+const packageRoot = path.resolve(distDir, "..");
+const runtimePackageBin = path.join(packageRoot, "bin", "aionis-runtime");
 const runtimeDir = path.join(distDir, "runtime");
 const runtimeEntry = path.join(runtimeDir, "src", "index.ts");
 const inspectorDistDir = path.join(runtimeDir, "apps", "inspector", "dist");
@@ -347,14 +349,16 @@ async function codexInstall(args) {
   const pluginDir = await materializeCodexPlugin();
   const installScript = path.join(pluginDir, "scripts", "aionis-codex-install.mjs");
   const doctorScript = path.join(pluginDir, "scripts", "aionis-codex-doctor.mjs");
+  const runtimeCommand = process.env.AIONIS_CODEX_RUNTIME_COMMAND || `${shellQuote(process.execPath)} ${shellQuote(runtimePackageBin)} start`;
+  const installEnv = { AIONIS_CODEX_RUNTIME_COMMAND: runtimeCommand };
 
   process.stdout.write(`Aionis Codex plugin materialized at ${pluginDir}\n`);
-  const installCode = await runNodeScript(installScript, installArgs, { cwd: pluginDir });
+  const installCode = await runNodeScript(installScript, installArgs, { cwd: pluginDir, env: installEnv });
   if (installCode !== 0) return exitWithCode(installCode);
 
   if (!skipDoctor) {
     const doctorArgs = startRuntimeDuringDoctor ? ["--local", "--start-runtime"] : ["--local"];
-    const doctorCode = await runNodeScript(doctorScript, doctorArgs, { cwd: pluginDir });
+    const doctorCode = await runNodeScript(doctorScript, doctorArgs, { cwd: pluginDir, env: installEnv });
     if (doctorCode !== 0) return exitWithCode(doctorCode);
   }
 
@@ -1093,6 +1097,8 @@ function buildAuditWarnings(args) {
   }
   if (!args.session.state) warnings.push("no local Codex session state found");
   if (args.runtime?.ok === false) warnings.push(`runtime unavailable: ${args.runtime.error}`);
+  if (args.runtime?.event_error) warnings.push(`session events unavailable: ${args.runtime.event_error}`);
+  if (args.runtime?.handoff_error) warnings.push(`handoff lookup unavailable: ${args.runtime.handoff_error}`);
   const latestTask = visibleAcceptedHandoffsByCategory(args.handoffs, "execution_outcome")[0] || null;
   const latestRelease = visibleAcceptedHandoffsByCategory(args.handoffs, "release_outcome")[0] || null;
   const latestOversized = [latestTask, latestRelease].find((row) => row && row.summary_chars > 1200);
@@ -1140,7 +1146,12 @@ async function codexAudit(args) {
     try {
       runtime.health = await codexRuntimeJson(paths, "GET", "/health", {});
       runtime.ok = runtime.health?.ok === true;
-      if (runtime.ok && sessionId) {
+    } catch (error) {
+      runtime.ok = false;
+      runtime.error = error?.message || String(error);
+    }
+    if (runtime.ok && sessionId) {
+      try {
         eventPayload = await codexRuntimeJson(paths, "GET", `/v1/memory/sessions/${encodeURIComponent(sessionId)}/events`, {
           tenant_id: project.tenant_id,
           scope: project.scope,
@@ -1150,8 +1161,12 @@ async function codexAudit(args) {
           include_meta: true,
           limit,
         });
+      } catch (error) {
+        runtime.event_error = error?.message || String(error);
       }
-      if (runtime.ok) {
+    }
+    if (runtime.ok) {
+      try {
         handoffPayload = await codexRuntimeJson(
           paths,
           "POST",
@@ -1174,10 +1189,9 @@ async function codexAudit(args) {
           },
           CODEX_AUDIT_HANDOFF_FIND_TIMEOUT_MS,
         );
+      } catch (error) {
+        runtime.handoff_error = error?.message || String(error);
       }
-    } catch (error) {
-      runtime.ok = false;
-      runtime.error = error?.message || String(error);
     }
   }
 

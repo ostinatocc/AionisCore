@@ -23,6 +23,7 @@ test("renderLaunchAgentPlist describes the Aionis Runtime watchdog", () => {
     pathEnv: "/usr/local/bin:/usr/bin:/bin",
     baseUrl: "http://127.0.0.1:3101",
     intervalMs: 12345,
+    runtimeCommand: "'/usr/local/bin/node' '/Users/lucio/.aionis/runtime/bin/aionis-runtime' start",
   });
   const plist = renderLaunchAgentPlist(options);
 
@@ -31,6 +32,7 @@ test("renderLaunchAgentPlist describes the Aionis Runtime watchdog", () => {
   assert.match(plist, /aionis-codex-runtime-daemon\.mjs/);
   assert.match(plist, /<key>AIONIS_CODEX_AUTOSTART<\/key>\s*<string>true<\/string>/);
   assert.match(plist, /<key>AIONIS_CODEX_WATCHDOG_INTERVAL_MS<\/key>\s*<string>12345<\/string>/);
+  assert.match(plist, /<key>AIONIS_CODEX_RUNTIME_COMMAND<\/key>\s*<string>&apos;\/usr\/local\/bin\/node&apos; &apos;\/Users\/lucio\/\.aionis\/runtime\/bin\/aionis-runtime&apos; start<\/string>/);
 });
 
 test("writeLaunchAgentPlist writes a stable plist file", () => {

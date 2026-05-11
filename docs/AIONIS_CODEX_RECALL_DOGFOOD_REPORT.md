@@ -1,6 +1,6 @@
 # Aionis Codex Recall Dogfood Report
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
 Document status: compact internal dogfood report
 
@@ -24,6 +24,7 @@ Aionis is harmful or distracting when it surfaces generic or stale context:
 5. compact summaries that omit the actual release/install evidence behind a "done" claim
 6. newer task handoffs that hide the latest release outcome from the first screen
 7. false release outcomes from candidate/unpublished summaries that mention npm latest
+8. hook-side telemetry that can block or crash the local Runtime during normal tool use
 
 ## What Helped
 
@@ -35,6 +36,7 @@ Aionis is harmful or distracting when it surfaces generic or stale context:
 | Fast planner fallback | Preserved useful task facts when full context assembly timed out. | Strong fit. Runtime context must degrade to a usable first action. |
 | Display compaction | Promoted latest dogfood progress and suppressed stale workflow entries. | Necessary. Recall quality depends as much on display selection as storage. |
 | Release outcome capture | `0.2.10` publish/install/doctor completion became recallable as a compact release outcome. | Strong fit, but display evidence still needed one more compression pass. |
+| Process-boundary continuity | After a Runtime/Codex restart, local snapshots still surfaced the current task handoff and `0.2.31` release outcome. | Strong fit. A daily memory layer must survive restarts, stale pids, and installed-vs-source drift. |
 
 ## What Was Garbage
 
@@ -47,6 +49,9 @@ Aionis is harmful or distracting when it surfaces generic or stale context:
 | Stale dogfood progress | Old `2/10`, `4/10`, and `7/10` entries competed with latest progress. | Promoted highest progress and suppressed stale dogfood workflow entries. |
 | Fake cwd anchor | Repo-level resume asked for an anchor equal to the cwd, hiding real task handoffs. | Stopped defaulting agent pack requests to `anchor=config.cwd`. |
 | Status suppression overreach | Completed npm publish looked like a status reply and was not recorded. | Added compact `release_outcome` handoff storage keyed by version. |
+| Stale runtime process records | Failed launchers could be written to `runtime-process.json` before health passed. | Runtime pid records are now written only after health succeeds. |
+| Env-only runtime command | Hook processes could miss the LaunchAgent runtime command and fall back to `npx`. | Codex install now persists `state/runtime-command.json`, and runtime startup reads it. |
+| Heavy automatic tool feedback | `/v1/memory/tools/feedback` can still hang Runtime under hook payloads. | Automatic hook telemetry is disabled by default; the explicit route remains a follow-up fix. |
 
 ## Current Live Check
 
@@ -65,6 +70,8 @@ This means release outcome capture works, but release outcome display still need
 
 A follow-up live query exposed one more write-side bug: summaries saying "0.2.11 candidate; npm latest still 0.2.10; no accidental publish" had enough npm/version tokens to be misclassified as a `release_outcome`. The release classifier now treats candidate, unpublished, still-latest, and no-accidental-publish language as negative evidence, and display filtering ignores already-written false positives.
 
+The current `0.2.32` candidate dogfood shifted from recall display to operational trust. Restarting the local Runtime/Codex integration proved the snapshot path works across process boundaries, but also exposed three practical failure modes: stale pids from failed launchers, hook processes losing the fixed local Runtime command, and automatic tool-feedback telemetry hanging Runtime. The first two are fixed in source; the third is guarded off by default until the route itself is repaired.
+
 ## Product Conclusion
 
 Aionis Runtime is not a general "make the AI smarter" feature yet. In Codex, its current value is narrower and more concrete:
@@ -78,7 +85,7 @@ That is enough to justify continuing the Codex integration for real development 
 
 ## Next Cuts
 
-1. Keep release outcome evidence visible in `Fast Task Facts`: `latest_release_outcome`, `npm_latest`, `clean_npx`, `clean_install`, and `codex_status`.
-2. Re-run the next live prompt and verify the first screen includes both current task continuity and the true latest release outcome, while ignoring candidate/unpublished false positives.
+1. Write the Task 10 product verdict from the evidence: strongest paying workflow, weakest claims, and the first sellable package boundary.
+2. Repair `/v1/memory/tools/feedback` route-level behavior before enabling automatic hook telemetry again.
 3. Run the same Codex recall loop on a second repository to check whether the improvements generalize beyond AionisRuntime.
 4. Keep suppressing generic memory. Aionis should earn visible space only when it changes the first action or validation boundary.

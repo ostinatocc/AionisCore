@@ -254,20 +254,17 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
     path: "/v1/memory/tools/feedback",
     requestKind: "tools_feedback",
     inflightKind: "write",
-    withGate: false,
     execute: (body) =>
       executeFeedbackWriteOperation({
         executeLite: (liteStore) =>
-          liteStore.withTx(() =>
-            toolSelectionFeedback(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
-              maxTextLen: env.MAX_TEXT_LEN,
-              piiRedaction: env.PII_REDACTION,
-              embedder,
-              embeddedRuntime,
-              governanceReviewProviders: governanceProviders.toolsFeedback,
-              liteWriteStore: liteStore,
-            }),
-          ),
+          toolSelectionFeedback(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
+            maxTextLen: env.MAX_TEXT_LEN,
+            piiRedaction: env.PII_REDACTION,
+            embedder,
+            embeddedRuntime,
+            governanceReviewProviders: governanceProviders.toolsFeedback,
+            liteWriteStore: liteStore,
+          }),
       }),
   });
   registerFeedbackPostRoute({

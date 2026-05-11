@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -107,6 +107,8 @@ function canonicalPath(value) {
 
 export function resolveConfig(input = {}) {
   const runtimeHome = path.resolve(expandHome(process.env.AIONIS_CODEX_RUNTIME_HOME || "~/.aionis/codex"));
+  const stateDir = path.join(runtimeHome, "state");
+  const runtimeCommandConfig = readJsonFile(path.join(stateDir, "runtime-command.json"), null);
   const explicitCwd = input.cwd || input.working_directory || process.env.CODEX_CWD || "";
   const processCwd = process.cwd();
   const activeProject = explicitCwd ? null : readJsonFile(path.join(runtimeHome, "state", "active-project.json"), null);
@@ -134,7 +136,7 @@ export function resolveConfig(input = {}) {
     baseUrl,
     port,
     runtimeHome,
-    stateDir: path.join(runtimeHome, "state"),
+    stateDir,
     logDir: path.join(runtimeHome, "logs"),
     dataDir: path.join(runtimeHome, "data"),
     cwd,
@@ -154,8 +156,10 @@ export function resolveConfig(input = {}) {
     contextCharLimit: intEnv("AIONIS_CODEX_CONTEXT_CHAR_LIMIT", DEFAULT_CONTEXT_CHAR_LIMIT, 2000, 80000),
     contextSnapshotTtlMs: intEnv("AIONIS_CODEX_CONTEXT_SNAPSHOT_TTL_MS", DEFAULT_CONTEXT_SNAPSHOT_TTL_MS, 0, 30 * 24 * 60 * 60 * 1000),
     postToolContext: boolEnv("AIONIS_CODEX_POST_TOOL_CONTEXT", true),
+    toolFeedbackTelemetry: boolEnv("AIONIS_CODEX_TOOLS_FEEDBACK_TELEMETRY", false),
     compilePlaybooks: boolEnv("AIONIS_CODEX_COMPILE_PLAYBOOKS", true),
     verbose: boolEnv("AIONIS_CODEX_VERBOSE", false),
+    runtimeCommand: process.env.AIONIS_CODEX_RUNTIME_COMMAND || runtimeCommandConfig?.command || "",
     headers: buildRuntimeHeaders(),
   };
 }
@@ -310,8 +314,8 @@ export async function runtimeHealth(config) {
   return runtimeGet(config, "/health", {});
 }
 
-function candidateRuntimeCommands() {
-  const explicit = process.env.AIONIS_CODEX_RUNTIME_COMMAND;
+function candidateRuntimeCommands(config) {
+  const explicit = config.runtimeCommand || process.env.AIONIS_CODEX_RUNTIME_COMMAND;
   if (explicit) return [{ kind: "shell", command: explicit }];
 
   const candidates = [];
@@ -371,20 +375,39 @@ function spawnRuntimeProcess(config, candidate) {
     : spawn(candidate.command, candidate.args || [], { cwd, env, detached: true, stdio: ["ignore", out, err] });
 
   child.unref();
-  writeJsonFile(path.join(config.stateDir, "runtime-process.json"), {
+  return {
+    child,
     pid: child.pid,
-    started_at: nowIso(),
     command: candidate.kind === "shell" ? candidate.command : [candidate.command, ...(candidate.args || [])].join(" "),
     cwd,
     base_url: config.baseUrl,
     stdout: outPath,
     stderr: errPath,
+  };
+}
+
+function recordRuntimeProcess(config, runtimeProcess) {
+  writeJsonFile(path.join(config.stateDir, "runtime-process.json"), {
+    pid: runtimeProcess.pid,
+    started_at: nowIso(),
+    command: runtimeProcess.command,
+    cwd: runtimeProcess.cwd,
+    base_url: runtimeProcess.base_url,
+    stdout: runtimeProcess.stdout,
+    stderr: runtimeProcess.stderr,
   });
-  return child;
 }
 
 async function sleep(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function processExitState(child, processExit) {
+  if (processExit) return processExit;
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return { code: child.exitCode, signal: child.signalCode };
+  }
+  return null;
 }
 
 function terminateRuntimeProcessGroup(child) {
@@ -403,6 +426,134 @@ function terminateRuntimeProcessGroup(child) {
   }
 }
 
+function isProcessAlive(pid) {
+  if (!pid || !Number.isFinite(Number(pid))) return false;
+  try {
+    process.kill(Number(pid), 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function processGroupId(pid) {
+  if (process.platform === "win32") return null;
+  const result = spawnSync("ps", ["-o", "pgid=", "-p", String(pid)], { encoding: "utf8" });
+  if (result.status !== 0) return null;
+  const pgid = Number(String(result.stdout || "").trim());
+  return Number.isFinite(pgid) && pgid > 0 ? pgid : null;
+}
+
+function terminatePid(pid, signal = "SIGTERM") {
+  if (!pid || !isProcessAlive(pid)) return false;
+  const pgid = processGroupId(pid);
+  if (pgid) {
+    try {
+      process.kill(-pgid, signal);
+      return true;
+    } catch {
+      // Fall through to direct pid termination.
+    }
+  }
+  try {
+    process.kill(pid, signal);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function listenerPidsForPort(config) {
+  if (process.platform === "win32") return [];
+  const result = spawnSync("lsof", ["-nP", `-iTCP:${config.port}`, "-sTCP:LISTEN", "-t"], { encoding: "utf8" });
+  if (result.status !== 0 && !result.stdout) return [];
+  return String(result.stdout || "")
+    .split(/\s+/)
+    .map((value) => Number(value))
+    .filter((pid) => Number.isFinite(pid) && pid > 0 && pid !== process.pid);
+}
+
+async function terminateRuntimeListeners(config) {
+  const pids = listenerPidsForPort(config);
+  if (!pids.length) return false;
+  for (const pid of pids) terminatePid(pid, "SIGTERM");
+  await sleep(750);
+  for (const pid of pids) {
+    if (isProcessAlive(pid)) terminatePid(pid, "SIGKILL");
+  }
+  await sleep(250);
+  return true;
+}
+
+async function terminateRecordedRuntimeProcess(config) {
+  const record = readJsonFile(path.join(config.stateDir, "runtime-process.json"), null);
+  const pid = Number(record?.pid);
+  if (!record || !pid || record.base_url !== config.baseUrl || !isProcessAlive(pid)) return false;
+  if (!terminatePid(pid, "SIGTERM")) return false;
+  await sleep(750);
+  if (isProcessAlive(pid)) {
+    terminatePid(pid, "SIGKILL");
+    await sleep(250);
+  }
+  return true;
+}
+
+function hasRecordedRuntimeProcess(config) {
+  const record = readJsonFile(path.join(config.stateDir, "runtime-process.json"), null);
+  const pid = Number(record?.pid);
+  return !!record && !!pid && record.base_url === config.baseUrl && isProcessAlive(pid);
+}
+
+function acquireRuntimeStartupLock(config) {
+  fs.mkdirSync(config.stateDir, { recursive: true });
+  const lockPath = path.join(config.stateDir, "runtime-start.lock");
+  const staleAfterMs = Math.max(30000, config.startupTimeoutMs * 2);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const fd = fs.openSync(lockPath, "wx");
+      fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, created_at: nowIso() }));
+      return () => {
+        try {
+          fs.closeSync(fd);
+        } catch {
+          // Ignore close failures during best-effort lock cleanup.
+        }
+        try {
+          fs.unlinkSync(lockPath);
+        } catch {
+          // Another process may have already removed a stale lock.
+        }
+      };
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      const stat = fs.statSync(lockPath, { throwIfNoEntry: false });
+      if (!stat || Date.now() - stat.mtimeMs <= staleAfterMs) return null;
+      try {
+        fs.unlinkSync(lockPath);
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+async function waitForExistingRuntimeHealth(config, timeoutMs) {
+  let lastError = null;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      return await runtimeHealth(config);
+    } catch (error) {
+      lastError = error;
+      await sleep(350);
+    }
+  }
+  const error = new Error(`Aionis Runtime did not become healthy at ${config.baseUrl}`);
+  error.cause = lastError;
+  throw error;
+}
+
 async function waitForRuntimeHealth(config, child, timeoutMs) {
   let lastError = null;
   let processError = null;
@@ -418,17 +569,28 @@ async function waitForRuntimeHealth(config, child, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (processError) throw processError;
-    try {
-      return await runtimeHealth(config);
-    } catch (error) {
-      lastError = error;
-    }
-    if (processExit) {
-      const error = new Error(`Aionis Runtime process exited before health check passed: code=${processExit.code ?? "null"} signal=${processExit.signal ?? "null"}`);
+    const exited = processExitState(child, processExit);
+    if (exited) {
+      const error = new Error(`Aionis Runtime process exited before health check passed: code=${exited.code ?? "null"} signal=${exited.signal ?? "null"}`);
       error.cause = lastError;
       throw error;
     }
-    await sleep(350);
+    let health = null;
+    try {
+      health = await runtimeHealth(config);
+    } catch (error) {
+      lastError = error;
+      await sleep(350);
+      continue;
+    }
+    await sleep(50);
+    const exitedAfterHealth = processExitState(child, processExit);
+    if (exitedAfterHealth) {
+      const error = new Error(`Aionis Runtime process exited before health check passed: code=${exitedAfterHealth.code ?? "null"} signal=${exitedAfterHealth.signal ?? "null"}`);
+      error.cause = lastError;
+      throw error;
+    }
+    return health;
   }
 
   terminateRuntimeProcessGroup(child);
@@ -439,25 +601,53 @@ async function waitForRuntimeHealth(config, child, timeoutMs) {
 }
 
 export async function ensureRuntime(config) {
+  let firstError = null;
   try {
     return { ok: true, started: false, health: await runtimeHealth(config) };
-  } catch (firstError) {
+  } catch (error) {
+    firstError = error;
     if (!config.autostart) {
       return { ok: false, started: false, error: firstError };
     }
   }
 
-  let spawnError = null;
-  for (const candidate of candidateRuntimeCommands()) {
+  const releaseLock = acquireRuntimeStartupLock(config);
+  if (!releaseLock) {
     try {
-      const child = spawnRuntimeProcess(config, candidate);
-      const health = await waitForRuntimeHealth(config, child, config.startupTimeoutMs);
-      return { ok: true, started: true, health };
+      const health = await waitForExistingRuntimeHealth(config, config.startupTimeoutMs);
+      return { ok: true, started: false, health };
     } catch (error) {
-      spawnError = error;
+      return { ok: false, started: false, error };
     }
   }
-  return { ok: false, started: false, error: spawnError || new Error("No Aionis Runtime start command could be launched") };
+
+  let spawnError = null;
+  try {
+    if (hasRecordedRuntimeProcess(config) || listenerPidsForPort(config).length > 0) {
+      try {
+        const health = await waitForExistingRuntimeHealth(config, Math.min(2500, config.startupTimeoutMs));
+        return { ok: true, started: false, health };
+      } catch {
+        // Continue into repair after a short grace period. This avoids killing a Runtime
+        // that is only briefly unavailable while launchd or another hook is starting it.
+      }
+    }
+    await terminateRecordedRuntimeProcess(config);
+    await terminateRuntimeListeners(config);
+    for (const candidate of candidateRuntimeCommands(config)) {
+      try {
+        const runtimeProcess = spawnRuntimeProcess(config, candidate);
+        const health = await waitForRuntimeHealth(config, runtimeProcess.child, config.startupTimeoutMs);
+        recordRuntimeProcess(config, runtimeProcess);
+        return { ok: true, started: true, health };
+      } catch (error) {
+        spawnError = error;
+      }
+    }
+  } finally {
+    releaseLock();
+  }
+  return { ok: false, started: false, error: spawnError || firstError || new Error("No Aionis Runtime start command could be launched") };
 }
 
 export function getSessionId(input = {}) {

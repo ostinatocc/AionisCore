@@ -306,10 +306,21 @@ function ensureCodexConfig() {
   }
 }
 
+function persistRuntimeCommand() {
+  const command = process.env.AIONIS_CODEX_RUNTIME_COMMAND;
+  if (!command) return;
+  writeJson(path.join(runtimeHome, "state", "runtime-command.json"), {
+    command,
+    source: "codex-install",
+    updated_at: new Date().toISOString(),
+  });
+}
+
 ensureSymlink();
 ensureMarketplace();
 const actualPluginRoot = ensureInstalledPluginDir();
 ensureCodexConfig();
+persistRuntimeCommand();
 const cachePluginRoot = ensureCodexPluginCache();
 const watchdog = installWatchdog
   ? installLaunchAgent(actualPluginRoot, { load: loadWatchdog, runtimeHome })
@@ -331,5 +342,6 @@ process.stdout.write([
   `watchdog=${watchdog.supported ? watchdog.message : "unsupported on this OS"}`,
   watchdog.options?.plistPath ? `watchdog_plist=${watchdog.options.plistPath}` : null,
   watchdog.options?.runtimeHome ? `runtime_home=${watchdog.options.runtimeHome}` : null,
+  watchdog.options?.runtimeCommand ? `runtime_command=${watchdog.options.runtimeCommand}` : null,
   "",
 ].filter(Boolean).join("\n") + "\n");
