@@ -726,6 +726,98 @@ test("Stop hook does not store conceptual product answers as task handoffs", asy
   }
 });
 
+test("Stop hook does not store product-value status answers that mention old completed tasks", async () => {
+  const routes = [];
+  const bodies = {};
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "product-value-status-turn",
+      cwd: pluginRoot,
+      prompt: "现在Aionis的作用大不大？",
+      last_assistant_message: [
+        "现在作用有，但不是所有任务立刻提升 10 倍。",
+        "对连续开发任务：作用已经中等偏大。",
+        "比如它能自动给我：最新任务 Task 2 已完成，Cognitive demo 跨项目测试通过。",
+        "接下来应该继续做真实 dogfood，而不是加新功能。",
+      ].join(" "),
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/memory/events"), true);
+    assert.equal(routes.includes("/v1/memory/replay/run/end"), true);
+    assert.equal(routes.includes("/v1/handoff/store"), false);
+    assert.equal(bodies["/v1/handoff/store"], undefined);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.store_handoff, false);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.category, "conceptual_answer");
+    assert.ok(bodies["/v1/memory/events"][0].metadata.handoff_quality.reasons.includes("conceptual_discussion_only"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Stop hook does not promote vague closeouts without task evidence", async () => {
+  const routes = [];
+  const bodies = {};
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "Stop",
+      session_id: "test-session",
+      turn_id: "vague-closeout-turn",
+      cwd: pluginRoot,
+      prompt: "继续推进吧",
+      last_assistant_message: "这轮先看了一下，整体还可以，后面继续。",
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    assert.deepEqual(JSON.parse(result.stdout), {});
+    assert.equal(routes.includes("/v1/memory/events"), true);
+    assert.equal(routes.includes("/v1/memory/replay/run/end"), true);
+    assert.equal(routes.includes("/v1/handoff/store"), false);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.store_handoff, false);
+    assert.equal(bodies["/v1/memory/events"][0].metadata.handoff_quality.category, "unclassified");
+    assert.ok(bodies["/v1/memory/events"][0].metadata.handoff_quality.reasons.includes("no_task_handoff_evidence"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("Stop hook still stores implementation summaries as task handoffs", async () => {
   const routes = [];
   const bodies = {};

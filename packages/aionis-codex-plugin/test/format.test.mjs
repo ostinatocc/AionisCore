@@ -866,6 +866,14 @@ test("renderAionisHookContext suppresses low-signal status and conceptual handof
         },
         {
           summary: [
+            "现在作用有，但不是所有任务立刻提升 10 倍。",
+            "对连续开发任务：作用已经中等偏大。",
+            "比如它能自动给我：最新任务 Task 2 已完成，Cognitive demo 跨项目测试通过。",
+          ].join(" "),
+          uri: "aionis://local-codex/codex%3Aproject/event/product-value-status",
+        },
+        {
+          summary: [
             "我不是把这些内容完全不记录，而是做了两层隔离。",
             "Stop hook 还是会写普通 session event，但只有真正有执行结果的内容才会升级成 handoff。",
           ].join(" "),
@@ -915,6 +923,7 @@ test("renderAionisHookContext suppresses low-signal status and conceptual handof
   assert.match(text, /latest_task_handoff=修复了 Codex context 质量过滤/);
   assert.match(text, /latest_release_outcome=0\.2\.11 发布闭环完成了/);
   assert.doesNotMatch(text, /latest_task_handoff=你这个质疑/);
+  assert.doesNotMatch(text, /latest_task_handoff=现在作用/);
   assert.doesNotMatch(text, /latest_task_handoff=我不是把这些内容/);
   assert.doesNotMatch(text, /latest_task_handoff=发布被 npm 拦住/);
   assert.doesNotMatch(text, /latest_task_handoff=接下来不要再盲目加功能/);

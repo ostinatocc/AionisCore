@@ -379,6 +379,8 @@ function isStatusOrCommandPrompt(value) {
   if (!text) return false;
   return [
     /\u73b0\u5728.*(\u6574\u4f53|\u72b6\u6001|\u600e\u4e48\u6837)/i,
+    /\u73b0\u5728.*Aionis.*\u4f5c\u7528/i,
+    /Aionis.*(\u4f5c\u7528\u5927\u4e0d\u5927|\u6709\u6ca1\u6709\u4f5c\u7528|\u6709\u7528\u5417|\u80fd\u4e0d\u80fd\u7528)/i,
     /(\u6574\u4f53|\u72b6\u6001).*(\u600e\u4e48\u6837|\u548b\u6837)/i,
     /\u7ed9\u6211\u547d\u4ee4|\u6211\u81ea\u5df1\u53d1|\u53d1\u5b8c\u4e86/i,
     /^\s*(\u63d0\u4ea4\u5427|\u5148\u63d0\u4ea4\u5427)\s*$/i,
@@ -404,6 +406,7 @@ function isStatusOnlyAssistantText(value) {
     /^\u6574\u4f53\u73b0\u5728/,
     /^\u73b0\u5728\u6574\u4f53/,
     /^\u73b0\u5728\u72b6\u6001/,
+    /^\u73b0\u5728.*\u4f5c\u7528/,
     /^\u786e\u8ba4\u5b8c\u4e86/,
     /^Current status\b/i,
     /^Overall\b/i,
@@ -417,6 +420,7 @@ function isOverallStatusSummary(value) {
     /^\u6574\u4f53\u73b0\u5728/,
     /^\u73b0\u5728\u6574\u4f53/,
     /^\u73b0\u5728\u72b6\u6001/,
+    /^\u73b0\u5728.*\u4f5c\u7528/,
     /^Current status\b/i,
     /^Overall\b/i,
   ].some((pattern) => pattern.test(text));
@@ -442,9 +446,21 @@ function hasTaskHandoffEvidence(value) {
   ].some((pattern) => pattern.test(text));
 }
 
+function hasCurrentTurnTaskOutcomeEvidence(value) {
+  const text = normalizeStopText(value);
+  if (!text) return false;
+  return [
+    /\b(implemented|fixed|updated|changed|added|removed|committed|pushed|published|released|installed|validated|created|refactored)\b/i,
+    /\b(git\s+(?:commit|push)|npm\s+(?:publish|view|--prefix)|npm\s+run|npx\s+--yes|codex-plugin:test|runtime\s+test|pack(?::|-|\s+)dry-run)\b/i,
+    /\b\d+\s+pass\b/i,
+    /\b[0-9a-f]{7,12}\b/,
+    /(?:\u8fd9\u8f6e|\u672c\u8f6e|\u8fd9\u4e00\u6b65|\u8fd9\u6b21|\u6211\u5df2|\u6211\u5df2\u7ecf|\u5df2\u7ee7\u7eed|\u7ee7\u7eed\u63a8\u8fdb\u5b8c|\u63a8\u8fdb\u5b8c)[^\n\u3002\uff1b;]{0,80}(\u5b9e\u73b0|\u4fee\u590d|\u66f4\u65b0|\u63d0\u4ea4|\u63a8\u9001|\u53d1\u5e03|\u53d1\u5305|\u9a8c\u8bc1|\u5b89\u88c5|\u5b8c\u6210|\u8dd1\u8fc7|\u901a\u8fc7)/,
+  ].some((pattern) => pattern.test(text));
+}
+
 function isPlanningAdviceOnly(value) {
   const text = normalizeStopText(value);
-  if (!text || hasTaskHandoffEvidence(text)) return false;
+  if (!text || hasCurrentTurnTaskOutcomeEvidence(text)) return false;
   return [
     /^\u63a5\u4e0b\u6765/,
     /^\u4e0b\u4e00\u6b65/,
@@ -467,6 +483,7 @@ function isConceptualDiscussionPrompt(value) {
     /\u662f.*\u4e0d\u662f/,
     /\u4e0d\u884c\u5417/,
     /\u6709\u6ca1\u6709\u4ef7\u503c|\u4ec0\u4e48\u4ef7\u503c/,
+    /\u4f5c\u7528\u5927\u4e0d\u5927|\u6709\u6ca1\u6709\u4f5c\u7528|\u6709\u7528\u5417|\u80fd\u4e0d\u80fd\u7528|\u901a\u7528\u5417|\u901a\u7528\u7684\u5417/,
     /\u4f60\u89c9\u5f97/,
     /\u5230\u5e95.*(\u662f\u4ec0\u4e48|\u600e\u4e48\u56de\u4e8b|\u5565\u60c5\u51b5)/,
     /\b(why|what is|is .* good|does .* work|is .* worth)\b/i,
@@ -475,12 +492,14 @@ function isConceptualDiscussionPrompt(value) {
 
 function isConceptualDiscussionOnly(value) {
   const text = normalizeStopText(value);
-  if (!text || hasTaskHandoffEvidence(text)) return false;
+  if (!text || hasCurrentTurnTaskOutcomeEvidence(text)) return false;
   return [
     /^\u4f60\u8fd9\u4e2a\u8d28\u7591/,
     /^\u8fd9\u91cc\u8981\u5206\u6e05/,
     /^\u672c\u8d28\u4e0a/,
     /^\u6211\u7684\u771f\u5b9e\u7ed3\u8bba/,
+    /^\u73b0\u5728.*\u4f5c\u7528/,
+    /^\u6211\u7ed9\u4e00\u4e2a\u76f4\u63a5\u5224\u65ad/,
     /Aionis\s+\u4e0d\u662f.*\u800c\u662f/i,
     /^The key point\b/i,
   ].some((pattern) => pattern.test(text));
@@ -582,19 +601,19 @@ function handoffQualityDecision(args) {
       reasons,
     };
   }
-  if (hasTaskHandoffEvidence(summary)) {
+  if (hasTaskHandoffEvidence(summary) || hasCurrentTurnTaskOutcomeEvidence(summary)) {
     return {
       store_handoff: true,
       category: "execution_outcome",
       confidence: 0.82,
-      reasons: ["task_handoff_evidence"],
+      reasons: [hasTaskHandoffEvidence(summary) ? "task_handoff_evidence" : "current_turn_task_outcome_evidence"],
     };
   }
   return {
-    store_handoff: true,
-    category: "execution_outcome",
-    confidence: 0.62,
-    reasons: ["default_task_handoff_candidate"],
+    store_handoff: false,
+    category: "unclassified",
+    confidence: 0.7,
+    reasons: ["no_task_handoff_evidence"],
   };
 }
 
