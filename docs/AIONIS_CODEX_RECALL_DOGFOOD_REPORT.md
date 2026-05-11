@@ -1,6 +1,6 @@
 # Aionis Codex Recall Dogfood Report
 
-Last updated: 2026-05-11
+Last updated: 2026-05-12
 
 Document status: compact internal dogfood report
 
@@ -14,6 +14,17 @@ Aionis is useful in Codex when it carries concrete execution continuity:
 2. exact target files and next actions after an interrupted task
 3. validation commands and test evidence from the previous turn
 4. release boundaries where source changes, installed plugin code, watchdog runtime code, and npm latest can diverge
+
+The first sellable product wedge is not "AI memory for everyone." It is a local-first execution-memory layer for developers who use Codex or Claude Code on long-running repositories and lose time to cross-turn state, release/install drift, restart churn, and repeated validation setup.
+
+A real developer is most likely to pay when Aionis gives them this without manual ceremony:
+
+1. the next turn starts with the right repo, release, install, and validation facts
+2. interrupted tasks resume from a precise next action instead of a chat scrollback
+3. Runtime/plugin/watchdog/package state is inspectable with one status/audit command
+4. stale or speculative memory is hidden unless it changes the next action
+
+Aionis is not yet ready to sell as a broad consumer memory product. Empty first-run projects still have little value beyond automatic wiring, and the explicit tools-feedback route still needs repair before automatic telemetry can be safely reenabled.
 
 Aionis is harmful or distracting when it surfaces generic or stale context:
 
@@ -37,6 +48,7 @@ Aionis is harmful or distracting when it surfaces generic or stale context:
 | Display compaction | Promoted latest dogfood progress and suppressed stale workflow entries. | Necessary. Recall quality depends as much on display selection as storage. |
 | Release outcome capture | `0.2.10` publish/install/doctor completion became recallable as a compact release outcome. | Strong fit, but display evidence still needed one more compression pass. |
 | Process-boundary continuity | After a Runtime/Codex restart, local snapshots still surfaced the current task handoff and `0.2.31` release outcome. | Strong fit. A daily memory layer must survive restarts, stale pids, and installed-vs-source drift. |
+| Published install verification | `0.2.32` passed npm latest, fresh npm exec, fresh install, isolated Codex install/status, isolated Runtime health/status, and live hook release rendering. | Strong fit. The paid wedge must start from a reliable public package path, not source checkout assumptions. |
 
 ## What Was Garbage
 
@@ -72,6 +84,8 @@ A follow-up live query exposed one more write-side bug: summaries saying "0.2.11
 
 The current `0.2.32` candidate dogfood shifted from recall display to operational trust. Restarting the local Runtime/Codex integration proved the snapshot path works across process boundaries, but also exposed three practical failure modes: stale pids from failed launchers, hook processes losing the fixed local Runtime command, and automatic tool-feedback telemetry hanging Runtime. The first two are fixed in source; the third is guarded off by default until the route itself is repaired.
 
+After publishing `0.2.32`, a live UserPromptSubmit hook rendered `latest_release_outcome=0.2.32 published and verified...`, and `codex audit` reran cleanly with `context_quality=pass`. The same audit exposed a quality problem: stored latest task handoff still pointed to Task 8 while the local task-start snapshot had the Task 9 closeout. The `0.2.33` candidate fixes that by merging local project snapshots into `codex audit` latest-handoff selection ahead of stale Runtime handoffs. Live audit now reports Task 9 and the `0.2.32` release as local snapshots with no warnings.
+
 ## Product Conclusion
 
 Aionis Runtime is not a general "make the AI smarter" feature yet. In Codex, its current value is narrower and more concrete:
@@ -81,11 +95,21 @@ Aionis Runtime is not a general "make the AI smarter" feature yet. In Codex, its
 3. prevent repeated rediscovery of release, install, and watchdog boundaries
 4. expose when recalled context is advisory instead of authoritative
 
-That is enough to justify continuing the Codex integration for real development workflows. It is not enough to claim broad consumer value until the first screen consistently shows the right facts with low noise.
+That is enough to justify a focused developer product, not enough to justify a broad memory platform claim. The first package should be "Aionis for coding agents": local Runtime, Codex/Claude Code integration, restart-safe context, release/handoff memory, and a compact audit/status surface. Do not sell design memory, general personal memory, or cloud memory until this coding wedge is boringly reliable.
+
+The sharpest product promise today:
+
+> Aionis keeps your coding agent oriented across turns, restarts, releases, and repo work, using local memory you can inspect.
+
+The current non-negotiable gaps before charging:
+
+1. make install/enable/recovery feel automatic, including clear Runtime online state
+2. keep first-screen context consistently short and current
+3. repair `/v1/memory/tools/feedback` before reenabling automatic tool telemetry
+4. prove the same value on a second non-AionisRuntime repository
 
 ## Next Cuts
 
-1. Write the Task 10 product verdict from the evidence: strongest paying workflow, weakest claims, and the first sellable package boundary.
-2. Repair `/v1/memory/tools/feedback` route-level behavior before enabling automatic hook telemetry again.
-3. Run the same Codex recall loop on a second repository to check whether the improvements generalize beyond AionisRuntime.
-4. Keep suppressing generic memory. Aionis should earn visible space only when it changes the first action or validation boundary.
+1. Repair `/v1/memory/tools/feedback` route-level behavior before enabling automatic hook telemetry again.
+2. Run the same Codex recall loop on a second repository to check whether the improvements generalize beyond AionisRuntime.
+3. Keep suppressing generic memory. Aionis should earn visible space only when it changes the first action or validation boundary.

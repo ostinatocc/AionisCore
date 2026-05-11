@@ -617,6 +617,136 @@ test("runtime cli audit emits a context quality report for a healthy handoff mix
   }
 });
 
+test("runtime cli audit includes local snapshot handoffs ahead of stale runtime handoffs", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-snapshot-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const sessionId = "audit-snapshot-session";
+  const turnId = "audit-snapshot-turn";
+  const runId = "audit-snapshot-run";
+  const scope = "codex:aionis-runtime:testhash";
+  const executionQuality = {
+    store_handoff: true,
+    category: "execution_outcome",
+    confidence: 0.92,
+    reasons: ["task_handoff_evidence"],
+  };
+
+  mkdirSync(path.join(runtimeHome, "state", "sessions"), { recursive: true });
+  mkdirSync(path.join(runtimeHome, "state", "project-context"), { recursive: true });
+  writeFileSync(path.join(runtimeHome, "state", "active-project.json"), JSON.stringify({
+    cwd: packageDir,
+    project_name: "aionis-runtime",
+    project_hash: "testhash",
+    scope,
+    global_scope: "codex:global",
+    tenant_id: "local-codex",
+    updated_at: new Date().toISOString(),
+  }));
+  writeFileSync(path.join(runtimeHome, "state", "sessions", `${sessionId}.json`), JSON.stringify({
+    session_id: sessionId,
+    active_turn_id: turnId,
+    active_run_id: runId,
+    turns: {
+      [turnId]: {
+        turn_id: turnId,
+        run_id: runId,
+        prompt: "Continue from the latest local snapshot.",
+      },
+    },
+    steps: {},
+    updated_at: new Date().toISOString(),
+  }));
+  writeFileSync(path.join(runtimeHome, "state", "project-context", `${safeSnapshotName(scope)}.json`), JSON.stringify({
+    version: 1,
+    cwd: packageDir,
+    project_name: "aionis-runtime",
+    project_hash: "testhash",
+    scope,
+    tenant_id: "local-codex",
+    created_at: "2026-05-10T00:00:00.000Z",
+    updated_at: "2026-05-11T16:52:29.717Z",
+    project_handoff_fast: {
+      snapshot_source: "stop_hook",
+      snapshot_captured_at: "2026-05-11T16:52:29.717Z",
+      nodes: [
+        {
+          uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/snapshot/latest-task",
+          summary: "Task 9 已闭环，Runtime restart 和 Codex watchdog 验证通过。测试：56 pass，20 pass，pack dry-run pass。",
+          text_summary: "Task 9 已闭环，Runtime restart 和 Codex watchdog 验证通过。测试：56 pass，20 pass，pack dry-run pass。",
+          slots: {
+            next_action: "Continue with Task 10 product verdict.",
+            execution_result_summary: {
+              handoff_quality: executionQuality,
+            },
+          },
+        },
+      ],
+    },
+  }));
+
+  const server = createServer((req, res) => {
+    const url = new URL(req.url, "http://127.0.0.1");
+    res.setHeader("content-type", "application/json");
+    if (req.method === "GET" && url.pathname === "/health") {
+      res.end(JSON.stringify({ ok: true, runtime: { edition: "lite" } }));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === `/v1/memory/sessions/${sessionId}/events`) {
+      res.end(JSON.stringify({ events: [] }));
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/v1/memory/find") {
+      req.resume();
+      req.on("end", () => {
+        res.end(JSON.stringify({
+          nodes: [
+            {
+              uri: "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/stale-task",
+              created_at: "2026-05-11T14:24:01.446Z",
+              text_summary: "Task 8 已推进完并提交。验证：fresh install pass。",
+              slots: {
+                execution_result_summary: {
+                  handoff_quality: executionQuality,
+                },
+              },
+            },
+          ],
+        }));
+      });
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const audit = await spawnCli(["codex", "audit", "--json", "--session", sessionId, "--limit", "4"], {
+      cwd: packageDir,
+      env: {
+        ...process.env,
+        HOME: home,
+        AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+        AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+      },
+    });
+    assert.equal(audit.status, 0, `${audit.stdout}\n${audit.stderr}`);
+    const parsed = JSON.parse(audit.stdout);
+
+    assert.equal(parsed.context_quality_report.status, "pass");
+    assert.equal(parsed.context_quality_report.latest.task_handoff.uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/snapshot/latest-task");
+    assert.equal(parsed.context_quality_report.latest.task_handoff.source, "local_snapshot");
+    assert.equal(parsed.context_quality_report.latest.task_handoff.snapshot_source, "stop_hook");
+    assert.equal(parsed.context_quality_report.counts.local_snapshot_handoffs, 1);
+    assert.equal(parsed.context_quality_report.counts.stored_handoffs, 1);
+    assert.equal(parsed.handoffs[0].source, "local_snapshot");
+    assert.equal(parsed.handoffs[1].source, "runtime");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("runtime cli audit separates current context quality from historical debt", async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-audit-debt-home-"));
   const runtimeHome = path.join(home, ".aionis", "codex");

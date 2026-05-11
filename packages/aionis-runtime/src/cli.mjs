@@ -757,6 +757,61 @@ function qualityFromHandoff(node) {
   return asObject(summary.handoff_quality);
 }
 
+function auditHandoffRowFromNode(node, options = {}) {
+  const slots = asObject(node?.slots);
+  const summary = String(node?.text_summary || node?.summary || slots.handoff_text || "");
+  const quality = qualityFromHandoff(node);
+  const display = auditDisplayDecision(summary, quality, { legacyHandoff: options.legacyHandoff === true });
+  return {
+    uri: node?.uri || null,
+    created_at: node?.created_at || options.createdAt || null,
+    source: options.source || "runtime",
+    snapshot_source: options.snapshotSource || null,
+    summary: compactText(summary),
+    summary_chars: summary.length,
+    display,
+    next_action: compactText(slots.next_action || node?.next_action, 120),
+    handoff_quality: Object.keys(quality).length ? quality : null,
+  };
+}
+
+function auditRowsFromProjectSnapshot(snapshot) {
+  if (!snapshot) return [];
+  const rows = [];
+  for (const [key, sourceKind] of [
+    ["project_handoff_fast", "task_snapshot"],
+    ["project_release_outcome_fast", "release_snapshot"],
+  ]) {
+    const result = asObject(snapshot[key]);
+    const nodes = Array.isArray(result.nodes) ? result.nodes : [];
+    for (const node of nodes) {
+      rows.push(auditHandoffRowFromNode(node, {
+        source: "local_snapshot",
+        snapshotSource: result.snapshot_source || sourceKind,
+        createdAt: node?.created_at || result.snapshot_captured_at || snapshot.updated_at || null,
+      }));
+    }
+  }
+  return rows;
+}
+
+function auditRowCreatedAtMs(row) {
+  const ms = Date.parse(row?.created_at || "");
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function mergeAuditHandoffRows(rows) {
+  const seen = new Set();
+  const merged = [];
+  for (const row of rows.sort((a, b) => auditRowCreatedAtMs(b) - auditRowCreatedAtMs(a))) {
+    const key = row.uri || `${row.source || "unknown"}:${row.created_at || ""}:${row.summary || ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(row);
+  }
+  return merged;
+}
+
 function auditHasConcreteOutcomeSignal(text) {
   return [
     /\b(implemented|fixed|updated|changed|added|removed|verified|tested|passed|committed|released|published|installed|validated|created|refactored)\b/i,
@@ -904,6 +959,7 @@ function contextQualitySection(checks) {
 function buildContextQualityReport(args) {
   const events = Array.isArray(args.events) ? args.events : [];
   const handoffs = Array.isArray(args.handoffs) ? args.handoffs : [];
+  const localSnapshotHandoffs = handoffs.filter((row) => row.source === "local_snapshot");
   const filteredHandoffs = handoffs.filter((row) => row.display?.decision === "filtered");
   const filteredEvents = events.filter((row) => row.display?.decision === "filtered");
   const accepted = visibleAcceptedHandoffs(handoffs);
@@ -1024,6 +1080,8 @@ function buildContextQualityReport(args) {
         ? {
             uri: latestTask.uri || null,
             created_at: latestTask.created_at || null,
+            source: latestTask.source || null,
+            snapshot_source: latestTask.snapshot_source || null,
             summary: latestTask.summary || "",
           }
         : null,
@@ -1031,13 +1089,16 @@ function buildContextQualityReport(args) {
         ? {
             uri: latestRelease.uri || null,
             created_at: latestRelease.created_at || null,
+            source: latestRelease.source || null,
+            snapshot_source: latestRelease.snapshot_source || null,
             summary: latestRelease.summary || "",
           }
         : null,
     },
     counts: {
       recent_events: events.length,
-      stored_handoffs: handoffs.length,
+      stored_handoffs: handoffs.length - localSnapshotHandoffs.length,
+      local_snapshot_handoffs: localSnapshotHandoffs.length,
       visible_accepted_handoffs: accepted.length,
       visible_task_handoffs: taskHandoffs.length,
       visible_release_outcomes: releaseHandoffs.length,
@@ -1215,23 +1276,11 @@ async function codexAudit(args) {
       })
     : [];
 
-  const handoffs = Array.isArray(handoffPayload?.nodes)
-    ? handoffPayload.nodes.map((node) => {
-        const slots = asObject(node.slots);
-        const summary = String(node.text_summary || slots.handoff_text || "");
-        const quality = qualityFromHandoff(node);
-        const display = auditDisplayDecision(summary, quality, { legacyHandoff: true });
-        return {
-          uri: node.uri || null,
-          created_at: node.created_at || null,
-          summary: compactText(summary),
-          summary_chars: summary.length,
-          display,
-          next_action: compactText(slots.next_action, 120),
-          handoff_quality: Object.keys(quality).length ? quality : null,
-        };
-      })
+  const runtimeHandoffs = Array.isArray(handoffPayload?.nodes)
+    ? handoffPayload.nodes.map((node) => auditHandoffRowFromNode(node, { legacyHandoff: true }))
     : [];
+  const snapshotHandoffs = auditRowsFromProjectSnapshot(loadProjectContextSnapshot(paths, project));
+  const handoffs = mergeAuditHandoffRows([...snapshotHandoffs, ...runtimeHandoffs]);
 
   const payload = {
     ok: !!session.state || runtime.ok === true,
