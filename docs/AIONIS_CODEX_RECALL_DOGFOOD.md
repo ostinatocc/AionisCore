@@ -1,6 +1,6 @@
 # Aionis Codex Recall Dogfood
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
 Goal: use Aionis inside Codex for 10 real repository tasks, then improve recall, compaction, and display quality based on observed value rather than imagined product claims.
 
@@ -30,6 +30,39 @@ Garbage context:
 - injects stale release or branch state
 - spends large budget on debug payloads that do not change the next action
 - reports non-fatal Runtime errors without enough cause or recovery detail
+
+## Post-0.2.27 Product Dogfood Plan
+
+The next loop tests whether Aionis is useful as a daily Codex execution-memory product, not whether the architecture has enough pieces.
+
+Each task must record:
+
+- the task Codex actually performed
+- the context Aionis surfaced at task start
+- which surfaced facts changed the first action or validation boundary
+- which facts were stale, duplicated, missing, or too verbose
+- the concrete product cut made from the observation
+
+Planned task queue:
+
+| # | Task | Product question | Status |
+| --- | --- | --- | --- |
+| 1 | Verify the published `@ostinato/aionis-runtime@0.2.27` package path with fresh npm cache, Codex status, and Codex audit. | Does the user-installed package expose the same usable state as local source? | done |
+| 2 | Start a second-repository Codex session and inspect the first Aionis context. | Does context generalize outside AionisRuntime, or is it self-referential? | next |
+| 3 | Implement a small feature in the second repository with Aionis enabled. | Does Aionis change the first action or just add noise? | planned |
+| 4 | Interrupt and resume a real bug fix across turns. | Does handoff recovery preserve the actual next step? | planned |
+| 5 | Re-run npm release verification after a source change. | Does release outcome stay visible beside current task work? | planned |
+| 6 | Ask status/planning-only questions between coding tasks. | Do those turns avoid polluting `latest_task_handoff`? | planned |
+| 7 | Force slow Runtime find behavior while snapshots exist. | Does task start remain fast and useful under Runtime latency? | planned |
+| 8 | Install from npm in a fresh consumer workspace. | Is the first-run path understandable without repo internals? | planned |
+| 9 | Restart Runtime/Codex integration and continue. | Does local state survive process boundaries? | planned |
+| 10 | Write a compact product verdict from the evidence. | Would a real developer pay for this, and for which workflow? | planned |
+
+### Post-0.2.27 Ledger
+
+| # | Task | Aionis context that helped | Garbage / weakness observed | Fix candidate | Status |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Published-package smoke for `@ostinato/aionis-runtime@0.2.27`: fresh `npm exec --version`, `codex status --no-watchdog --json`, and `codex audit --limit 12 --json`. | Fresh npm package returned `0.2.27`; Codex status passed all checks; audit found clean current context with separate visible task handoff and visible release outcome. | The actual task-start injected context showed `used_release_outcome_snapshot=true` but did not render a separate `latest_release_outcome=0.2.27...` line. The Runtime had the structured release snapshot; the formatter rejected it because the text said "published and verified" instead of matching a narrower completion phrase. A local reinstall also showed a transient doctor `runtime health` failure while immediate `curl /health` and `codex status` passed, so install health wait may still be flaky. | Trust structured `release_outcome=true` snapshot records when they include a version and are not candidate/unpublished/status-lead text; keep existing false-positive filters. Track install doctor health timing as a follow-up if it repeats. | fixed in 0.2.28 candidate |
 
 ## Task Ledger
 

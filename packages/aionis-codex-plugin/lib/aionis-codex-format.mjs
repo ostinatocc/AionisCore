@@ -648,12 +648,16 @@ function isReleaseOutcomeRecord(record) {
   const summary = handoffSummary(record);
   const text = sanitizeInlineMarkdown(summary);
   if (isUnpublishedReleaseStatusText(text)) return false;
-  if (!hasReleaseCompletionSignal(text)) return false;
   const tags = Array.isArray(record?.tags) ? record.tags : [];
   const result = executionResultSummaryFromRecord(record);
   const quality = asRecord(result?.handoff_quality);
   if (quality?.category && quality.category !== "release_outcome") return false;
-  if (tags.includes("release_outcome") || result?.release_outcome === true) return true;
+  const structuredReleaseOutcome = tags.includes("release_outcome") || result?.release_outcome === true || quality?.category === "release_outcome";
+  if (structuredReleaseOutcome) {
+    if (hasReleaseCompletionSignal(text)) return true;
+    return !!releaseOutcomeVersionFromRecord(record) && !isStatusOrDiscussionLead(text);
+  }
+  if (!hasReleaseCompletionSignal(text)) return false;
   return releaseEvidenceFromHandoff(text).length > 0 && /\bnpm\s+(?:publish|view|latest)\b|\bnpx\b|\bclean\s+(?:npm\s+)?install\b|\u53d1\u5e03|\u53d1\u5305/i.test(text);
 }
 

@@ -515,6 +515,61 @@ test("renderAionisHookContext keeps release outcome evidence visible", () => {
   assert.match(text, /codex_status=pass/);
 });
 
+test("renderAionisHookContext trusts structured release snapshot closeouts", () => {
+  const text = renderAionisHookContext({
+    config,
+    sessionId: "session-1",
+    turnId: "turn-release-snapshot",
+    runId: "run-release-snapshot",
+    prompt: "继续推进吧",
+    runtimeStatus: { ok: true, started: false },
+    projectHandoffFast: {
+      handoff: {
+        summary: "Implemented release snapshot display regression coverage. Verification: codex-plugin:test 49 pass.",
+        execution_result_summary: {
+          handoff_quality: {
+            store_handoff: true,
+            category: "execution_outcome",
+            confidence: 0.82,
+            reasons: ["task_handoff_evidence"],
+          },
+        },
+        uri: "aionis://local-codex/codex%3Aproject/event/task",
+      },
+    },
+    projectReleaseOutcomeFast: {
+      nodes: [
+        {
+          summary: "0.2.27 published and verified. Codex task-start uses local project-context snapshots before slow Runtime find.",
+          slots: {
+            execution_result_summary: {
+              handoff_quality: {
+                store_handoff: true,
+                category: "release_outcome",
+                confidence: 0.98,
+                reasons: ["explicit_cli_release", "release_completion_signal"],
+              },
+              release_outcome: true,
+              version: "0.2.27",
+            },
+          },
+          uri: "aionis://local-codex/codex%3Aproject/event/release-0.2.27",
+        },
+      ],
+    },
+    localContextSnapshot: {
+      used_task_handoff: true,
+      used_release_outcome: true,
+      updated_at: "2026-05-11T04:29:21.115Z",
+    },
+  });
+
+  assert.match(text, /used_release_outcome_snapshot=true/);
+  assert.match(text, /latest_task_handoff=Implemented release snapshot display regression coverage/);
+  assert.match(text, /latest_release_outcome=0\.2\.27 published and verified/);
+  assert.doesNotMatch(text, /project_release_outcome_fast/);
+});
+
 test("renderAionisHookContext treats confirmed publish closeouts as release outcomes", () => {
   const text = renderAionisHookContext({
     config,
