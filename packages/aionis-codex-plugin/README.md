@@ -48,11 +48,15 @@ Override with environment variables:
 - `AIONIS_CODEX_SCOPE_MODE=global`
 - `AIONIS_CODEX_GLOBAL_SCOPE`
 - `AIONIS_CODEX_FAST_TIMEOUT_MS`
+- `AIONIS_CODEX_TOOLS_FEEDBACK_TIMEOUT_MS`
+- `AIONIS_CODEX_TOOLS_FEEDBACK_TELEMETRY=false`
 - `AIONIS_CODEX_CONTEXT_CHAR_LIMIT`
 - `AIONIS_CODEX_CONTEXT_SNAPSHOT_TTL_MS`
 - `AIONIS_CODEX_COMPILE_PLAYBOOKS=false`
 
 `UserPromptSubmit` uses local project-context snapshots before slow project handoff and release lookups. The `Stop` hook and Runtime CLI handoff/release commands write snapshots under `~/.aionis/codex/state`, so the next task can receive the latest task or release context without waiting for Runtime find queries.
+
+`PostToolUse` records automatic tools-feedback by default, but it uses a separate short timeout budget so tool learning cannot block normal Codex work. Generic automatic feedback is kept out of recallable pattern anchors unless the Runtime sees a concrete task/file/workflow/error target or rule-backed evidence. Set `AIONIS_CODEX_TOOLS_FEEDBACK_TELEMETRY=false` to disable this learning path.
 
 ## Doctor
 

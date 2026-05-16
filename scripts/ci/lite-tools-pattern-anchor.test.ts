@@ -788,6 +788,95 @@ test("positive tools feedback without matched rule sources still writes a provis
   }
 });
 
+test("automatic Codex tools feedback without concrete target does not write a generic pattern anchor", async () => {
+  const dbPath = tmpDbPath("pattern-anchor-automatic-generic-feedback");
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const runId = randomUUID();
+  const context = {
+    host: "codex",
+    telemetry_source: "codex_post_tool_use",
+    prompt: "continue",
+    tool_name: "functions.exec_command",
+    tool_status: "success",
+  };
+  try {
+    const feedback = await liteWriteStore.withTx(() =>
+      toolSelectionFeedback(null, {
+        tenant_id: "default",
+        scope: "default",
+        actor: "codex",
+        run_id: runId,
+        outcome: "positive",
+        context,
+        candidates: ["functions.exec_command", "functions.apply_patch", "functions.update_plan"],
+        selected_tool: "functions.exec_command",
+        target: "tool",
+        note: "Codex functions.exec_command completed with success",
+        input_text: JSON.stringify({ cmd: "git status --short" }),
+      }, "default", "default", {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        embedder: FakeEmbeddingProvider,
+        liteWriteStore,
+      }),
+    );
+
+    assert.equal(feedback.updated_rules, 0);
+    assert.deepEqual(feedback.rule_node_ids, []);
+    assert.equal(feedback.decision_link_mode, "created_from_feedback");
+    assert.equal(feedback.pattern_anchor ?? null, null);
+    assert.equal(feedback.policy_memory ?? null, null);
+  } finally {
+    await liteWriteStore.close();
+  }
+});
+
+test("automatic Codex tools feedback with concrete target can still write a pattern anchor", async () => {
+  const dbPath = tmpDbPath("pattern-anchor-automatic-concrete-feedback");
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const runId = randomUUID();
+  const context = {
+    host: "codex",
+    telemetry_source: "codex_post_tool_use",
+    task_signature: "fix-runtime-tools-feedback-timeout",
+    goal: "fix Runtime tools feedback timeout",
+    target_files: ["src/memory/tools-feedback.ts"],
+    tool_name: "functions.apply_patch",
+    tool_status: "success",
+  };
+  try {
+    const feedback = await liteWriteStore.withTx(() =>
+      toolSelectionFeedback(null, {
+        tenant_id: "default",
+        scope: "default",
+        actor: "codex",
+        run_id: runId,
+        outcome: "positive",
+        context,
+        candidates: ["functions.exec_command", "functions.apply_patch", "functions.update_plan"],
+        selected_tool: "functions.apply_patch",
+        target: "tool",
+        note: "Codex functions.apply_patch completed with success",
+        input_text: "patch tools-feedback timeout handling",
+      }, "default", "default", {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        embedder: FakeEmbeddingProvider,
+        liteWriteStore,
+      }),
+    );
+
+    assert.equal(feedback.updated_rules, 0);
+    assert.deepEqual(feedback.rule_node_ids, []);
+    assert.equal(feedback.decision_link_mode, "created_from_feedback");
+    assert.ok(feedback.pattern_anchor);
+    assert.equal(feedback.pattern_anchor?.pattern_state, "provisional");
+    assert.equal(feedback.pattern_anchor?.credibility_state, "candidate");
+  } finally {
+    await liteWriteStore.close();
+  }
+});
+
 test("positive tools feedback with multiple matched rule sources exposes form_pattern governance preview", async () => {
   const dbPath = tmpDbPath("pattern-anchor-governance-preview");
   const { liteWriteStore, ruleNodeIds } = await seedActiveRules(dbPath, ["edit", "edit"]);

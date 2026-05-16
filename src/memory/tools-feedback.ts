@@ -314,6 +314,48 @@ function extractContextConsumerTeamId(context: unknown): string | null {
   return nullableString(ctx?.team_id) ?? nullableString(agent?.team_id);
 }
 
+function extractTelemetrySource(context: unknown): string | null {
+  const ctx = asRecord(context);
+  const telemetry = asRecord(ctx?.telemetry);
+  return nullableString(ctx?.telemetry_source)
+    ?? nullableString(telemetry?.source)
+    ?? null;
+}
+
+function isAutomaticCodexToolsFeedback(context: unknown): boolean {
+  const source = extractTelemetrySource(context);
+  return !!source && (
+    source === "codex_post_tool_use"
+    || source === "codex_post_tool_use_soak"
+    || source.startsWith("codex_post_tool_use:")
+  );
+}
+
+function hasConcreteWorkflowFeedbackTarget(target: WorkflowFeedbackTarget): boolean {
+  return !!(
+    target.taskSignature
+    || target.errorSignature
+    || target.workflowSignature
+    || target.filePath
+    || target.targetFiles.length > 0
+    || target.workflowSteps.length > 0
+    || target.patternHints.length > 0
+    || target.serviceLifecycleConstraints.length > 0
+  );
+}
+
+function shouldWriteToolsFeedbackPatternAnchor(args: {
+  context: unknown;
+  outcome: "positive" | "negative" | "neutral";
+  sourceRuleIds: string[];
+  workflowFeedbackTarget: WorkflowFeedbackTarget;
+}): boolean {
+  if (args.outcome !== "positive" && args.outcome !== "negative") return false;
+  if (!isAutomaticCodexToolsFeedback(args.context)) return true;
+  if (args.sourceRuleIds.length > 0) return true;
+  return hasConcreteWorkflowFeedbackTarget(args.workflowFeedbackTarget);
+}
+
 function buildExperienceQueryTextFromFeedback(args: {
   context: unknown;
   inputText: string | null;
@@ -1204,7 +1246,15 @@ export async function toolSelectionFeedback(
       await opts.embeddedRuntime.syncRuleDefs(embeddedRows);
     }
 
-    if (parsed.outcome === "positive" || parsed.outcome === "negative") {
+    const patternFeedbackOutcome = parsed.outcome === "positive" || parsed.outcome === "negative"
+      ? parsed.outcome
+      : null;
+    if (patternFeedbackOutcome && shouldWriteToolsFeedbackPatternAnchor({
+      context: parsed.context,
+      outcome: patternFeedbackOutcome,
+      sourceRuleIds: uniq,
+      workflowFeedbackTarget,
+    })) {
       let anchorOut = await writeToolsDecisionPatternAnchor(null, {
         tenant_id: tenancy.tenant_id,
         scope: tenancy.scope,
@@ -1218,7 +1268,7 @@ export async function toolSelectionFeedback(
         source_rule_ids: uniq,
         decision: decision!,
         feedback_commit_id: commit_id,
-        feedback_outcome: parsed.outcome,
+        feedback_outcome: patternFeedbackOutcome,
         governed_pattern_state_override: null,
       }, {
         defaultScope,
@@ -1266,7 +1316,7 @@ export async function toolSelectionFeedback(
             source_rule_ids: uniq,
             decision: decision!,
             feedback_commit_id: commit_id,
-            feedback_outcome: parsed.outcome,
+            feedback_outcome: patternFeedbackOutcome,
             governed_pattern_state_override: applyGate.governedOverrideState,
           }, {
             defaultScope,
@@ -1639,7 +1689,15 @@ export async function toolSelectionFeedback(
     await opts.embeddedRuntime.syncRuleDefs(ruleDefRes.rows);
   }
 
-  if (parsed.outcome === "positive" || parsed.outcome === "negative") {
+  const patternFeedbackOutcome = parsed.outcome === "positive" || parsed.outcome === "negative"
+    ? parsed.outcome
+    : null;
+  if (patternFeedbackOutcome && shouldWriteToolsFeedbackPatternAnchor({
+    context: parsed.context,
+    outcome: patternFeedbackOutcome,
+    sourceRuleIds: uniq,
+    workflowFeedbackTarget,
+  })) {
     if (parsed.governance_review?.form_pattern?.review_result && !opts.liteWriteStore) {
       badRequest("form_pattern_governance_requires_lite_lookup", "form_pattern governance review currently requires lite node lookup support", {});
     }
@@ -1656,7 +1714,7 @@ export async function toolSelectionFeedback(
       source_rule_ids: uniq,
       decision: decision!,
       feedback_commit_id: commit_id,
-      feedback_outcome: parsed.outcome,
+      feedback_outcome: patternFeedbackOutcome,
       governed_pattern_state_override: null,
     }, {
       defaultScope,
@@ -1705,7 +1763,7 @@ export async function toolSelectionFeedback(
           source_rule_ids: uniq,
           decision: decision!,
           feedback_commit_id: commit_id,
-          feedback_outcome: parsed.outcome,
+          feedback_outcome: patternFeedbackOutcome,
           governed_pattern_state_override: applyGate.governedOverrideState,
         }, {
           defaultScope,

@@ -152,11 +152,12 @@ export function resolveConfig(input = {}) {
     timeoutMs: intEnv("AIONIS_CODEX_TIMEOUT_MS", DEFAULT_TIMEOUT_MS, 250, 30000),
     fastTimeoutMs: intEnv("AIONIS_CODEX_FAST_TIMEOUT_MS", 1200, 250, 10000),
     eventTimeoutMs: intEnv("AIONIS_CODEX_EVENT_TIMEOUT_MS", 750, 100, 5000),
+    toolsFeedbackTimeoutMs: intEnv("AIONIS_CODEX_TOOLS_FEEDBACK_TIMEOUT_MS", 500, 100, 5000),
     startupTimeoutMs: intEnv("AIONIS_CODEX_STARTUP_TIMEOUT_MS", 12000, 1000, 120000),
     contextCharLimit: intEnv("AIONIS_CODEX_CONTEXT_CHAR_LIMIT", DEFAULT_CONTEXT_CHAR_LIMIT, 2000, 80000),
     contextSnapshotTtlMs: intEnv("AIONIS_CODEX_CONTEXT_SNAPSHOT_TTL_MS", DEFAULT_CONTEXT_SNAPSHOT_TTL_MS, 0, 30 * 24 * 60 * 60 * 1000),
     postToolContext: boolEnv("AIONIS_CODEX_POST_TOOL_CONTEXT", true),
-    toolFeedbackTelemetry: boolEnv("AIONIS_CODEX_TOOLS_FEEDBACK_TELEMETRY", false),
+    toolFeedbackTelemetry: boolEnv("AIONIS_CODEX_TOOLS_FEEDBACK_TELEMETRY", true),
     compilePlaybooks: boolEnv("AIONIS_CODEX_COMPILE_PLAYBOOKS", true),
     verbose: boolEnv("AIONIS_CODEX_VERBOSE", false),
     runtimeCommand: process.env.AIONIS_CODEX_RUNTIME_COMMAND || runtimeCommandConfig?.command || "",
@@ -583,7 +584,10 @@ async function waitForRuntimeHealth(config, child, timeoutMs) {
       await sleep(350);
       continue;
     }
-    await sleep(50);
+    // A competing watchdog can make the port healthy while the launcher we just
+    // spawned is already exiting. Hold a short stability window before trusting
+    // and recording this child pid.
+    await sleep(250);
     const exitedAfterHealth = processExitState(child, processExit);
     if (exitedAfterHealth) {
       const error = new Error(`Aionis Runtime process exited before health check passed: code=${exitedAfterHealth.code ?? "null"} signal=${exitedAfterHealth.signal ?? "null"}`);

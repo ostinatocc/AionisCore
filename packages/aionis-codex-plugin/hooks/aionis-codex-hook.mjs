@@ -317,6 +317,11 @@ function lifecycleRuntimeConfig(config) {
   return { ...config, timeoutMs };
 }
 
+function toolsFeedbackRuntimeConfig(config) {
+  const timeoutMs = Math.min(config.timeoutMs, config.toolsFeedbackTimeoutMs || config.eventTimeoutMs || config.fastTimeoutMs || config.timeoutMs);
+  return { ...config, timeoutMs };
+}
+
 function normalizeStopText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
@@ -928,7 +933,9 @@ async function handlePostToolUse(input) {
   const toolName = extractToolName(input);
   const toolResponse = extractToolResponse(input);
   const status = inferToolStatus(toolResponse);
-  const runId = state.active_run_id || buildTurnRunId(sessionId, state.active_turn_id || getTurnId(input));
+  const turnId = state.active_turn_id || getTurnId(input);
+  const activeTurn = state.turns?.[turnId] || null;
+  const runId = state.active_run_id || buildTurnRunId(sessionId, turnId);
   const stepCandidates = Object.values(state.steps || {})
     .filter((step) => step && step.run_id === runId && step.tool_name === toolName && !step.completed_at)
     .sort((a, b) => (b.step_index || 0) - (a.step_index || 0));
@@ -954,16 +961,24 @@ async function handlePostToolUse(input) {
         },
       }), []);
     if (config.toolFeedbackTelemetry) {
-      await safeRuntimeCall(config, "tools_feedback", () =>
-        runtimePost(config, "/v1/memory/tools/feedback", {
-          ...commonRuntimeFields(config),
+      const feedbackConfig = toolsFeedbackRuntimeConfig(config);
+      await safeRuntimeCall(feedbackConfig, "tools_feedback", () =>
+        runtimePost(feedbackConfig, "/v1/memory/tools/feedback", {
+          ...commonRuntimeFields(feedbackConfig),
           run_id: runId,
           outcome: status === "success" ? "positive" : status === "failed" ? "negative" : "neutral",
           context: {
-            ...baseContext(config, sessionId, input),
+            ...baseContext(feedbackConfig, sessionId, input),
+            turn_id: turnId,
+            run_id: runId,
+            step_id: step?.step_id ?? null,
+            step_index: step?.step_index ?? null,
+            prompt: activeTurn?.prompt || extractPrompt(input) || null,
             tool_name: toolName,
             tool_input: extractToolInput(input),
             tool_response: toolResponse,
+            tool_status: status,
+            telemetry_source: "codex_post_tool_use",
           },
           candidates: defaultToolCandidates(),
           selected_tool: toolName,

@@ -86,6 +86,151 @@ test("PreToolUse hook stays non-blocking when runtime is unavailable", async () 
   assert.deepEqual(JSON.parse(result.stdout), {});
 });
 
+test("PostToolUse records bounded tools feedback by default", async () => {
+  const routes = [];
+  const bodies = {};
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      if (body) {
+        bodies[req.url] = bodies[req.url] || [];
+        bodies[req.url].push(JSON.parse(body));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      if (req.url === "/health") {
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "PostToolUse",
+      session_id: "tool-feedback-session",
+      turn_id: "tool-feedback-turn",
+      cwd: pluginRoot,
+      tool_name: "functions.exec_command",
+      tool_input: { cmd: "git status --short" },
+      tool_response: { exit_code: 0, stdout: "" },
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.hookSpecificOutput.hookEventName, "PostToolUse");
+    assert.match(output.hookSpecificOutput.additionalContext, /Aionis Tool Outcome/);
+    assert.equal(routes.includes("/v1/memory/replay/step/after"), true);
+    assert.equal(routes.includes("/v1/memory/tools/feedback"), true);
+
+    const feedback = bodies["/v1/memory/tools/feedback"][0];
+    assert.equal(feedback.outcome, "positive");
+    assert.equal(feedback.selected_tool, "functions.exec_command");
+    assert.equal(feedback.context.telemetry_source, "codex_post_tool_use");
+    assert.equal(feedback.context.tool_status, "success");
+    assert.equal(feedback.context.run_id, feedback.run_id);
+    assert.match(feedback.input_text, /git status --short/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("PostToolUse tools feedback timeout is bounded and non-rendering", async () => {
+  const routes = [];
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    req.resume();
+    req.on("end", () => {
+      res.setHeader("content-type", "application/json");
+      if (req.url === "/health") {
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (req.url === "/v1/memory/tools/feedback") {
+        setTimeout(() => {
+          try {
+            res.end(JSON.stringify({ ok: true }));
+          } catch {
+            // The hook should abort this request and still return normally.
+          }
+        }, 2500);
+        return;
+      }
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  const startedAt = performance.now();
+  try {
+    const result = await runHook({
+      hook_event_name: "PostToolUse",
+      session_id: "tool-feedback-timeout-session",
+      turn_id: "tool-feedback-timeout-turn",
+      cwd: pluginRoot,
+      tool_name: "functions.exec_command",
+      tool_input: { cmd: "npm test" },
+      tool_response: { exit_code: 0, stdout: "ok" },
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      env: {
+        AIONIS_CODEX_TOOLS_FEEDBACK_TIMEOUT_MS: "100",
+      },
+    });
+    const durationMs = performance.now() - startedAt;
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.hookSpecificOutput.hookEventName, "PostToolUse");
+    assert.match(output.hookSpecificOutput.additionalContext, /Aionis Tool Outcome/);
+    assert.doesNotMatch(output.hookSpecificOutput.additionalContext, /tools_feedback/);
+    assert.equal(routes.includes("/v1/memory/replay/step/after"), true);
+    assert.equal(routes.includes("/v1/memory/tools/feedback"), true);
+    assert.ok(durationMs < 2000, `hook should not wait for slow tools feedback route, took ${durationMs}ms`);
+    assert.equal(result.stderr, "");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("PostToolUse tools feedback can be disabled explicitly", async () => {
+  const routes = [];
+  const server = http.createServer((req, res) => {
+    routes.push(req.url);
+    req.resume();
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  const address = await listen(server);
+  try {
+    const result = await runHook({
+      hook_event_name: "PostToolUse",
+      session_id: "tool-feedback-disabled-session",
+      turn_id: "tool-feedback-disabled-turn",
+      cwd: pluginRoot,
+      tool_name: "functions.exec_command",
+      tool_input: { cmd: "pwd" },
+      tool_response: { exit_code: 0, stdout: pluginRoot },
+    }, {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      env: {
+        AIONIS_CODEX_TOOLS_FEEDBACK_TELEMETRY: "false",
+      },
+    });
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.hookSpecificOutput.hookEventName, "PostToolUse");
+    assert.match(output.hookSpecificOutput.additionalContext, /Aionis Tool Outcome/);
+    assert.equal(routes.includes("/v1/memory/replay/step/after"), true);
+    assert.equal(routes.includes("/v1/memory/tools/feedback"), false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("UserPromptSubmit skips blocking planning context when project handoff is already usable", async () => {
   const routes = [];
   const server = http.createServer((req, res) => {
