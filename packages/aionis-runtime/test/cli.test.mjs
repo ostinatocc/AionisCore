@@ -1304,6 +1304,101 @@ test("runtime cli codex release stores a structured release outcome handoff", as
   }
 });
 
+test("runtime cli codex release recovers existing handoff after store failure", async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-release-recover-home-"));
+  const runtimeHome = path.join(home, ".aionis", "codex");
+  const requests = [];
+  const handoffUri = "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/release-0.2.34";
+  const server = createServer((req, res) => {
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      const parsedBody = body ? JSON.parse(body) : null;
+      requests.push({ method: req.method, url: req.url, body: parsedBody });
+      if (req.url === "/v1/handoff/store") {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "invalid request" }));
+        return;
+      }
+      if (req.url === "/v1/memory/find") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({
+          nodes: [
+            {
+              uri: handoffUri,
+              slots: parsedBody.slots_contains,
+            },
+          ],
+        }));
+        return;
+      }
+      res.writeHead(404, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "not found" }));
+    });
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const release = await spawnCli([
+      "codex",
+      "release",
+      "0.2.34",
+      "--summary",
+      "0.2.34 published and verified after a recovered store write.",
+      "--cwd",
+      packageDir,
+      "--json",
+    ], {
+      cwd: os.tmpdir(),
+      env: {
+        ...process.env,
+        HOME: home,
+        AIONIS_CODEX_RUNTIME_HOME: runtimeHome,
+        AIONIS_CODEX_BASE_URL: `http://127.0.0.1:${address.port}`,
+      },
+    });
+    assert.equal(release.status, 0, `${release.stdout}\n${release.stderr}`);
+    const parsed = JSON.parse(release.stdout);
+    assert.equal(parsed.recovered_from_store_error, true);
+    assert.match(parsed.store_error.message, /400 invalid request/);
+    assert.equal(parsed.result, null);
+    assert.equal(parsed.stored.release_outcome, true);
+    assert.equal(parsed.stored.version, "0.2.34");
+    assert.equal(parsed.stored.uri, handoffUri);
+    assert.equal(parsed.audit_visibility.ok, true);
+    assert.equal(parsed.audit_visibility.uri, handoffUri);
+    assert.equal(parsed.audit_visibility.recovered_after_store_error, true);
+    assert.equal(parsed.audit_visibility.recovery_attempts, 1);
+    assert.equal(parsed.project_context_snapshot.ok, true);
+    assert.equal(parsed.project_context_snapshot.release_outcome, true);
+
+    const snapshotPath = path.join(runtimeHome, "state", "project-context", `${safeSnapshotName(parsed.project.scope)}.json`);
+    const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+    assert.equal(snapshot.project_release_outcome_fast.nodes[0].uri, handoffUri);
+    assert.equal(snapshot.project_release_outcome_fast.nodes[0].summary, "0.2.34 published and verified after a recovered store write.");
+    assert.equal(snapshot.project_release_outcome_fast.nodes[0].execution_result_summary.release_outcome, true);
+    assert.equal(snapshot.project_release_outcome_fast.nodes[0].execution_result_summary.version, "0.2.34");
+    assert.equal(snapshot.project_release_outcome_fast.nodes[0].slots.anchor, `${packageDir}#release:0.2.34`);
+
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0].url, "/v1/handoff/store");
+    assert.equal(requests[0].body.anchor, `${packageDir}#release:0.2.34`);
+    assert.equal(requests[1].url, "/v1/memory/find");
+    assert.deepEqual(requests[1].body.slots_contains, {
+      summary_kind: "handoff",
+      handoff_kind: "task_handoff",
+      repo_root: packageDir,
+      anchor: `${packageDir}#release:0.2.34`,
+    });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("runtime cli codex handoff stores a structured task outcome handoff", async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), "aionis-codex-handoff-home-"));
   const runtimeHome = path.join(home, ".aionis", "codex");
@@ -1692,12 +1787,14 @@ test("runtime cli audit reports remediation for filtered historical handoffs", a
     assert.equal(parsed.quality_summary.filtered_by_current_policy, 1);
     assert.equal(parsed.handoff_display_summary.filtered, 2);
     assert.equal(parsed.remediations.length, 2);
-    assert.equal(parsed.remediations[0].kind, "filtered_historical_handoff");
-    assert.equal(parsed.remediations[0].action, "keep_hidden_from_task_start_context");
-    assert.equal(parsed.remediations[0].uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/polluted");
-    assert.deepEqual(parsed.remediations[0].reasons, ["planning_advice_without_execution_evidence"]);
-    assert.equal(parsed.remediations[1].uri, "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/legacy-explainer");
-    assert.deepEqual(parsed.remediations[1].reasons, ["status_or_discussion_lead"]);
+    const pollutedRemediation = parsed.remediations.find((remediation) =>
+      remediation.uri === "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/polluted");
+    const legacyExplainerRemediation = parsed.remediations.find((remediation) =>
+      remediation.uri === "aionis://local-codex/codex%3Aaionis-runtime%3Atesthash/event/legacy-explainer");
+    assert.equal(pollutedRemediation.kind, "filtered_historical_handoff");
+    assert.equal(pollutedRemediation.action, "keep_hidden_from_task_start_context");
+    assert.deepEqual(pollutedRemediation.reasons, ["planning_advice_without_execution_evidence"]);
+    assert.deepEqual(legacyExplainerRemediation.reasons, ["status_or_discussion_lead"]);
     assert.equal(parsed.context_quality_report.status, "warn");
     assert.equal(parsed.context_quality_report.current_context.status, "warn");
     assert.equal(parsed.context_quality_report.historical_debt.status, "warn");

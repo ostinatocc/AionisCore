@@ -701,6 +701,11 @@ function sessionStateForAudit(paths, sessionId) {
 const CODEX_AUDIT_DEFAULT_TIMEOUT_MS = 3000;
 const CODEX_AUDIT_HANDOFF_FIND_TIMEOUT_MS = 10000;
 const CODEX_HANDOFF_STORE_TIMEOUT_MS = 10000;
+const CODEX_HANDOFF_STORE_RECOVERY_DELAYS_MS = [0, 300, 900];
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function codexRuntimeJson(paths, method, routePath, payloadOrQuery, timeoutMs = CODEX_AUDIT_DEFAULT_TIMEOUT_MS) {
   const configuredTimeoutMs = Number(process.env.AIONIS_CODEX_AUDIT_TIMEOUT_MS || timeoutMs);
@@ -1538,6 +1543,46 @@ async function verifyStoredHandoffVisibility(paths, project, payload) {
   return result;
 }
 
+async function verifyStoredHandoffVisibilityAfterStoreError(paths, project, payload) {
+  let last = null;
+  let attempts = 0;
+  for (const delayMs of CODEX_HANDOFF_STORE_RECOVERY_DELAYS_MS) {
+    attempts += 1;
+    if (delayMs > 0) await delay(delayMs);
+    last = await verifyStoredHandoffVisibility(paths, project, payload);
+    if (last.ok) {
+      return {
+        ...last,
+        recovered_after_store_error: true,
+        recovery_attempts: attempts,
+      };
+    }
+  }
+  return {
+    ...(last || {
+      ok: false,
+      checked: true,
+      route: "/v1/memory/find",
+      scope: project.scope,
+      project_cwd: project.cwd,
+      repo_root: payload.repo_root,
+      anchor: payload.anchor,
+      audit_command: handoffAuditCommand(project),
+      node_count: 0,
+      uri: null,
+      error: null,
+    }),
+    recovered_after_store_error: false,
+    recovery_attempts: attempts,
+  };
+}
+
+function storeErrorInfo(error) {
+  return {
+    message: error?.message || String(error),
+  };
+}
+
 async function storeCodexHandoff(args, options = {}) {
   validateFlags(args, new Set([
     "--json",
@@ -1560,11 +1605,28 @@ async function storeCodexHandoff(args, options = {}) {
   const projectCwd = optionTextValue(args, "--cwd", optionTextValue(args, "--working-directory", cwd));
   const project = projectDefaults(paths, projectCwd);
   const payload = buildCodexHandoffPayload(project, args, options);
-  const result = await codexRuntimeJson(paths, "POST", "/v1/handoff/store", payload, CODEX_HANDOFF_STORE_TIMEOUT_MS);
-  const storedUri = result?.handoff?.uri || result?.handoff_uri || null;
-  const storedPayload = { ...payload, stored_uri: storedUri };
+  let result = null;
+  let storeError = null;
+  let storedUri = null;
+  let visibility = null;
+  let recoveredFromStoreError = false;
+  try {
+    result = await codexRuntimeJson(paths, "POST", "/v1/handoff/store", payload, CODEX_HANDOFF_STORE_TIMEOUT_MS);
+    storedUri = result?.handoff?.uri || result?.handoff_uri || null;
+  } catch (error) {
+    storeError = storeErrorInfo(error);
+    visibility = await verifyStoredHandoffVisibilityAfterStoreError(paths, project, payload);
+    if (!visibility.ok) throw error;
+    recoveredFromStoreError = true;
+    storedUri = visibility.uri || null;
+  }
+  let storedPayload = { ...payload, ...(storedUri ? { stored_uri: storedUri } : {}) };
+  if (!visibility) visibility = await verifyStoredHandoffVisibility(paths, project, storedPayload);
+  if (!storedUri && visibility.uri) {
+    storedUri = visibility.uri;
+    storedPayload = { ...payload, stored_uri: storedUri };
+  }
   const projectContextSnapshot = updateProjectContextSnapshot(paths, project, storedPayload);
-  const visibility = await verifyStoredHandoffVisibility(paths, project, storedPayload);
   if (json) {
     process.stdout.write(`${JSON.stringify({
       ok: true,
@@ -1580,6 +1642,8 @@ async function storeCodexHandoff(args, options = {}) {
       },
       project_context_snapshot: projectContextSnapshot,
       audit_visibility: visibility,
+      recovered_from_store_error: recoveredFromStoreError,
+      ...(storeError ? { store_error: storeError } : {}),
       result,
     }, null, 2)}\n`);
   } else {
@@ -1591,6 +1655,7 @@ async function storeCodexHandoff(args, options = {}) {
     process.stdout.write(`repo_root - ${payload.repo_root}\n`);
     if (storedUri) process.stdout.write(`uri - ${storedUri}\n`);
     process.stdout.write(`summary - ${payload.summary}\n`);
+    if (storeError) process.stdout.write(`store_warning - recovered after store error: ${storeError.message}\n`);
     if (projectContextSnapshot?.ok) process.stdout.write(`project_context_snapshot - updated ${projectContextSnapshot.path}\n`);
     process.stdout.write(`audit_visibility - ${visibility.ok ? "PASS" : "WARN"} node_count=${visibility.node_count}\n`);
     if (visibility.error) process.stdout.write(`audit_visibility_error - ${visibility.error}\n`);
