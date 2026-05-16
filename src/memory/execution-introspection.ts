@@ -9,6 +9,7 @@ import {
 import { listRecentDelegationRecordNodeRowsLite } from "./delegation-records-surface.js";
 import {
   ExecutionMemoryIntrospectionRequest,
+  ExecutionSummaryV1Schema,
   type ExecutionMemoryIntrospectionResponse,
 } from "./schemas.js";
 import type { LiteExecutionNativeNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
@@ -973,14 +974,14 @@ export async function buildExecutionMemoryIntrospectionLite(
       samples: continuityProjectionSamples.slice(0, Math.max(Math.min(limit, 8), 4)),
     },
     demo_surface: demoSurface,
-    execution_summary: buildExecutionSummarySurface({
+    execution_summary: ExecutionSummaryV1Schema.parse(buildExecutionSummarySurface({
       planner_packet: null,
       surface,
       packet_assembly: null,
       tools: null,
       cost_signals: null,
       delegation_records: delegationRecordRows,
-    }),
+    })),
     recommended_workflows: recommendedWorkflows,
     candidate_workflows: candidateWorkflows,
     candidate_patterns: candidatePatterns,

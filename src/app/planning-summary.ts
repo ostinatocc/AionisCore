@@ -177,7 +177,7 @@ export type ActionRetrievalGateSummary = {
   preferred_rehydration: ActionRetrievalGateRehydrationHint | null;
 };
 
-type PatternSignalSummary = {
+export type PatternSignalSummary = {
   candidate_pattern_count: number;
   candidate_pattern_tools: string[];
   trusted_pattern_count: number;

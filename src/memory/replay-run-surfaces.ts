@@ -1,4 +1,4 @@
-import type { ReplayNodeRow } from "../store/replay-access.js";
+import type { ReplayPlaybookRow } from "../store/replay-access.js";
 import { buildAionisUri } from "./uri.js";
 
 type ReplayRunSurfaceOut = Record<string, unknown> | null;
@@ -7,7 +7,7 @@ export function buildReplayRunPlaybookSurface(args: {
   tenantId: string;
   scope: string;
   playbookId: string;
-  row: ReplayNodeRow;
+  row: ReplayPlaybookRow;
 }) {
   return {
     playbook_id: args.playbookId,
@@ -231,7 +231,7 @@ export function buildReplayGuidedPartialStepReport(args: {
 export function buildReplayPendingStepReport(args: {
   stepIndex: number | null;
   toolName: string | null;
-  mode: "strict" | "guided";
+  mode: "simulate" | "strict" | "guided";
   command: string;
   argv: string[];
   executionBackend: string;

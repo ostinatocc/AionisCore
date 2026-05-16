@@ -57,6 +57,8 @@ type LiteAutomationReplayResult = {
   playbook?: unknown;
   run?: unknown;
   summary?: unknown;
+  execution?: unknown;
+  steps?: unknown;
 };
 
 type LiteAutomationReplayRunner = (body: unknown, options: unknown) => Promise<LiteAutomationReplayResult>;
@@ -731,10 +733,11 @@ async function continueAutomationRun(args: {
       args.deps.buildReplayRunOptions("lite_automation_run"),
     );
     const replayReadiness = toStringOrNull(asObject(replayOut?.summary)?.replay_readiness);
+    const replayRun = asObject(replayOut?.run);
     const replayStatusRaw =
       replayOut?.mode === "simulate"
         ? (replayReadiness === "ready" || replayReadiness === "success" ? "success" : "failed")
-        : String(replayOut?.run?.status ?? "failed");
+        : String(replayRun?.status ?? "failed");
     const replayStatus = replayStatusRaw.toLowerCase();
     const replayRunId = toStringOrNull(asObject(replayOut?.run)?.run_id);
     const replayPlaybookVersion = toPositiveIntOrNull(asObject(replayOut?.playbook)?.version) ?? node.version ?? null;

@@ -241,45 +241,52 @@ export function registerHealthRoute(args: {
     sandboxRemoteAllowedCidrs,
   } = args;
 
-  app.get("/health", async () => ({
-    ok: true,
-    runtime: {
-      edition: env.AIONIS_EDITION,
-      mode: env.AIONIS_MODE,
-    },
-    storage: {
-      backend: resolveRuntimeMemoryStoreBackend(env),
-    },
-    lite: env.AIONIS_EDITION === "lite"
-      ? {
-          identity: {
-            local_actor_id: env.LITE_LOCAL_ACTOR_ID,
-          },
-          stores: {
-            recall: liteRecallStore ? liteRecallStore.healthSnapshot() : null,
-            write: liteWriteStore ? liteWriteStore.healthSnapshot() : null,
-            replay: liteReplayStore ? liteReplayStore.healthSnapshot() : null,
-            automation_definitions: liteAutomationStore ? liteAutomationStore.healthSnapshot() : null,
-            automation_runs: liteAutomationRunStore ? liteAutomationRunStore.healthSnapshot() : null,
-          },
-          route_matrix: buildLiteRouteMatrix(),
-        }
-      : null,
-    sandbox: {
-      ...sandboxExecutor.healthSnapshot(),
-      tenant_budget: {
-        window_hours: env.SANDBOX_TENANT_BUDGET_WINDOW_HOURS,
-        tenant_count: sandboxTenantBudgetPolicy.size,
+  app.get("/health", async () => {
+    const sandboxHealth = sandboxExecutor.healthSnapshot();
+    const sandboxHealthRecord =
+      sandboxHealth && typeof sandboxHealth === "object" && !Array.isArray(sandboxHealth)
+        ? (sandboxHealth as Record<string, unknown>)
+        : {};
+    return {
+      ok: true,
+      runtime: {
+        edition: env.AIONIS_EDITION,
+        mode: env.AIONIS_MODE,
       },
-      remote_egress: {
-        cidr_count: sandboxRemoteAllowedCidrs.size,
-        deny_private_ips: env.SANDBOX_REMOTE_EXECUTOR_EGRESS_DENY_PRIVATE_IPS,
+      storage: {
+        backend: resolveRuntimeMemoryStoreBackend(env),
       },
-      artifact_object_store: {
-        base_uri_configured: !!env.SANDBOX_ARTIFACT_OBJECT_STORE_BASE_URI.trim(),
+      lite: env.AIONIS_EDITION === "lite"
+        ? {
+            identity: {
+              local_actor_id: env.LITE_LOCAL_ACTOR_ID,
+            },
+            stores: {
+              recall: liteRecallStore ? liteRecallStore.healthSnapshot() : null,
+              write: liteWriteStore ? liteWriteStore.healthSnapshot() : null,
+              replay: liteReplayStore ? liteReplayStore.healthSnapshot() : null,
+              automation_definitions: liteAutomationStore ? liteAutomationStore.healthSnapshot() : null,
+              automation_runs: liteAutomationRunStore ? liteAutomationRunStore.healthSnapshot() : null,
+            },
+            route_matrix: buildLiteRouteMatrix(),
+          }
+        : null,
+      sandbox: {
+        ...sandboxHealthRecord,
+        tenant_budget: {
+          window_hours: env.SANDBOX_TENANT_BUDGET_WINDOW_HOURS,
+          tenant_count: sandboxTenantBudgetPolicy.size,
+        },
+        remote_egress: {
+          cidr_count: sandboxRemoteAllowedCidrs.size,
+          deny_private_ips: env.SANDBOX_REMOTE_EXECUTOR_EGRESS_DENY_PRIVATE_IPS,
+        },
+        artifact_object_store: {
+          base_uri_configured: !!env.SANDBOX_ARTIFACT_OBJECT_STORE_BASE_URI.trim(),
+        },
       },
-    },
-  }));
+    };
+  });
 }
 
 type MemoryWriteRouteArgs = Parameters<typeof registerMemoryWriteRoutes>[0];

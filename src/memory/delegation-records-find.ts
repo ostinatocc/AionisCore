@@ -5,6 +5,7 @@ import {
   ExecutionDelegationRecordsSummarySchema,
   type DelegationRecordsAggregateInput,
   type DelegationRecordsAggregateResponse,
+  type DelegationRecordFindEntry,
   type DelegationRecordsFindInput,
   type DelegationRecordsFindResponse,
 } from "./schemas.js";
@@ -363,9 +364,9 @@ function collectDelegationRecordEntries(
 function buildDelegationRecordsFindEntries(
   entries: ParsedDelegationRecordEntry[],
   includePayload: boolean,
-) {
+): DelegationRecordFindEntry[] {
   return entries.map((entry) => {
-    const out: Record<string, unknown> = {
+    const out: DelegationRecordFindEntry = {
       uri: entry.uri,
       node_id: entry.node_id,
       client_id: entry.client_id,

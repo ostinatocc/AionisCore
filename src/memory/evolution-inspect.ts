@@ -10,6 +10,7 @@ import {
   type ExecutionContractV1,
 } from "./execution-contract.js";
 import { applyPolicyMemoryGovernanceLite } from "./policy-memory.js";
+import { normalizeContractTrust } from "./contract-trust.js";
 import {
   EvolutionInspectRequest,
   EvolutionInspectResponseSchema,
@@ -92,7 +93,7 @@ function buildExecutionContractFromPolicyContractSurface(policyContract: PolicyC
 function buildExecutionContractFromDerivedPolicySurface(derivedPolicy: Record<string, unknown> | null): ExecutionContractV1 | null {
   if (!derivedPolicy) return null;
   return buildExecutionContractFromProjection({
-    contract_trust: firstString(derivedPolicy.contract_trust),
+    contract_trust: normalizeContractTrust(derivedPolicy.contract_trust),
     task_family: firstString(derivedPolicy.task_family),
     workflow_signature: firstString(derivedPolicy.workflow_signature),
     policy_memory_id: firstString(derivedPolicy.policy_memory_id),
@@ -439,7 +440,7 @@ async function buildEvolutionInspectArtifacts(args: {
     },
     args.defaultScope,
     args.defaultTenantId,
-    args.defaultActorId,
+    args.defaultActorId ?? "local",
   );
 
   const tools = await selectTools(
@@ -516,7 +517,7 @@ async function rebuildEvolutionInspectArtifactsLite(args: {
     },
     args.defaultScope,
     args.defaultTenantId,
-    args.defaultActorId,
+    args.defaultActorId ?? "local",
   );
   const experience = buildExperienceIntelligenceResponse({
     parsed: args.parsed,

@@ -1,7 +1,7 @@
 import type {
   LocalCommandOutcome,
   PreconditionResult,
-  SignatureCheck,
+  SignatureEvaluation,
 } from "./replay-execution-helpers.js";
 import type { ReplayRunGateDecision } from "./replay-run-gates.js";
 import {
@@ -283,7 +283,7 @@ export async function handleReplaySuccessStep(input: {
   sensitiveReview: ReplaySensitiveReviewInfo;
   execution: LocalCommandOutcome;
   resultSummary: ReplayResultSummaryRecord;
-  signature: SignatureCheck;
+  signature: SignatureEvaluation;
   postconditions: PreconditionResult[];
   writeStepAfter?: ReplayStepAfterWriter | null;
 }): Promise<ReplayHandledStepResult> {
@@ -330,7 +330,7 @@ export async function handleReplayStrictFailureStep(input: {
   sensitiveReview: ReplaySensitiveReviewInfo;
   execution: LocalCommandOutcome;
   resultSummary: ReplayResultSummaryRecord;
-  signature: SignatureCheck;
+  signature: SignatureEvaluation;
   preconditions: PreconditionResult[];
   postconditions: PreconditionResult[];
   error: string;
@@ -384,7 +384,7 @@ export async function handleReplayGuidedFailureStep(input: {
   sensitiveReview: ReplaySensitiveReviewInfo;
   execution: LocalCommandOutcome;
   resultSummary: ReplayResultSummaryRecord;
-  signature: SignatureCheck;
+  signature: SignatureEvaluation;
   postconditions: PreconditionResult[];
   error: string;
   writeStepAfter?: ReplayStepAfterWriter | null;

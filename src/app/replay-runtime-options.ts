@@ -31,7 +31,7 @@ function createSandboxRunExecutor(args: {
     project_id?: string | null;
     argv: string[];
     timeout_ms: number;
-    mode: "sync" | "async";
+    mode?: "sync" | "async";
     metadata?: Record<string, unknown>;
   }) => {
     if (!env.SANDBOX_ENABLED) {
@@ -171,6 +171,9 @@ export function createReplayRuntimeOptionBuilders(args: {
   );
 
   function buildReplayRepairReviewOptions() {
+    const localExecutorMode = env.SANDBOX_ENABLED && env.SANDBOX_EXECUTOR_MODE === "local_process"
+      ? "local_process" as const
+      : "disabled" as const;
     return {
       defaultScope: env.MEMORY_SCOPE,
       defaultTenantId: env.MEMORY_TENANT_ID,
@@ -187,7 +190,7 @@ export function createReplayRuntimeOptionBuilders(args: {
       replayMirror: liteReplayStore,
       localExecutor: {
         enabled: env.SANDBOX_ENABLED && env.SANDBOX_EXECUTOR_MODE === "local_process",
-        mode: env.SANDBOX_ENABLED && env.SANDBOX_EXECUTOR_MODE === "local_process" ? "local_process" : "disabled",
+        mode: localExecutorMode,
         allowedCommands: sandboxAllowedCommands,
         workdir: env.SANDBOX_EXECUTOR_WORKDIR,
         timeoutMs: env.SANDBOX_EXECUTOR_TIMEOUT_MS,

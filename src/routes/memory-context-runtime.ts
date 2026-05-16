@@ -121,15 +121,6 @@ type RecallAdaptiveHardCapLike = {
 type RecallTextEmbedBatcherLike = {
   stats: () => unknown;
 };
-type StaticContextBlock = {
-  id: string;
-  title?: string;
-  content: string;
-  tags?: string[];
-  intents?: string[];
-  priority: number;
-  always_include: boolean;
-};
 
 type ParsedMemoryRecall = ReturnType<typeof MemoryRecallRequest.parse>;
 type ParsedMemoryRecallText = ReturnType<typeof MemoryRecallTextRequest.parse>;
@@ -157,9 +148,7 @@ type ContextAssembleRouteOutput = {
   tools: ToolSelectionLike | null;
 };
 type ContextRuntimeLiteStoreLike =
-  NonNullable<NonNullable<Parameters<typeof evaluateRules>[4]>["liteWriteStore"]>
-  & NonNullable<NonNullable<Parameters<typeof selectTools>[4]>["liteWriteStore"]>
-  & Pick<LiteWriteStore, "findNodes">;
+  LiteWriteStore;
 type MemoryRecallRuntimeOptions = NonNullable<Parameters<typeof memoryRecallParsed>[7]>;
 type RecallEmbedResult = Awaited<
   ReturnType<
@@ -1180,7 +1169,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
             || entry === "request_operator_review",
         )
       : [];
-    const orderedActions = gateAction
+    const orderedActions: Array<"inspect_context" | "widen_recall" | "rehydrate_payload" | "request_operator_review"> = gateAction
       ? [gateAction, ...recommendedActions.filter((entry) => entry !== gateAction)]
       : recommendedActions;
     const contractTrust =
@@ -1395,8 +1384,9 @@ export function registerMemoryContextRuntimeRoutes(args: {
     runtimeVerification: RuntimeVerificationSurfaceV1 | null;
     parse: (input: unknown) => TParsed;
   }): TParsed => {
-    const evidence = args.runtimeVerification?.evidence_for_trust_gate;
-    if (!evidence) return args.parsed;
+    const runtimeVerification = args.runtimeVerification;
+    const evidence = runtimeVerification?.evidence_for_trust_gate;
+    if (!runtimeVerification || !evidence) return args.parsed;
     return args.parse({
       ...args.parsed,
       execution_evidence: [
@@ -1406,13 +1396,13 @@ export function registerMemoryContextRuntimeRoutes(args: {
       execution_result_summary: {
         ...(args.parsed.execution_result_summary ?? {}),
         runtime_verification_v1: {
-          surface_version: args.runtimeVerification.surface_version,
-          requested_mode: args.runtimeVerification.requested_mode,
-          execution_state: args.runtimeVerification.execution_state,
-          request_count: args.runtimeVerification.request_count,
-          result_count: args.runtimeVerification.result_count,
-          authoritative_evidence_ready: args.runtimeVerification.summary.authoritative_evidence_ready,
-          reason_codes: args.runtimeVerification.summary.reason_codes,
+          surface_version: runtimeVerification.surface_version,
+          requested_mode: runtimeVerification.requested_mode,
+          execution_state: runtimeVerification.execution_state,
+          request_count: runtimeVerification.request_count,
+          result_count: runtimeVerification.result_count,
+          authoritative_evidence_ready: runtimeVerification.summary.authoritative_evidence_ready,
+          reason_codes: runtimeVerification.summary.reason_codes,
         },
       },
     });

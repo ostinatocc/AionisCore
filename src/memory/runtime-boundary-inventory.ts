@@ -126,7 +126,7 @@ function authorityInventoryEntry(entry: RuntimeAuthorityBoundaryDeclaration): Ru
       may_use_stable_workflow_literal: entry.mayUseStableWorkflowLiteral === true,
       may_use_stable_pattern_literal: entry.mayUseStablePatternLiteral === true,
     },
-    required_source_markers: entry.requiredSourceMarkers ?? [],
+    required_source_markers: [...(entry.requiredSourceMarkers ?? [])],
   };
 }
 

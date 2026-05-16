@@ -1,4 +1,4 @@
-import type { ReplayNodeRow } from "../store/replay-access.js";
+import type { ReplayPlaybookRow } from "../store/replay-access.js";
 import { buildReplayCostSignals } from "./cost-signals.js";
 import { buildAionisUri } from "./uri.js";
 
@@ -14,7 +14,7 @@ export function buildReplayPlaybookGetSurface(args: {
   tenantId: string;
   scope: string;
   playbookId: string;
-  row: ReplayNodeRow;
+  row: ReplayPlaybookRow;
   commitUri: string | null;
 }) {
   const slotsObj = asObject(args.row.slots) ?? {};
@@ -48,7 +48,7 @@ export function buildReplayPlaybookCandidateSurface(args: {
   tenantId: string;
   scope: string;
   playbookId: string;
-  row: ReplayNodeRow;
+  row: ReplayPlaybookRow;
   deterministicGate: Record<string, unknown>;
   nextAction: string | null;
 }) {

@@ -638,14 +638,15 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
     },
     opts.embedder,
   );
-  const out = opts.liteWriteStore
-    ? await opts.liteWriteStore.withTx(() => applyMemoryWrite({} as pg.PoolClient, prepared, {
+  const liteWriteStore = opts.liteWriteStore ?? null;
+  const out = liteWriteStore
+    ? await liteWriteStore.withTx(() => applyMemoryWrite({} as pg.PoolClient, prepared, {
         maxTextLen: opts.maxTextLen,
         piiRedaction: opts.piiRedaction,
         allowCrossScopeEdges: opts.allowCrossScopeEdges,
         shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
         shadowDualWriteStrict: opts.shadowDualWriteStrict,
-        write_access: opts.liteWriteStore,
+        write_access: liteWriteStore,
       }))
     : await applyMemoryWrite(client, prepared, {
         maxTextLen: opts.maxTextLen,

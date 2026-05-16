@@ -166,6 +166,9 @@ export type DistillationOrigin =
   | "write_distillation_event_node"
   | "write_distillation_evidence_node"
   | "execution_write_projection"
+  | "handoff_continuity_carrier"
+  | "session_event_continuity_carrier"
+  | "session_continuity_carrier"
   | "replay_learning_episode";
 
 export type DistillationTransitionKind =
@@ -173,6 +176,9 @@ export type DistillationTransitionKind =
   | "distilled_from_event_node"
   | "distilled_from_evidence_node"
   | "projected_from_execution_write"
+  | "projected_from_handoff_carrier"
+  | "projected_from_session_event_carrier"
+  | "projected_from_session_carrier"
   | "projected_from_replay_learning";
 
 export type DistillationPromotionTarget = "workflow" | "pattern" | "policy";
@@ -192,7 +198,15 @@ export type DistillationMaintenanceMetadata = {
 export type DistillationMetadata = {
   abstraction_state: "distilled";
   distillation_origin: DistillationOrigin;
-  source_kind: "input_text" | "event_nodes" | "evidence_nodes";
+  source_kind:
+    | "input_text"
+    | "event_nodes"
+    | "evidence_nodes"
+    | "execution_projection"
+    | "handoff_carrier"
+    | "session_event_carrier"
+    | "session_carrier"
+    | "replay_learning";
   preferred_promotion_target: DistillationPromotionTarget;
   extraction_pattern: string | null;
   source_node_id: string | null;

@@ -334,7 +334,7 @@ export async function buildStablePlaybookNodeFields(args: {
   const authority = authorityGatedReplayWorkflowContract({
     base: rawWorkflowContract,
     taskSignature: anchor.task_signature,
-    workflowSignature: anchor.workflow_signature,
+    workflowSignature: anchor.workflow_signature ?? args.playbookId,
     sourceAnchor: args.clientId,
     filePath: anchor.file_path ?? null,
     notes: ["replay_stable_playbook_projection"],

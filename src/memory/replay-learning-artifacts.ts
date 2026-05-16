@@ -433,7 +433,7 @@ export function buildReplayLearningProjectionArtifacts(args: {
     const stableExecutionContract = buildReplayProjectionExecutionContract({
       base: workflowContract,
       task_signature: workflowAnchor.task_signature,
-      workflow_signature: workflowAnchor.workflow_signature,
+      workflow_signature: workflowAnchor.workflow_signature ?? args.workflowSignature,
       source_anchor: workflowClientId,
       file_path: workflowAnchor.file_path ?? null,
       notes: ["replay_learning_stable_projection"],

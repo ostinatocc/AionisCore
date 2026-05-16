@@ -160,6 +160,46 @@ export async function startAionisRuntime(): Promise<void> {
     scopeFromBody,
   });
 
+  const coerceRecallProfileName = (profile: string): Parameters<typeof resolveExplicitRecallMode>[1] =>
+    profile === "legacy" || profile === "strict_edges" || profile === "quality_first" || profile === "lite"
+      ? profile
+      : env.MEMORY_RECALL_PROFILE;
+  const resolveExplicitRecallModeForRoutes: RegisterApplicationRoutesArgs["resolveExplicitRecallMode"] = (
+    body,
+    baseProfile,
+    explicitRecallKnobs,
+  ) => resolveExplicitRecallMode(body, coerceRecallProfileName(baseProfile), explicitRecallKnobs);
+  const resolveClassAwareRecallProfileForRoutes: RegisterApplicationRoutesArgs["resolveClassAwareRecallProfile"] = (
+    endpoint,
+    body,
+    baseProfile,
+    explicitRecallKnobs,
+  ) => resolveClassAwareRecallProfile(
+    endpoint as Parameters<typeof resolveClassAwareRecallProfile>[0],
+    body,
+    coerceRecallProfileName(baseProfile),
+    explicitRecallKnobs,
+  );
+  const withRecallProfileDefaultsForRoutes: RegisterApplicationRoutesArgs["withRecallProfileDefaults"] = (body, defaults) => {
+    const merged = {
+      limit: typeof defaults.limit === "number" ? defaults.limit : globalRecallProfileDefaults.limit,
+      neighborhood_hops: defaults.neighborhood_hops === 2 ? 2 : defaults.neighborhood_hops === 1 ? 1 : globalRecallProfileDefaults.neighborhood_hops,
+      max_nodes: typeof defaults.max_nodes === "number" ? defaults.max_nodes : globalRecallProfileDefaults.max_nodes,
+      max_edges: typeof defaults.max_edges === "number" ? defaults.max_edges : globalRecallProfileDefaults.max_edges,
+      ranked_limit: typeof defaults.ranked_limit === "number" ? defaults.ranked_limit : globalRecallProfileDefaults.ranked_limit,
+      min_edge_weight: typeof defaults.min_edge_weight === "number" ? defaults.min_edge_weight : globalRecallProfileDefaults.min_edge_weight,
+      min_edge_confidence: typeof defaults.min_edge_confidence === "number" ? defaults.min_edge_confidence : globalRecallProfileDefaults.min_edge_confidence,
+    };
+    return withRecallProfileDefaults(body, merged);
+  };
+  const resolveAdaptiveRecallProfileForRoutes: RegisterApplicationRoutesArgs["resolveAdaptiveRecallProfile"] = (
+    profile,
+    waitMs,
+    explicitRecallKnobs,
+  ) => resolveAdaptiveRecallProfile(coerceRecallProfileName(profile), waitMs, explicitRecallKnobs);
+  const buildRecallTrajectoryForRoutes: RegisterApplicationRoutesArgs["buildRecallTrajectory"] = (args) =>
+    buildRecallTrajectory(args as Parameters<typeof buildRecallTrajectory>[0]);
+
   const app = createHttpApp(env);
 
   registerHostErrorHandler(app);
@@ -226,14 +266,14 @@ export async function startAionisRuntime(): Promise<void> {
     acquireInflightSlot,
     hasExplicitRecallKnobs,
     resolveRecallProfile,
-    resolveExplicitRecallMode,
-    resolveClassAwareRecallProfile,
-    withRecallProfileDefaults,
+    resolveExplicitRecallMode: resolveExplicitRecallModeForRoutes,
+    resolveClassAwareRecallProfile: resolveClassAwareRecallProfileForRoutes,
+    withRecallProfileDefaults: withRecallProfileDefaultsForRoutes,
     resolveRecallStrategy,
-    resolveAdaptiveRecallProfile,
+    resolveAdaptiveRecallProfile: resolveAdaptiveRecallProfileForRoutes,
     resolveAdaptiveRecallHardCap,
     inferRecallStrategyFromKnobs,
-    buildRecallTrajectory,
+    buildRecallTrajectory: buildRecallTrajectoryForRoutes,
     embedRecallTextQuery,
     mapRecallTextEmbeddingError,
     recordContextAssemblyTelemetryBestEffort,

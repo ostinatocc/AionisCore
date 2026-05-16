@@ -1,3 +1,4 @@
+import type pg from "pg";
 import { summarizeToolResult } from "./tool-result-summary.js";
 
 export type SandboxDefaults = {

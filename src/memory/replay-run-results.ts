@@ -1,7 +1,7 @@
 import type {
   LocalCommandOutcome,
   PreconditionResult,
-  SignatureCheck,
+  SignatureEvaluation,
 } from "./replay-execution-helpers.js";
 
 type ReplaySensitiveReviewInfo = {
@@ -18,7 +18,7 @@ type ReplayRepairRecord = Record<string, unknown> | null;
 
 export function isReplayExecutionPassed(input: {
   execution: LocalCommandOutcome;
-  signature: SignatureCheck;
+  signature: SignatureEvaluation;
   postconditions: PreconditionResult[];
 }): boolean {
   const failedPost = input.postconditions.some((entry) => entry.state === "fail");
@@ -52,7 +52,7 @@ export function buildReplaySuccessOutputSignature(input: {
   sensitiveReview: ReplaySensitiveReviewInfo;
   execution: LocalCommandOutcome;
   resultSummary: ReplayResultSummaryRecord;
-  signature: SignatureCheck;
+  signature: SignatureEvaluation;
 }): Record<string, unknown> {
   return {
     command: input.command,
@@ -75,7 +75,7 @@ export function buildReplayFailureOutputSignature(input: {
   sensitiveReview: ReplaySensitiveReviewInfo;
   execution: LocalCommandOutcome;
   resultSummary: ReplayResultSummaryRecord;
-  signature: SignatureCheck;
+  signature: SignatureEvaluation;
   preconditions: PreconditionResult[];
   postconditions: PreconditionResult[];
 }): Record<string, unknown> {
@@ -102,7 +102,7 @@ export function buildReplayGuidedPartialOutputSignature(input: {
   sensitiveReview: ReplaySensitiveReviewInfo;
   execution: LocalCommandOutcome;
   resultSummary: ReplayResultSummaryRecord;
-  signature: SignatureCheck;
+  signature: SignatureEvaluation;
   postconditions: PreconditionResult[];
   repair: ReplayRepairRecord;
 }): Record<string, unknown> {

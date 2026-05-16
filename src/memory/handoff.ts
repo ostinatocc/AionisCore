@@ -951,7 +951,7 @@ export async function recoverHandoff(args: {
   let matchedNodes = 0;
   let resolvedScope = parsed.scope ?? args.defaultScope;
   let resolvedTenantId = parsed.tenant_id ?? args.defaultTenantId;
-  let resolvedUri: string | null = normalizeOptionalString(parsed.handoff_uri);
+  let resolvedUri: string | null = normalizeOptionalString(parsed.handoff_uri) ?? null;
 
   if (!resolvedUri) {
     const findInput: MemoryFindInput = {

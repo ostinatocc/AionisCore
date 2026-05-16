@@ -1,7 +1,6 @@
 import {
   asRecord,
   buildActionRetrievalResponse,
-  choosePathRecommendation,
   choosePreferredTrustedPattern,
   findSelectedWorkflow,
   firstString,
@@ -34,8 +33,26 @@ import {
 } from "./execution-contract.js";
 import { resolveContractTrustForSteering } from "./contract-trust.js";
 import { resolveNodeExecutionEvidence } from "./node-execution-surface.js";
+import {
+  ServiceLifecycleConstraintV1Schema,
+  type ServiceLifecycleConstraintV1,
+} from "../execution/types.js";
 
-function workflowReuseReason(path: ReturnType<typeof choosePathRecommendation>): string {
+type ActionRetrievalPath = ActionRetrievalResponse["path"];
+
+function normalizeServiceLifecycleConstraints(value: unknown, limit = 16): ServiceLifecycleConstraintV1[] {
+  if (!Array.isArray(value)) return [];
+  const out: ServiceLifecycleConstraintV1[] = [];
+  for (const entry of value) {
+    const parsed = ServiceLifecycleConstraintV1Schema.safeParse(entry);
+    if (!parsed.success) continue;
+    out.push(parsed.data);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function workflowReuseReason(path: ActionRetrievalPath): string {
   const record = path as unknown as Record<string, unknown>;
   return firstString(record.reason, record.summary, record.next_action)
     ?? "Reuse the most relevant learned workflow first.";
@@ -90,7 +107,7 @@ function outcomeFieldsFromPolicy(policy: DerivedPolicySurface | PolicyContract |
 export function buildDerivedPolicySurface(args: {
   tools: ToolsSelectRouteContract;
   introspection: ExecutionMemoryIntrospectionResponse;
-  path: ReturnType<typeof choosePathRecommendation>;
+  path: ActionRetrievalPath;
   queryText: string;
   context: unknown;
   executionContract: ExecutionContractV1 | null;
@@ -187,13 +204,13 @@ export function buildDerivedPolicySurface(args: {
       : args.executionContract?.pattern_hints,
     24,
   );
-  const serviceLifecycleConstraints = workflowSupports && Array.isArray(selectedWorkflow?.service_lifecycle_constraints)
-    && selectedWorkflow.service_lifecycle_constraints.length > 0
-    ? selectedWorkflow.service_lifecycle_constraints.slice(0, 16)
-    : Array.isArray(args.executionContract?.service_lifecycle_constraints)
-    && args.executionContract.service_lifecycle_constraints.length > 0
-    ? args.executionContract.service_lifecycle_constraints.slice(0, 16)
+  const workflowServiceLifecycleConstraints = workflowSupports
+    ? normalizeServiceLifecycleConstraints(selectedWorkflow?.service_lifecycle_constraints)
     : [];
+  const executionServiceLifecycleConstraints = normalizeServiceLifecycleConstraints(args.executionContract?.service_lifecycle_constraints);
+  const serviceLifecycleConstraints = workflowServiceLifecycleConstraints.length > 0
+    ? workflowServiceLifecycleConstraints
+    : executionServiceLifecycleConstraints;
   const targetFiles = stringList(
     workflowSupports && selectedWorkflow?.target_files && selectedWorkflow.target_files.length > 0
       ? selectedWorkflow.target_files
@@ -241,7 +258,7 @@ export function buildDerivedPolicySurface(args: {
 export function buildPolicyHintPack(args: {
   tools: ToolsSelectRouteContract;
   introspection: ExecutionMemoryIntrospectionResponse;
-  path: ReturnType<typeof choosePathRecommendation>;
+  path: ActionRetrievalPath;
   queryText: string;
   context: unknown;
 }): PolicyHintPack {
@@ -310,9 +327,7 @@ export function buildPolicyHintPack(args: {
       target_files: stringList(selectedWorkflow!.target_files, 24),
       workflow_steps: stringList(selectedWorkflow!.workflow_steps, 24),
       pattern_hints: stringList(selectedWorkflow!.pattern_hints, 24),
-      service_lifecycle_constraints: Array.isArray(selectedWorkflow!.service_lifecycle_constraints)
-        ? selectedWorkflow!.service_lifecycle_constraints.slice(0, 16)
-        : [],
+      service_lifecycle_constraints: normalizeServiceLifecycleConstraints(selectedWorkflow!.service_lifecycle_constraints),
       rehydration_mode: null,
       confidence: Number.isFinite(selectedWorkflow!.confidence ?? Number.NaN) ? (selectedWorkflow!.confidence ?? null) : null,
       priority: preferredPattern?.selected_tool === selectedTool ? 85 : 95,
@@ -348,11 +363,11 @@ export function buildPolicyHintPack(args: {
     const patternHints = Array.isArray(args.path.pattern_hints) && args.path.pattern_hints.length > 0
       ? args.path.pattern_hints
       : stringList(selectedWorkflow?.pattern_hints, 24);
-    const serviceLifecycleConstraints = Array.isArray(args.path.service_lifecycle_constraints) && args.path.service_lifecycle_constraints.length > 0
-      ? args.path.service_lifecycle_constraints
-      : Array.isArray(selectedWorkflow?.service_lifecycle_constraints)
-        ? selectedWorkflow!.service_lifecycle_constraints!.slice(0, 16)
-        : [];
+    const pathServiceLifecycleConstraints = normalizeServiceLifecycleConstraints(args.path.service_lifecycle_constraints);
+    const workflowServiceLifecycleConstraints = normalizeServiceLifecycleConstraints(selectedWorkflow?.service_lifecycle_constraints);
+    const serviceLifecycleConstraints = pathServiceLifecycleConstraints.length > 0
+      ? pathServiceLifecycleConstraints
+      : workflowServiceLifecycleConstraints;
     hints.push({
       hint_id: `workflow_reuse:${args.path.anchor_id}`,
       source_kind: "stable_workflow",
@@ -411,7 +426,7 @@ export function buildPolicyContract(args: {
   historyApplied: boolean;
   derivedPolicy: DerivedPolicySurface | null;
   policyHints: PolicyHintPack;
-  path: ReturnType<typeof choosePathRecommendation>;
+  path: ActionRetrievalPath;
   nextAction: string | null;
   executionContract: ExecutionContractV1 | null;
 }): PolicyContract | null {
@@ -440,9 +455,7 @@ export function buildPolicyContract(args: {
       ? "default"
       : "hint";
   const pathWorkflowSteps = Array.isArray(args.path.workflow_steps) ? args.path.workflow_steps : [];
-  const pathServiceLifecycleConstraints = Array.isArray(args.path.service_lifecycle_constraints)
-    ? args.path.service_lifecycle_constraints
-    : [];
+  const pathServiceLifecycleConstraints = normalizeServiceLifecycleConstraints(args.path.service_lifecycle_constraints);
   const workflowSteps = Array.isArray(args.executionContract?.workflow_steps) && args.executionContract.workflow_steps.length > 0
     ? args.executionContract.workflow_steps
     : pathWorkflowSteps.length > 0
@@ -455,14 +468,13 @@ export function buildPolicyContract(args: {
     : Array.isArray(args.derivedPolicy.pattern_hints)
     ? args.derivedPolicy.pattern_hints
     : [];
-  const serviceLifecycleConstraints = Array.isArray(args.executionContract?.service_lifecycle_constraints)
-    && args.executionContract.service_lifecycle_constraints.length > 0
-    ? args.executionContract.service_lifecycle_constraints
+  const executionServiceLifecycleConstraints = normalizeServiceLifecycleConstraints(args.executionContract?.service_lifecycle_constraints);
+  const derivedPolicyServiceLifecycleConstraints = normalizeServiceLifecycleConstraints(args.derivedPolicy.service_lifecycle_constraints);
+  const serviceLifecycleConstraints = executionServiceLifecycleConstraints.length > 0
+    ? executionServiceLifecycleConstraints
     : pathServiceLifecycleConstraints.length > 0
     ? pathServiceLifecycleConstraints
-    : Array.isArray(args.derivedPolicy.service_lifecycle_constraints)
-      ? args.derivedPolicy.service_lifecycle_constraints
-      : [];
+    : derivedPolicyServiceLifecycleConstraints;
   const reason = [
     args.derivedPolicy.reason,
     avoidTools.length > 0 ? `avoid=${avoidTools.join(", ")}` : null,
@@ -505,7 +517,7 @@ export function buildPolicyContract(args: {
 export type PolicyMaterializationSurface = {
   actionRetrieval: ActionRetrievalResponse;
   executionContract: ExecutionContractV1 | null;
-  path: ReturnType<typeof choosePathRecommendation>;
+  path: ActionRetrievalPath;
   liveDerivedPolicy: DerivedPolicySurface | null;
   persistedPolicyMemory: PersistedPolicyMemory | null;
   derivedPolicy: DerivedPolicySurface | null;

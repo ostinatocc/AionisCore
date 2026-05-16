@@ -65,8 +65,12 @@ export async function assertBootstrapStoreContracts(args: {
 }) {
   const { store, recallAccessForClient, replayAccessForClient, writeAccessForClient, liteWriteStore } = args;
   await store.withClient(async (client) => {
-    assertRecallStoreAccessContract(recallAccessForClient(client));
-    assertReplayStoreAccessContract(replayAccessForClient(client));
+    const recallAccess = recallAccessForClient(client);
+    const replayAccess = replayAccessForClient(client);
+    if (!recallAccess) throw new Error("recall store access is not available");
+    if (!replayAccess) throw new Error("replay store access is not available");
+    assertRecallStoreAccessContract(recallAccess);
+    assertReplayStoreAccessContract(replayAccess);
     assertWriteStoreAccessContract(writeAccessForClient(client));
   });
   if (liteWriteStore) {

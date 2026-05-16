@@ -1,7 +1,19 @@
 import { existsSync, statSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyPluginCallback } from "fastify";
 import type { Env } from "../config.js";
+
+type FastifyStaticPlugin = FastifyPluginCallback<Record<string, unknown>>;
+
+const dynamicImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<unknown>;
+
+function resolveDefaultExport<T>(mod: unknown): T {
+  return (
+    mod && typeof mod === "object" && "default" in mod
+      ? (mod as { default: T }).default
+      : mod
+  ) as T;
+}
 
 /**
  * Registers the Aionis Inspector static bundle at `/inspector/*` for Lite
@@ -44,10 +56,9 @@ export async function registerInspectorStaticRoutes(
     return;
   }
 
-  let fastifyStatic: typeof import("@fastify/static").default | null = null;
+  let fastifyStatic: FastifyStaticPlugin | null = null;
   try {
-    const mod = await import("@fastify/static");
-    fastifyStatic = (mod as { default: typeof import("@fastify/static").default }).default ?? (mod as any);
+    fastifyStatic = resolveDefaultExport<FastifyStaticPlugin>(await dynamicImport("@fastify/static"));
   } catch (err) {
     app.log.warn(
       { err: (err as Error).message },
@@ -62,7 +73,7 @@ export async function registerInspectorStaticRoutes(
     decorateReply: false,
     index: ["index.html"],
     serve: true,
-    setHeaders: (res) => {
+    setHeaders: (res: { setHeader: (name: string, value: string) => void }) => {
       res.setHeader("cache-control", "no-cache");
       res.setHeader("x-aionis-surface", "inspector");
     },

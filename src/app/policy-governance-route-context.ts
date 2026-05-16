@@ -91,7 +91,7 @@ export async function buildLivePolicyGovernanceRouteContext(args: {
     },
     args.env.MEMORY_SCOPE,
     args.env.MEMORY_TENANT_ID,
-    null,
+    args.env.LITE_LOCAL_ACTOR_ID,
   );
   const tools = await selectTools(
     null,

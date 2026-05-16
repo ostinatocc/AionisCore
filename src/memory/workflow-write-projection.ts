@@ -1009,7 +1009,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
         contractTrust,
         taskSignature: stableAnchor.task_signature,
         taskFamily: stableAnchor.task_family ?? null,
-        workflowSignature: stableAnchor.workflow_signature,
+        workflowSignature: stableAnchor.workflow_signature ?? workflowSignature,
         filePath: stableAnchor.file_path ?? null,
         targetFiles: stableAnchor.target_files ?? [],
         acceptanceChecks,

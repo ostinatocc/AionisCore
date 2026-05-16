@@ -63,7 +63,7 @@ Aionis is harmful or distracting when it surfaces generic or stale context:
 | Status suppression overreach | Completed npm publish looked like a status reply and was not recorded. | Added compact `release_outcome` handoff storage keyed by version. |
 | Stale runtime process records | Failed launchers could be written to `runtime-process.json` before health passed. | Runtime pid records are now written only after health succeeds. |
 | Env-only runtime command | Hook processes could miss the LaunchAgent runtime command and fall back to `npx`. | Codex install now persists `state/runtime-command.json`, and runtime startup reads it. |
-| Heavy automatic tool feedback | `/v1/memory/tools/feedback` can still hang Runtime under hook payloads. | Automatic hook telemetry is disabled by default; the explicit route remains a follow-up fix. |
+| Heavy automatic tool feedback | `/v1/memory/tools/feedback` previously hung Runtime under hook-shaped payloads. | Automatic hook telemetry remains disabled by default, but the explicit route is repaired in source: no-trust feedback now avoids policy-memory materialization and Lite query hot paths are indexed. |
 
 ## Current Live Check
 
@@ -82,7 +82,7 @@ This means release outcome capture works, but release outcome display still need
 
 A follow-up live query exposed one more write-side bug: summaries saying "0.2.11 candidate; npm latest still 0.2.10; no accidental publish" had enough npm/version tokens to be misclassified as a `release_outcome`. The release classifier now treats candidate, unpublished, still-latest, and no-accidental-publish language as negative evidence, and display filtering ignores already-written false positives.
 
-The current `0.2.32` candidate dogfood shifted from recall display to operational trust. Restarting the local Runtime/Codex integration proved the snapshot path works across process boundaries, but also exposed three practical failure modes: stale pids from failed launchers, hook processes losing the fixed local Runtime command, and automatic tool-feedback telemetry hanging Runtime. The first two are fixed in source; the third is guarded off by default until the route itself is repaired.
+The current `0.2.32` candidate dogfood shifted from recall display to operational trust. Restarting the local Runtime/Codex integration proved the snapshot path works across process boundaries, but also exposed three practical failure modes: stale pids from failed launchers, hook processes losing the fixed local Runtime command, and automatic tool-feedback telemetry hanging Runtime. The first two were fixed in source; the explicit tools-feedback route is now repaired after `0.2.34`, while automatic hook telemetry remains guarded off until it gets a bounded hook-side soak.
 
 After publishing `0.2.32`, a live UserPromptSubmit hook rendered `latest_release_outcome=0.2.32 published and verified...`, and `codex audit` reran cleanly with `context_quality=pass`. The same audit exposed a quality problem: stored latest task handoff still pointed to Task 8 while the local task-start snapshot had the Task 9 closeout. The `0.2.33` candidate fixes that by merging local project snapshots into `codex audit` latest-handoff selection ahead of stale Runtime handoffs. Live audit now reports Task 9 and the `0.2.32` release as local snapshots with no warnings.
 
@@ -105,11 +105,11 @@ The current non-negotiable gaps before charging:
 
 1. make install/enable/recovery feel automatic, including clear Runtime online state
 2. keep first-screen context consistently short and current
-3. repair `/v1/memory/tools/feedback` before reenabling automatic tool telemetry
+3. re-enable automatic tool feedback only behind a bounded hook timeout and live soak
 4. prove the same value on a second non-AionisRuntime repository
 
 ## Next Cuts
 
-1. Repair `/v1/memory/tools/feedback` route-level behavior before enabling automatic hook telemetry again.
+1. Soak the repaired `/v1/memory/tools/feedback` route and add bounded automatic hook telemetry only if it stays sub-second under real Codex payloads.
 2. Run the same Codex recall loop on a second repository to check whether the improvements generalize beyond AionisRuntime.
 3. Keep suppressing generic memory. Aionis should earn visible space only when it changes the first action or validation boundary.

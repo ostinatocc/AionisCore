@@ -44,7 +44,7 @@ function normalizeForgettingSignals(costSignals: unknown) {
   const forgottenItems = Number.isFinite(Number(signals.forgotten_items))
     ? Math.max(0, Math.trunc(Number(signals.forgotten_items)))
     : 0;
-  const forgottenByReason =
+  const forgottenByReason: Record<string, number> =
     signals.forgotten_by_reason && typeof signals.forgotten_by_reason === "object" && !Array.isArray(signals.forgotten_by_reason)
       ? Object.fromEntries(
           Object.entries(signals.forgotten_by_reason as Record<string, unknown>)

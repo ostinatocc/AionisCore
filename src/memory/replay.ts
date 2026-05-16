@@ -71,6 +71,7 @@ import {
   isSafeCommandReference,
   normalizeReplayExecutionBackend,
   normalizeReplaySensitiveReviewMode,
+  sandboxResultToOutcome,
   type PreconditionResult,
   type ReplayExecutionBackend,
   type ReplaySensitiveReviewMode,
@@ -2432,7 +2433,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
             repair_note: input.repairNote,
             error: input.error,
           },
-          opts.writeOptions,
+          opts.writeOptions!,
         );
       }
     : null;

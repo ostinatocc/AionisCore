@@ -35,7 +35,7 @@ export type RuntimeAuthorityBoundaryDeclaration = {
   requiredSourceMarkers?: readonly string[];
 };
 
-export const RUNTIME_AUTHORITY_BOUNDARY_REGISTRY = [
+export const RUNTIME_AUTHORITY_BOUNDARY_REGISTRY: readonly RuntimeAuthorityBoundaryDeclaration[] = [
   {
     id: "authority_boundary_manifest",
     file: "src/memory/authority-producer-registry.ts",

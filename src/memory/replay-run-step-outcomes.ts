@@ -1,7 +1,7 @@
 import type {
   LocalCommandOutcome,
   PreconditionResult,
-  SignatureCheck,
+  SignatureEvaluation,
 } from "./replay-execution-helpers.js";
 import {
   buildReplayExecutionFailureStepReport,
@@ -83,7 +83,7 @@ export function buildReplaySuccessStepArtifacts(input: {
   sensitiveReview: ReplaySensitiveReviewInfo;
   execution: LocalCommandOutcome;
   resultSummary: ReplayResultSummaryRecord;
-  signature: SignatureCheck;
+  signature: SignatureEvaluation;
   postconditions: PreconditionResult[];
 }): {
   report: Record<string, unknown>;
@@ -126,7 +126,7 @@ export function buildReplayStrictFailureStepArtifacts(input: {
   sensitiveReview: ReplaySensitiveReviewInfo;
   execution: LocalCommandOutcome;
   resultSummary: ReplayResultSummaryRecord;
-  signature: SignatureCheck;
+  signature: SignatureEvaluation;
   preconditions: PreconditionResult[];
   postconditions: PreconditionResult[];
   error: string;
@@ -174,7 +174,7 @@ export function buildReplayGuidedPartialStepArtifacts(input: {
   sensitiveReview: ReplaySensitiveReviewInfo;
   execution: LocalCommandOutcome;
   resultSummary: ReplayResultSummaryRecord;
-  signature: SignatureCheck;
+  signature: SignatureEvaluation;
   postconditions: PreconditionResult[];
   repair: ReplayRepairRecord;
 }): {

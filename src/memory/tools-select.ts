@@ -7,7 +7,11 @@ import {
   normalizeToolCandidates,
   uniqueRuleIds,
 } from "./execution-provenance.js";
-import { ToolsSelectRequest } from "./schemas.js";
+import {
+  ToolsSelectRequest,
+  ToolsSelectRouteContractSchema,
+  type ToolsSelectRouteContract,
+} from "./schemas.js";
 import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
 import { applyToolPolicy } from "./tool-selector.js";
@@ -403,8 +407,9 @@ export async function selectTools(
     liteWriteStore?: Pick<LiteWriteStore, "insertExecutionDecision" | "listRuleCandidates"> | null;
     recallAccess?: RecallStoreAccess | null;
     embedder?: EmbeddingProvider | null;
+    persistDecision?: boolean;
   } = {},
-) {
+): Promise<ToolsSelectRouteContract> {
   const parsed = ToolsSelectRequest.parse(body);
   const { context: evaluationContext, sideOutputs } = mergeExecutionContinuityContext(parsed.context, {
     execution_result_summary: parsed.execution_result_summary,
@@ -516,8 +521,10 @@ export async function selectTools(
     skipped_suppressed_pattern_affinity_levels: uniqueStrings(suppressedPatterns.map((pattern) => pattern.affinity_level), 8),
     ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
   };
-  const decisionRes: { id: string; created_at: string } = opts.liteWriteStore
-    ? await opts.liteWriteStore.insertExecutionDecision({
+  const decisionRes: { id: string; created_at: string | null } = opts.persistDecision === false
+    ? { id: decision_id, created_at: null }
+    : opts.liteWriteStore
+      ? await opts.liteWriteStore.insertExecutionDecision({
         id: decision_id,
         scope: tenancy.scope_key,
         decisionKind: "tools_select",
@@ -530,7 +537,7 @@ export async function selectTools(
         metadataJson: decisionMetadata,
         commitId: null,
       })
-    : await client!.query<{ id: string; created_at: string }>(
+      : await client!.query<{ id: string; created_at: string }>(
         `
         INSERT INTO memory_execution_decisions
           (id, scope, decision_kind, run_id, selected_tool, candidates_json, context_sha256, policy_sha256, source_rule_ids, metadata_json)
@@ -678,7 +685,7 @@ export async function selectTools(
       },
     },
   };
-  return {
+  return ToolsSelectRouteContractSchema.parse({
     ...response,
     selection_summary: buildToolsSelectionSummary({
       selection: response.selection,
@@ -686,5 +693,5 @@ export async function selectTools(
       pattern_matches: response.pattern_matches,
       source_rule_ids,
     }),
-  };
+  });
 }

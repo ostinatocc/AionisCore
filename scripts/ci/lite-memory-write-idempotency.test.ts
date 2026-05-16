@@ -108,3 +108,98 @@ test("memory/write allows exact client_id replay but rejects changed duplicate n
     await store.close();
   }
 });
+
+test("lite findNodes preserves literal text and slotsContains filtering", async () => {
+  const store = createLiteWriteStore(tmpDbPath("find-nodes-filtering"));
+  try {
+    const prepared = await prepareMemoryWrite(
+      {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        producer_agent_id: "local-user",
+        owner_agent_id: "local-user",
+        input_text: "seed findNodes filtering fixtures",
+        auto_embed: false,
+        nodes: [
+          {
+            client_id: "policy-memory:functions.exec_command",
+            type: "concept",
+            title: "Literal 100%_match",
+            text_summary: "Policy memory fixture for exec_command.",
+            slots: {
+              summary_kind: "policy_memory",
+              selected_tool: "functions.exec_command",
+            },
+          },
+          {
+            client_id: "policy-memory:functions.apply_patch",
+            type: "concept",
+            title: "Literal 1000 match",
+            text_summary: "Policy memory fixture for apply_patch.",
+            slots: {
+              summary_kind: "policy_memory",
+              selected_tool: "functions.apply_patch",
+            },
+          },
+        ],
+      },
+      "default",
+      "default",
+      {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        allowCrossScopeEdges: false,
+      },
+      null,
+    );
+    await store.withTx(() =>
+      applyMemoryWrite({} as any, prepared, {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        allowCrossScopeEdges: false,
+        shadowDualWriteEnabled: false,
+        shadowDualWriteStrict: false,
+        write_access: store,
+      }),
+    );
+
+    const byClient = await store.findNodes({
+      scope: "default",
+      type: "concept",
+      clientId: "policy-memory:functions.exec_command",
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 10,
+      offset: 0,
+    });
+    assert.equal(byClient.rows.length, 1);
+    assert.equal(byClient.rows[0]?.title, "Literal 100%_match");
+
+    const literalLike = await store.findNodes({
+      scope: "default",
+      titleContains: "100%_",
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 10,
+      offset: 0,
+    });
+    assert.deepEqual(literalLike.rows.map((row) => row.client_id), ["policy-memory:functions.exec_command"]);
+
+    const bySlots = await store.findNodes({
+      scope: "default",
+      type: "concept",
+      slotsContains: {
+        summary_kind: "policy_memory",
+        selected_tool: "functions.exec_command",
+      },
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 10,
+      offset: 0,
+    });
+    assert.deepEqual(bySlots.rows.map((row) => row.client_id), ["policy-memory:functions.exec_command"]);
+  } finally {
+    await store.close();
+  }
+});

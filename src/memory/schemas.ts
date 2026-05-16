@@ -437,7 +437,7 @@ export type { ContractTrust } from "./contract-trust.js";
 export const MemoryAnchorV1Schema = z.object({
   anchor_kind: MemoryAnchorKind,
   anchor_level: MemoryAnchorLevel,
-  contract_trust: ContractTrustSchema.optional(),
+  contract_trust: ContractTrustSchema.nullable().optional(),
   pattern_state: MemoryPatternState.optional(),
   credibility_state: MemoryPatternCredibilityState.optional(),
   task_signature: z.string().min(1).max(256),
@@ -783,6 +783,7 @@ export const StaticContextBlock = z.object({
   priority: z.number().int().min(0).max(100).default(50),
   always_include: z.boolean().default(false),
 });
+export type StaticContextBlock = z.infer<typeof StaticContextBlock>;
 
 export const StaticInjectionPolicy = z.object({
   enabled: z.boolean().default(true),
@@ -885,6 +886,7 @@ export type PlanningContextInput = z.infer<typeof PlanningContextRequest>;
 export const ContextAssembleRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
+  run_id: z.string().min(1).optional(),
   query_text: z.string().min(1),
   recall_strategy: z.enum(["local", "balanced", "global"]).optional(),
   recall_mode: z.enum(["dense_edge"]).optional(),
@@ -1198,7 +1200,7 @@ export type RuntimeAuthorityDecisionReportV1 = z.infer<typeof RuntimeAuthorityDe
 export const ExperienceIntelligencePathRecommendationSchema = z.object({
   source_kind: z.enum(["recommended_workflow", "candidate_workflow", "none"]),
   anchor_id: z.string().nullable(),
-  contract_trust: ContractTrustSchema.optional(),
+  contract_trust: ContractTrustSchema.nullable().optional(),
   task_family: z.string().nullable().optional(),
   workflow_signature: z.string().nullable(),
   title: z.string().nullable(),
@@ -1214,6 +1216,7 @@ export const ExperienceIntelligencePathRecommendationSchema = z.object({
   authority_visibility: RuntimeAuthorityVisibilityContractSchema.nullable().optional(),
   authority_blocked: z.boolean().optional(),
   authority_primary_blocker: z.string().nullable().optional(),
+  reason: z.string().nullable().optional(),
 }).strict();
 
 export const ExperienceIntelligenceToolRecommendationSchema = z.object({
@@ -2228,6 +2231,8 @@ export const EvolutionInspectResponseSchema = z.object({
   execution_introspection: ExecutionMemoryIntrospectionResponseSchema,
   evolution_summary: EvolutionInspectSummarySchema,
 }).passthrough();
+
+export type EvolutionInspectResponse = z.infer<typeof EvolutionInspectResponseSchema>;
 
 export const EvolutionReviewContractSchema = z.object({
   execution_contract_v1: ExecutionContractV1Schema.nullable().default(null),

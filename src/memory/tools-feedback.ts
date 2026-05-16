@@ -555,7 +555,7 @@ async function materializeLitePolicyMemoryFromFeedback(args: {
 }): Promise<ToolsFeedbackResponse["policy_memory"] | null> {
   if (!args.opts.liteWriteStore) return null;
   const contractTrust = resolveFeedbackContractTrustForMaterialization(args.parsed.context);
-  if (contractTrust === "observational") return null;
+  if (!contractTrust || contractTrust === "observational") return null;
 
   const consumerAgentId = extractContextConsumerAgentId(args.parsed.context) ?? args.actor;
   const consumerTeamId = extractContextConsumerTeamId(args.parsed.context);

@@ -31,6 +31,10 @@ import {
 } from "./authority-consumption.js";
 import type { RuntimeAuthorityVisibilityV1 } from "./authority-visibility.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
+import {
+  ServiceLifecycleConstraintV1Schema,
+  type ServiceLifecycleConstraintV1,
+} from "../execution/types.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { LiteWriteStore } from "../store/lite-write-store.js";
 
@@ -84,6 +88,8 @@ type RankedWorkflow = {
   family_match: boolean;
   relevant: boolean;
 };
+
+type PathRecommendationLike = ActionRetrievalResponse["path"];
 
 export type PolicyHintEntryLike = {
   anchor_id: string;
@@ -147,6 +153,18 @@ export function firstString(...values: unknown[]): string | null {
 export function numeric(value: unknown): number | null {
   const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeServiceLifecycleConstraints(value: unknown, limit = 16): ServiceLifecycleConstraintV1[] {
+  if (!Array.isArray(value)) return [];
+  const out: ServiceLifecycleConstraintV1[] = [];
+  for (const entry of value) {
+    const parsed = ServiceLifecycleConstraintV1Schema.safeParse(entry);
+    if (!parsed.success) continue;
+    out.push(parsed.data);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 export function workflowEvidenceParts(workflow: WorkflowEntry): string[] {
@@ -391,7 +409,7 @@ function buildExecutionContractFromWorkflowEntry(args: {
 }
 
 function buildExecutionContractFromPathRecommendation(args: {
-  path: ReturnType<typeof choosePathRecommendation>;
+  path: PathRecommendationLike;
   selectedTool: string | null;
 }): ExecutionContractV1 | null {
   const pathRecord = args.path as Record<string, unknown>;
@@ -483,7 +501,7 @@ export function readPersistedPolicyMemory(args: {
   queryText: string;
   context: unknown;
   selectedTool: string | null;
-  path: ReturnType<typeof choosePathRecommendation>;
+  path: PathRecommendationLike;
   preferredPattern: PolicyHintEntryLike | null;
   selectedWorkflow: WorkflowEntry | null;
 }): PersistedPolicyMemory | null {
@@ -780,9 +798,7 @@ export function choosePathRecommendation(args: {
     next_action: nextAction,
     workflow_steps: candidateBoundary ? [] : stringList(top.workflow.workflow_steps, 24),
     pattern_hints: candidateBoundary ? [] : stringList(top.workflow.pattern_hints, 24),
-    service_lifecycle_constraints: !candidateBoundary && Array.isArray(top.workflow.service_lifecycle_constraints)
-      ? top.workflow.service_lifecycle_constraints.slice(0, 16)
-      : [],
+    service_lifecycle_constraints: candidateBoundary ? [] : normalizeServiceLifecycleConstraints(top.workflow.service_lifecycle_constraints),
     confidence: Number.isFinite(top.workflow.confidence) ? (top.workflow.confidence ?? null) : null,
     tool_set: stringList(top.workflow.tool_set),
     authority_visibility: authorityState.visibility,
@@ -905,7 +921,7 @@ export function choosePreferredTrustedPattern(args: {
 
 export function findSelectedWorkflow(args: {
   introspection: ExecutionMemoryIntrospectionResponse;
-  path: ReturnType<typeof choosePathRecommendation>;
+  path: Pick<PathRecommendationLike, "anchor_id">;
 }): WorkflowEntry | null {
   const recommendedWorkflows =
     (Array.isArray(args.introspection.recommended_workflows) ? args.introspection.recommended_workflows : []) as WorkflowEntry[];
@@ -964,7 +980,7 @@ function clamp01(value: number): number {
 
 function buildActionRetrievalUncertainty(args: {
   selectedTool: string | null;
-  path: ReturnType<typeof choosePathRecommendation>;
+  path: PathRecommendationLike;
   preferredPattern: PolicyHintEntryLike | null;
   selectedWorkflow: WorkflowEntry | null;
   contestedPatterns: PolicyHintEntryLike[];

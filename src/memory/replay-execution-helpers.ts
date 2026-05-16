@@ -376,7 +376,7 @@ function runLocalCommand(
   }
 }
 
-function sandboxResultToOutcome(
+export function sandboxResultToOutcome(
   input: {
     ok: boolean;
     status: string;
@@ -500,7 +500,9 @@ export async function executeReplayCommand(args: {
   };
 }
 
-export function evaluateExpectedSignature(expected: unknown, outcome: LocalCommandOutcome): { ok: boolean; checks: SignatureCheck[] } {
+export type SignatureEvaluation = { ok: boolean; checks: SignatureCheck[] };
+
+export function evaluateExpectedSignature(expected: unknown, outcome: LocalCommandOutcome): SignatureEvaluation {
   const checks: SignatureCheck[] = [];
   const spec = asObject(expected);
   if (!spec) return { ok: true, checks };

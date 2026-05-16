@@ -324,14 +324,14 @@ export function deriveExecutionContractFromSlots(args: {
   const derivedPolicy = asObject(slots.derived_policy_v1);
 
   const projected = buildExecutionContractFromProjection({
-    contract_trust: firstNonEmptyString(
+    contract_trust: normalizeContractTrust(firstNonEmptyString(
       slots.contract_trust,
       executionNative?.contract_trust,
       anchor?.contract_trust,
       recoveryContract?.contract_trust,
       policyContract?.contract_trust,
       derivedPolicy?.contract_trust,
-    ),
+    )),
     task_family: firstNonEmptyString(
       slots.task_family,
       slots.task_kind,

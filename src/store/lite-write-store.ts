@@ -766,6 +766,42 @@ function jsonContains(actual: unknown, expected: unknown): boolean {
     .every(([key, value]) => jsonContains((actual as Record<string, unknown>)[key], value));
 }
 
+function escapeSqlLike(value: string): string {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
+function sqliteJsonPathForTopLevelKey(key: string): string | null {
+  if (!/^[A-Za-z0-9_]+$/.test(key)) return null;
+  return `$.${key}`;
+}
+
+function buildSimpleSlotsSqlFilters(slotsContains: Record<string, unknown> | null | undefined): {
+  where: string[];
+  params: unknown[];
+} {
+  if (!slotsContains) return { where: [], params: [] };
+  const where: string[] = [];
+  const params: unknown[] = [];
+  for (const [key, value] of Object.entries(slotsContains)) {
+    const path = sqliteJsonPathForTopLevelKey(key);
+    if (!path) continue;
+    if (value === null) {
+      where.push(`json_type(slots_json, '${path}') = 'null'`);
+      continue;
+    }
+    if (typeof value === "string" || typeof value === "number") {
+      where.push(`json_extract(slots_json, '${path}') = ?`);
+      params.push(value);
+      continue;
+    }
+    if (typeof value === "boolean") {
+      where.push(`json_extract(slots_json, '${path}') = ?`);
+      params.push(value ? 1 : 0);
+    }
+  }
+  return { where, params };
+}
+
 export function createLiteWriteStore(path: string): LiteWriteStore {
   mkdirSync(dirname(path), { recursive: true });
   const db = createSqliteDatabase(path);
@@ -785,6 +821,8 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
       commit_hash TEXT NOT NULL UNIQUE,
       created_at TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_lite_memory_commits_scope_created
+      ON lite_memory_commits(scope, created_at DESC, id DESC);
 
     CREATE TABLE IF NOT EXISTS lite_memory_nodes (
       id TEXT PRIMARY KEY,
@@ -813,8 +851,16 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_lite_memory_nodes_scope ON lite_memory_nodes(scope);
+    CREATE INDEX IF NOT EXISTS idx_lite_memory_nodes_scope_created ON lite_memory_nodes(scope, created_at DESC, id DESC);
     CREATE INDEX IF NOT EXISTS idx_lite_memory_nodes_scope_commit ON lite_memory_nodes(scope, commit_id);
     CREATE INDEX IF NOT EXISTS idx_lite_memory_nodes_scope_status ON lite_memory_nodes(scope, embedding_status);
+    CREATE INDEX IF NOT EXISTS idx_lite_memory_nodes_scope_type_created ON lite_memory_nodes(scope, type, created_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_lite_memory_nodes_scope_client ON lite_memory_nodes(scope, client_id);
+    CREATE INDEX IF NOT EXISTS idx_lite_memory_nodes_scope_type_client_created ON lite_memory_nodes(scope, type, client_id, created_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_lite_memory_nodes_scope_type_summary_kind_created
+      ON lite_memory_nodes(scope, type, json_extract(slots_json, '$.summary_kind'), created_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_lite_memory_nodes_scope_type_summary_tool_created
+      ON lite_memory_nodes(scope, type, json_extract(slots_json, '$.summary_kind'), json_extract(slots_json, '$.selected_tool'), created_at DESC, id DESC);
 
     CREATE TABLE IF NOT EXISTS lite_memory_rule_defs (
       rule_node_id TEXT PRIMARY KEY,
@@ -832,6 +878,8 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_lite_memory_rule_defs_scope_created
+      ON lite_memory_rule_defs(scope, created_at DESC, rule_node_id ASC);
 
     CREATE TABLE IF NOT EXISTS lite_memory_edges (
       id TEXT PRIMARY KEY,
@@ -901,6 +949,8 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
       ON lite_memory_execution_decisions(scope, created_at DESC, id DESC);
     CREATE INDEX IF NOT EXISTS idx_lite_memory_execution_decisions_scope_run_created
       ON lite_memory_execution_decisions(scope, run_id, created_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_lite_memory_execution_decisions_scope_tool_context_created
+      ON lite_memory_execution_decisions(scope, selected_tool, context_sha256, created_at DESC, id DESC);
 
     CREATE TABLE IF NOT EXISTS lite_memory_rule_feedback (
       id TEXT PRIMARY KEY,
@@ -958,6 +1008,52 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
     },
 
     async findNodes(args): Promise<{ rows: LiteFindNodeRow[]; has_more: boolean }> {
+      const where: string[] = ["scope = ?"];
+      const params: unknown[] = [args.scope];
+      if (args.id) {
+        where.push("id = ?");
+        params.push(args.id);
+      }
+      if (args.type) {
+        where.push("type = ?");
+        params.push(args.type);
+      }
+      if (args.clientId) {
+        where.push("client_id = ?");
+        params.push(args.clientId);
+      }
+      if (args.titleContains) {
+        where.push("LOWER(COALESCE(title, '')) LIKE ? ESCAPE '\\'");
+        params.push(`%${escapeSqlLike(args.titleContains.toLowerCase())}%`);
+      }
+      if (args.textContains) {
+        where.push("LOWER(COALESCE(text_summary, '')) LIKE ? ESCAPE '\\'");
+        params.push(`%${escapeSqlLike(args.textContains.toLowerCase())}%`);
+      }
+      if (args.memoryLane) {
+        where.push("memory_lane = ?");
+        params.push(args.memoryLane);
+      }
+      const consumerAgentId = args.consumerAgentId ?? null;
+      const consumerTeamId = args.consumerTeamId ?? null;
+      const visibility: string[] = ["memory_lane = 'shared'"];
+      if (consumerAgentId) {
+        visibility.push("(memory_lane = 'private' AND owner_agent_id = ?)");
+        params.push(consumerAgentId);
+      }
+      if (consumerTeamId) {
+        visibility.push("(memory_lane = 'private' AND owner_team_id = ?)");
+        params.push(consumerTeamId);
+      }
+      where.push(`(${visibility.join(" OR ")})`);
+      const slotsSql = buildSimpleSlotsSqlFilters(args.slotsContains);
+      where.push(...slotsSql.where);
+      params.push(...slotsSql.params);
+      const requiresSlotsJsonVerification = !!args.slotsContains;
+      const limitOffsetSql = requiresSlotsJsonVerification ? "" : " LIMIT ? OFFSET ?";
+      const queryParams = requiresSlotsJsonVerification
+        ? params
+        : [...params, args.limit + 1, args.offset];
       const rows = db.prepare(
         `SELECT
            id,
@@ -981,9 +1077,9 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
            created_at,
            commit_id
          FROM lite_memory_nodes
-         WHERE scope = ?
-         ORDER BY created_at DESC, id DESC`,
-      ).all(args.scope) as Array<{
+         WHERE ${where.join(" AND ")}
+         ORDER BY created_at DESC, id DESC${limitOffsetSql}`,
+      ).all(...queryParams) as Array<{
         id: string;
         type: string;
         client_id: string | null;
@@ -1037,15 +1133,10 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
               : null,
           } satisfies LiteFindNodeRow;
         })
-        .filter((row) => !args.id || row.id === args.id)
-        .filter((row) => !args.type || row.type === args.type)
-        .filter((row) => !args.clientId || row.client_id === args.clientId)
-        .filter((row) => !args.titleContains || (row.title ?? "").toLowerCase().includes(args.titleContains.toLowerCase()))
-        .filter((row) => !args.textContains || (row.text_summary ?? "").toLowerCase().includes(args.textContains.toLowerCase()))
-        .filter((row) => !args.memoryLane || row.memory_lane === args.memoryLane)
-        .filter((row) => !args.slotsContains || jsonContains(row.slots, args.slotsContains))
-        .filter((row) => nodeVisible(row, args.consumerAgentId ?? null, args.consumerTeamId ?? null));
-      const slice = filtered.slice(args.offset, args.offset + args.limit + 1);
+        .filter((row) => !args.slotsContains || jsonContains(row.slots, args.slotsContains));
+      const slice = requiresSlotsJsonVerification
+        ? filtered.slice(args.offset, args.offset + args.limit + 1)
+        : filtered;
       const hasMore = slice.length > args.limit;
       return {
         rows: hasMore ? slice.slice(0, args.limit) : slice,
